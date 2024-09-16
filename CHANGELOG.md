@@ -24,6 +24,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - `TypeError` when corrupt PDF specifies text-positioning operators with invalid values ([#1000](https://github.com/pdfminer/pdfminer.six/pull/1000))
 - inline image parsing fails when stream data contains "EI\n" ([#1008](https://github.com/pdfminer/pdfminer.six/issues/1008))
 - `TypeError` raised by extract_text method with compressed PDF file ([#886](https://github.com/pdfminer/pdfminer.six/issues/886))
+- Using `pyproject.toml` instead of `setup.py` ([#931](https://github.com/pdfminer/pdfminer.six/issues/931))
 
 ### Removed
 
