@@ -1,73 +1,34 @@
-pdfminer.six
-============
+# PLAYA is a LAYout Analyzer 🏖️
 
-[![Continuous integration](https://github.com/pdfminer/pdfminer.six/actions/workflows/actions.yml/badge.svg)](https://github.com/pdfminer/pdfminer.six/actions/workflows/actions.yml)
-[![PyPI version](https://img.shields.io/pypi/v/pdfminer.six.svg)](https://pypi.python.org/pypi/pdfminer.six/)
-[![gitter](https://badges.gitter.im/pdfminer-six/Lobby.svg)](https://gitter.im/pdfminer-six/Lobby?utm_source=badge&utm_medium)
+## About
 
-*We fathom PDF*
+This is not an experimental fork of
+[pdfminer.six](https://github.com/pdfminer/pdfminer.six).  Well, it's
+kind of an experimental fork of pdfminer.six.  The idea is to extract
+just the part of pdfminer.six that gets used these days, namely the
+layout analysis and low-level PDF access, see if it can be
+reimplemented using other libraries such as pypdf or pikepdf, and make
+its API more fun to use.
 
-Pdfminer.six is a community maintained fork of the original PDFMiner. It is a tool for extracting information from PDF
-documents. It focuses on getting and analyzing text data. Pdfminer.six extracts the text from a page directly from the
-sourcecode of the PDF. It can also be used to get the exact location, font or color of the text.
+There are already too many PDF libraries, unfortunately none of which
+does everything that everybody wants it to do, and we probably don't
+need another one. It is not recommended that you use this library for
+anything at all, but if you were going to use it for something, it
+would be specifically one of these things and nothing else:
 
-It is built in a modular way such that each component of pdfminer.six can be replaced easily. You can implement your own
-interpreter or rendering device that uses the power of pdfminer.six for other purposes than text analysis.
+1. Accessing the document catalog, page tree, structure tree, content
+   streams, cross-reference table, XObjects, and other low-level PDF
+   metadata.
+2. Obtaining the absolute position and attributes of every character,
+   line, path, and image in every page of a PDF document.
 
-Check out the full documentation on
-[Read the Docs](https://pdfminersix.readthedocs.io).
+Since most people *do not want to do these things*, ideally, this will
+get merged into some other library, perhaps
+[pypdf](https://github.com/py-pdf/pypdf).  Did I mention this is
+experimental?
 
+## Acknowledgement
 
-Features
---------
-
-* Written entirely in Python.
-* Parse, analyze, and convert PDF documents.
-* Extract content as text, images, html or [hOCR](https://en.wikipedia.org/wiki/HOCR).
-* PDF-1.7 specification support. (well, almost).
-* CJK languages and vertical writing scripts support.
-* Various font types (Type1, TrueType, Type3, and CID) support.
-* Support for extracting images (JPG, JBIG2, Bitmaps).
-* Support for various compressions (ASCIIHexDecode, ASCII85Decode, LZWDecode, FlateDecode, RunLengthDecode,
-  CCITTFaxDecode)
-* Support for RC4 and AES encryption.
-* Support for AcroForm interactive form extraction.
-* Table of contents extraction.
-* Tagged contents extraction.
-* Automatic layout analysis.
-
-How to use
-----------
-
-* Install Python 3.8 or newer.
-* Install pdfminer.six.
-  ```bash
-  pip install pdfminer.six
-
-* (Optionally) install extra dependencies for extracting images.
-
-  ```bash
-  pip install 'pdfminer.six[image]'
-
-* Use the command-line interface to extract text from pdf.
-
-  ```bash
-  pdf2txt.py example.pdf
-
-* Or use it with Python. 
-  ```python
-  from pdfminer.high_level import extract_text
-
-  text = extract_text("example.pdf")
-  print(text)
-  ```
-
-Contributing
-------------
-
-Be sure to read the [contribution guidelines](https://github.com/pdfminer/pdfminer.six/blob/master/CONTRIBUTING.md). 
-
-Acknowledgement
----------------
-
-This repository includes code from `pyHanko` ; the original license has been included [here](/docs/licenses/LICENSE.pyHanko).
+This repository obviously includes code from `pdfminer.six`.  Original
+license text is included in [LICENSE](/LICENSE.pdfminer).  The license
+itself has not changed!
