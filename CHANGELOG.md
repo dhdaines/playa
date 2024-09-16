@@ -16,16 +16,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Fixed
 
+- `TypeError` raised by extract_text method with compressed PDF file ([#886](https://github.com/pdfminer/pdfminer.six/issues/886))
+- Using `pyproject.toml` instead of `setup.py` ([#931](https://github.com/pdfminer/pdfminer.six/issues/931))
 - `TypeError` when corrupt PDF object reference cannot be parsed as int ([#972](https://github.com/pdfminer/pdfminer.six/pull/972))])
 - `TypeError` when corrupt PDF literal cannot be converted to str ([#978](https://github.com/pdfminer/pdfminer.six/pull/978))
 - `ValueError` when corrupt PDF specifies a negative xref location ([#980](http://github.com/pdfminer/pdfminer.six/pull/980))
 - `ValueError` when corrupt PDF specifies an invalid mediabox ([#987](https://github.com/pdfminer/pdfminer.six/pull/987))
 - `RecursionError` when corrupt PDF specifies a recursive /Pages object ([#998](https://github.com/pdfminer/pdfminer.six/pull/998))
 - `TypeError` when corrupt PDF specifies text-positioning operators with invalid values ([#1000](https://github.com/pdfminer/pdfminer.six/pull/1000))
-- inline image parsing fails when stream data contains "EI\n" ([#1008](https://github.com/pdfminer/pdfminer.six/issues/1008))
-- `TypeError` raised by extract_text method with compressed PDF file ([#886](https://github.com/pdfminer/pdfminer.six/issues/886))
-- Using `pyproject.toml` instead of `setup.py` ([#931](https://github.com/pdfminer/pdfminer.six/issues/931))
 - `TypeError` when MediaBox is an indirect object reference ([#1004](https://github.com/pdfminer/pdfminer.six/issues/1004))
+- inline image parsing fails when stream data contains "EI\n" ([#1008](https://github.com/pdfminer/pdfminer.six/issues/1008))
 
 ### Removed
 
