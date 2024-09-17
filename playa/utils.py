@@ -23,7 +23,7 @@ from typing import (
     cast,
 )
 
-from playa.pdfexceptions import PDFTypeError, PDFValueError
+from playa.exceptions import PDFTypeError, PDFValueError
 
 if TYPE_CHECKING:
     from playa.layout import LTComponent

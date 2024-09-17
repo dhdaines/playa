@@ -1,60 +1,35 @@
-import io
 import logging
 import re
 from typing import (
-    BinaryIO,
-    Dict,
-    Generic,
     List,
     Optional,
     Sequence,
-    TextIO,
-    Tuple,
-    TypeVar,
-    Union,
     cast,
 )
 
-from playa import utils
-from playa.image import ImageWriter
 from playa.layout import (
     LAParams,
-    LTAnno,
     LTChar,
-    LTComponent,
-    LTContainer,
     LTCurve,
     LTFigure,
     LTImage,
-    LTItem,
     LTLayoutContainer,
     LTLine,
     LTPage,
     LTRect,
-    LTText,
-    LTTextBox,
-    LTTextBoxVertical,
-    LTTextGroup,
-    LTTextLine,
-    TextGroupElement,
 )
 from playa.pdfcolor import PDFColorSpace
 from playa.pdfdevice import PDFTextDevice
-from playa.pdfexceptions import PDFValueError
 from playa.pdffont import PDFFont, PDFUnicodeNotDefined
 from playa.pdfinterp import PDFGraphicState, PDFResourceManager
 from playa.pdfpage import PDFPage
 from playa.pdftypes import PDFStream
 from playa.utils import (
-    AnyIO,
     Matrix,
     PathSegment,
     Point,
     Rect,
     apply_matrix_pt,
-    bbox2str,
-    enc,
-    make_compat_str,
     mult_matrix,
 )
 

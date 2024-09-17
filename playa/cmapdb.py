@@ -33,8 +33,7 @@ from typing import (
 )
 
 from playa.encodingdb import name2unicode
-from playa.pdfexceptions import PDFException, PDFTypeError
-from playa.psexceptions import PSEOF, PSSyntaxError
+from playa.exceptions import PSEOF, PDFException, PDFTypeError, PSSyntaxError
 from playa.psparser import KWD, PSKeyword, PSLiteral, PSStackParser, literal_name
 from playa.utils import choplist, nunpack
 

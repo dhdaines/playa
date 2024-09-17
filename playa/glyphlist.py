@@ -10,8 +10,7 @@ The following data was taken by
 ```python
 from playa.glyphlist import convert_glyphlist
 
-convert_glyphlist("glyphlist.txt")
-"""
+convert_glyphlist("glyphlist.txt")"""
 
 # ###################################################################################
 # Copyright (c) 1997,1998,2002,2007 Adobe Systems Incorporated

@@ -27,8 +27,8 @@ from playa.cmapdb import (
     UnicodeMap,
 )
 from playa.encodingdb import EncodingDB, name2unicode
+from playa.exceptions import PSEOF, PDFException, PDFKeyError, PDFValueError
 from playa.fontmetrics import FONT_METRICS
-from playa.pdfexceptions import PDFException, PDFKeyError, PDFValueError
 from playa.pdftypes import (
     PDFStream,
     dict_value,
@@ -39,7 +39,6 @@ from playa.pdftypes import (
     resolve_all,
     stream_value,
 )
-from playa.psexceptions import PSEOF
 from playa.psparser import (
     KWD,
     LIT,

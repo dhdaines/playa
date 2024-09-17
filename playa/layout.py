@@ -15,8 +15,8 @@ from typing import (
     cast,
 )
 
+from playa.exceptions import PDFTypeError, PDFValueError
 from playa.pdfcolor import PDFColorSpace
-from playa.pdfexceptions import PDFTypeError, PDFValueError
 from playa.pdffont import PDFFont
 from playa.pdfinterp import Color, PDFGraphicState
 from playa.pdftypes import PDFStream
@@ -105,9 +105,7 @@ class LAParams:
             boxes_flow_err_msg = (
                 "LAParam boxes_flow should be None, or a number between -1 and +1"
             )
-            if not (
-                isinstance(self.boxes_flow, int) or isinstance(self.boxes_flow, float)
-            ):
+            if not (isinstance(self.boxes_flow, (float, int))):
                 raise PDFTypeError(boxes_flow_err_msg)
             if not -1 <= self.boxes_flow <= 1:
                 raise PDFValueError(boxes_flow_err_msg)
@@ -116,7 +114,12 @@ class LAParams:
         return (
             "<LAParams: char_margin=%.1f, line_margin=%.1f, "
             "word_margin=%.1f all_texts=%r>"
-            % (self.char_margin, self.line_margin, self.word_margin, self.all_texts)
+            % (
+                self.char_margin,
+                self.line_margin,
+                self.word_margin,
+                self.all_texts,
+            )
         )
 
 
