@@ -1,10 +1,11 @@
 import logging
+import re
 from io import BytesIO
 from typing import TYPE_CHECKING, BinaryIO, Optional, Union
 
 from playa import settings
 from playa.casting import safe_int
-from playa.exceptions import PSEOF, PDFException
+from playa.exceptions import PSEOF, PDFSyntaxError
 from playa.pdftypes import PDFObjRef, PDFStream, dict_value, int_value
 from playa.psparser import KWD, PSKeyword, PSStackParser
 
@@ -13,9 +14,35 @@ if TYPE_CHECKING:
 
 log = logging.getLogger(__name__)
 
+# Important keywords
+KEYWORD_R = KWD(b"R")
+KEYWORD_NULL = KWD(b"null")
+KEYWORD_ENDOBJ = KWD(b"endobj")
+KEYWORD_STREAM = KWD(b"stream")
+KEYWORD_XREF = KWD(b"xref")
+KEYWORD_STARTXREF = KWD(b"startxref")
+KEYWORD_OBJ = KWD(b"obj")
 
-class PDFSyntaxError(PDFException):
-    pass
+
+def read_header(fp: BinaryIO) -> str:
+    """Read the PDF header and return the (initial) version string.
+
+    Note that this version can be overridden in the document catalog."""
+    try:
+        hdr = fp.read(8)
+    except IOError as err:
+        raise PDFSyntaxError("Failed to read PDF header") from err
+    if not hdr.startswith(b"%PDF-"):
+        raise PDFSyntaxError("Expected b'%%PDF-', got %r, is this a PDF?" % hdr)
+    try:
+        version = hdr[5:].decode("ascii")
+    except UnicodeDecodeError as err:
+        raise PDFSyntaxError(
+            "Version number in %r contains non-ASCII characters" % hdr
+        ) from err
+    if not re.match(r"\d\.\d", version):
+        raise PDFSyntaxError("Version number in  %r is invalid" % hdr)
+    return version
 
 
 # PDFParser stack holds all the base types plus PDFStream, PDFObjRef, and None
@@ -38,32 +65,26 @@ class PDFParser(PSStackParser[Union[PSKeyword, PDFStream, PDFObjRef, None]]):
     def __init__(self, fp: BinaryIO) -> None:
         PSStackParser.__init__(self, fp)
         self.doc: Optional[PDFDocument] = None
+        self.pdf_version = read_header(fp)
         self.fallback = False
 
-    def set_document(self, doc: "PDFDocument") -> None:
+    def set_document(self, doc: Union["PDFDocument", None]) -> None:
         """Associates the parser with a PDFDocument object."""
         self.doc = doc
 
-    KEYWORD_R = KWD(b"R")
-    KEYWORD_NULL = KWD(b"null")
-    KEYWORD_ENDOBJ = KWD(b"endobj")
-    KEYWORD_STREAM = KWD(b"stream")
-    KEYWORD_XREF = KWD(b"xref")
-    KEYWORD_STARTXREF = KWD(b"startxref")
-
     def do_keyword(self, pos: int, token: PSKeyword) -> None:
         """Handles PDF-related keywords."""
-        if token in (self.KEYWORD_XREF, self.KEYWORD_STARTXREF):
+        if token in (KEYWORD_XREF, KEYWORD_STARTXREF):
             self.add_results(*self.pop(1))
 
-        elif token is self.KEYWORD_ENDOBJ:
+        elif token is KEYWORD_ENDOBJ:
             self.add_results(*self.pop(4))
 
-        elif token is self.KEYWORD_NULL:
+        elif token is KEYWORD_NULL:
             # null object
             self.push((pos, None))
 
-        elif token is self.KEYWORD_R:
+        elif token is KEYWORD_R:
             # reference to indirect object
             if len(self.curstack) >= 2:
                 (_, _object_id), _ = self.pop(2)
@@ -72,7 +93,7 @@ class PDFParser(PSStackParser[Union[PSKeyword, PDFStream, PDFObjRef, None]]):
                     obj = PDFObjRef(self.doc, object_id)
                     self.push((pos, obj))
 
-        elif token is self.KEYWORD_STREAM:
+        elif token is KEYWORD_STREAM:
             # stream object
             ((_, dic),) = self.pop(1)
             dic = dict_value(dic)
@@ -142,10 +163,8 @@ class PDFStreamParser(PDFParser):
     def flush(self) -> None:
         self.add_results(*self.popall())
 
-    KEYWORD_OBJ = KWD(b"obj")
-
     def do_keyword(self, pos: int, token: PSKeyword) -> None:
-        if token is self.KEYWORD_R:
+        if token is KEYWORD_R:
             # reference to indirect object
             (_, _object_id), _ = self.pop(2)
             object_id = safe_int(_object_id)
@@ -154,7 +173,7 @@ class PDFStreamParser(PDFParser):
                 self.push((pos, obj))
             return
 
-        elif token in (self.KEYWORD_OBJ, self.KEYWORD_ENDOBJ):
+        elif token in (KEYWORD_OBJ, KEYWORD_ENDOBJ):
             if settings.STRICT:
                 # See PDF Spec 3.4.6: Only the object values are stored in the
                 # stream; the obj and endobj keywords are not used.

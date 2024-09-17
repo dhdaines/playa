@@ -5,6 +5,7 @@ import struct
 from hashlib import md5, sha256, sha384, sha512
 from typing import (
     Any,
+    BinaryIO,
     Callable,
     Dict,
     Iterable,
@@ -14,7 +15,6 @@ from typing import (
     Optional,
     Sequence,
     Tuple,
-    Type,
     Union,
     cast,
 )
@@ -39,7 +39,7 @@ from playa.exceptions import (
     PDFSyntaxError,
     PDFTypeError,
 )
-from playa.pdfparser import PDFParser, PDFStreamParser
+from playa.pdfparser import KEYWORD_XREF, PDFParser, PDFStreamParser, read_header
 from playa.pdftypes import (
     DecipherCallable,
     PDFStream,
@@ -63,10 +63,12 @@ from playa.utils import (
 log = logging.getLogger(__name__)
 
 
-# some predefined literals and keywords.
+# Some predefined literals and keywords (these can be defined wherever
+# they are used as they are interned to the same objects)
 LITERAL_OBJSTM = LIT("ObjStm")
 LITERAL_XREF = LIT("XRef")
 LITERAL_CATALOG = LIT("Catalog")
+KEYWORD_OBJ = KWD(b"obj")
 
 
 class PDFBaseXRef:
@@ -619,58 +621,73 @@ class PDFStandardSecurityHandlerV5(PDFStandardSecurityHandlerV4):
         return cipher.decryptor().update(ciphertext)  # type: ignore
 
 
+SECURITY_HANDLERS = {
+    1: PDFStandardSecurityHandler,
+    2: PDFStandardSecurityHandler,
+    4: PDFStandardSecurityHandlerV4,
+    5: PDFStandardSecurityHandlerV5,
+}
+
+
 class PDFDocument:
-    """PDFDocument object represents a PDF document.
+    """Representation of a PDF document on disk.
 
-    Since a PDF file can be very big, normally it is not loaded at
-    once. So PDF document has to cooperate with a PDF parser in order to
-    dynamically import the data as processing goes.
+    Since PDF documents can be very large and complex, merely creating
+    a `PDFDocument` does very little aside from opening the file and
+    verifying that the password is correct and it is, in fact, a PDF.
+    This may, however, involve a certain amount of random file access
+    since the cross-reference table and trailer must be read in order
+    to determine this (we do not treat linearized PDFs specially for
+    the moment).
 
-    Typical usage:
-      doc = PDFDocument(parser, password)
-      obj = doc.getobj(objid)
+    Some metadata, such as the structure tree and page tree, will be
+    loaded lazily and cached.  Because PLAYA is a LAYout Analyzer, we
+    do not handle modification of PDFs, and all such data can be
+    assumed to be constant and read-only.
+
+    Args:
+      fp: File-like object in binary mode.  Must support random access.
+      password: Password for decryption, if needed.
 
     """
 
-    security_handler_registry: Dict[int, Type[PDFStandardSecurityHandler]] = {
-        1: PDFStandardSecurityHandler,
-        2: PDFStandardSecurityHandler,
-        4: PDFStandardSecurityHandlerV4,
-        5: PDFStandardSecurityHandlerV5,
-    }
+    def __enter__(self) -> "PDFDocument":
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback) -> None:
+        # Undo the circular reference
+        self.parser.set_document(None)
 
     def __init__(
         self,
-        parser: PDFParser,
+        fp: BinaryIO,
         password: str = "",
-        caching: bool = True,
-        fallback: bool = True,
     ) -> None:
-        """Set the document to use a given PDFParser object."""
-        self.caching = caching
         self.xrefs: List[PDFBaseXRef] = []
         self.info = []
         self.catalog: Dict[str, Any] = {}
         self.encryption: Optional[Tuple[Any, Any]] = None
         self.decipher: Optional[DecipherCallable] = None
-        self._parser = None
         self._cached_objs: Dict[int, Tuple[object, int]] = {}
         self._parsed_objs: Dict[int, Tuple[List[object], int]] = {}
-        self._parser = parser
-        self._parser.set_document(self)
+        self.parser = PDFParser(fp)
+        self.parser.set_document(self)  # FIXME: annoying circular reference
         self.is_printable = self.is_modifiable = self.is_extractable = True
-        # Retrieve the information of each header that was appended
-        # (maybe multiple times) at the end of the document.
+        # Getting the XRef table and trailer is done non-lazily
+        # because they contain encryption information among other
+        # things.  As noted above we don't try to look for the first
+        # page cross-reference table (for linearized PDFs) after the
+        # header, it will instead be loaded with all the rest.
         try:
-            pos = self.find_xref(parser)
-            self.read_xref_from(parser, pos, self.xrefs)
+            pos = self.find_xref()
+            self.read_xref_from(pos, self.xrefs)
         except PDFNoValidXRef:
-            if fallback:
-                parser.fallback = True
-                newxref = PDFXRefFallback()
-                newxref.load(parser)
-                self.xrefs.append(newxref)
-
+            log.warning("Using fallback XRef parsing")
+            self.parser.fallback = True
+            newxref = PDFXRefFallback()
+            newxref.load(self.parser)
+            self.xrefs.append(newxref)
+        # Now find the trailer
         for xref in self.xrefs:
             trailer = xref.get_trailer()
             if not trailer:
@@ -698,17 +715,24 @@ class PDFDocument:
             if settings.STRICT:
                 raise PDFSyntaxError("Catalog not found!")
 
-    KEYWORD_OBJ = KWD(b"obj")
-
-    # _initialize_password(password=b'')
-    #   Perform the initialization with a given password.
     def _initialize_password(self, password: str = "") -> None:
+        """Initialize the decryption handler with a given password, if any.
+
+        Internal function, requires the Encrypt dictionary to have
+        been read from the trailer into self.encryption.
+        """
         assert self.encryption is not None
         (docid, param) = self.encryption
         if literal_name(param.get("Filter")) != "Standard":
             raise PDFEncryptionError("Unknown filter: param=%r" % param)
         v = int_value(param.get("V", 0))
-        factory = self.security_handler_registry.get(v)
+        # 3 (PDF 1.4) An unpublished algorithm that permits encryption
+        # key lengths ranging from 40 to 128 bits. This value shall
+        # not appear in a conforming PDF file.
+        if v == 3:
+            raise PDFEncryptionError("Unpublished algorithm 3 not supported")
+        factory = SECURITY_HANDLERS.get(v)
+        # 0 An algorithm that is undocumented. This value shall not be used.
         if factory is None:
             raise PDFEncryptionError("Unknown algorithm: param=%r" % param)
         handler = factory(docid, param, password)
@@ -716,17 +740,16 @@ class PDFDocument:
         self.is_printable = handler.is_printable()
         self.is_modifiable = handler.is_modifiable()
         self.is_extractable = handler.is_extractable()
-        assert self._parser is not None
-        self._parser.fallback = False  # need to read streams with exact length
+        assert self.parser is not None
+        self.parser.fallback = False  # need to read streams with exact length
 
     def _getobj_objstm(self, stream: PDFStream, index: int, objid: int) -> object:
         if stream.objid in self._parsed_objs:
             (objs, n) = self._parsed_objs[stream.objid]
         else:
             (objs, n) = self._get_objects(stream)
-            if self.caching:
-                assert stream.objid is not None
-                self._parsed_objs[stream.objid] = (objs, n)
+            assert stream.objid is not None
+            self._parsed_objs[stream.objid] = (objs, n)
         i = n * 2 + index
         try:
             obj = objs[i]
@@ -756,11 +779,11 @@ class PDFDocument:
         return (objs, n)
 
     def _getobj_parse(self, pos: int, objid: int) -> object:
-        assert self._parser is not None
-        self._parser.seek(pos)
-        (_, objid1) = self._parser.nexttoken()  # objid
-        (_, genno) = self._parser.nexttoken()  # genno
-        (_, kwd) = self._parser.nexttoken()
+        assert self.parser is not None
+        self.parser.seek(pos)
+        (_, objid1) = self.parser.nexttoken()  # objid
+        (_, genno) = self.parser.nexttoken()  # genno
+        (_, kwd) = self.parser.nexttoken()
         # hack around malformed pdf files
         # copied from https://github.com/jaepil/pdfminer3k/blob/master/
         # pdfminer/pdfparser.py#L399
@@ -768,8 +791,8 @@ class PDFDocument:
         # assert objid1 == objid, str((objid1, objid))
         if objid1 != objid:
             x = []
-            while kwd is not self.KEYWORD_OBJ:
-                (_, kwd) = self._parser.nexttoken()
+            while kwd is not KEYWORD_OBJ:
+                (_, kwd) = self.parser.nexttoken()
                 x.append(kwd)
             if len(x) >= 2:
                 objid1 = x[-2]
@@ -779,7 +802,7 @@ class PDFDocument:
 
         if kwd != KWD(b"obj"):
             raise PDFSyntaxError("Invalid object spec: offset=%r" % pos)
-        (_, obj) = self._parser.nextobject()
+        (_, obj) = self.parser.nextobject()
         return obj
 
     # can raise PDFObjectNotFound
@@ -817,8 +840,7 @@ class PDFDocument:
             else:
                 raise PDFObjectNotFound(objid)
             log.debug("register: objid=%r: %r", objid, obj)
-            if self.caching:
-                self._cached_objs[objid] = (obj, genno)
+            self._cached_objs[objid] = (obj, genno)
         return obj
 
     OutlineType = Tuple[Any, Any, Any, Any, Any]
@@ -903,11 +925,11 @@ class PDFDocument:
         return obj
 
     # find_xref
-    def find_xref(self, parser: PDFParser) -> int:
+    def find_xref(self) -> int:
         """Internal function used to locate the first XRef."""
         # search the last xref table by scanning the file backwards.
         prev = b""
-        for line in parser.revreadlines():
+        for line in self.parser.revreadlines():
             line = line.strip()
             log.debug("find_xref: %r", line)
 
@@ -932,39 +954,38 @@ class PDFDocument:
     # read xref table
     def read_xref_from(
         self,
-        parser: PDFParser,
         start: int,
         xrefs: List[PDFBaseXRef],
     ) -> None:
         """Reads XRefs from the given location."""
-        parser.seek(start)
-        parser.reset()
+        self.parser.seek(start)
+        self.parser.reset()
         try:
-            (pos, token) = parser.nexttoken()
+            (pos, token) = self.parser.nexttoken()
         except PSEOF:
             raise PDFNoValidXRef("Unexpected EOF")
         log.debug("read_xref_from: start=%d, token=%r", start, token)
         if isinstance(token, int):
             # XRefStream: PDF-1.5
-            parser.seek(pos)
-            parser.reset()
+            self.parser.seek(pos)
+            self.parser.reset()
             xref: PDFBaseXRef = PDFXRefStream()
-            xref.load(parser)
+            xref.load(self.parser)
         else:
-            if token is parser.KEYWORD_XREF:
-                parser.nextline()
+            if token is KEYWORD_XREF:
+                self.parser.nextline()
             xref = PDFXRef()
-            xref.load(parser)
+            xref.load(self.parser)
         xrefs.append(xref)
         trailer = xref.get_trailer()
         log.debug("trailer: %r", trailer)
         if "XRefStm" in trailer:
             pos = int_value(trailer["XRefStm"])
-            self.read_xref_from(parser, pos, xrefs)
+            self.read_xref_from(pos, xrefs)
         if "Prev" in trailer:
             # find previous xref
             pos = int_value(trailer["Prev"])
-            self.read_xref_from(parser, pos, xrefs)
+            self.read_xref_from(pos, xrefs)
 
 
 class PageLabels(NumberTree):
