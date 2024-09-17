@@ -42,7 +42,7 @@ dependencies = [
 Homepage = "https://github.com/dhdaines/playa"
 
 [tool.hatch.version]
-source = "vcs"
+path = "playa/__init__.py"
 
 [tool.hatch.build.targets.wheel]
 packages = ["playa"]
