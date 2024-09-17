@@ -23,10 +23,10 @@ from typing import (
     cast,
 )
 
-from pdfminer.pdfexceptions import PDFTypeError, PDFValueError
+from playa.pdfexceptions import PDFTypeError, PDFValueError
 
 if TYPE_CHECKING:
-    from pdfminer.layout import LTComponent
+    from playa.layout import LTComponent
 
 import charset_normalizer  # For str encoding detection
 

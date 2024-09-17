@@ -2,17 +2,17 @@ import itertools
 import logging
 from typing import Any, BinaryIO, Container, Dict, Iterator, List, Optional, Set, Tuple
 
-from pdfminer import settings
-from pdfminer.pdfdocument import (
+from playa import settings
+from playa.pdfdocument import (
     PDFDocument,
     PDFNoPageLabels,
     PDFTextExtractionNotAllowed,
 )
-from pdfminer.pdfexceptions import PDFObjectNotFound, PDFValueError
-from pdfminer.pdfparser import PDFParser
-from pdfminer.pdftypes import dict_value, int_value, list_value, resolve1
-from pdfminer.psparser import LIT
-from pdfminer.utils import parse_rect
+from playa.pdfexceptions import PDFObjectNotFound, PDFValueError
+from playa.pdfparser import PDFParser
+from playa.pdftypes import dict_value, int_value, list_value, resolve1
+from playa.psparser import LIT
+from playa.utils import parse_rect
 
 log = logging.getLogger(__name__)
 

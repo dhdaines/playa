@@ -10,17 +10,17 @@ except ImportError:
     # Literal was introduced in Python 3.8
     from typing_extensions import Literal  # type: ignore[assignment]
 
-from pdfminer.jbig2 import JBIG2StreamReader, JBIG2StreamWriter
-from pdfminer.layout import LTImage
-from pdfminer.pdfcolor import (
+from playa.jbig2 import JBIG2StreamReader, JBIG2StreamWriter
+from playa.layout import LTImage
+from playa.pdfcolor import (
     LITERAL_DEVICE_CMYK,
     LITERAL_DEVICE_GRAY,
     LITERAL_DEVICE_RGB,
     LITERAL_INLINE_DEVICE_GRAY,
     LITERAL_INLINE_DEVICE_RGB,
 )
-from pdfminer.pdfexceptions import PDFValueError
-from pdfminer.pdftypes import (
+from playa.pdfexceptions import PDFValueError
+from playa.pdftypes import (
     LITERALS_DCT_DECODE,
     LITERALS_FLATE_DECODE,
     LITERALS_JBIG2_DECODE,

@@ -3,7 +3,7 @@ import os
 from struct import calcsize, pack, unpack
 from typing import BinaryIO, Dict, Iterable, List, Optional, Tuple, Union, cast
 
-from pdfminer.pdfexceptions import PDFValueError
+from playa.pdfexceptions import PDFValueError
 
 # segment structure base
 SEG_STRUCT = [

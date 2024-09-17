@@ -2,10 +2,10 @@ import logging
 import re
 from typing import Dict, Iterable, Optional, cast
 
-from pdfminer.glyphlist import glyphname2unicode
-from pdfminer.latin_enc import ENCODING
-from pdfminer.pdfexceptions import PDFKeyError
-from pdfminer.psparser import PSLiteral
+from playa.glyphlist import glyphname2unicode
+from playa.latin_enc import ENCODING
+from playa.pdfexceptions import PDFKeyError
+from playa.psparser import PSLiteral
 
 HEXADECIMAL = re.compile(r"[0-9a-fA-F]+")
 

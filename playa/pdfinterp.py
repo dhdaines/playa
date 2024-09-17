@@ -3,13 +3,13 @@ import re
 from io import BytesIO
 from typing import Dict, List, Mapping, Optional, Sequence, Tuple, Union, cast
 
-from pdfminer import settings
-from pdfminer.casting import safe_float
-from pdfminer.cmapdb import CMap, CMapBase, CMapDB
-from pdfminer.pdfcolor import PREDEFINED_COLORSPACE, PDFColorSpace
-from pdfminer.pdfdevice import PDFDevice, PDFTextSeq
-from pdfminer.pdfexceptions import PDFException, PDFValueError
-from pdfminer.pdffont import (
+from playa import settings
+from playa.casting import safe_float
+from playa.cmapdb import CMap, CMapBase, CMapDB
+from playa.pdfcolor import PREDEFINED_COLORSPACE, PDFColorSpace
+from playa.pdfdevice import PDFDevice, PDFTextSeq
+from playa.pdfexceptions import PDFException, PDFValueError
+from playa.pdffont import (
     PDFCIDFont,
     PDFFont,
     PDFFontError,
@@ -17,8 +17,8 @@ from pdfminer.pdffont import (
     PDFType1Font,
     PDFType3Font,
 )
-from pdfminer.pdfpage import PDFPage
-from pdfminer.pdftypes import (
+from playa.pdfpage import PDFPage
+from playa.pdftypes import (
     LITERALS_ASCII85_DECODE,
     PDFObjRef,
     PDFStream,
@@ -27,8 +27,8 @@ from pdfminer.pdftypes import (
     resolve1,
     stream_value,
 )
-from pdfminer.psexceptions import PSEOF, PSTypeError
-from pdfminer.psparser import (
+from playa.psexceptions import PSEOF, PSTypeError
+from playa.psparser import (
     KWD,
     LIT,
     PSKeyword,
@@ -38,7 +38,7 @@ from pdfminer.psparser import (
     keyword_name,
     literal_name,
 )
-from pdfminer.utils import (
+from playa.utils import (
     MATRIX_IDENTITY,
     Matrix,
     PathSegment,

@@ -9,16 +9,16 @@ from typing import (
     cast,
 )
 
-from pdfminer import utils
-from pdfminer.pdfcolor import PDFColorSpace
-from pdfminer.pdffont import PDFFont, PDFUnicodeNotDefined
-from pdfminer.pdfpage import PDFPage
-from pdfminer.pdftypes import PDFStream
-from pdfminer.psparser import PSLiteral
-from pdfminer.utils import Matrix, PathSegment, Point, Rect
+from playa import utils
+from playa.pdfcolor import PDFColorSpace
+from playa.pdffont import PDFFont, PDFUnicodeNotDefined
+from playa.pdfpage import PDFPage
+from playa.pdftypes import PDFStream
+from playa.psparser import PSLiteral
+from playa.utils import Matrix, PathSegment, Point, Rect
 
 if TYPE_CHECKING:
-    from pdfminer.pdfinterp import (
+    from playa.pdfinterp import (
         PDFGraphicState,
         PDFResourceManager,
         PDFStackT,

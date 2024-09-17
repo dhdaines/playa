@@ -22,17 +22,17 @@ from typing import (
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 
-from pdfminer import settings
-from pdfminer.arcfour import Arcfour
-from pdfminer.data_structures import NumberTree
-from pdfminer.pdfexceptions import (
+from playa import settings
+from playa.arcfour import Arcfour
+from playa.data_structures import NumberTree
+from playa.pdfexceptions import (
     PDFException,
     PDFKeyError,
     PDFObjectNotFound,
     PDFTypeError,
 )
-from pdfminer.pdfparser import PDFParser, PDFStreamParser, PDFSyntaxError
-from pdfminer.pdftypes import (
+from playa.pdfparser import PDFParser, PDFStreamParser, PDFSyntaxError
+from playa.pdftypes import (
     DecipherCallable,
     PDFStream,
     decipher_all,
@@ -43,9 +43,9 @@ from pdfminer.pdftypes import (
     stream_value,
     uint_value,
 )
-from pdfminer.psexceptions import PSEOF
-from pdfminer.psparser import KWD, LIT, literal_name
-from pdfminer.utils import (
+from playa.psexceptions import PSEOF
+from playa.psparser import KWD, LIT, literal_name
+from playa.utils import (
     choplist,
     decode_text,
     format_int_alpha,
@@ -585,7 +585,7 @@ class PDFStandardSecurityHandlerV5(PDFStandardSecurityHandlerV4):
             # saslprep expects non-empty strings, apparently
             if not password:
                 return b""
-            from pdfminer._saslprep import saslprep
+            from playa._saslprep import saslprep
 
             password = saslprep(password)
         return password.encode("utf-8")[:127]

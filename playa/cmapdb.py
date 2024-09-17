@@ -32,11 +32,11 @@ from typing import (
     cast,
 )
 
-from pdfminer.encodingdb import name2unicode
-from pdfminer.pdfexceptions import PDFException, PDFTypeError
-from pdfminer.psexceptions import PSEOF, PSSyntaxError
-from pdfminer.psparser import KWD, PSKeyword, PSLiteral, PSStackParser, literal_name
-from pdfminer.utils import choplist, nunpack
+from playa.encodingdb import name2unicode
+from playa.pdfexceptions import PDFException, PDFTypeError
+from playa.psexceptions import PSEOF, PSSyntaxError
+from playa.psparser import KWD, PSKeyword, PSLiteral, PSStackParser, literal_name
+from playa.utils import choplist, nunpack
 
 log = logging.getLogger(__name__)
 

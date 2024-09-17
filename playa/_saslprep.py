@@ -24,7 +24,7 @@ import stringprep
 import unicodedata
 from typing import Callable, Tuple
 
-from pdfminer.pdfexceptions import PDFValueError
+from playa.pdfexceptions import PDFValueError
 
 # RFC4013 section 2.3 prohibited output.
 _PROHIBITED: Tuple[Callable[[str], bool], ...] = (

@@ -1,9 +1,9 @@
 from typing import Any, Iterable, List, Optional, Tuple
 
-from pdfminer import settings
-from pdfminer.pdfparser import PDFSyntaxError
-from pdfminer.pdftypes import dict_value, int_value, list_value
-from pdfminer.utils import choplist
+from playa import settings
+from playa.pdfparser import PDFSyntaxError
+from playa.pdftypes import dict_value, int_value, list_value
+from playa.utils import choplist
 
 
 class NumberTree:

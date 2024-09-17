@@ -15,16 +15,16 @@ from typing import (
 )
 from warnings import warn
 
-from pdfminer import pdfexceptions, settings
-from pdfminer.ascii85 import ascii85decode, asciihexdecode
-from pdfminer.ccitt import ccittfaxdecode
-from pdfminer.lzw import lzwdecode
-from pdfminer.psparser import LIT, PSObject
-from pdfminer.runlength import rldecode
-from pdfminer.utils import apply_png_predictor
+from playa import pdfexceptions, settings
+from playa.ascii85 import ascii85decode, asciihexdecode
+from playa.ccitt import ccittfaxdecode
+from playa.lzw import lzwdecode
+from playa.psparser import LIT, PSObject
+from playa.runlength import rldecode
+from playa.utils import apply_png_predictor
 
 if TYPE_CHECKING:
-    from pdfminer.pdfdocument import PDFDocument
+    from playa.pdfdocument import PDFDocument
 
 logger = logging.getLogger(__name__)
 

@@ -16,8 +16,8 @@ from typing import (
     cast,
 )
 
-from pdfminer import settings
-from pdfminer.cmapdb import (
+from playa import settings
+from playa.cmapdb import (
     CMap,
     CMapBase,
     CMapDB,
@@ -26,10 +26,10 @@ from pdfminer.cmapdb import (
     IdentityUnicodeMap,
     UnicodeMap,
 )
-from pdfminer.encodingdb import EncodingDB, name2unicode
-from pdfminer.fontmetrics import FONT_METRICS
-from pdfminer.pdfexceptions import PDFException, PDFKeyError, PDFValueError
-from pdfminer.pdftypes import (
+from playa.encodingdb import EncodingDB, name2unicode
+from playa.fontmetrics import FONT_METRICS
+from playa.pdfexceptions import PDFException, PDFKeyError, PDFValueError
+from playa.pdftypes import (
     PDFStream,
     dict_value,
     int_value,
@@ -39,8 +39,8 @@ from pdfminer.pdftypes import (
     resolve_all,
     stream_value,
 )
-from pdfminer.psexceptions import PSEOF
-from pdfminer.psparser import (
+from playa.psexceptions import PSEOF
+from playa.psparser import (
     KWD,
     LIT,
     PSKeyword,
@@ -48,10 +48,10 @@ from pdfminer.psparser import (
     PSStackParser,
     literal_name,
 )
-from pdfminer.utils import Matrix, Point, Rect, apply_matrix_norm, choplist, nunpack
+from playa.utils import Matrix, Point, Rect, apply_matrix_norm, choplist, nunpack
 
 if TYPE_CHECKING:
-    from pdfminer.pdfinterp import PDFResourceManager
+    from playa.pdfinterp import PDFResourceManager
 
 log = logging.getLogger(__name__)
 

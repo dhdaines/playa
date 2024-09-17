@@ -8,7 +8,7 @@ The following data was taken by
   $ wget https://partners.adobe.com/public/developer/en/opentype/glyphlist.txt
 
 ```python
-from pdfminer.glyphlist import convert_glyphlist
+from playa.glyphlist import convert_glyphlist
 
 convert_glyphlist("glyphlist.txt")
 """

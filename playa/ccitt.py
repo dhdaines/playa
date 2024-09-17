@@ -25,7 +25,7 @@ from typing import (
     cast,
 )
 
-from pdfminer.pdfexceptions import PDFException, PDFValueError
+from playa.pdfexceptions import PDFException, PDFValueError
 
 
 def get_bytes(data: bytes) -> Iterator[int]:

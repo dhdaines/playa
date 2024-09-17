@@ -1,4 +1,4 @@
-from pdfminer.psexceptions import PSException
+from playa.psexceptions import PSException
 
 
 class PDFException(PSException):

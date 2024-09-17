@@ -15,12 +15,12 @@ from typing import (
     cast,
 )
 
-from pdfminer.pdfcolor import PDFColorSpace
-from pdfminer.pdfexceptions import PDFTypeError, PDFValueError
-from pdfminer.pdffont import PDFFont
-from pdfminer.pdfinterp import Color, PDFGraphicState
-from pdfminer.pdftypes import PDFStream
-from pdfminer.utils import (
+from playa.pdfcolor import PDFColorSpace
+from playa.pdfexceptions import PDFTypeError, PDFValueError
+from playa.pdffont import PDFFont
+from playa.pdfinterp import Color, PDFGraphicState
+from playa.pdftypes import PDFStream
+from playa.utils import (
     INF,
     LTComponentT,
     Matrix,

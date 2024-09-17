@@ -2,15 +2,15 @@ import logging
 from io import BytesIO
 from typing import TYPE_CHECKING, BinaryIO, Optional, Union
 
-from pdfminer import settings
-from pdfminer.casting import safe_int
-from pdfminer.pdfexceptions import PDFException
-from pdfminer.pdftypes import PDFObjRef, PDFStream, dict_value, int_value
-from pdfminer.psexceptions import PSEOF
-from pdfminer.psparser import KWD, PSKeyword, PSStackParser
+from playa import settings
+from playa.casting import safe_int
+from playa.pdfexceptions import PDFException
+from playa.pdftypes import PDFObjRef, PDFStream, dict_value, int_value
+from playa.psexceptions import PSEOF
+from playa.psparser import KWD, PSKeyword, PSStackParser
 
 if TYPE_CHECKING:
-    from pdfminer.pdfdocument import PDFDocument
+    from playa.pdfdocument import PDFDocument
 
 log = logging.getLogger(__name__)
 

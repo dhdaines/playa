@@ -16,8 +16,8 @@ from typing import (
     Union,
 )
 
-from pdfminer import psexceptions, settings
-from pdfminer.utils import choplist
+from playa import psexceptions, settings
+from playa.utils import choplist
 
 log = logging.getLogger(__name__)
 
