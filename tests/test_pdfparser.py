@@ -6,7 +6,7 @@ from io import BytesIO
 
 import pytest
 
-from playa.pdfparser import read_header
+from playa.pdfparser import read_header, PDFParser
 from playa.exceptions import PDFSyntaxError
 
 
