@@ -17,7 +17,7 @@ __version__ = "0.0.1"
 
 
 @contextmanager
-def open(path: PathLike, password: str = "") -> PDFDocument:
+def open(path: PathLike, password: str = "") -> PDFDocument:  # noqa: A001
     """Open a PDF document from a path on the filesystem."""
     with builtins.open(path, "rb") as infh:
         parser = PDFParser(infh)

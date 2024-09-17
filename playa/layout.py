@@ -105,9 +105,7 @@ class LAParams:
             boxes_flow_err_msg = (
                 "LAParam boxes_flow should be None, or a number between -1 and +1"
             )
-            if not (
-                isinstance(self.boxes_flow, (float, int))
-            ):
+            if not (isinstance(self.boxes_flow, (float, int))):
                 raise PDFTypeError(boxes_flow_err_msg)
             if not -1 <= self.boxes_flow <= 1:
                 raise PDFValueError(boxes_flow_err_msg)
@@ -116,7 +114,12 @@ class LAParams:
         return (
             "<LAParams: char_margin=%.1f, line_margin=%.1f, "
             "word_margin=%.1f all_texts=%r>"
-            % (self.char_margin, self.line_margin, self.word_margin, self.all_texts)
+            % (
+                self.char_margin,
+                self.line_margin,
+                self.word_margin,
+                self.all_texts,
+            )
         )
 
 
