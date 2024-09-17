@@ -6,9 +6,9 @@ from typing import Dict, List, Mapping, Optional, Sequence, Tuple, Union, cast
 from playa import settings
 from playa.casting import safe_float
 from playa.cmapdb import CMap, CMapBase, CMapDB
+from playa.exceptions import PSEOF, PDFException, PDFValueError, PSTypeError
 from playa.pdfcolor import PREDEFINED_COLORSPACE, PDFColorSpace
 from playa.pdfdevice import PDFDevice, PDFTextSeq
-from playa.pdfexceptions import PDFException, PDFValueError
 from playa.pdffont import (
     PDFCIDFont,
     PDFFont,
@@ -27,7 +27,6 @@ from playa.pdftypes import (
     resolve1,
     stream_value,
 )
-from playa.psexceptions import PSEOF, PSTypeError
 from playa.psparser import (
     KWD,
     LIT,
@@ -334,7 +333,7 @@ class PDFContentParser(PSStackParser[Union[PSKeyword, PDFStream]]):
                     raise PSTypeError(error_msg)
                 d = {literal_name(k): resolve1(v) for (k, v) in choplist(2, objs)}
                 eos = b"EI"
-                filter = d.get("F", None)
+                filter = d.get("F")
                 if filter is not None:
                     if isinstance(filter, PSLiteral):
                         filter = [filter]

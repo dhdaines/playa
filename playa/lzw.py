@@ -2,7 +2,7 @@ import logging
 from io import BytesIO
 from typing import BinaryIO, Iterator, List, Optional, cast
 
-from playa.pdfexceptions import PDFEOFError, PDFException
+from playa.exceptions import PDFEOFError, PDFException
 
 logger = logging.getLogger(__name__)
 

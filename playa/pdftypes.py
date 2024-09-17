@@ -15,9 +15,16 @@ from typing import (
 )
 from warnings import warn
 
-from playa import pdfexceptions, settings
+from playa import settings
 from playa.ascii85 import ascii85decode, asciihexdecode
 from playa.ccitt import ccittfaxdecode
+from playa.exceptions import (
+    PDFException,
+    PDFNotImplementedError,
+    PDFObjectNotFound,
+    PDFTypeError,
+    PDFValueError,
+)
 from playa.lzw import lzwdecode
 from playa.psparser import LIT, PSObject
 from playa.runlength import rldecode
@@ -58,13 +65,6 @@ class DecipherCallable(Protocol):
 class PDFObject(PSObject):
     pass
 
-
-# Adding aliases for these exceptions for backwards compatibility
-PDFException = pdfexceptions.PDFException
-PDFTypeError = pdfexceptions.PDFTypeError
-PDFValueError = pdfexceptions.PDFValueError
-PDFObjectNotFound = pdfexceptions.PDFObjectNotFound
-PDFNotImplementedError = pdfexceptions.PDFNotImplementedError
 
 _DEFAULT = object()
 

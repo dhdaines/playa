@@ -4,9 +4,8 @@ from typing import TYPE_CHECKING, BinaryIO, Optional, Union
 
 from playa import settings
 from playa.casting import safe_int
-from playa.pdfexceptions import PDFException
+from playa.exceptions import PSEOF, PDFException
 from playa.pdftypes import PDFObjRef, PDFStream, dict_value, int_value
-from playa.psexceptions import PSEOF
 from playa.psparser import KWD, PSKeyword, PSStackParser
 
 if TYPE_CHECKING:

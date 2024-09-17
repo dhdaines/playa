@@ -25,13 +25,21 @@ from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from playa import settings
 from playa.arcfour import Arcfour
 from playa.data_structures import NumberTree
-from playa.pdfexceptions import (
+from playa.exceptions import (
+    PSEOF,
+    PDFDestinationNotFound,
+    PDFEncryptionError,
     PDFException,
     PDFKeyError,
+    PDFNoOutlines,
+    PDFNoPageLabels,
+    PDFNoValidXRef,
     PDFObjectNotFound,
+    PDFPasswordIncorrect,
+    PDFSyntaxError,
     PDFTypeError,
 )
-from playa.pdfparser import PDFParser, PDFStreamParser, PDFSyntaxError
+from playa.pdfparser import PDFParser, PDFStreamParser
 from playa.pdftypes import (
     DecipherCallable,
     PDFStream,
@@ -43,7 +51,6 @@ from playa.pdftypes import (
     stream_value,
     uint_value,
 )
-from playa.psexceptions import PSEOF
 from playa.psparser import KWD, LIT, literal_name
 from playa.utils import (
     choplist,
@@ -54,55 +61,6 @@ from playa.utils import (
 )
 
 log = logging.getLogger(__name__)
-
-
-class PDFNoValidXRef(PDFSyntaxError):
-    pass
-
-
-class PDFNoValidXRefWarning(SyntaxWarning):
-    """Legacy warning for missing xref.
-
-    Not used anymore because warnings.warn is replaced by logger.Logger.warn.
-    """
-
-
-class PDFNoOutlines(PDFException):
-    pass
-
-
-class PDFNoPageLabels(PDFException):
-    pass
-
-
-class PDFDestinationNotFound(PDFException):
-    pass
-
-
-class PDFEncryptionError(PDFException):
-    pass
-
-
-class PDFPasswordIncorrect(PDFEncryptionError):
-    pass
-
-
-class PDFEncryptionWarning(UserWarning):
-    """Legacy warning for failed decryption.
-
-    Not used anymore because warnings.warn is replaced by logger.Logger.warn.
-    """
-
-
-class PDFTextExtractionNotAllowedWarning(UserWarning):
-    """Legacy warning for PDF that does not allow extraction.
-
-    Not used anymore because warnings.warn is replaced by logger.Logger.warn.
-    """
-
-
-class PDFTextExtractionNotAllowed(PDFEncryptionError):
-    pass
 
 
 # some predefined literals and keywords.

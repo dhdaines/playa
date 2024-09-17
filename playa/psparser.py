@@ -16,18 +16,16 @@ from typing import (
     Union,
 )
 
-from playa import psexceptions, settings
+from playa import settings
+from playa.exceptions import (
+    PSEOF,
+    PSException,
+    PSSyntaxError,
+    PSTypeError,
+)
 from playa.utils import choplist
 
 log = logging.getLogger(__name__)
-
-
-# Adding aliases for these exceptions for backwards compatibility
-PSException = psexceptions.PSException
-PSEOF = psexceptions.PSEOF
-PSSyntaxError = psexceptions.PSSyntaxError
-PSTypeError = psexceptions.PSTypeError
-PSValueError = psexceptions.PSValueError
 
 
 class PSObject:
