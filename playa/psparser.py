@@ -249,7 +249,7 @@ class PSBaseParser:
     def _parse_main(self):
         """Initial/default state for the lexer."""
         c = self.fp.read(1)
-        # note that b"" is in everything, which is fine
+        # note that b"" (EOF) is in everything, which is fine
         if c in WHITESPACE:
             return c
         self._curtokenpos = self.fp.tell() - 1

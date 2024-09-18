@@ -1,4 +1,5 @@
 import logging
+import tempfile
 import time
 from io import BytesIO
 from pathlib import Path
@@ -271,18 +272,32 @@ DATA = rb"""
 
 
 def bench_playa():
-    from playa.psparser import PSBaseParser
     from playa.converter import PDFPageAggregator
     from playa.pdfdocument import PDFDocument
     from playa.pdfinterp import PDFPageInterpreter, PDFResourceManager
     from playa.pdfpage import PDFPage
+    from playa.psparser import PSBaseParser
+
     runs = 100
     start = time.time()
     parser = PSBaseParser(BytesIO(DATA * runs))
     _ = list(parser)
     print(
-        "PLAYA Parser: %fms / run" % ((time.time() - start) / runs * 1000),
+        "PLAYA Parser (BytesIO): %fms / run" % ((time.time() - start) / runs * 1000),
     )
+    with tempfile.NamedTemporaryFile() as tf:
+        runs = 100
+        with open(tf.name, "wb") as outfh:
+            outfh.write(DATA * runs)
+        with open(tf.name, "rb") as infh:
+            start = time.time()
+            parser = PSBaseParser(infh)
+            _ = list(parser)
+            print(
+                "PLAYA Parser (BinaryIO): %fms / run"
+                % ((time.time() - start) / runs * 1000),
+            )
+
     runs = 20
     start = time.time()
     for _ in range(runs):
@@ -299,12 +314,13 @@ def bench_playa():
 
 
 def bench_pdfminer():
-    from pdfminer.psparser import PSBaseParser, PSEOF
-    from pdfminer.pdfparser import PDFParser
     from pdfminer.converter import PDFPageAggregator
     from pdfminer.pdfdocument import PDFDocument
     from pdfminer.pdfinterp import PDFPageInterpreter, PDFResourceManager
     from pdfminer.pdfpage import PDFPage
+    from pdfminer.pdfparser import PDFParser
+    from pdfminer.psparser import PSEOF, PSBaseParser
+
     runs = 100
     start = time.time()
     parser = PSBaseParser(BytesIO(DATA * runs))
@@ -314,8 +330,24 @@ def bench_pdfminer():
         except PSEOF:
             break
     print(
-        "pdfminer.six Parser: %fms / run" % ((time.time() - start) / runs * 1000),
+        "pdfminer.six Parser (BytesIO): %fms / run"
+        % ((time.time() - start) / runs * 1000),
     )
+    with tempfile.NamedTemporaryFile() as tf:
+        runs = 100
+        with open(tf.name, "wb") as outfh:
+            outfh.write(DATA * runs)
+        with open(tf.name, "rb") as infh:
+            parser = PSBaseParser(infh)
+            while True:
+                try:
+                    _ = parser.nexttoken()
+                except PSEOF:
+                    break
+            print(
+                "pdfminer.six Parser (BinaryIO): %fms / run"
+                % ((time.time() - start) / runs * 1000),
+            )
     runs = 20
     start = time.time()
     for _ in range(runs):
@@ -333,6 +365,7 @@ def bench_pdfminer():
 
 if __name__ == "__main__":
     import sys
+
     if len(sys.argv) < 2 or sys.argv[1] == "pdfminer":
         bench_pdfminer()
     if len(sys.argv) < 2 or sys.argv[1] == "playa":
