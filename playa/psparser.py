@@ -2,9 +2,12 @@
 import io
 import logging
 import re
+from binascii import unhexlify
+from collections import deque
 from typing import (
     Any,
     BinaryIO,
+    Deque,
     Dict,
     Generic,
     Iterator,
@@ -107,6 +110,7 @@ KEYWORD_ARRAY_BEGIN = KWD(b"[")
 KEYWORD_ARRAY_END = KWD(b"]")
 KEYWORD_DICT_BEGIN = KWD(b"<<")
 KEYWORD_DICT_END = KWD(b">>")
+KEYWORD_GT = KWD(b">")
 
 
 def literal_name(x: Any) -> str:
@@ -134,17 +138,15 @@ def keyword_name(x: Any) -> Any:
     return name
 
 
-EOL = re.compile(rb"[\r\n]")
+EOL = b"\r\n"
 SPC = re.compile(rb"\s")
-NONSPC = re.compile(rb"\S")
-HEX = re.compile(rb"[0-9a-fA-F]")
-END_LITERAL = re.compile(rb"[#/%\[\]()<>{}\s]")
-END_HEX_STRING = re.compile(rb"[^\s0-9a-fA-F]")
-HEX_PAIR = re.compile(rb"[0-9a-fA-F]{2}|.")
-END_NUMBER = re.compile(rb"[^0-9]")
-END_KEYWORD = re.compile(rb"[#/%\[\]()<>{}\s]")
-END_STRING = re.compile(rb"[()\134]")
-OCT_STRING = re.compile(rb"[0-7]")
+WHITESPACE = b" \t\n\r\f\v"
+NUMBER = b"0123456789"
+HEX = NUMBER + b"abcdef" + b"ABCDEF"
+NOTLITERAL = b"#/%[]()<>{}" + WHITESPACE
+NOTKEYWORD = b"#/%[]()<>{}" + WHITESPACE
+NOTSTRING = b"()\\"
+OCTAL = b"01234567"
 ESC_STRING = {
     b"b": 8,
     b"t": 9,
@@ -161,363 +163,353 @@ PSBaseParserToken = Union[float, bool, PSLiteral, PSKeyword, bytes]
 
 
 class PSBaseParser:
-    """Most basic PostScript parser that performs only tokenization."""
-
-    BUFSIZ = 4096
-
-    def __init__(self, fp: BinaryIO) -> None:
-        self.fp = fp
-        self.eof = False
+    def __init__(self, reader: io.BufferedReader):
+        self.reader = reader
+        self._tokens: Deque[Tuple[int, str]] = deque()
         self.seek(0)
 
-    def __repr__(self) -> str:
-        return "<%s: %r, bufpos=%d>" % (self.__class__.__name__, self.fp, self.bufpos)
-
-    def flush(self) -> None:
-        pass
-
-    def close(self) -> None:
-        self.flush()
-
-    def tell(self) -> int:
-        return self.bufpos + self.charpos
-
-    def poll(self, pos: Optional[int] = None, n: int = 80) -> None:
-        pos0 = self.fp.tell()
-        if not pos:
-            pos = self.bufpos + self.charpos
-        self.fp.seek(pos)
-        log.debug("poll(%d): %r", pos, self.fp.read(n))
-        self.fp.seek(pos0)
-
     def seek(self, pos: int) -> None:
-        """Seeks the parser to the given position."""
-        log.debug("seek: %r", pos)
-        self.fp.seek(pos)
-        # reset the status for nextline()
-        self.bufpos = pos
-        self.buf = b""
-        self.charpos = 0
-        # reset the status for nexttoken()
+        self.reader.seek(pos)
         self._parse1 = self._parse_main
         self._curtoken = b""
         self._curtokenpos = 0
-        self._tokens: List[Tuple[int, PSBaseParserToken]] = []
-        self.eof = False
+        self._tokens.clear()
 
-    def fillbuf(self) -> None:
-        if self.charpos < len(self.buf):
-            return
-        # fetch next chunk.
-        self.bufpos = self.fp.tell()
-        self.buf = self.fp.read(self.BUFSIZ)
-        if not self.buf:
-            raise PSEOF("Unexpected EOF")
-        self.charpos = 0
+    def tell(self) -> None:
+        return self.reader.tell()
 
     def nextline(self) -> Tuple[int, bytes]:
-        """Fetches a next line that ends either with \\r or \\n."""
-        linebuf = b""
-        linepos = self.bufpos + self.charpos
-        eol = False
-        while 1:
-            self.fillbuf()
-            if eol:
-                c = self.buf[self.charpos : self.charpos + 1]
-                # handle b'\r\n'
-                if c == b"\n":
-                    linebuf += c
-                    self.charpos += 1
-                break
-            m = EOL.search(self.buf, self.charpos)
-            if m:
-                linebuf += self.buf[self.charpos : m.end(0)]
-                self.charpos = m.end(0)
-                if linebuf[-1:] == b"\r":
-                    eol = True
-                else:
-                    break
-            else:
-                linebuf += self.buf[self.charpos :]
-                self.charpos = len(self.buf)
-        log.debug("nextline: %r, %r", linepos, linebuf)
-
-        return (linepos, linebuf)
+        r"""Fetches a next line that ends either with \r, \n, or \r\n."""
+        linepos = self.reader.tell()
+        # readline() is implemented on BufferedReader so just use that
+        # (except that it only accepts \n as a separator)
+        line_or_lines = self.reader.readline()
+        if line_or_lines == b"":
+            raise PSEOF
+        first, sep, rest = line_or_lines.partition(b"\r")
+        if len(rest) == 0:
+            return (linepos, line_or_lines)
+        elif rest != b"\n":
+            self.reader.seek(linepos + len(first) + 1)
+            return (linepos, first + sep)
+        else:
+            self.reader.seek(linepos + len(first) + 2)
+            return (linepos, first + b"\r\n")
 
     def revreadlines(self) -> Iterator[bytes]:
-        """Fetches a next line backword.
+        """Fetches a next line backwards.
 
         This is used to locate the trailers at the end of a file.
         """
-        self.fp.seek(0, io.SEEK_END)
-        pos = self.fp.tell()
+        self.reader.seek(0, io.SEEK_END)
+        pos = self.reader.tell()
         buf = b""
         while pos > 0:
-            prevpos = pos
-            pos = max(0, pos - self.BUFSIZ)
-            self.fp.seek(pos)
-            s = self.fp.read(prevpos - pos)
-            if not s:
-                break
-            while 1:
-                n = max(s.rfind(b"\r"), s.rfind(b"\n"))
-                if n == -1:
-                    buf = s + buf
-                    break
-                yield s[n:] + buf
-                s = s[:n]
-                buf = b""
+            # NOTE: This can obviously be optimized to use regular
+            # expressions on the (known to exist) buffer in
+            # self.reader...
+            pos -= 1
+            self.reader.seek(pos)
+            c = self.reader.read(1)
+            if c in b"\r\n":
+                yield buf
+                buf = c
+                if c == b"\n" and pos > 0:
+                    self.reader.seek(pos - 1)
+                    cc = self.reader.read(1)
+                    if cc == b"\r":
+                        pos -= 1
+                        buf = cc + buf
+            else:
+                buf = c + buf
+        yield buf
 
-    def _parse_main(self, s: bytes, i: int) -> int:
-        m = NONSPC.search(s, i)
-        if not m:
-            return len(s)
-        j = m.start(0)
-        c = s[j : j + 1]
-        self._curtokenpos = self.bufpos + j
+    def __iter__(self):
+        return self
+
+    def __next__(self) -> Union[None, Tuple[int, PSBaseParserToken]]:
+        while True:
+            c = self._parse1()
+            # print(c, self._curtoken, self._parse1)
+            if self._tokens or c == b"":
+                break
+        if not self._tokens:
+            raise StopIteration
+        return self._tokens.popleft()
+
+    def nexttoken(self) -> Tuple[int, PSBaseParserToken]:
+        try:
+            return self.__next__()
+        except StopIteration:
+            raise PSEOF
+
+    def _getbuf(self) -> bytes:
+        return self.reader.peek()
+
+    def _getchar(self) -> bytes:
+        return self.reader.read(1)
+
+    def _parse_main(self):
+        """Initial/default state for the lexer."""
+        c = self.reader.read(1)
+        # note that b"" is in everything, which is fine
+        if c in WHITESPACE:
+            return c
+        self._curtokenpos = self.reader.tell() - 1
         if c == b"%":
             self._curtoken = b"%"
             self._parse1 = self._parse_comment
-            return j + 1
         elif c == b"/":
             self._curtoken = b""
             self._parse1 = self._parse_literal
-            return j + 1
-        elif c in b"-+" or c.isdigit():
+        elif c in b"-+" or c in NUMBER:
             self._curtoken = c
             self._parse1 = self._parse_number
-            return j + 1
         elif c == b".":
             self._curtoken = c
             self._parse1 = self._parse_float
-            return j + 1
         elif c.isalpha():
             self._curtoken = c
             self._parse1 = self._parse_keyword
-            return j + 1
         elif c == b"(":
             self._curtoken = b""
             self.paren = 1
             self._parse1 = self._parse_string
-            return j + 1
         elif c == b"<":
             self._curtoken = b""
             self._parse1 = self._parse_wopen
-            return j + 1
         elif c == b">":
             self._curtoken = b""
             self._parse1 = self._parse_wclose
-            return j + 1
         elif c == b"\x00":
-            return j + 1
+            pass
         else:
             self._add_token(KWD(c))
-            return j + 1
+        return c
 
     def _add_token(self, obj: PSBaseParserToken) -> None:
+        """Add a succesfully parsed token."""
         self._tokens.append((self._curtokenpos, obj))
 
-    def _parse_comment(self, s: bytes, i: int) -> int:
-        m = EOL.search(s, i)
-        if not m:
-            self._curtoken += s[i:]
-            return len(s)
-        j = m.start(0)
-        self._curtoken += s[i:j]
-        self._parse1 = self._parse_main
-        # We ignore comments.
-        # self._tokens.append(self._curtoken)
-        return j
+    def _parse_comment(self):
+        """Comment state for the lexer"""
+        c = self.reader.read(1)
+        if c in EOL:  # this includes b"", i.e. EOF
+            self._parse1 = self._parse_main
+            # We ignore comments.
+            # self._tokens.append(self._curtoken)
+        else:
+            self._curtoken += c
+        return c
 
-    def _parse_literal(self, s: bytes, i: int) -> int:
-        m = END_LITERAL.search(s, i)
-        if not m:
-            self._curtoken += s[i:]
-            return len(s)
-        j = m.start(0)
-        self._curtoken += s[i:j]
-        c = s[j : j + 1]
+    def _parse_literal(self):
+        """Literal (keyword) state for the lexer."""
+        c = self.reader.read(1)
         if c == b"#":
             self.hex = b""
             self._parse1 = self._parse_literal_hex
-            return j + 1
-        try:
-            name: Union[str, bytes] = str(self._curtoken, "utf-8")
-        except Exception:
-            name = self._curtoken
-        self._add_token(LIT(name))
-        self._parse1 = self._parse_main
-        return j
+        elif c in NOTLITERAL:
+            if c:
+                self.reader.seek(-1, io.SEEK_CUR)
+            try:
+                self._add_token(LIT(self._curtoken.decode("utf-8")))
+            except UnicodeDecodeError:
+                self._add_token(LIT(self._curtoken))
+            self._parse1 = self._parse_main
+        else:
+            self._curtoken += c
+        return c
 
-    def _parse_literal_hex(self, s: bytes, i: int) -> int:
-        c = s[i : i + 1]
-        if HEX.match(c) and len(self.hex) < 2:
+    def _parse_literal_hex(self):
+        """State for escaped hex characters in literal names"""
+        # Consume a hex digit only if we can ... consume a hex digit
+        c = self.reader.read(1)
+        if c and c in HEX and len(self.hex) < 2:
             self.hex += c
-            return i + 1
-        if self.hex:
-            self._curtoken += bytes((int(self.hex, 16),))
-        self._parse1 = self._parse_literal
-        return i
+        else:
+            if c:
+                self.reader.seek(-1, io.SEEK_CUR)
+            if self.hex:
+                self._curtoken += bytes((int(self.hex, 16),))
+            self._parse1 = self._parse_literal
+        return c
 
-    def _parse_number(self, s: bytes, i: int) -> int:
-        m = END_NUMBER.search(s, i)
-        if not m:
-            self._curtoken += s[i:]
-            return len(s)
-        j = m.start(0)
-        self._curtoken += s[i:j]
-        c = s[j : j + 1]
-        if c == b".":
+    def _parse_number(self):
+        """State for numeric objects."""
+        c = self.reader.read(1)
+        if c and c in NUMBER:
+            self._curtoken += c
+        elif c == b".":
             self._curtoken += c
             self._parse1 = self._parse_float
-            return j + 1
-        try:
-            self._add_token(int(self._curtoken))
-        except ValueError:
-            pass
-        self._parse1 = self._parse_main
-        return j
-
-    def _parse_float(self, s: bytes, i: int) -> int:
-        m = END_NUMBER.search(s, i)
-        if not m:
-            self._curtoken += s[i:]
-            return len(s)
-        j = m.start(0)
-        self._curtoken += s[i:j]
-        try:
-            self._add_token(float(self._curtoken))
-        except ValueError:
-            pass
-        self._parse1 = self._parse_main
-        return j
-
-    def _parse_keyword(self, s: bytes, i: int) -> int:
-        m = END_KEYWORD.search(s, i)
-        if m:
-            j = m.start(0)
-            self._curtoken += s[i:j]
         else:
-            self._curtoken += s[i:]
-            return len(s)
-        if self._curtoken == b"true":
-            token: Union[bool, PSKeyword] = True
-        elif self._curtoken == b"false":
-            token = False
-        else:
-            token = KWD(self._curtoken)
-        self._add_token(token)
-        self._parse1 = self._parse_main
-        return j
+            if c:
+                self.reader.seek(-1, io.SEEK_CUR)
+            try:
+                self._add_token(int(self._curtoken))
+            except ValueError:
+                log.warning("Invalid int literal: %r", self._curtoken)
+            self._parse1 = self._parse_main
+        return c
 
-    def _parse_string(self, s: bytes, i: int) -> int:
-        m = END_STRING.search(s, i)
-        if not m:
-            self._curtoken += s[i:]
-            return len(s)
-        j = m.start(0)
-        self._curtoken += s[i:j]
-        c = s[j : j + 1]
-        if c == b"\\":
-            self.oct = b""
-            self._parse1 = self._parse_string_1
-            return j + 1
-        if c == b"(":
-            self.paren += 1
+    def _parse_float(self):
+        """State for fractional part of numeric objects."""
+        c = self.reader.read(1)
+        # b"" is in everything so we have to add an extra check
+        if not c or c not in NUMBER:
+            if c:
+                self.reader.seek(-1, io.SEEK_CUR)
+            try:
+                self._add_token(float(self._curtoken))
+            except ValueError:
+                log.warning("Invalid float literal: %r", self._curtoken)
+            self._parse1 = self._parse_main
+        else:
             self._curtoken += c
-            return j + 1
-        if c == b")":
-            self.paren -= 1
-            if self.paren:
-                # WTF, they said balanced parens need no special treatment.
+        return c
+
+    def _parse_keyword(self):
+        """State for keywords."""
+        c = self.reader.read(1)
+        if c in NOTKEYWORD:  # includes EOF
+            if c:
+                self.reader.seek(-1, io.SEEK_CUR)
+            if self._curtoken == b"true":
+                self._add_token(True)
+            elif self._curtoken == b"false":
+                self._add_token(False)
+            else:
+                self._add_token(KWD(self._curtoken))
+            self._parse1 = self._parse_main
+        else:
+            self._curtoken += c
+        return c
+
+    def _parse_string(self):
+        """State for string objects."""
+        c = self.reader.read(1)
+        if c and c in NOTSTRING:  # does not include EOF
+            if c == b"\\":
+                self._parse1 = self._parse_string_esc
+                return c
+            elif c == b"(":
+                self.paren += 1
                 self._curtoken += c
-                return j + 1
-        self._add_token(self._curtoken)
-        self._parse1 = self._parse_main
-        return j + 1
+                return c
+            elif c == b")":
+                self.paren -= 1
+                if self.paren:
+                    self._curtoken += c
+                    return c
+            # We saw the last parenthesis and fell through (it will be
+            # consumed, but not added to self._curtoken)
+            self._add_token(self._curtoken)
+            self._parse1 = self._parse_main
+        elif c == b"\r":
+            # PDF 1.7 page 15: An end-of-line marker appearing within
+            # a literal string without a preceding REVERSE SOLIDUS
+            # shall be treated as a byte value of (0Ah), irrespective
+            # of whether the end-of-line marker was a CARRIAGE RETURN
+            # (0Dh), a LINE FEED (0Ah), or both.
+            cc = self.reader.read(1)
+            # Put it back if it isn't \n
+            if cc and cc != b"\n":
+                self.reader.seek(-1, io.SEEK_CUR)
+            self._curtoken += b"\n"
+        else:
+            self._curtoken += c
+        return c
 
-    def _parse_string_1(self, s: bytes, i: int) -> int:
-        """Parse literal strings
-
-        PDF Reference 3.2.3
-        """
-        c = s[i : i + 1]
-        if OCT_STRING.match(c) and len(self.oct) < 3:
-            self.oct += c
-            return i + 1
-
-        elif self.oct:
-            chrcode = int(self.oct, 8)
-            assert chrcode < 256, "Invalid octal %s (%d)" % (repr(self.oct), chrcode)
-            self._curtoken += bytes((chrcode,))
-            self._parse1 = self._parse_string
-            return i
-
-        elif c in ESC_STRING:
+    def _parse_string_esc(self):
+        """State for escapes in literal strings.  We have seen a
+        backslash and nothing else."""
+        c = self.reader.read(1)
+        if c and c in OCTAL:  # exclude EOF
+            self.oct = c
+            self._parse1 = self._parse_string_octal
+            return c
+        elif c and c in ESC_STRING:
             self._curtoken += bytes((ESC_STRING[c],))
-
-        elif c == b"\r" and len(s) > i + 1 and s[i + 1 : i + 2] == b"\n":
-            # If current and next character is \r\n skip both because enters
-            # after a \ are ignored
-            i += 1
-
-        # default action
+        elif c == b"\n":  # Skip newline after backslash
+            pass
+        elif c == b"\r":  # Also skip CRLF after
+            cc = self.reader.read(1)
+            # Put it back if it isn't \n
+            if cc and cc != b"\n":
+                self.reader.seek(-1, io.SEEK_CUR)
+        elif c == b"":
+            log.warning("EOF inside escape %r", self._curtoken)
+        else:
+            log.warning("Unrecognized escape %r", c)
+            self._curtoken += c
         self._parse1 = self._parse_string
-        return i + 1
+        return c
 
-    def _parse_wopen(self, s: bytes, i: int) -> int:
-        c = s[i : i + 1]
+    def _parse_string_octal(self):
+        """State for an octal escape."""
+        c = self.reader.read(1)
+        if c and c in OCTAL:  # exclude EOF
+            self.oct += c
+            done = len(self.oct) >= 3  # it can't be > though
+        else:
+            if c:
+                self.reader.seek(-1, io.SEEK_CUR)
+            else:
+                log.warning("EOF in octal escape %r", self._curtoken)
+            done = True
+        if done:
+            chrcode = int(self.oct, 8)
+            if chrcode >= 256:
+                # PDF1.7 p.16: "high-order overflow shall be ignored."
+                log.warning("Invalid octal %s (%d)", repr(self.oct), chrcode)
+            else:
+                self._curtoken += bytes((chrcode,))
+            # Back to normal string parsing
+            self._parse1 = self._parse_string
+        return c
+
+    def _parse_wopen(self):
+        """State for start of dictionary or hex string."""
+        c = self.reader.read(1)
         if c == b"<":
             self._add_token(KEYWORD_DICT_BEGIN)
             self._parse1 = self._parse_main
-            i += 1
         else:
+            if c:
+                self.reader.seek(-1, io.SEEK_CUR)
             self._parse1 = self._parse_hexstring
-        return i
+        return c
 
-    def _parse_wclose(self, s: bytes, i: int) -> int:
-        c = s[i : i + 1]
+    def _parse_wclose(self):
+        """State for end of dictionary (accessed from initial state only)"""
+        c = self.reader.read(1)
         if c == b">":
             self._add_token(KEYWORD_DICT_END)
-            i += 1
+        else:
+            # Assuming this is a keyword (which means nothing)
+            self._add_token(KEYWORD_GT)
+            if c:
+                self.reader.seek(-1, io.SEEK_CUR)
         self._parse1 = self._parse_main
-        return i
 
-    def _parse_hexstring(self, s: bytes, i: int) -> int:
-        m = END_HEX_STRING.search(s, i)
-        if not m:
-            self._curtoken += s[i:]
-            return len(s)
-        j = m.start(0)
-        self._curtoken += s[i:j]
-        token = HEX_PAIR.sub(
-            lambda m: bytes((int(m.group(0), 16),)),
-            SPC.sub(b"", self._curtoken),
-        )
-        self._add_token(token)
-        self._parse1 = self._parse_main
-        return j
-
-    def nexttoken(self) -> Tuple[int, PSBaseParserToken]:
-        if self.eof:
-            # It's not really unexpected, come on now...
-            raise PSEOF("Unexpected EOF")
-        while not self._tokens:
-            try:
-                self.fillbuf()
-                self.charpos = self._parse1(self.buf, self.charpos)
-            except PSEOF:
-                # If we hit EOF in the middle of a token, try to parse
-                # it by tacking on whitespace, and delay raising PSEOF
-                # until next time around
-                self.charpos = self._parse1(b"\n", 0)
-                self.eof = True
-                # Oh, so there wasn't actually a token there? OK.
-                if not self._tokens:
-                    raise
-        token = self._tokens.pop(0)
-        log.debug("nexttoken: %r", token)
-        return token
+    def _parse_hexstring(self):
+        """State for parsing hexadecimal literal strings."""
+        c = self.reader.read(1)
+        if not c:
+            log.warning("EOF in hex string %r", self._curtoken)
+        elif c in WHITESPACE:
+            pass
+        elif c in HEX:
+            self._curtoken += c
+        elif c == b">":
+            if len(self._curtoken) % 2 == 1:
+                self._curtoken += b"0"
+            token = unhexlify(self._curtoken)
+            self._add_token(token)
+            self._parse1 = self._parse_main
+        else:
+            log.warning("unexpected character %r in hex string %r", c, self._curtoken)
+        return c
 
 
 # Stack slots may by occupied by any of:
@@ -653,8 +645,6 @@ class PSStackParser(PSBaseParser, Generic[ExtraT]):
                 raise PSException
             if self.context:
                 continue
-            else:
-                self.flush()
         obj = self.results.pop(0)
         try:
             log.debug("nextobject: %r", obj)
