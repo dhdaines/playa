@@ -42,6 +42,7 @@ from playa.exceptions import (
 from playa.pdfparser import KEYWORD_XREF, PDFParser, PDFStreamParser
 from playa.pdftypes import (
     DecipherCallable,
+    PDFObjRef,
     PDFStream,
     decipher_all,
     dict_value,
@@ -68,7 +69,10 @@ log = logging.getLogger(__name__)
 LITERAL_OBJSTM = LIT("ObjStm")
 LITERAL_XREF = LIT("XRef")
 LITERAL_CATALOG = LIT("Catalog")
+LITERAL_PAGE = LIT("Page")
+LITERAL_PAGES = LIT("Pages")
 KEYWORD_OBJ = KWD(b"obj")
+INHERITABLE_PAGE_ATTRS = {"Resources", "MediaBox", "CropBox", "Rotate"}
 
 
 class PDFBaseXRef:
@@ -906,6 +910,72 @@ class PDFDocument:
             raise PDFNoPageLabels
 
         return page_labels.labels
+
+    PageType = Dict[Any, Dict[Any, Any]]
+
+    def get_pages_from_xrefs(self) -> Iterator[Tuple[int, PageType]]:
+        """Find pages from the cross-reference tables if the page tree
+        is missing (note that this only happens in invalid PDFs, but
+        it happens.)
+
+        Returns an iterator over (objid, dict) pairs.
+        """
+        for xref in self.xrefs:
+            for object_id in xref.get_objids():
+                try:
+                    obj = self.getobj(object_id)
+                    if isinstance(obj, dict) and obj.get("Type") is LITERAL_PAGE:
+                        yield object_id, obj
+                except PDFObjectNotFound:
+                    pass
+
+    def walk_page_tree(self) -> Iterator[Tuple[int, PageType]]:
+        """Iterate over the flattened page tree in reading order, propagating
+        inheritable attributes.  Returns an iterator over (objid, dict) pairs.
+
+        Will raise an IndexError if there is no page tree.
+        """
+        stack = [(self.catalog["Pages"], self.catalog)]
+        visited = set()
+        while stack:
+            (obj, parent) = stack.pop()
+            if isinstance(obj, PDFObjRef):
+                # The PDF specification *requires* both the Pages
+                # element of the catalog and the entries in Kids in
+                # the page tree to be indirect references.
+                object_id = obj.objid
+            elif isinstance(obj, int):
+                # Should not happen in a valid PDF, but probably does?
+                log.warning("Page tree contains bare integer: %r in %r", obj, parent)
+                object_id = obj
+            else:
+                log.warning("Page tree contains unknown object: %r", obj)
+            page_object = dict_value(self.getobj(object_id))
+
+            # Avoid recursion errors by keeping track of visited nodes
+            # (again, this should never actually happen in a valid PDF)
+            if object_id in visited:
+                log.warning("Circular reference %r in page tree", obj)
+                continue
+            visited.add(object_id)
+
+            # Propagate inheritable attributes
+            object_properties = page_object.copy()
+            for k, v in parent.items():
+                if k in INHERITABLE_PAGE_ATTRS and k not in object_properties:
+                    object_properties[k] = v
+
+            # Recurse, depth-first
+            object_type = object_properties.get("Type")
+            if object_type is None and not settings.STRICT:  # See #64
+                object_type = object_properties.get("type")
+            if object_type is LITERAL_PAGES and "Kids" in object_properties:
+                log.debug("Pages: Kids=%r", object_properties["Kids"])
+                for child in reversed(list_value(object_properties["Kids"])):
+                    stack.append((child, object_properties))
+            elif object_type is LITERAL_PAGE:
+                log.debug("Page: %r", object_properties)
+                yield object_id, object_properties
 
     def lookup_name(self, cat: str, key: Union[str, bytes]) -> Any:
         try:
