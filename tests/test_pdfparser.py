@@ -11,6 +11,7 @@ from playa.psparser import (
     KWD,
     LIT,
     PSBaseParser,
+    PSInMemoryParser,
 )
 
 TESTDATA = b"""
@@ -89,6 +90,13 @@ def test_new_parser_eof():
     # Make sure we get a keyword at eof
     parser = PSBaseParser(BytesIO(SIMPLE1[:-1]))
     tokens = [tok for pos, tok in list(parser)]
+    assert tokens == SIMPLETOK
+
+
+def test_inmemory_parser():
+    parser = PSInMemoryParser(SIMPLE1)
+    tokens = [tok for pos, tok in list(parser)]
+    print(tokens)
     assert tokens == SIMPLETOK
 
 

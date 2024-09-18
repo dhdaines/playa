@@ -271,12 +271,41 @@ DATA = rb"""
 """
 
 
+def bench_bytes():
+    from playa.psparser import PSInMemoryParser
+
+    runs = 100
+    start = time.time()
+    parser = PSInMemoryParser(DATA * runs)
+    _ = list(parser)
+    print(
+        "PLAYA Parser (bytes): %fms / run" % ((time.time() - start) / runs * 1000),
+    )
+
+
+def bench_bytesio():
+    from pdfminer.psparser import PSEOF, PSBaseParser
+
+    runs = 100
+    start = time.time()
+    parser = PSBaseParser(BytesIO(DATA * runs))
+    while True:
+        try:
+            _ = parser.nexttoken()
+        except PSEOF:
+            break
+    print(
+        "pdfminer.six Parser (BytesIO): %fms / run"
+        % ((time.time() - start) / runs * 1000),
+    )
+
+
 def bench_playa():
     from playa.converter import PDFPageAggregator
     from playa.pdfdocument import PDFDocument
     from playa.pdfinterp import PDFPageInterpreter, PDFResourceManager
     from playa.pdfpage import PDFPage
-    from playa.psparser import PSBaseParser
+    from playa.psparser import PSBaseParser, PSInMemoryParser
 
     runs = 100
     start = time.time()
@@ -284,6 +313,12 @@ def bench_playa():
     _ = list(parser)
     print(
         "PLAYA Parser (BytesIO): %fms / run" % ((time.time() - start) / runs * 1000),
+    )
+    start = time.time()
+    parser = PSInMemoryParser(DATA * runs)
+    _ = list(parser)
+    print(
+        "PLAYA Parser (bytes): %fms / run" % ((time.time() - start) / runs * 1000),
     )
     with tempfile.NamedTemporaryFile() as tf:
         runs = 100
@@ -370,3 +405,7 @@ if __name__ == "__main__":
         bench_pdfminer()
     if len(sys.argv) < 2 or sys.argv[1] == "playa":
         bench_playa()
+    if len(sys.argv) < 2 or sys.argv[1] == "bytes":
+        bench_bytes()
+    if len(sys.argv) < 2 or sys.argv[1] == "bytesio":
+        bench_bytesio()
