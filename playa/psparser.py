@@ -139,7 +139,6 @@ def keyword_name(x: Any) -> Any:
 
 
 EOL = b"\r\n"
-SPC = re.compile(rb"\s")
 WHITESPACE = b" \t\n\r\f\v"
 NUMBER = b"0123456789"
 HEX = NUMBER + b"abcdef" + b"ABCDEF"
@@ -162,9 +161,9 @@ ESC_STRING = {
 PSBaseParserToken = Union[float, bool, PSLiteral, PSKeyword, bytes]
 
 
-class PSBaseParser:
+class PSFileParser:
     """
-    Basic parser (actually a lexer) for PDF data.
+    Parser (actually a lexer) for PDF data from a buffered file object.
     """
 
     def __init__(self, fp: BinaryIO):
@@ -579,7 +578,7 @@ LEXER = re.compile(
     | (?P<name> /(?: \#[A-Fa-f\d][A-Fa-f\d] | [^#/%\[\]()<>{}\s])+ )
     | (?P<number> [-+]? (?: \d*\.\d+ | \d+ ) )
     | (?P<keyword> [A-Za-z] [^#/%\[\]()<>{}\s]*)
-    | (?P<startstr> \([^()\\]+)
+    | (?P<startstr> \([^()\\]*)
     | (?P<hexstr> <[A-Fa-f\d\s]+>)
     | (?P<startdict> <<)
     | (?P<enddict> >>)
@@ -599,10 +598,12 @@ STRLEXER = re.compile(
 )""",
     re.VERBOSE,
 )
-HEXDIGIT = re.compile(rb"#[A-Fa-f\d][A-Fa-f\d]")
+HEXDIGIT = re.compile(rb"#([A-Fa-f\d][A-Fa-f\d])")
+EOLR = re.compile(rb"\r\n?|\n")
+SPC = re.compile(rb"\s")
 
 
-class PSInMemoryParser(PSBaseParser):
+class PSInMemoryParser(PSFileParser):
     """
     Specialization of the parser for in-memory data streams.
     """
@@ -628,7 +629,7 @@ class PSInMemoryParser(PSBaseParser):
         return self.pos
 
     def get_inline_data(
-        self, target: bytes = b"EI", blocksize: int = 4096
+        self, target: bytes = b"EI", blocksize: int = -1
     ) -> Tuple[int, bytes]:
         """Get the data for an inline image up to the target
         end-of-stream marker.
@@ -657,16 +658,16 @@ class PSInMemoryParser(PSBaseParser):
             m = LEXER.match(self.data, self.pos)
             if m is None:  # can only happen at EOS
                 raise StopIteration
+            self._curtokenpos = m.start()
             self.pos = m.end()
             if m.lastgroup not in ("whitespace", "comment"):
                 # Okay, we got a token or something
                 break
-        self._curtokenpos = self.pos
         self._curtoken = m[0]
         if m.lastgroup == "name":
             self._curtoken = m[0][1:]
             self._curtoken = HEXDIGIT.sub(
-                lambda x: bytes((int(x, 16),)), self._curtoken
+                lambda x: bytes((int(x[1], 16),)), self._curtoken
             )
             try:
                 tok = LIT(self._curtoken.decode("utf-8"))
@@ -674,7 +675,7 @@ class PSInMemoryParser(PSBaseParser):
                 tok = LIT(self._curtoken)
             return (self._curtokenpos, tok)
         if m.lastgroup == "number":
-            if b'.' in self._curtoken:
+            if b"." in self._curtoken:
                 return (self._curtokenpos, float(self._curtoken))
             else:
                 return (self._curtokenpos, int(self._curtoken))
@@ -684,6 +685,11 @@ class PSInMemoryParser(PSBaseParser):
             return (self._curtokenpos, KEYWORD_DICT_END)
         if m.lastgroup == "startstr":
             return self._parse_endstr(self.data[m.start() + 1 : m.end()], m.end())
+        if m.lastgroup == "hexstr":
+            self._curtoken = SPC.sub(b"", self._curtoken[1:-1])
+            if len(self._curtoken) % 2 == 1:
+                self._curtoken += b"0"
+            return (self._curtokenpos, unhexlify(self._curtoken))
         # Anything else is treated as a keyword (whether explicitly matched or not)
         if self._curtoken == b"true":
             return (self._curtokenpos, True)
@@ -729,7 +735,7 @@ class PSInMemoryParser(PSBaseParser):
         if paren != 0:
             log.warning("Unterminated string at %d", pos)
             raise StopIteration
-        return (self._curtokenpos, b"".join(parts))
+        return (self._curtokenpos, b"".join(EOLR.sub(b"\n", part) for part in parts))
 
 
 # Stack slots may by occupied by any of:
