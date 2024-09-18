@@ -264,6 +264,8 @@ class PSBaseParser:
                 partial = b""
                 # Fall through (the target could be at the beginning)
             buf = self.fp.read(blocksize)
+            if not buf:
+                return (-1, b"")
             tpos = buf.find(target)
             if tpos != -1:
                 data.append(buf[: tpos + len(target)])

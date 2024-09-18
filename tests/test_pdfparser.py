@@ -186,6 +186,8 @@ def test_invalid_strings_eof():
 def test_get_inline_data():
     kwd_eio = KWD(b"EIO")
     kwd_omg = KWD(b"OMG")
+    p = PSBaseParser(BytesIO(b"""0123456789"""))
+    assert p.get_inline_data() == (-1, b"")
     p = PSBaseParser(BytesIO(b"""0123456789EI"""))
     assert p.get_inline_data() == (10, b"0123456789EI")
     p = PSBaseParser(BytesIO(b"""0123456789EIEIO"""))

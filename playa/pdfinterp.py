@@ -1,12 +1,17 @@
-import io
 import logging
 from io import BytesIO
-from typing import BinaryIO, Dict, List, Mapping, Optional, Sequence, Tuple, Union, cast
+from typing import Dict, List, Mapping, Optional, Sequence, Tuple, Union, cast
 
 from playa import settings
 from playa.casting import safe_float
 from playa.cmapdb import CMap, CMapBase, CMapDB
-from playa.exceptions import PSEOF, PDFException, PDFValueError, PSTypeError
+from playa.exceptions import (
+    PSEOF,
+    PDFException,
+    PDFValueError,
+    PSTypeError,
+    PDFSyntaxError,
+)
 from playa.pdfcolor import PREDEFINED_COLORSPACE, PDFColorSpace
 from playa.pdfdevice import PDFDevice, PDFTextSeq
 from playa.pdffont import (
@@ -314,6 +319,8 @@ class PDFContentParser(PSStackParser[Union[PSKeyword, PDFStream]]):
                 else:
                     self.seek(pos + len(token.name))
                     (pos, data) = self.get_inline_data(target=eos)
+                if pos == -1:
+                    raise PDFSyntaxError("End of inline stream %r not found" % eos)
                 obj = PDFStream(d, data)
                 self.push((pos, obj))
                 # This was included in the data but we need to "parse" it
