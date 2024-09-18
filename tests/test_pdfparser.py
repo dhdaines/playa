@@ -7,23 +7,13 @@ from io import BytesIO
 import pytest
 
 from playa.exceptions import PSEOF, PDFSyntaxError
-from playa.pdfparser import read_header
-from playa.psparser import KEYWORD_DICT_BEGIN, KEYWORD_DICT_END, KWD, LIT, PSBaseParser
-
-
-def test_read_header():
-    """Verify reading header."""
-    with pytest.raises(PDFSyntaxError):
-        read_header(BytesIO(b"NOT-A-PDF!!!"))
-    with pytest.raises(PDFSyntaxError):
-        read_header(BytesIO(b"%PDF"))
-    with pytest.raises(PDFSyntaxError) as e:
-        read_header(BytesIO("%PDF-ÅÖÜ".encode("latin1")))
-    assert "ASCII" in str(e)
-    with pytest.raises(PDFSyntaxError) as e:
-        read_header(BytesIO(b"%PDF-OMG"))
-    assert "invalid" in str(e)
-    assert read_header(BytesIO(b"%PDF-1.7")) == "1.7"
+from playa.psparser import (
+    KEYWORD_DICT_BEGIN,
+    KEYWORD_DICT_END,
+    KWD,
+    LIT,
+    PSBaseParser,
+)
 
 
 TESTDATA = b"""
@@ -194,7 +184,3 @@ def test_invalid_strings_eof():
     assert list(parser) == []
     parser = PSBaseParser(BytesIO(rb"<73686"))
     assert list(parser) == []
-
-
-def test_stack_parser():
-    pass

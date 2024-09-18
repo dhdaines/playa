@@ -24,27 +24,6 @@ KEYWORD_STARTXREF = KWD(b"startxref")
 KEYWORD_OBJ = KWD(b"obj")
 
 
-def read_header(fp: BinaryIO) -> str:
-    """Read the PDF header and return the (initial) version string.
-
-    Note that this version can be overridden in the document catalog."""
-    try:
-        hdr = fp.read(8)
-    except IOError as err:
-        raise PDFSyntaxError("Failed to read PDF header") from err
-    if not hdr.startswith(b"%PDF-"):
-        raise PDFSyntaxError("Expected b'%%PDF-', got %r, is this a PDF?" % hdr)
-    try:
-        version = hdr[5:].decode("ascii")
-    except UnicodeDecodeError as err:
-        raise PDFSyntaxError(
-            "Version number in %r contains non-ASCII characters" % hdr
-        ) from err
-    if not re.match(r"\d\.\d", version):
-        raise PDFSyntaxError("Version number in  %r is invalid" % hdr)
-    return version
-
-
 # PDFParser stack holds all the base types plus PDFStream, PDFObjRef, and None
 class PDFParser(PSStackParser[Union[PSKeyword, PDFStream, PDFObjRef, None]]):
     """PDFParser fetch PDF objects from a file stream.
@@ -65,7 +44,6 @@ class PDFParser(PSStackParser[Union[PSKeyword, PDFStream, PDFObjRef, None]]):
     def __init__(self, fp: BinaryIO) -> None:
         PSStackParser.__init__(self, fp)
         self.doc: Optional[PDFDocument] = None
-        self.pdf_version = read_header(fp)
         self.fallback = False
 
     def set_document(self, doc: Union["PDFDocument", None]) -> None:

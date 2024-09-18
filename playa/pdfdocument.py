@@ -629,6 +629,27 @@ SECURITY_HANDLERS = {
 }
 
 
+def read_header(fp: BinaryIO) -> str:
+    """Read the PDF header and return the (initial) version string.
+
+    Note that this version can be overridden in the document catalog."""
+    try:
+        hdr = fp.read(8)
+    except IOError as err:
+        raise PDFSyntaxError("Failed to read PDF header") from err
+    if not hdr.startswith(b"%PDF-"):
+        raise PDFSyntaxError("Expected b'%%PDF-', got %r, is this a PDF?" % hdr)
+    try:
+        version = hdr[5:].decode("ascii")
+    except UnicodeDecodeError as err:
+        raise PDFSyntaxError(
+            "Version number in %r contains non-ASCII characters" % hdr
+        ) from err
+    if not re.match(r"\d\.\d", version):
+        raise PDFSyntaxError("Version number in  %r is invalid" % hdr)
+    return version
+
+
 class PDFDocument:
     """Representation of a PDF document on disk.
 
@@ -670,6 +691,7 @@ class PDFDocument:
         self.decipher: Optional[DecipherCallable] = None
         self._cached_objs: Dict[int, Tuple[object, int]] = {}
         self._parsed_objs: Dict[int, Tuple[List[object], int]] = {}
+        self.pdf_version = read_header(fp)
         self.parser = PDFParser(fp)
         self.parser.set_document(self)  # FIXME: annoying circular reference
         self.is_printable = self.is_modifiable = self.is_extractable = True

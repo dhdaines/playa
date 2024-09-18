@@ -272,7 +272,7 @@ class PDFContentParser(PSStackParser[Union[PSKeyword, PDFStream]]):
     def fillbuf(self) -> None:
         if self.charpos < len(self.buf):
             return
-        while 1:
+        while True:
             self.fillfp()
             self.bufpos = self.fp.tell()
             self.buf = self.fp.read(self.BUFSIZ)
