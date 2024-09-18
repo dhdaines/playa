@@ -3,11 +3,14 @@ import logging
 from typing import Any, BinaryIO, Container, Dict, Iterator, List, Optional, Set, Tuple
 
 from playa import settings
-from playa.exceptions import PDFObjectNotFound, PDFValueError
-from playa.pdfdocument import (
-    PDFDocument,
+from playa.exceptions import (
+    PDFObjectNotFound,
+    PDFValueError,
     PDFNoPageLabels,
     PDFTextExtractionNotAllowed,
+)
+from playa.pdfdocument import (
+    PDFDocument,
 )
 from playa.pdfparser import PDFParser
 from playa.pdftypes import dict_value, int_value, list_value, resolve1
@@ -173,10 +176,8 @@ class PDFPage:
         caching: bool = True,
         check_extractable: bool = False,
     ) -> Iterator["PDFPage"]:
-        # Create a PDF parser object associated with the file object.
-        parser = PDFParser(fp)
         # Create a PDF document object that stores the document structure.
-        doc = PDFDocument(parser, password=password, caching=caching)
+        doc = PDFDocument(fp, password=password)
         # Check if the document allows text extraction.
         # If not, warn the user and proceed.
         if not doc.is_extractable:

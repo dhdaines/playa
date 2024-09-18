@@ -246,12 +246,6 @@ class PSBaseParser:
         except StopIteration:
             raise PSEOF
 
-    def _getbuf(self) -> bytes:
-        return self.fp.peek()
-
-    def _getchar(self) -> bytes:
-        return self.fp.read(1)
-
     def _parse_main(self):
         """Initial/default state for the lexer."""
         c = self.fp.read(1)
@@ -527,7 +521,7 @@ PSStackEntry = Tuple[int, PSStackType[ExtraT]]
 
 
 class PSStackParser(PSBaseParser, Generic[ExtraT]):
-    def __init__(self, reader: io.RawIOBase) -> None:
+    def __init__(self, reader: BinaryIO) -> None:
         PSBaseParser.__init__(self, reader)
         self.reset()
 

@@ -3,10 +3,10 @@ Test the PDF parser
 """
 
 from io import BytesIO
+from pathlib import Path
 
-import pytest
 
-from playa.exceptions import PSEOF, PDFSyntaxError
+from playa.exceptions import PSEOF
 from playa.psparser import (
     KEYWORD_DICT_BEGIN,
     KEYWORD_DICT_END,

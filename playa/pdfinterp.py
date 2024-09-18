@@ -267,31 +267,23 @@ class PDFContentParser(PSStackParser[Union[PSKeyword, PDFStream]]):
 
     def seek(self, pos: int) -> None:
         self.fillfp()
-        PSStackParser.seek(self, pos)
-
-    def fillbuf(self) -> None:
-        if self.charpos < len(self.buf):
-            return
-        while True:
-            self.fillfp()
-            self.bufpos = self.fp.tell()
-            self.buf = self.fp.read(self.BUFSIZ)
-            if self.buf:
-                break
-            self.fp = None  # type: ignore[assignment]
-        self.charpos = 0
+        super().seek(pos)
 
     def get_inline_data(self, pos: int, target: bytes = b"EI") -> Tuple[int, bytes]:
         self.seek(pos)
         i = 0
         data = b""
+        charpos = 0
+        buf = b""
         while i <= len(target):
-            self.fillbuf()
+            if charpos == len(buf):
+                buf = self.fp.read(4096)
+                charpos = 0
             if i:
-                ci = self.buf[self.charpos]
+                ci = buf[charpos]
                 c = bytes((ci,))
                 data += c
-                self.charpos += 1
+                charpos += 1
                 if (
                     len(target) <= i
                     and c.isspace()
@@ -303,13 +295,13 @@ class PDFContentParser(PSStackParser[Union[PSKeyword, PDFStream]]):
                     i = 0
             else:
                 try:
-                    j = self.buf.index(target[0], self.charpos)
-                    data += self.buf[self.charpos : j + 1]
-                    self.charpos = j + 1
+                    j = buf.index(target[0], charpos)
+                    data += buf[charpos : j + 1]
+                    charpos = j + 1
                     i = 1
                 except ValueError:
-                    data += self.buf[self.charpos :]
-                    self.charpos = len(self.buf)
+                    data += buf[charpos :]
+                    charpos = len(buf)
         data = data[: -(len(target) + 1)]  # strip the last part
         data = re.sub(rb"(\x0d\x0a|[\x0d\x0a])$", b"", data)
         return (pos, data)
