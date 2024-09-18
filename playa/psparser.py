@@ -163,37 +163,40 @@ PSBaseParserToken = Union[float, bool, PSLiteral, PSKeyword, bytes]
 
 
 class PSBaseParser:
-    def __init__(self, reader: io.BufferedReader):
-        self.reader = reader
-        self._tokens: Deque[Tuple[int, str]] = deque()
+    def __init__(self, fp: BinaryIO):
+        self.fp = fp
+        self._tokens: Deque[Tuple[int, PSBaseParserToken]] = deque()
         self.seek(0)
 
+    def flush(self) -> None:
+        pass
+
     def seek(self, pos: int) -> None:
-        self.reader.seek(pos)
+        self.fp.seek(pos)
         self._parse1 = self._parse_main
         self._curtoken = b""
         self._curtokenpos = 0
         self._tokens.clear()
 
-    def tell(self) -> None:
-        return self.reader.tell()
+    def tell(self) -> int:
+        return self.fp.tell()
 
     def nextline(self) -> Tuple[int, bytes]:
         r"""Fetches a next line that ends either with \r, \n, or \r\n."""
-        linepos = self.reader.tell()
-        # readline() is implemented on BufferedReader so just use that
+        linepos = self.fp.tell()
+        # readline() is implemented on BinarIO so just use that
         # (except that it only accepts \n as a separator)
-        line_or_lines = self.reader.readline()
+        line_or_lines = self.fp.readline()
         if line_or_lines == b"":
             raise PSEOF
         first, sep, rest = line_or_lines.partition(b"\r")
         if len(rest) == 0:
             return (linepos, line_or_lines)
         elif rest != b"\n":
-            self.reader.seek(linepos + len(first) + 1)
+            self.fp.seek(linepos + len(first) + 1)
             return (linepos, first + sep)
         else:
-            self.reader.seek(linepos + len(first) + 2)
+            self.fp.seek(linepos + len(first) + 2)
             return (linepos, first + b"\r\n")
 
     def revreadlines(self) -> Iterator[bytes]:
@@ -201,22 +204,22 @@ class PSBaseParser:
 
         This is used to locate the trailers at the end of a file.
         """
-        self.reader.seek(0, io.SEEK_END)
-        pos = self.reader.tell()
+        self.fp.seek(0, io.SEEK_END)
+        pos = self.fp.tell()
         buf = b""
         while pos > 0:
             # NOTE: This can obviously be optimized to use regular
             # expressions on the (known to exist) buffer in
-            # self.reader...
+            # self.fp...
             pos -= 1
-            self.reader.seek(pos)
-            c = self.reader.read(1)
+            self.fp.seek(pos)
+            c = self.fp.read(1)
             if c in b"\r\n":
                 yield buf
                 buf = c
                 if c == b"\n" and pos > 0:
-                    self.reader.seek(pos - 1)
-                    cc = self.reader.read(1)
+                    self.fp.seek(pos - 1)
+                    cc = self.fp.read(1)
                     if cc == b"\r":
                         pos -= 1
                         buf = cc + buf
@@ -227,7 +230,7 @@ class PSBaseParser:
     def __iter__(self):
         return self
 
-    def __next__(self) -> Union[None, Tuple[int, PSBaseParserToken]]:
+    def __next__(self) -> Tuple[int, PSBaseParserToken]:
         while True:
             c = self._parse1()
             # print(c, self._curtoken, self._parse1)
@@ -244,18 +247,18 @@ class PSBaseParser:
             raise PSEOF
 
     def _getbuf(self) -> bytes:
-        return self.reader.peek()
+        return self.fp.peek()
 
     def _getchar(self) -> bytes:
-        return self.reader.read(1)
+        return self.fp.read(1)
 
     def _parse_main(self):
         """Initial/default state for the lexer."""
-        c = self.reader.read(1)
+        c = self.fp.read(1)
         # note that b"" is in everything, which is fine
         if c in WHITESPACE:
             return c
-        self._curtokenpos = self.reader.tell() - 1
+        self._curtokenpos = self.fp.tell() - 1
         if c == b"%":
             self._curtoken = b"%"
             self._parse1 = self._parse_comment
@@ -293,7 +296,7 @@ class PSBaseParser:
 
     def _parse_comment(self):
         """Comment state for the lexer"""
-        c = self.reader.read(1)
+        c = self.fp.read(1)
         if c in EOL:  # this includes b"", i.e. EOF
             self._parse1 = self._parse_main
             # We ignore comments.
@@ -304,13 +307,13 @@ class PSBaseParser:
 
     def _parse_literal(self):
         """Literal (keyword) state for the lexer."""
-        c = self.reader.read(1)
+        c = self.fp.read(1)
         if c == b"#":
             self.hex = b""
             self._parse1 = self._parse_literal_hex
         elif c in NOTLITERAL:
             if c:
-                self.reader.seek(-1, io.SEEK_CUR)
+                self.fp.seek(-1, io.SEEK_CUR)
             try:
                 self._add_token(LIT(self._curtoken.decode("utf-8")))
             except UnicodeDecodeError:
@@ -323,12 +326,12 @@ class PSBaseParser:
     def _parse_literal_hex(self):
         """State for escaped hex characters in literal names"""
         # Consume a hex digit only if we can ... consume a hex digit
-        c = self.reader.read(1)
+        c = self.fp.read(1)
         if c and c in HEX and len(self.hex) < 2:
             self.hex += c
         else:
             if c:
-                self.reader.seek(-1, io.SEEK_CUR)
+                self.fp.seek(-1, io.SEEK_CUR)
             if self.hex:
                 self._curtoken += bytes((int(self.hex, 16),))
             self._parse1 = self._parse_literal
@@ -336,7 +339,7 @@ class PSBaseParser:
 
     def _parse_number(self):
         """State for numeric objects."""
-        c = self.reader.read(1)
+        c = self.fp.read(1)
         if c and c in NUMBER:
             self._curtoken += c
         elif c == b".":
@@ -344,7 +347,7 @@ class PSBaseParser:
             self._parse1 = self._parse_float
         else:
             if c:
-                self.reader.seek(-1, io.SEEK_CUR)
+                self.fp.seek(-1, io.SEEK_CUR)
             try:
                 self._add_token(int(self._curtoken))
             except ValueError:
@@ -354,11 +357,11 @@ class PSBaseParser:
 
     def _parse_float(self):
         """State for fractional part of numeric objects."""
-        c = self.reader.read(1)
+        c = self.fp.read(1)
         # b"" is in everything so we have to add an extra check
         if not c or c not in NUMBER:
             if c:
-                self.reader.seek(-1, io.SEEK_CUR)
+                self.fp.seek(-1, io.SEEK_CUR)
             try:
                 self._add_token(float(self._curtoken))
             except ValueError:
@@ -370,10 +373,10 @@ class PSBaseParser:
 
     def _parse_keyword(self):
         """State for keywords."""
-        c = self.reader.read(1)
+        c = self.fp.read(1)
         if c in NOTKEYWORD:  # includes EOF
             if c:
-                self.reader.seek(-1, io.SEEK_CUR)
+                self.fp.seek(-1, io.SEEK_CUR)
             if self._curtoken == b"true":
                 self._add_token(True)
             elif self._curtoken == b"false":
@@ -387,7 +390,7 @@ class PSBaseParser:
 
     def _parse_string(self):
         """State for string objects."""
-        c = self.reader.read(1)
+        c = self.fp.read(1)
         if c and c in NOTSTRING:  # does not include EOF
             if c == b"\\":
                 self._parse1 = self._parse_string_esc
@@ -411,10 +414,10 @@ class PSBaseParser:
             # shall be treated as a byte value of (0Ah), irrespective
             # of whether the end-of-line marker was a CARRIAGE RETURN
             # (0Dh), a LINE FEED (0Ah), or both.
-            cc = self.reader.read(1)
+            cc = self.fp.read(1)
             # Put it back if it isn't \n
             if cc and cc != b"\n":
-                self.reader.seek(-1, io.SEEK_CUR)
+                self.fp.seek(-1, io.SEEK_CUR)
             self._curtoken += b"\n"
         else:
             self._curtoken += c
@@ -423,7 +426,7 @@ class PSBaseParser:
     def _parse_string_esc(self):
         """State for escapes in literal strings.  We have seen a
         backslash and nothing else."""
-        c = self.reader.read(1)
+        c = self.fp.read(1)
         if c and c in OCTAL:  # exclude EOF
             self.oct = c
             self._parse1 = self._parse_string_octal
@@ -433,10 +436,10 @@ class PSBaseParser:
         elif c == b"\n":  # Skip newline after backslash
             pass
         elif c == b"\r":  # Also skip CRLF after
-            cc = self.reader.read(1)
+            cc = self.fp.read(1)
             # Put it back if it isn't \n
             if cc and cc != b"\n":
-                self.reader.seek(-1, io.SEEK_CUR)
+                self.fp.seek(-1, io.SEEK_CUR)
         elif c == b"":
             log.warning("EOF inside escape %r", self._curtoken)
         else:
@@ -447,13 +450,13 @@ class PSBaseParser:
 
     def _parse_string_octal(self):
         """State for an octal escape."""
-        c = self.reader.read(1)
+        c = self.fp.read(1)
         if c and c in OCTAL:  # exclude EOF
             self.oct += c
             done = len(self.oct) >= 3  # it can't be > though
         else:
             if c:
-                self.reader.seek(-1, io.SEEK_CUR)
+                self.fp.seek(-1, io.SEEK_CUR)
             else:
                 log.warning("EOF in octal escape %r", self._curtoken)
             done = True
@@ -470,31 +473,31 @@ class PSBaseParser:
 
     def _parse_wopen(self):
         """State for start of dictionary or hex string."""
-        c = self.reader.read(1)
+        c = self.fp.read(1)
         if c == b"<":
             self._add_token(KEYWORD_DICT_BEGIN)
             self._parse1 = self._parse_main
         else:
             if c:
-                self.reader.seek(-1, io.SEEK_CUR)
+                self.fp.seek(-1, io.SEEK_CUR)
             self._parse1 = self._parse_hexstring
         return c
 
     def _parse_wclose(self):
         """State for end of dictionary (accessed from initial state only)"""
-        c = self.reader.read(1)
+        c = self.fp.read(1)
         if c == b">":
             self._add_token(KEYWORD_DICT_END)
         else:
             # Assuming this is a keyword (which means nothing)
             self._add_token(KEYWORD_GT)
             if c:
-                self.reader.seek(-1, io.SEEK_CUR)
+                self.fp.seek(-1, io.SEEK_CUR)
         self._parse1 = self._parse_main
 
     def _parse_hexstring(self):
         """State for parsing hexadecimal literal strings."""
-        c = self.reader.read(1)
+        c = self.fp.read(1)
         if not c:
             log.warning("EOF in hex string %r", self._curtoken)
         elif c in WHITESPACE:
@@ -524,8 +527,8 @@ PSStackEntry = Tuple[int, PSStackType[ExtraT]]
 
 
 class PSStackParser(PSBaseParser, Generic[ExtraT]):
-    def __init__(self, fp: BinaryIO) -> None:
-        PSBaseParser.__init__(self, fp)
+    def __init__(self, reader: io.RawIOBase) -> None:
+        PSBaseParser.__init__(self, reader)
         self.reset()
 
     def reset(self) -> None:
@@ -645,6 +648,8 @@ class PSStackParser(PSBaseParser, Generic[ExtraT]):
                 raise PSException
             if self.context:
                 continue
+            else:
+                self.flush()  # FIXME: what does it do?
         obj = self.results.pop(0)
         try:
             log.debug("nextobject: %r", obj)
