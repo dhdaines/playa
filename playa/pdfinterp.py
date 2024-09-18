@@ -300,7 +300,7 @@ class PDFContentParser(PSStackParser[Union[PSKeyword, PDFStream]]):
                     charpos = j + 1
                     i = 1
                 except ValueError:
-                    data += buf[charpos :]
+                    data += buf[charpos:]
                     charpos = len(buf)
         data = data[: -(len(target) + 1)]  # strip the last part
         data = re.sub(rb"(\x0d\x0a|[\x0d\x0a])$", b"", data)

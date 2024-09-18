@@ -3,8 +3,6 @@ Test the PDF parser
 """
 
 from io import BytesIO
-from pathlib import Path
-
 
 from playa.exceptions import PSEOF
 from playa.psparser import (
@@ -14,7 +12,6 @@ from playa.psparser import (
     LIT,
     PSBaseParser,
 )
-
 
 TESTDATA = b"""
 ugh

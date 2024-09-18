@@ -2,14 +2,16 @@
 Test the classes in pdfdocument.py
 """
 
-from pathlib import Path
 from io import BytesIO
+from pathlib import Path
+
+import pytest
 
 import playa
 import playa.settings
-import pytest
-from playa.pdfdocument import read_header
 from playa.exceptions import PDFSyntaxError
+from playa.pdfdocument import read_header
+
 playa.settings.STRICT = True
 
 TESTDIR = Path(__file__).parent.parent / "samples"

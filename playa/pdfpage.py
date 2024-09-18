@@ -4,15 +4,14 @@ from typing import Any, BinaryIO, Container, Dict, Iterator, List, Optional, Set
 
 from playa import settings
 from playa.exceptions import (
-    PDFObjectNotFound,
-    PDFValueError,
     PDFNoPageLabels,
+    PDFObjectNotFound,
     PDFTextExtractionNotAllowed,
+    PDFValueError,
 )
 from playa.pdfdocument import (
     PDFDocument,
 )
-from playa.pdfparser import PDFParser
 from playa.pdftypes import dict_value, int_value, list_value, resolve1
 from playa.psparser import LIT
 from playa.utils import parse_rect

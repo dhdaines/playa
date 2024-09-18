@@ -13,7 +13,6 @@ from typing import (
     Union,
     cast,
 )
-from warnings import warn
 
 from playa import settings
 from playa.ascii85 import ascii85decode, asciihexdecode
