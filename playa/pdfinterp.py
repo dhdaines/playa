@@ -1,7 +1,7 @@
+import io
 import logging
-import re
 from io import BytesIO
-from typing import Dict, List, Mapping, Optional, Sequence, Tuple, Union, cast
+from typing import BinaryIO, Dict, List, Mapping, Optional, Sequence, Tuple, Union, cast
 
 from playa import settings
 from playa.casting import safe_float
@@ -247,6 +247,69 @@ class PDFResourceManager:
         return font
 
 
+KEYWORD_BI = KWD(b"BI")
+KEYWORD_ID = KWD(b"ID")
+KEYWORD_EI = KWD(b"EI")
+
+
+def get_inline_data(
+    fp: BinaryIO, target: bytes = b"EI", blocksize: int = 4096
+) -> Tuple[int, bytes]:
+    """Get the data for an inline image up to the target
+    end-of-stream marker.
+
+    Returns a tuple of the position of the target in the data and the
+    data *including* the end of stream marker.  Advances the file
+    pointer to a position after the end of the stream.
+
+    The caller is responsible for removing the end-of-stream if
+    necessary (this depends on the filter being used) and parsing
+    the end-of-stream token (likewise) if necessary.
+    """
+    # PDF 1.7, p. 216: The bytes between the ID and EI operators
+    # shall be treated the same as a stream object’s data (see
+    # 7.3.8, "Stream Objects"), even though they do not follow the
+    # standard stream syntax.
+    data = []  # list of blocks
+    partial = b""  # partially seen target
+    pos = 0
+    while True:
+        # Did we see part of the target at the end of the last
+        # block?  Then scan ahead and try to find the rest (we
+        # assume the stream is buffered)
+        if partial:
+            extra_len = len(target) - len(partial)
+            extra = fp.read(extra_len)
+            if partial + extra == target:
+                pos -= len(partial)
+                data.append(extra)
+                break
+            # Put it back (assume buffering!)
+            fp.seek(-extra_len, io.SEEK_CUR)
+            partial = b""
+            # Fall through (the target could be at the beginning)
+        buf = fp.read(blocksize)
+        tpos = buf.find(target)
+        if tpos != -1:
+            data.append(buf[: tpos + len(target)])
+            # Put the extra back (assume buffering!)
+            fp.seek(tpos - len(buf) + len(target), io.SEEK_CUR)
+            pos += tpos
+            break
+        else:
+            pos += len(buf)
+            # look for the longest partial match at the end
+            plen = len(target) - 1
+            while plen > 0:
+                ppos = len(buf) - plen
+                if buf[ppos:] == target[:plen]:
+                    partial = buf[ppos:]
+                    break
+                plen -= 1
+            data.append(buf)
+    return (pos, b"".join(data))
+
+
 class PDFContentParser(PSStackParser[Union[PSKeyword, PDFStream]]):
     def __init__(self, streams: Sequence[object]) -> None:
         self.streams = streams
@@ -269,55 +332,14 @@ class PDFContentParser(PSStackParser[Union[PSKeyword, PDFStream]]):
         self.fillfp()
         super().seek(pos)
 
-    def get_inline_data(self, pos: int, target: bytes = b"EI") -> Tuple[int, bytes]:
-        self.seek(pos)
-        i = 0
-        data = b""
-        charpos = 0
-        buf = b""
-        while i <= len(target):
-            if charpos == len(buf):
-                buf = self.fp.read(4096)
-                charpos = 0
-            if i:
-                ci = buf[charpos]
-                c = bytes((ci,))
-                data += c
-                charpos += 1
-                if (
-                    len(target) <= i
-                    and c.isspace()
-                    or i < len(target)
-                    and c == (bytes((target[i],)))
-                ):
-                    i += 1
-                else:
-                    i = 0
-            else:
-                try:
-                    j = buf.index(target[0], charpos)
-                    data += buf[charpos : j + 1]
-                    charpos = j + 1
-                    i = 1
-                except ValueError:
-                    data += buf[charpos:]
-                    charpos = len(buf)
-        data = data[: -(len(target) + 1)]  # strip the last part
-        data = re.sub(rb"(\x0d\x0a|[\x0d\x0a])$", b"", data)
-        return (pos, data)
-
     def flush(self) -> None:
         self.add_results(*self.popall())
 
-    KEYWORD_BI = KWD(b"BI")
-    KEYWORD_ID = KWD(b"ID")
-    KEYWORD_EI = KWD(b"EI")
-
     def do_keyword(self, pos: int, token: PSKeyword) -> None:
-        if token is self.KEYWORD_BI:
+        if token is KEYWORD_BI:
             # inline image within a content stream
             self.start_type(pos, "inline")
-        elif token is self.KEYWORD_ID:
+        elif token is KEYWORD_ID:
             try:
                 (_, objs) = self.end_type("inline")
                 if len(objs) % 2 != 0:
@@ -331,13 +353,30 @@ class PDFContentParser(PSStackParser[Union[PSKeyword, PDFStream]]):
                         filter = [filter]
                     if filter[0] in LITERALS_ASCII85_DECODE:
                         eos = b"~>"
-                (pos, data) = self.get_inline_data(pos + len(b"ID "), target=eos)
-                if eos != b"EI":  # it may be necessary for decoding
-                    data += eos
+                # PDF 1.7 p. 215: Unless the image uses ASCIIHexDecode
+                # or ASCII85Decode as one of its filters, the ID
+                # operator shall be followed by a single white-space
+                # character, and the next character shall be
+                # interpreted as the first byte of image data.
+                if eos == b"EI":
+                    self.seek(pos + len(token.name) + 1)
+                    (pos, data) = get_inline_data(self.fp, target=eos)
+                    # FIXME: it is totally unspecified what to do with
+                    # a newline between the end of the data and "EI",
+                    # since there is no explicit stream length.  (PDF
+                    # 1.7 p. 756: There should be an end-of-line
+                    # marker after the data and before endstream; this
+                    # marker shall not be included in the stream
+                    # length.)
+                    data = data[: -len(eos)]
+                else:
+                    self.seek(pos + len(token.name))
+                    (pos, data) = get_inline_data(self.fp, target=eos)
                 obj = PDFStream(d, data)
                 self.push((pos, obj))
-                if eos == b"EI":  # otherwise it is still in the stream
-                    self.push((pos, self.KEYWORD_EI))
+                # This was included in the data but we need to "parse" it
+                if eos == b"EI":
+                    self.push((pos, KEYWORD_EI))
             except PSTypeError:
                 if settings.STRICT:
                     raise

@@ -35,4 +35,4 @@ def test_read_header():
 def test_page_labels():
     with playa.open(TESTDIR / "contrib" / "pagelabels.pdf") as doc:
         labels = [label for _, label in zip(range(10), doc.get_page_labels())]
-        assert labels == ['iii', 'iv', '1', '2', '1', '2', '3', '4', '5', '6']
+        assert labels == ["iii", "iv", "1", "2", "1", "2", "3", "4", "5", "6"]

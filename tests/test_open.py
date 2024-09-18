@@ -7,6 +7,11 @@ from pathlib import Path
 import pytest
 
 import playa
+from playa.converter import PDFPageAggregator
+
+# These APIs will go away soon
+from playa.pdfinterp import PDFPageInterpreter, PDFResourceManager
+from playa.pdfpage import PDFPage
 
 TESTDIR = Path(__file__).parent.parent / "samples"
 ALLPDFS = TESTDIR.glob("**/*.pdf")
@@ -31,6 +36,19 @@ def test_open(path: Path):
             pass
         assert pdf.parser.fp.closed
         assert pdf.parser.doc is None
+
+
+def test_inline_data():
+    # No, there's no easy way to unit test PDFContentParser directly.
+    # The necessary mocking would be useless considering that I will
+    # shortly demolish these redundant and confusing APIs.
+    with playa.open(TESTDIR / "contrib" / "issue-1008-inline-ascii85.pdf") as doc:
+        # Seriously WTF is all this... just to get a page... OMG
+        rsrc = PDFResourceManager()
+        agg = PDFPageAggregator(rsrc, pageno=1)
+        interp = PDFPageInterpreter(rsrc, agg)
+        page = next(PDFPage.create_pages(doc))
+        interp.process_page(page)
 
 
 if __name__ == "__main__":
