@@ -1,13 +1,7 @@
 import logging
 import time
-from io import BufferedReader, BytesIO
+from io import BytesIO
 from pathlib import Path
-
-from playa.converter import PDFPageAggregator
-from playa.pdfdocument import PDFDocument
-from playa.pdfinterp import PDFPageInterpreter, PDFResourceManager
-from playa.pdfpage import PDFPage
-from playa.psparser import PSBaseParser
 
 log = logging.getLogger(Path(__file__).stem)
 TESTDIR = Path(__file__).parent.parent / "samples"
@@ -276,21 +270,23 @@ DATA = rb"""
 """
 
 
-def bench_parser():
+def bench_playa():
+    from playa.psparser import PSBaseParser
+    from playa.converter import PDFPageAggregator
+    from playa.pdfdocument import PDFDocument
+    from playa.pdfinterp import PDFPageInterpreter, PDFResourceManager
+    from playa.pdfpage import PDFPage
     runs = 100
     start = time.time()
-    parser = PSBaseParser(BufferedReader(BytesIO(DATA * runs)))
+    parser = PSBaseParser(BytesIO(DATA * runs))
     _ = list(parser)
     print(
-        "Parser: %fms / run" % ((time.time() - start) / runs * 1000),
+        "PLAYA Parser: %fms / run" % ((time.time() - start) / runs * 1000),
     )
-
-
-def bench_interpereter():
     runs = 20
     start = time.time()
     for _ in range(runs):
-        with open(TESTDIR / "contrib" / "issue-1008-inline-ascii85.pdf", "rb") as infh:
+        with open(TESTDIR / "contrib" / "pagelabels.pdf", "rb") as infh:
             rsrc = PDFResourceManager()
             agg = PDFPageAggregator(rsrc, pageno=1)
             interp = PDFPageInterpreter(rsrc, agg)
@@ -298,10 +294,43 @@ def bench_interpereter():
             page = next(PDFPage.create_pages(doc))
             interp.process_page(page)
     print(
-        "Interpreter: %dms / run" % ((time.time() - start) / runs * 1000),
+        "PLAYA Interpreter: %dms / run" % ((time.time() - start) / runs * 1000),
+    )
+
+
+def bench_pdfminer():
+    from pdfminer.psparser import PSBaseParser, PSEOF
+    from pdfminer.pdfparser import PDFParser
+    from pdfminer.converter import PDFPageAggregator
+    from pdfminer.pdfdocument import PDFDocument
+    from pdfminer.pdfinterp import PDFPageInterpreter, PDFResourceManager
+    from pdfminer.pdfpage import PDFPage
+    runs = 100
+    start = time.time()
+    parser = PSBaseParser(BytesIO(DATA * runs))
+    while True:
+        try:
+            _ = parser.nexttoken()
+        except PSEOF:
+            break
+    print(
+        "pdfminer.six Parser: %fms / run" % ((time.time() - start) / runs * 1000),
+    )
+    runs = 20
+    start = time.time()
+    for _ in range(runs):
+        with open(TESTDIR / "contrib" / "pagelabels.pdf", "rb") as infh:
+            rsrc = PDFResourceManager()
+            agg = PDFPageAggregator(rsrc, pageno=1)
+            interp = PDFPageInterpreter(rsrc, agg)
+            doc = PDFDocument(PDFParser(infh))
+            page = next(PDFPage.create_pages(doc))
+            interp.process_page(page)
+    print(
+        "pdfminer.six Interpreter: %dms / run" % ((time.time() - start) / runs * 1000),
     )
 
 
 if __name__ == "__main__":
-    bench_parser()
-    bench_interpereter()
+    bench_pdfminer()
+    bench_playa()
