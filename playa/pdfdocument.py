@@ -39,7 +39,7 @@ from playa.exceptions import (
     PDFSyntaxError,
     PDFTypeError,
 )
-from playa.pdfparser import KEYWORD_XREF, PDFParser, PDFStreamParser, read_header
+from playa.pdfparser import KEYWORD_XREF, PDFParser, PDFStreamParser
 from playa.pdftypes import (
     DecipherCallable,
     PDFStream,
