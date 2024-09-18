@@ -5,7 +5,6 @@ Test the PDF parser
 from io import BytesIO
 
 from playa.exceptions import PSEOF
-from playa.pdfinterp import get_inline_data
 from playa.psparser import (
     KEYWORD_DICT_BEGIN,
     KEYWORD_DICT_END,
@@ -185,21 +184,23 @@ def test_invalid_strings_eof():
 
 
 def test_get_inline_data():
-    fp = BytesIO(b"""0123456789EI""")
-    assert get_inline_data(fp) == (10, b"0123456789EI")
-    fp = BytesIO(b"""0123456789EIEIO""")
-    assert get_inline_data(fp) == (10, b"0123456789EI")
-    assert fp.read(3) == b"EIO"
-    fp = BytesIO(b"""012EIEIO""")
-    assert get_inline_data(fp, blocksize=4) == (3, b"012EI")
-    assert fp.read(3) == b"EIO"
-    fp = BytesIO(b"""0123012EIEIO""")
-    assert get_inline_data(fp, blocksize=4) == (7, b"0123012EI")
-    assert fp.read(3) == b"EIO"
+    kwd_eio = KWD(b"EIO")
+    kwd_omg = KWD(b"OMG")
+    p = PSBaseParser(BytesIO(b"""0123456789EI"""))
+    assert p.get_inline_data() == (10, b"0123456789EI")
+    p = PSBaseParser(BytesIO(b"""0123456789EIEIO"""))
+    assert p.get_inline_data() == (10, b"0123456789EI")
+    assert p.nexttoken() == (12, kwd_eio)
+    p = PSBaseParser(BytesIO(b"""012EIEIO"""))
+    assert p.get_inline_data(blocksize=4) == (3, b"012EI")
+    assert p.nexttoken() == (5, kwd_eio)
+    p = PSBaseParser(BytesIO(b"""0123012EIEIO"""))
+    assert p.get_inline_data(blocksize=4) == (7, b"0123012EI")
+    assert p.nexttoken() == (9, kwd_eio)
     for blocksize in range(1, 8):
-        fp = BytesIO(b"""012EIEIOOMG""")
-        assert get_inline_data(fp, blocksize=blocksize, target=b"EIEIO") == (
+        p = PSBaseParser(BytesIO(b"""012EIEIOOMG"""))
+        assert p.get_inline_data(blocksize=blocksize, target=b"EIEIO") == (
             3,
             b"012EIEIO",
         )
-        assert fp.read(3) == b"OMG"
+        assert p.nexttoken() == (8, kwd_omg)

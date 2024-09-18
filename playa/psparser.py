@@ -227,6 +227,63 @@ class PSBaseParser:
                 buf = c + buf
         yield buf
 
+    def get_inline_data(
+        self, target: bytes = b"EI", blocksize: int = 4096
+    ) -> Tuple[int, bytes]:
+        """Get the data for an inline image up to the target
+        end-of-stream marker.
+
+        Returns a tuple of the position of the target in the data and the
+        data *including* the end of stream marker.  Advances the file
+        pointer to a position after the end of the stream.
+
+        The caller is responsible for removing the end-of-stream if
+        necessary (this depends on the filter being used) and parsing
+        the end-of-stream token (likewise) if necessary.
+        """
+        # PDF 1.7, p. 216: The bytes between the ID and EI operators
+        # shall be treated the same as a stream object’s data (see
+        # 7.3.8, "Stream Objects"), even though they do not follow the
+        # standard stream syntax.
+        data = []  # list of blocks
+        partial = b""  # partially seen target
+        pos = 0
+        while True:
+            # Did we see part of the target at the end of the last
+            # block?  Then scan ahead and try to find the rest (we
+            # assume the stream is buffered)
+            if partial:
+                extra_len = len(target) - len(partial)
+                extra = self.fp.read(extra_len)
+                if partial + extra == target:
+                    pos -= len(partial)
+                    data.append(extra)
+                    break
+                # Put it back (assume buffering!)
+                self.fp.seek(-extra_len, io.SEEK_CUR)
+                partial = b""
+                # Fall through (the target could be at the beginning)
+            buf = self.fp.read(blocksize)
+            tpos = buf.find(target)
+            if tpos != -1:
+                data.append(buf[: tpos + len(target)])
+                # Put the extra back (assume buffering!)
+                self.fp.seek(tpos - len(buf) + len(target), io.SEEK_CUR)
+                pos += tpos
+                break
+            else:
+                pos += len(buf)
+                # look for the longest partial match at the end
+                plen = len(target) - 1
+                while plen > 0:
+                    ppos = len(buf) - plen
+                    if buf[ppos:] == target[:plen]:
+                        partial = buf[ppos:]
+                        break
+                    plen -= 1
+                data.append(buf)
+        return (pos, b"".join(data))
+
     def __iter__(self):
         return self
 

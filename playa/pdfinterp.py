@@ -252,64 +252,6 @@ KEYWORD_ID = KWD(b"ID")
 KEYWORD_EI = KWD(b"EI")
 
 
-def get_inline_data(
-    fp: BinaryIO, target: bytes = b"EI", blocksize: int = 4096
-) -> Tuple[int, bytes]:
-    """Get the data for an inline image up to the target
-    end-of-stream marker.
-
-    Returns a tuple of the position of the target in the data and the
-    data *including* the end of stream marker.  Advances the file
-    pointer to a position after the end of the stream.
-
-    The caller is responsible for removing the end-of-stream if
-    necessary (this depends on the filter being used) and parsing
-    the end-of-stream token (likewise) if necessary.
-    """
-    # PDF 1.7, p. 216: The bytes between the ID and EI operators
-    # shall be treated the same as a stream object’s data (see
-    # 7.3.8, "Stream Objects"), even though they do not follow the
-    # standard stream syntax.
-    data = []  # list of blocks
-    partial = b""  # partially seen target
-    pos = 0
-    while True:
-        # Did we see part of the target at the end of the last
-        # block?  Then scan ahead and try to find the rest (we
-        # assume the stream is buffered)
-        if partial:
-            extra_len = len(target) - len(partial)
-            extra = fp.read(extra_len)
-            if partial + extra == target:
-                pos -= len(partial)
-                data.append(extra)
-                break
-            # Put it back (assume buffering!)
-            fp.seek(-extra_len, io.SEEK_CUR)
-            partial = b""
-            # Fall through (the target could be at the beginning)
-        buf = fp.read(blocksize)
-        tpos = buf.find(target)
-        if tpos != -1:
-            data.append(buf[: tpos + len(target)])
-            # Put the extra back (assume buffering!)
-            fp.seek(tpos - len(buf) + len(target), io.SEEK_CUR)
-            pos += tpos
-            break
-        else:
-            pos += len(buf)
-            # look for the longest partial match at the end
-            plen = len(target) - 1
-            while plen > 0:
-                ppos = len(buf) - plen
-                if buf[ppos:] == target[:plen]:
-                    partial = buf[ppos:]
-                    break
-                plen -= 1
-            data.append(buf)
-    return (pos, b"".join(data))
-
-
 class PDFContentParser(PSStackParser[Union[PSKeyword, PDFStream]]):
     def __init__(self, streams: Sequence[object]) -> None:
         self.streams = streams
@@ -360,7 +302,7 @@ class PDFContentParser(PSStackParser[Union[PSKeyword, PDFStream]]):
                 # interpreted as the first byte of image data.
                 if eos == b"EI":
                     self.seek(pos + len(token.name) + 1)
-                    (pos, data) = get_inline_data(self.fp, target=eos)
+                    (pos, data) = self.get_inline_data(target=eos)
                     # FIXME: it is totally unspecified what to do with
                     # a newline between the end of the data and "EI",
                     # since there is no explicit stream length.  (PDF
@@ -371,7 +313,7 @@ class PDFContentParser(PSStackParser[Union[PSKeyword, PDFStream]]):
                     data = data[: -len(eos)]
                 else:
                     self.seek(pos + len(token.name))
-                    (pos, data) = get_inline_data(self.fp, target=eos)
+                    (pos, data) = self.get_inline_data(target=eos)
                 obj = PDFStream(d, data)
                 self.push((pos, obj))
                 # This was included in the data but we need to "parse" it
