@@ -332,5 +332,8 @@ def bench_pdfminer():
 
 
 if __name__ == "__main__":
-    bench_pdfminer()
-    bench_playa()
+    import sys
+    if len(sys.argv) < 2 or sys.argv[1] == "pdfminer":
+        bench_pdfminer()
+    if len(sys.argv) < 2 or sys.argv[1] == "playa":
+        bench_playa()
