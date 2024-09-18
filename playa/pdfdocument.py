@@ -39,7 +39,7 @@ from playa.exceptions import (
     PDFSyntaxError,
     PDFTypeError,
 )
-from playa.pdfparser import KEYWORD_XREF, PDFParser, PDFStreamParser, read_header
+from playa.pdfparser import KEYWORD_XREF, PDFParser, PDFStreamParser
 from playa.pdftypes import (
     DecipherCallable,
     PDFStream,
@@ -629,6 +629,27 @@ SECURITY_HANDLERS = {
 }
 
 
+def read_header(fp: BinaryIO) -> str:
+    """Read the PDF header and return the (initial) version string.
+
+    Note that this version can be overridden in the document catalog."""
+    try:
+        hdr = fp.read(8)
+    except IOError as err:
+        raise PDFSyntaxError("Failed to read PDF header") from err
+    if not hdr.startswith(b"%PDF-"):
+        raise PDFSyntaxError("Expected b'%%PDF-', got %r, is this a PDF?" % hdr)
+    try:
+        version = hdr[5:].decode("ascii")
+    except UnicodeDecodeError as err:
+        raise PDFSyntaxError(
+            "Version number in %r contains non-ASCII characters" % hdr
+        ) from err
+    if not re.match(r"\d\.\d", version):
+        raise PDFSyntaxError("Version number in  %r is invalid" % hdr)
+    return version
+
+
 class PDFDocument:
     """Representation of a PDF document on disk.
 
@@ -670,6 +691,7 @@ class PDFDocument:
         self.decipher: Optional[DecipherCallable] = None
         self._cached_objs: Dict[int, Tuple[object, int]] = {}
         self._parsed_objs: Dict[int, Tuple[List[object], int]] = {}
+        self.pdf_version = read_header(fp)
         self.parser = PDFParser(fp)
         self.parser.set_document(self)  # FIXME: annoying circular reference
         self.is_printable = self.is_modifiable = self.is_extractable = True
@@ -818,6 +840,7 @@ class PDFDocument:
         if objid in self._cached_objs:
             (obj, genno) = self._cached_objs[objid]
         else:
+            obj = None
             for xref in self.xrefs:
                 try:
                     (strmid, index, genno) = xref.get_pos(objid)
@@ -837,7 +860,7 @@ class PDFDocument:
                     break
                 except (PSEOF, PDFSyntaxError):
                     continue
-            else:
+            if obj is None:
                 raise PDFObjectNotFound(objid)
             log.debug("register: objid=%r: %r", objid, obj)
             self._cached_objs[objid] = (obj, genno)
@@ -871,7 +894,9 @@ class PDFDocument:
         If the document includes page labels, generates strings, one per page.
         If not, raises PDFNoPageLabels.
 
-        The resulting iteration is unbounded.
+        The resulting iterator is unbounded, so it is recommended to
+        zip it with the iterator over actual pages returned by `get_pages`.
+
         """
         assert self.catalog is not None
 

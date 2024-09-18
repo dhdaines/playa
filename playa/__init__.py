@@ -12,7 +12,6 @@ from os import PathLike
 from typing import Iterator
 
 from playa.pdfdocument import PDFDocument
-from playa.pdfparser import PDFParser
 
 __version__ = "0.0.1"
 

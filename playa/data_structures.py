@@ -37,9 +37,7 @@ class NumberTree:
 
         return items
 
-    values: List[Tuple[int, Any]]  # workaround decorators unsupported by mypy
-
-    @property  # type: ignore[no-redef,misc]
+    @property
     def values(self) -> List[Tuple[int, Any]]:
         values = self._parse()
 

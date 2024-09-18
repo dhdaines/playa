@@ -13,7 +13,6 @@ from typing import (
     Union,
     cast,
 )
-from warnings import warn
 
 from playa import settings
 from playa.ascii85 import ascii85decode, asciihexdecode
@@ -74,21 +73,12 @@ class PDFObjRef(PDFObject):
         self,
         doc: Optional["PDFDocument"],
         objid: int,
-        _: Any = _DEFAULT,
     ) -> None:
         """Reference to a PDF object.
 
         :param doc: The PDF document.
         :param objid: The object number.
-        :param _: Unused argument for backwards compatibility.
         """
-        if _ is not _DEFAULT:
-            warn(
-                "The third argument of PDFObjRef is unused and will be removed after "
-                "2024",
-                DeprecationWarning,
-            )
-
         if objid == 0:
             if settings.STRICT:
                 raise PDFValueError("PDF object id cannot be 0.")
