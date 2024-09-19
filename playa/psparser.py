@@ -166,16 +166,18 @@ class PSFileParser:
     Parser (actually a lexer) for PDF data from a buffered file object.
     """
 
-    def __init__(self, fp: BinaryIO):
+    def __init__(self, fp: BinaryIO) -> None:
         self.fp = fp
         self._tokens: Deque[Tuple[int, PSBaseParserToken]] = deque()
         self.seek(0)
 
-    def reinit(self, fp: BinaryIO):
+    def reinit(self, fp: BinaryIO) -> None:
+        """Reinitialize parser with a new file."""
         self.fp = fp
         self.seek(0)
 
     def seek(self, pos: int) -> None:
+        """Seek to a position and reinitialize parser state."""
         self.fp.seek(pos)
         self._parse1 = self._parse_main
         self._curtoken = b""
@@ -183,14 +185,18 @@ class PSFileParser:
         self._tokens.clear()
 
     def tell(self) -> int:
+        """Get the current position in the file."""
         return self.fp.tell()
 
     def read(self, pos: int, objlen: int) -> bytes:
+        """Read data from a specified position, moving the current
+        position to the end of this data."""
         self.fp.seek(pos)
         return self.fp.read(objlen)
 
     def nextline(self) -> Tuple[int, bytes]:
-        r"""Fetches a next line that ends either with \r, \n, or \r\n."""
+        r"""Fetches a next line that ends either with \r, \n, or
+        \r\n."""
         linepos = self.fp.tell()
         # readline() is implemented on BinarIO so just use that
         # (except that it only accepts \n as a separator)
@@ -294,10 +300,13 @@ class PSFileParser:
                 data.append(buf)
         return (pos, b"".join(data))
 
-    def __iter__(self):
+    def __iter__(self) -> Iterator[Tuple[int, PSBaseParserToken]]:
+        """Iterate over tokens."""
         return self
 
     def __next__(self) -> Tuple[int, PSBaseParserToken]:
+        """Get the next token in iteration, raising StopIteration when
+        done."""
         while True:
             c = self._parse1()
             # print(c, self._curtoken, self._parse1)
@@ -308,12 +317,13 @@ class PSFileParser:
         return self._tokens.popleft()
 
     def nexttoken(self) -> Tuple[int, PSBaseParserToken]:
+        """Get the next token in iteration, raising PSEOF when done."""
         try:
             return self.__next__()
         except StopIteration:
             raise PSEOF
 
-    def _parse_main(self):
+    def _parse_main(self) -> bytes:
         """Initial/default state for the lexer."""
         c = self.fp.read(1)
         # note that b"" (EOF) is in everything, which is fine
@@ -355,7 +365,7 @@ class PSFileParser:
         """Add a succesfully parsed token."""
         self._tokens.append((self._curtokenpos, obj))
 
-    def _parse_comment(self):
+    def _parse_comment(self) -> bytes:
         """Comment state for the lexer"""
         c = self.fp.read(1)
         if c in EOL:  # this includes b"", i.e. EOF
@@ -366,7 +376,7 @@ class PSFileParser:
             self._curtoken += c
         return c
 
-    def _parse_literal(self):
+    def _parse_literal(self) -> bytes:
         """Literal (keyword) state for the lexer."""
         c = self.fp.read(1)
         if c == b"#":
@@ -384,7 +394,7 @@ class PSFileParser:
             self._curtoken += c
         return c
 
-    def _parse_literal_hex(self):
+    def _parse_literal_hex(self) -> bytes:
         """State for escaped hex characters in literal names"""
         # Consume a hex digit only if we can ... consume a hex digit
         c = self.fp.read(1)
@@ -398,7 +408,7 @@ class PSFileParser:
             self._parse1 = self._parse_literal
         return c
 
-    def _parse_number(self):
+    def _parse_number(self) -> bytes:
         """State for numeric objects."""
         c = self.fp.read(1)
         if c and c in NUMBER:
@@ -416,7 +426,7 @@ class PSFileParser:
             self._parse1 = self._parse_main
         return c
 
-    def _parse_float(self):
+    def _parse_float(self) -> bytes:
         """State for fractional part of numeric objects."""
         c = self.fp.read(1)
         # b"" is in everything so we have to add an extra check
@@ -432,7 +442,7 @@ class PSFileParser:
             self._curtoken += c
         return c
 
-    def _parse_keyword(self):
+    def _parse_keyword(self) -> bytes:
         """State for keywords."""
         c = self.fp.read(1)
         if c in NOTKEYWORD:  # includes EOF
@@ -449,7 +459,7 @@ class PSFileParser:
             self._curtoken += c
         return c
 
-    def _parse_string(self):
+    def _parse_string(self) -> bytes:
         """State for string objects."""
         c = self.fp.read(1)
         if c and c in NOTSTRING:  # does not include EOF
@@ -484,7 +494,7 @@ class PSFileParser:
             self._curtoken += c
         return c
 
-    def _parse_string_esc(self):
+    def _parse_string_esc(self) -> bytes:
         """State for escapes in literal strings.  We have seen a
         backslash and nothing else."""
         c = self.fp.read(1)
@@ -509,7 +519,7 @@ class PSFileParser:
         self._parse1 = self._parse_string
         return c
 
-    def _parse_string_octal(self):
+    def _parse_string_octal(self) -> bytes:
         """State for an octal escape."""
         c = self.fp.read(1)
         if c and c in OCTAL:  # exclude EOF
@@ -532,7 +542,7 @@ class PSFileParser:
             self._parse1 = self._parse_string
         return c
 
-    def _parse_wopen(self):
+    def _parse_wopen(self) -> bytes:
         """State for start of dictionary or hex string."""
         c = self.fp.read(1)
         if c == b"<":
@@ -544,7 +554,7 @@ class PSFileParser:
             self._parse1 = self._parse_hexstring
         return c
 
-    def _parse_wclose(self):
+    def _parse_wclose(self) -> bytes:
         """State for end of dictionary (accessed from initial state only)"""
         c = self.fp.read(1)
         if c == b">":
@@ -555,8 +565,9 @@ class PSFileParser:
             if c:
                 self.fp.seek(-1, io.SEEK_CUR)
         self._parse1 = self._parse_main
+        return c
 
-    def _parse_hexstring(self):
+    def _parse_hexstring(self) -> bytes:
         """State for parsing hexadecimal literal strings."""
         c = self.fp.read(1)
         if not c:
@@ -613,26 +624,31 @@ class PSInMemoryParser:
     Parser for in-memory data streams.
     """
 
-    def __init__(self, data: bytes):
+    def __init__(self, data: bytes) -> None:
         self.data = data
         self.pos = 0
         self.end = len(data)
         self._tokens: Deque[Tuple[int, PSBaseParserToken]] = deque()
 
-    def reinit(self, data: bytes):
+    def reinit(self, data: bytes) -> None:
+        """Reinitialize parser with a new buffer."""
         self.data = data
         self.seek(0)
 
     def seek(self, pos: int) -> None:
+        """Seek to a position and reinitialize parser state."""
         self.pos = pos
         self._curtoken = b""
         self._curtokenpos = 0
         self._tokens.clear()
 
     def tell(self) -> int:
+        """Get the current position in the buffer."""
         return self.pos
 
     def read(self, pos: int, objlen: int) -> bytes:
+        """Read data from a specified position, moving the current
+        position to the end of this data."""
         self.pos = max(pos + objlen, len(self.data))
         return self.data[pos : self.pos]
 
@@ -691,30 +707,31 @@ class PSInMemoryParser:
             return result
         return (-1, b"")
 
-    def __iter__(self):
+    def __iter__(self) -> Iterator[Tuple[int, PSBaseParserToken]]:
+        """Iterate over tokens."""
         return self
 
     def nexttoken(self) -> Tuple[int, PSBaseParserToken]:
+        """Get the next token in iteration, raising PSEOF when done."""
         try:
             return self.__next__()
         except StopIteration:
             raise PSEOF
 
     def __next__(self) -> Tuple[int, PSBaseParserToken]:
-        """Lexer (most of the work is done in regular expressions, but
-        PDF syntax is not entirely regular due to the use of balanced
-        parentheses in strings)."""
+        """Get the next token in iteration, raising StopIteration when
+        done."""
         while True:
             m = LEXER.match(self.data, self.pos)
             if m is None:  # can only happen at EOS
                 raise StopIteration
             self._curtokenpos = m.start()
             self.pos = m.end()
-            if m.lastgroup not in ("whitespace", "comment"):
+            if m.lastgroup not in ("whitespace", "comment"):  # type: ignore
                 # Okay, we got a token or something
                 break
         self._curtoken = m[0]
-        if m.lastgroup == "name":
+        if m.lastgroup == "name":  # type: ignore
             self._curtoken = m[0][1:]
             self._curtoken = HEXDIGIT.sub(
                 lambda x: bytes((int(x[1], 16),)), self._curtoken
@@ -724,18 +741,18 @@ class PSInMemoryParser:
             except UnicodeDecodeError:
                 tok = LIT(self._curtoken)
             return (self._curtokenpos, tok)
-        if m.lastgroup == "number":
+        if m.lastgroup == "number":  # type: ignore
             if b"." in self._curtoken:
                 return (self._curtokenpos, float(self._curtoken))
             else:
                 return (self._curtokenpos, int(self._curtoken))
-        if m.lastgroup == "startdict":
+        if m.lastgroup == "startdict":  # type: ignore
             return (self._curtokenpos, KEYWORD_DICT_BEGIN)
-        if m.lastgroup == "enddict":
+        if m.lastgroup == "enddict":  # type: ignore
             return (self._curtokenpos, KEYWORD_DICT_END)
-        if m.lastgroup == "startstr":
+        if m.lastgroup == "startstr":  # type: ignore
             return self._parse_endstr(self.data[m.start() + 1 : m.end()], m.end())
-        if m.lastgroup == "hexstr":
+        if m.lastgroup == "hexstr":  # type: ignore
             self._curtoken = SPC.sub(b"", self._curtoken[1:-1])
             if len(self._curtoken) % 2 == 1:
                 self._curtoken += b"0"
@@ -754,23 +771,23 @@ class PSInMemoryParser:
         paren = 1
         for m in STRLEXER.finditer(self.data, pos):
             self.pos = m.end()
-            if m.lastgroup == "parenright":
+            if m.lastgroup == "parenright":  # type: ignore
                 paren -= 1
                 if paren == 0:
                     # By far the most common situation!
                     break
                 parts.append(m[0])
-            elif m.lastgroup == "parenleft":
+            elif m.lastgroup == "parenleft":  # type: ignore
                 parts.append(m[0])
                 paren += 1
-            elif m.lastgroup == "escape":
+            elif m.lastgroup == "escape":  # type: ignore
                 chr = m[0][1:2]
                 if chr not in ESC_STRING:
                     log.warning("Unrecognized escape %r", m[0])
                     parts.append(chr)
                 else:
                     parts.append(bytes((ESC_STRING[chr],)))
-            elif m.lastgroup == "octal":
+            elif m.lastgroup == "octal":  # type: ignore
                 chrcode = int(m[0][1:], 8)
                 if chrcode >= 256:
                     # PDF1.7 p.16: "high-order overflow shall be
@@ -778,7 +795,7 @@ class PSInMemoryParser:
                     log.warning("Invalid octal %r (%d)", m[0][1:], chrcode)
                 else:
                     parts.append(bytes((chrcode,)))
-            elif m.lastgroup == "linebreak":
+            elif m.lastgroup == "linebreak":  # type: ignore
                 pass
             else:
                 parts.append(m[0])
@@ -800,10 +817,14 @@ PSStackEntry = Tuple[int, PSStackType[ExtraT]]
 
 
 class PSStackParser(Generic[ExtraT]):
+    """Basic parser for PDF objects, can take a file or a `bytes` as
+    input."""
+
     def __init__(self, reader: Union[BinaryIO, bytes]) -> None:
         self.reinit(reader)
 
     def reinit(self, reader: Union[BinaryIO, bytes]) -> None:
+        """Reinitialize parser with a new file or buffer."""
         if isinstance(reader, bytes):
             self._parser: Union[PSInMemoryParser, PSFileParser] = PSInMemoryParser(
                 reader
@@ -813,29 +834,35 @@ class PSStackParser(Generic[ExtraT]):
         self.reset()
 
     def reset(self) -> None:
+        """Reset parser state."""
         self.context: List[Tuple[int, Optional[str], List[PSStackEntry[ExtraT]]]] = []
         self.curtype: Optional[str] = None
         self.curstack: List[PSStackEntry[ExtraT]] = []
         self.results: List[PSStackEntry[ExtraT]] = []
 
     def seek(self, pos: int) -> None:
+        """Seek to a position and reset parser state."""
         self._parser.seek(pos)
         self.reset()
 
     def push(self, *objs: PSStackEntry[ExtraT]) -> None:
+        """Push some objects onto the stack."""
         self.curstack.extend(objs)
 
     def pop(self, n: int) -> List[PSStackEntry[ExtraT]]:
+        """Pop some objects off the stack."""
         objs = self.curstack[-n:]
         self.curstack[-n:] = []
         return objs
 
     def popall(self) -> List[PSStackEntry[ExtraT]]:
+        """Pop all the things off the stack."""
         objs = self.curstack
         self.curstack = []
         return objs
 
     def add_results(self, *objs: PSStackEntry[ExtraT]) -> None:
+        """Move some objects to the output."""
         try:
             log.debug("add_results: %r", objs)
         except Exception:
@@ -843,11 +870,13 @@ class PSStackParser(Generic[ExtraT]):
         self.results.extend(objs)
 
     def start_type(self, pos: int, type: str) -> None:
+        """Start a composite object (array, dict, etc)."""
         self.context.append((pos, self.curtype, self.curstack))
         (self.curtype, self.curstack) = (type, [])
         log.debug("start_type: pos=%r, type=%r", pos, type)
 
     def end_type(self, type: str) -> Tuple[int, List[PSStackType[ExtraT]]]:
+        """End a composite object (array, dict, etc)."""
         if self.curtype != type:
             raise PSTypeError(f"Type mismatch: {self.curtype!r} != {type!r}")
         objs = [obj for (_, obj) in self.curstack]
@@ -856,9 +885,11 @@ class PSStackParser(Generic[ExtraT]):
         return (pos, objs)
 
     def do_keyword(self, pos: int, token: PSKeyword) -> None:
+        """Handle a PDF keyword."""
         pass
 
     def flush(self) -> None:
+        """Get everything off the stack and into the output?"""
         pass
 
     def nextobject(self) -> PSStackEntry[ExtraT]:
@@ -943,25 +974,39 @@ class PSStackParser(Generic[ExtraT]):
 
     # Delegation follows
     def nextline(self) -> Tuple[int, bytes]:
+        r"""Fetches a next line that ends either with \r, \n, or
+        \r\n."""
         return self._parser.nextline()
 
     def revreadlines(self) -> Iterator[bytes]:
+        """Fetches a next line backwards.
+
+        This is used to locate the trailers at the end of a file.
+        """
         return self._parser.revreadlines()
 
     def read(self, pos: int, objlen: int) -> bytes:
+        """Read data from a specified position, moving the current
+        position to the end of this data."""
         return self._parser.read(pos, objlen)
 
     def nexttoken(self) -> Tuple[int, PSBaseParserToken]:
+        """Get the next token in iteration, raising PSEOF when done."""
         try:
             return self.__next__()
         except StopIteration:
             raise PSEOF
 
     def get_inline_data(self, target: bytes = b"EI") -> Tuple[int, bytes]:
+        """Get the data for an inline image up to the target
+        end-of-stream marker."""
         return self._parser.get_inline_data(target)
 
-    def __iter__(self):
+    def __iter__(self) -> Iterator[Tuple[int, PSBaseParserToken]]:
+        """Iterate over tokens."""
         return self
 
-    def __next__(self):
+    def __next__(self) -> Tuple[int, PSBaseParserToken]:
+        """Get the next token in iteration, raising StopIteration when
+        done."""
         return self._parser.__next__()
