@@ -305,11 +305,11 @@ def bench_playa():
     from playa.pdfdocument import PDFDocument
     from playa.pdfinterp import PDFPageInterpreter, PDFResourceManager
     from playa.pdfpage import PDFPage
-    from playa.psparser import PSBaseParser, PSInMemoryParser
+    from playa.psparser import PSFileParser, PSInMemoryParser
 
     runs = 100
     start = time.time()
-    parser = PSBaseParser(BytesIO(DATA * runs))
+    parser = PSFileParser(BytesIO(DATA * runs))
     _ = list(parser)
     print(
         "PLAYA Parser (BytesIO): %fms / run" % ((time.time() - start) / runs * 1000),
@@ -326,7 +326,7 @@ def bench_playa():
             outfh.write(DATA * runs)
         with open(tf.name, "rb") as infh:
             start = time.time()
-            parser = PSBaseParser(infh)
+            parser = PSFileParser(infh)
             _ = list(parser)
             print(
                 "PLAYA Parser (BinaryIO): %fms / run"
@@ -405,7 +405,3 @@ if __name__ == "__main__":
         bench_pdfminer()
     if len(sys.argv) < 2 or sys.argv[1] == "playa":
         bench_playa()
-    if len(sys.argv) < 2 or sys.argv[1] == "bytes":
-        bench_bytes()
-    if len(sys.argv) < 2 or sys.argv[1] == "bytesio":
-        bench_bytesio()

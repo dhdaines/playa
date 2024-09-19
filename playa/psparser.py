@@ -749,9 +749,9 @@ PSStackType = Union[str, float, bool, PSLiteral, bytes, List, Dict, ExtraT]
 PSStackEntry = Tuple[int, PSStackType[ExtraT]]
 
 
-class PSStackParser(PSBaseParser, Generic[ExtraT]):
+class PSStackParser(PSFileParser, Generic[ExtraT]):
     def __init__(self, reader: BinaryIO) -> None:
-        PSBaseParser.__init__(self, reader)
+        PSFileParser.__init__(self, reader)
         self.reset()
 
     def reset(self) -> None:
@@ -761,7 +761,7 @@ class PSStackParser(PSBaseParser, Generic[ExtraT]):
         self.results: List[PSStackEntry[ExtraT]] = []
 
     def seek(self, pos: int) -> None:
-        PSBaseParser.seek(self, pos)
+        super().seek(pos)
         self.reset()
 
     def push(self, *objs: PSStackEntry[ExtraT]) -> None:
