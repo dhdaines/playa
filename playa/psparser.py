@@ -605,7 +605,7 @@ LEXER = re.compile(
 )
 STRLEXER = re.compile(
     rb"""(?:
-      (?P<octal> \\\d{1,3})
+      (?P<octal> \\[0-7]{1,3})
     | (?P<linebreak> \\(?:\r\n?|\n))
     | (?P<escape> \\.)
     | (?P<parenleft> \()
