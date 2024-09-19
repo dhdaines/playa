@@ -8,9 +8,9 @@ from playa.cmapdb import CMap, CMapBase, CMapDB
 from playa.exceptions import (
     PSEOF,
     PDFException,
+    PDFSyntaxError,
     PDFValueError,
     PSTypeError,
-    PDFSyntaxError,
 )
 from playa.pdfcolor import PREDEFINED_COLORSPACE, PDFColorSpace
 from playa.pdfdevice import PDFDevice, PDFTextSeq

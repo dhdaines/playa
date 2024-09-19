@@ -1,5 +1,4 @@
 import logging
-from io import BytesIO
 from typing import TYPE_CHECKING, BinaryIO, Optional, Union
 
 from playa import settings

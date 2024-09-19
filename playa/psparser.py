@@ -636,7 +636,7 @@ class PSInMemoryParser:
             self.pos = self.end
         else:
             self.pos = m.end()
-        return (linepos, self.data[linepos:self.pos])
+        return (linepos, self.data[linepos : self.pos])
 
     def revreadlines(self) -> Iterator[bytes]:
         """Fetches a next line backwards.
@@ -653,10 +653,10 @@ class PSInMemoryParser:
             if best == -1:
                 yield self.data[:endline]
                 break
-            yield self.data[best + 1:endline]
+            yield self.data[best + 1 : endline]
             endline = best + 1
             pos = best
-            if pos > 0 and self.data[pos - 1:pos + 1] == b"\r\n":
+            if pos > 0 and self.data[pos - 1 : pos + 1] == b"\r\n":
                 pos -= 1
 
     def get_inline_data(

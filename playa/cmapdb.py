@@ -18,7 +18,6 @@ import struct
 import sys
 from typing import (
     Any,
-    BinaryIO,
     Dict,
     Iterable,
     Iterator,
