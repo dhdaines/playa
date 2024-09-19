@@ -40,8 +40,8 @@ class PDFParser(PSStackParser[Union[PSKeyword, PDFStream, PDFObjRef, None]]):
 
     """
 
-    def __init__(self, fp: BinaryIO) -> None:
-        PSStackParser.__init__(self, fp)
+    def __init__(self, data: Union[BinaryIO, bytes]) -> None:
+        super().__init__(data)
         self.doc: Optional[PDFDocument] = None
         self.fallback = False
 
@@ -135,7 +135,7 @@ class PDFStreamParser(PDFParser):
     """
 
     def __init__(self, data: bytes) -> None:
-        PDFParser.__init__(self, BytesIO(data))
+        super().__init__(data)
 
     def flush(self) -> None:
         self.add_results(*self.popall())

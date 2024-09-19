@@ -277,8 +277,8 @@ class CMapDB:
 
 
 class CMapParser(PSStackParser[PSKeyword]):
-    def __init__(self, cmap: CMapBase, fp: BinaryIO) -> None:
-        PSStackParser.__init__(self, fp)
+    def __init__(self, cmap: CMapBase, data: bytes) -> None:
+        super().__init__(data)
         self.cmap = cmap
         # some ToUnicode maps don't have "begincmap" keyword.
         self._in_cmap = True

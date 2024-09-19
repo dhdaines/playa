@@ -641,7 +641,9 @@ class PSInMemoryParser:
     def revreadlines(self) -> Iterator[bytes]:
         """Fetches a next line backwards.
 
-        This is used to locate the trailers at the end of a file.
+        This is used to locate the trailers at the end of a file.  So,
+        it isn't actually used in PSInMemoryParser, but is here for
+        completeness.
         """
         endline = pos = self.end
         while True:
@@ -788,8 +790,11 @@ PSStackEntry = Tuple[int, PSStackType[ExtraT]]
 
 
 class PSStackParser(PSFileParser, Generic[ExtraT]):
-    def __init__(self, reader: BinaryIO) -> None:
-        PSFileParser.__init__(self, reader)
+    def __init__(self, reader: Union[BinaryIO, bytes]) -> None:
+        if isinstance(reader, bytes):
+            super().__init__(io.BytesIO(reader))
+        else:
+            super().__init__(reader)
         self.reset()
 
     def reset(self) -> None:
