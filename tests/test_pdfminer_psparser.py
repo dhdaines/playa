@@ -332,8 +332,8 @@ are the same . )
     list_parsers(b"(foo\r)", [(0, b"foo\n")])
     list_parsers(b"(foo\r\nbar\r\nbaz)", [(0, b"foo\nbar\nbaz")])
     list_parsers(b"(foo\n)", [(0, b"foo\n")])
-    list_parsers(br"(foo\r\nbaz)", [(0, b"foo\r\nbaz")])
-    list_parsers(br"(foo\r\nbar\r\nbaz)", [(0, b"foo\r\nbar\r\nbaz")])
+    list_parsers(rb"(foo\r\nbaz)", [(0, b"foo\r\nbaz")])
+    list_parsers(rb"(foo\r\nbar\r\nbaz)", [(0, b"foo\r\nbar\r\nbaz")])
     list_parsers(
         rb"( This string contains \245two octal characters\307 . )",
         [(0, b" This string contains \245two octal characters\307 . ")],
