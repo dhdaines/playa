@@ -23,7 +23,7 @@ from typing import (
     cast,
 )
 
-from playa.exceptions import PDFTypeError, PDFValueError
+from playa.exceptions import PDFSyntaxError, PDFTypeError, PDFValueError
 
 if TYPE_CHECKING:
     from playa.layout import LTComponent
@@ -246,6 +246,8 @@ def parse_rect(o: Any) -> Rect:
         return float(x0), float(y0), float(x1), float(y1)
     except ValueError:
         raise PDFValueError("Could not parse rectangle")
+    except TypeError:
+        raise PDFSyntaxError("Rectangle contains non-numeric values")
 
 
 def mult_matrix(m1: Matrix, m0: Matrix) -> Matrix:
