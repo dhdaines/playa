@@ -1,5 +1,4 @@
 import logging
-from io import BytesIO
 from typing import Dict, List, Mapping, Optional, Sequence, Tuple, Union, cast
 
 from playa import settings
@@ -35,6 +34,7 @@ from playa.pdftypes import (
 from playa.psparser import (
     KWD,
     LIT,
+    PSBaseParserToken,
     PSKeyword,
     PSLiteral,
     PSStackParser,
@@ -258,26 +258,37 @@ KEYWORD_EI = KWD(b"EI")
 
 
 class PDFContentParser(PSStackParser[Union[PSKeyword, PDFStream]]):
+    """Parse the concatenation of multiple content streams, as
+    described in the spec (PDF 1.7, p.86):
+
+    ...the effect shall be as if all of the streams in the array were
+    concatenated, in order, to form a single stream.  Conforming
+    writers can create image objects and other resources as they
+    occur, even though they interrupt the content stream. The division
+    between streams may occur only at the boundaries between lexical
+    tokens (see 7.2, "Lexical Conventions") but shall be unrelated to
+    the page’s logical content or organization.
+    """
+
     def __init__(self, streams: Sequence[object]) -> None:
-        self.streams = streams
-        self.istream = 0
-        # PSStackParser.__init__(fp=None) is safe only because we've overloaded
-        # all the methods that would attempt to access self.fp without first
-        # calling self.fillfp().
-        PSStackParser.__init__(self, None)  # type: ignore[arg-type]
+        self.streamiter = iter(streams)
+        try:
+            stream = stream_value(next(self.streamiter))
+        except StopIteration:
+            raise PSEOF
+        log.debug("PDFContentParser starting stream %r", stream)
+        super().__init__(stream.get_data())
 
-    def fillfp(self) -> None:
-        if not self.fp:
-            if self.istream < len(self.streams):
-                strm = stream_value(self.streams[self.istream])
-                self.istream += 1
-            else:
-                raise PSEOF("Unexpected EOF, file truncated?")
-            self.fp = BytesIO(strm.get_data())
-
-    def seek(self, pos: int) -> None:
-        self.fillfp()
-        super().seek(pos)
+    def __next__(self) -> Tuple[int, PSBaseParserToken]:
+        while True:
+            try:
+                return super().__next__()
+            except StopIteration:
+                # Will also raise StopIteration if there are no more,
+                # which is exactly what we want
+                stream = stream_value(next(self.streamiter))
+                log.debug("PDFContentParser starting stream %r", stream)
+                self.reinit(stream.get_data())
 
     def flush(self) -> None:
         self.add_results(*self.popall())

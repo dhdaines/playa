@@ -51,5 +51,16 @@ def test_inline_data():
         interp.process_page(page)
 
 
+def test_multiple_contents():
+    # See above...
+    with playa.open(TESTDIR / "jo.pdf") as doc:
+        rsrc = PDFResourceManager()
+        agg = PDFPageAggregator(rsrc, pageno=1)
+        interp = PDFPageInterpreter(rsrc, agg)
+        page = next(PDFPage.create_pages(doc))
+        assert len(page.contents) > 1
+        interp.process_page(page)
+
+
 if __name__ == "__main__":
     test_open(TESTDIR / "simple5.pdf")

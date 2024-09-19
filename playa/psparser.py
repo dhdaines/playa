@@ -171,6 +171,10 @@ class PSFileParser:
         self._tokens: Deque[Tuple[int, PSBaseParserToken]] = deque()
         self.seek(0)
 
+    def reinit(self, fp: BinaryIO):
+        self.fp = fp
+        self.seek(0)
+
     def flush(self) -> None:
         pass
 
@@ -614,6 +618,10 @@ class PSInMemoryParser:
         self.end = len(data)
         self._tokens: Deque[Tuple[int, PSBaseParserToken]] = deque()
 
+    def reinit(self, data: bytes):
+        self.data = data
+        self.seek(0)
+
     def flush(self) -> None:
         pass
 
@@ -795,6 +803,13 @@ class PSStackParser(PSFileParser, Generic[ExtraT]):
             super().__init__(io.BytesIO(reader))
         else:
             super().__init__(reader)
+        self.reset()
+
+    def reinit(self, reader: Union[BinaryIO, bytes]) -> None:
+        if isinstance(reader, bytes):
+            super().reinit(io.BytesIO(reader))
+        else:
+            super().reinit(reader)
         self.reset()
 
     def reset(self) -> None:
