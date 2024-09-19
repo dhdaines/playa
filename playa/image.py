@@ -2,7 +2,7 @@ import os
 import os.path
 import struct
 from io import BytesIO
-from typing import BinaryIO, Tuple, Literal
+from typing import BinaryIO, Literal, Tuple
 
 from playa.exceptions import PDFValueError
 from playa.jbig2 import JBIG2StreamReader, JBIG2StreamWriter
