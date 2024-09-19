@@ -610,6 +610,7 @@ STRLEXER = re.compile(
     | (?P<escape> \\.)
     | (?P<parenleft> \()
     | (?P<parenright> \))
+    | (?P<newline> \r\n?|\n)
     | (?P<other> .)
 )""",
     re.VERBOSE,
@@ -768,7 +769,8 @@ class PSInMemoryParser:
 
     def _parse_endstr(self, start: bytes, pos: int) -> Tuple[int, PSBaseParserToken]:
         """Parse the remainder of a string."""
-        parts = [start]
+        # Handle nonsense CRLF conversion in strings (PDF 1.7, p.15)
+        parts = [EOLR.sub(b"\n", start)]
         paren = 1
         for m in STRLEXER.finditer(self.data, pos):
             self.pos = m.end()
@@ -796,6 +798,9 @@ class PSInMemoryParser:
                     log.warning("Invalid octal %r (%d)", m[0][1:], chrcode)
                 else:
                     parts.append(bytes((chrcode,)))
+            elif m.lastgroup == "newline":  # type: ignore
+                # Handle nonsense CRLF conversion in strings (PDF 1.7, p.15)
+                parts.append(b"\n")
             elif m.lastgroup == "linebreak":  # type: ignore
                 pass
             else:
@@ -803,7 +808,7 @@ class PSInMemoryParser:
         if paren != 0:
             log.warning("Unterminated string at %d", pos)
             raise StopIteration
-        return (self._curtokenpos, b"".join(EOLR.sub(b"\n", part) for part in parts))
+        return (self._curtokenpos, b"".join(parts))
 
 
 # Stack slots may by occupied by any of:
