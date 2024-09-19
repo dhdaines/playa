@@ -603,30 +603,59 @@ EOLR = re.compile(rb"\r\n?|\n")
 SPC = re.compile(rb"\s")
 
 
-class PSInMemoryParser(PSFileParser):
+class PSInMemoryParser:
     """
-    Specialization of the parser for in-memory data streams.
+    Parser for in-memory data streams.
     """
 
     def __init__(self, data: bytes):
-        self.fp = io.BytesIO(data)
         self.data = data
         self.pos = 0
+        self.end = len(data)
         self._tokens: Deque[Tuple[int, PSBaseParserToken]] = deque()
 
     def flush(self) -> None:
         pass
 
     def seek(self, pos: int) -> None:
-        self.fp.seek(0)
         self.pos = 0
-        self._parse1 = self._parse_main
         self._curtoken = b""
         self._curtokenpos = 0
         self._tokens.clear()
 
     def tell(self) -> int:
         return self.pos
+
+    def nextline(self) -> Tuple[int, bytes]:
+        r"""Fetches a next line that ends either with \r, \n, or \r\n."""
+        if self.pos == self.end:
+            raise PSEOF
+        linepos = self.pos
+        m = EOLR.search(self.data, self.pos)
+        if m is None:
+            self.pos = self.end
+        else:
+            self.pos = m.end()
+        return (linepos, self.data[linepos:self.pos])
+
+    def revreadlines(self) -> Iterator[bytes]:
+        """Fetches a next line backwards.
+
+        This is used to locate the trailers at the end of a file.
+        """
+        endline = pos = self.end
+        while True:
+            nidx = self.data.rfind(ord(b"\n"), 0, pos)
+            ridx = self.data.rfind(ord(b"\r"), 0, pos)
+            best = max(nidx, ridx)
+            if best == -1:
+                yield self.data[:endline]
+                break
+            yield self.data[best + 1:endline]
+            endline = best + 1
+            pos = best
+            if pos > 0 and self.data[pos - 1:pos + 1] == b"\r\n":
+                pos -= 1
 
     def get_inline_data(
         self, target: bytes = b"EI", blocksize: int = -1
@@ -649,6 +678,15 @@ class PSInMemoryParser(PSFileParser):
             self.pos = nextpos
             return result
         return (-1, b"")
+
+    def __iter__(self):
+        return self
+
+    def nexttoken(self) -> Tuple[int, PSBaseParserToken]:
+        try:
+            return self.__next__()
+        except StopIteration:
+            raise PSEOF
 
     def __next__(self) -> Tuple[int, PSBaseParserToken]:
         """Lexer (most of the work is done in regular expressions, but
