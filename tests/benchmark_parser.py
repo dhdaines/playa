@@ -283,6 +283,26 @@ def bench_bytes():
     )
 
 
+def bench_mmap():
+    import mmap
+
+    from playa.psparser import PSInMemoryParser
+
+    with tempfile.NamedTemporaryFile() as tf:
+        runs = 100
+        with open(tf.name, "wb") as outfh:
+            outfh.write(DATA * runs)
+        with open(tf.name, "rb") as infh:
+            start = time.time()
+            mapping = mmap.mmap(infh.fileno(), 0, access=mmap.ACCESS_READ)
+            parser = PSInMemoryParser(mapping)
+            _ = list(parser)
+            print(
+                "PLAYA Parser (mmap): %fms / run"
+                % ((time.time() - start) / runs * 1000),
+            )
+
+
 def bench_bytesio():
     from pdfminer.psparser import PSEOF, PSBaseParser
 
@@ -305,7 +325,7 @@ def bench_playa():
     from playa.pdfdocument import PDFDocument
     from playa.pdfinterp import PDFPageInterpreter, PDFResourceManager
     from playa.pdfpage import PDFPage
-    from playa.psparser import PSFileParser, PSInMemoryParser
+    from playa.psparser import PSFileParser
 
     runs = 100
     start = time.time()
@@ -313,12 +333,6 @@ def bench_playa():
     _ = list(parser)
     print(
         "PLAYA Parser (BytesIO): %fms / run" % ((time.time() - start) / runs * 1000),
-    )
-    start = time.time()
-    parser = PSInMemoryParser(DATA * runs)
-    _ = list(parser)
-    print(
-        "PLAYA Parser (bytes): %fms / run" % ((time.time() - start) / runs * 1000),
     )
     with tempfile.NamedTemporaryFile() as tf:
         runs = 100
@@ -332,6 +346,8 @@ def bench_playa():
                 "PLAYA Parser (BinaryIO): %fms / run"
                 % ((time.time() - start) / runs * 1000),
             )
+    bench_bytes()
+    bench_mmap()
 
     runs = 20
     start = time.time()
@@ -405,3 +421,9 @@ if __name__ == "__main__":
         bench_pdfminer()
     if len(sys.argv) < 2 or sys.argv[1] == "playa":
         bench_playa()
+    if len(sys.argv) > 1 and sys.argv[1] == "bytes":
+        bench_bytes()
+    if len(sys.argv) > 1 and sys.argv[1] == "bytesio":
+        bench_bytesio()
+    if len(sys.argv) > 1 and sys.argv[1] == "mmap":
+        bench_mmap()

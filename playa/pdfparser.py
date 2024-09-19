@@ -80,16 +80,17 @@ class PDFParser(PSStackParser[Union[PSKeyword, PDFStream, PDFObjRef, None]]):
                 except KeyError:
                     if settings.STRICT:
                         raise PDFSyntaxError("/Length is undefined: %r" % dic)
+            # back up and read the entire line including 'stream' as
+            # the data starts after the trailing newline
             self.seek(pos)
             try:
-                (_, line) = self.nextline()  # 'stream'
+                (_, line) = self.nextline()  # 'stream\n'
             except PSEOF:
                 if settings.STRICT:
                     raise PDFSyntaxError("Unexpected EOF")
                 return
-            pos += len(line)
-            data = bytearray(self.read(pos, objlen))
-            self.seek(pos + objlen)
+            pos = self.tell()
+            data = self.read(objlen)
             while True:
                 try:
                     (linepos, line) = self.nextline()

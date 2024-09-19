@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import io
 import logging
+import mmap
 import re
 from binascii import unhexlify
 from collections import deque
@@ -188,10 +189,9 @@ class PSFileParser:
         """Get the current position in the file."""
         return self.fp.tell()
 
-    def read(self, pos: int, objlen: int) -> bytes:
+    def read(self, objlen: int) -> bytes:
         """Read data from a specified position, moving the current
         position to the end of this data."""
-        self.fp.seek(pos)
         return self.fp.read(objlen)
 
     def nextline(self) -> Tuple[int, bytes]:
@@ -624,7 +624,7 @@ class PSInMemoryParser:
     Parser for in-memory data streams.
     """
 
-    def __init__(self, data: bytes) -> None:
+    def __init__(self, data: Union[bytes, mmap.mmap]) -> None:
         self.data = data
         self.pos = 0
         self.end = len(data)
@@ -646,9 +646,10 @@ class PSInMemoryParser:
         """Get the current position in the buffer."""
         return self.pos
 
-    def read(self, pos: int, objlen: int) -> bytes:
-        """Read data from a specified position, moving the current
-        position to the end of this data."""
+    def read(self, objlen: int) -> bytes:
+        """Read data from current position, advancing to the end of
+        this data."""
+        pos = self.pos
         self.pos = min(pos + objlen, len(self.data))
         return self.data[pos : self.pos]
 
@@ -830,7 +831,14 @@ class PSStackParser(Generic[ExtraT]):
                 reader
             )
         else:
-            self._parser = PSFileParser(reader)
+            try:
+                self._mmap = mmap.mmap(reader.fileno(), 0, access=mmap.ACCESS_READ)
+                self._parser = PSInMemoryParser(self._mmap)
+            except io.UnsupportedOperation:
+                log.warning(
+                    "mmap not supported on %r, falling back to file parser", reader
+                )
+                self._parser = PSFileParser(reader)
         self.reset()
 
     def reset(self) -> None:
@@ -844,6 +852,10 @@ class PSStackParser(Generic[ExtraT]):
         """Seek to a position and reset parser state."""
         self._parser.seek(pos)
         self.reset()
+
+    def tell(self) -> int:
+        """Get the current position in the file."""
+        return self._parser.tell()
 
     def push(self, *objs: PSStackEntry[ExtraT]) -> None:
         """Push some objects onto the stack."""
@@ -985,10 +997,10 @@ class PSStackParser(Generic[ExtraT]):
         """
         return self._parser.revreadlines()
 
-    def read(self, pos: int, objlen: int) -> bytes:
+    def read(self, objlen: int) -> bytes:
         """Read data from a specified position, moving the current
         position to the end of this data."""
-        return self._parser.read(pos, objlen)
+        return self._parser.read(objlen)
 
     def nexttoken(self) -> Tuple[int, PSBaseParserToken]:
         """Get the next token in iteration, raising PSEOF when done."""
