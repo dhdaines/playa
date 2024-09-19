@@ -88,8 +88,7 @@ class PDFParser(PSStackParser[Union[PSKeyword, PDFStream, PDFObjRef, None]]):
                     raise PDFSyntaxError("Unexpected EOF")
                 return
             pos += len(line)
-            self.fp.seek(pos)
-            data = bytearray(self.fp.read(objlen))
+            data = bytearray(self.read(pos, objlen))
             self.seek(pos + objlen)
             while True:
                 try:

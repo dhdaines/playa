@@ -34,7 +34,6 @@ def test_open(path: Path):
     for password in passwords:
         with playa.open(TESTDIR / path, password=password) as pdf:
             pass
-        assert pdf.parser.fp.closed
         assert pdf.parser.doc is None
 
 

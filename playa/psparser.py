@@ -175,9 +175,6 @@ class PSFileParser:
         self.fp = fp
         self.seek(0)
 
-    def flush(self) -> None:
-        pass
-
     def seek(self, pos: int) -> None:
         self.fp.seek(pos)
         self._parse1 = self._parse_main
@@ -187,6 +184,10 @@ class PSFileParser:
 
     def tell(self) -> int:
         return self.fp.tell()
+
+    def read(self, pos: int, objlen: int) -> bytes:
+        self.fp.seek(pos)
+        return self.fp.read(objlen)
 
     def nextline(self) -> Tuple[int, bytes]:
         r"""Fetches a next line that ends either with \r, \n, or \r\n."""
@@ -622,17 +623,18 @@ class PSInMemoryParser:
         self.data = data
         self.seek(0)
 
-    def flush(self) -> None:
-        pass
-
     def seek(self, pos: int) -> None:
-        self.pos = 0
+        self.pos = pos
         self._curtoken = b""
         self._curtokenpos = 0
         self._tokens.clear()
 
     def tell(self) -> int:
         return self.pos
+
+    def read(self, pos: int, objlen: int) -> bytes:
+        self.pos = max(pos + objlen, len(self.data))
+        return self.data[pos : self.pos]
 
     def nextline(self) -> Tuple[int, bytes]:
         r"""Fetches a next line that ends either with \r, \n, or \r\n."""
@@ -797,19 +799,17 @@ PSStackType = Union[str, float, bool, PSLiteral, bytes, List, Dict, ExtraT]
 PSStackEntry = Tuple[int, PSStackType[ExtraT]]
 
 
-class PSStackParser(PSFileParser, Generic[ExtraT]):
+class PSStackParser(Generic[ExtraT]):
     def __init__(self, reader: Union[BinaryIO, bytes]) -> None:
-        if isinstance(reader, bytes):
-            super().__init__(io.BytesIO(reader))
-        else:
-            super().__init__(reader)
-        self.reset()
+        self.reinit(reader)
 
     def reinit(self, reader: Union[BinaryIO, bytes]) -> None:
         if isinstance(reader, bytes):
-            super().reinit(io.BytesIO(reader))
+            self._parser: Union[PSInMemoryParser, PSFileParser] = PSInMemoryParser(
+                reader
+            )
         else:
-            super().reinit(reader)
+            self._parser = PSFileParser(reader)
         self.reset()
 
     def reset(self) -> None:
@@ -819,7 +819,7 @@ class PSStackParser(PSFileParser, Generic[ExtraT]):
         self.results: List[PSStackEntry[ExtraT]] = []
 
     def seek(self, pos: int) -> None:
-        super().seek(pos)
+        self._parser.seek(pos)
         self.reset()
 
     def push(self, *objs: PSStackEntry[ExtraT]) -> None:
@@ -858,6 +858,9 @@ class PSStackParser(PSFileParser, Generic[ExtraT]):
     def do_keyword(self, pos: int, token: PSKeyword) -> None:
         pass
 
+    def flush(self) -> None:
+        pass
+
     def nextobject(self) -> PSStackEntry[ExtraT]:
         """Yields a list of objects.
 
@@ -867,7 +870,7 @@ class PSStackParser(PSFileParser, Generic[ExtraT]):
         :return: keywords, literals, strings, numbers, arrays and dictionaries.
         """
         while not self.results:
-            (pos, token) = self.nexttoken()
+            (pos, token) = self._parser.nexttoken()
             if isinstance(token, (int, float, bool, str, bytes, PSLiteral)):
                 # normal token
                 self.push((pos, token))
@@ -930,10 +933,32 @@ class PSStackParser(PSFileParser, Generic[ExtraT]):
             if self.context:
                 continue
             else:
-                self.flush()  # FIXME: what does it do?
+                self.flush()  # Does nothing here, but in subclasses... (ugh)
         obj = self.results.pop(0)
         try:
             log.debug("nextobject: %r", obj)
         except Exception:
             log.debug("nextobject: (unprintable object)")
         return obj
+
+    # Delegation follows
+    def nextline(self) -> Tuple[int, bytes]:
+        return self._parser.nextline()
+
+    def revreadlines(self) -> Iterator[bytes]:
+        return self._parser.revreadlines()
+
+    def read(self, pos: int, objlen: int) -> bytes:
+        return self._parser.read(pos, objlen)
+
+    def nexttoken(self) -> Tuple[int, PSBaseParserToken]:
+        return self._parser.nexttoken()
+
+    def get_inline_data(self, target: bytes = b"EI") -> Tuple[int, bytes]:
+        return self._parser.get_inline_data(target)
+
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        return next(self._parser)
