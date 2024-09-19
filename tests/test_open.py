@@ -34,7 +34,6 @@ def test_open(path: Path):
     for password in passwords:
         with playa.open(TESTDIR / path, password=password) as pdf:
             pass
-        assert pdf.parser.fp.closed
         assert pdf.parser.doc is None
 
 
@@ -48,6 +47,17 @@ def test_inline_data():
         agg = PDFPageAggregator(rsrc, pageno=1)
         interp = PDFPageInterpreter(rsrc, agg)
         page = next(PDFPage.create_pages(doc))
+        interp.process_page(page)
+
+
+def test_multiple_contents():
+    # See above...
+    with playa.open(TESTDIR / "jo.pdf") as doc:
+        rsrc = PDFResourceManager()
+        agg = PDFPageAggregator(rsrc, pageno=1)
+        interp = PDFPageInterpreter(rsrc, agg)
+        page = next(PDFPage.create_pages(doc))
+        assert len(page.contents) > 1
         interp.process_page(page)
 
 

@@ -1,12 +1,16 @@
-import io
 import logging
-from io import BytesIO
-from typing import BinaryIO, Dict, List, Mapping, Optional, Sequence, Tuple, Union, cast
+from typing import Dict, List, Mapping, Optional, Sequence, Tuple, Union, cast
 
 from playa import settings
 from playa.casting import safe_float
 from playa.cmapdb import CMap, CMapBase, CMapDB
-from playa.exceptions import PSEOF, PDFException, PDFValueError, PSTypeError
+from playa.exceptions import (
+    PSEOF,
+    PDFException,
+    PDFSyntaxError,
+    PDFValueError,
+    PSTypeError,
+)
 from playa.pdfcolor import PREDEFINED_COLORSPACE, PDFColorSpace
 from playa.pdfdevice import PDFDevice, PDFTextSeq
 from playa.pdffont import (
@@ -30,6 +34,7 @@ from playa.pdftypes import (
 from playa.psparser import (
     KWD,
     LIT,
+    PSBaseParserToken,
     PSKeyword,
     PSLiteral,
     PSStackParser,
@@ -252,85 +257,38 @@ KEYWORD_ID = KWD(b"ID")
 KEYWORD_EI = KWD(b"EI")
 
 
-def get_inline_data(
-    fp: BinaryIO, target: bytes = b"EI", blocksize: int = 4096
-) -> Tuple[int, bytes]:
-    """Get the data for an inline image up to the target
-    end-of-stream marker.
-
-    Returns a tuple of the position of the target in the data and the
-    data *including* the end of stream marker.  Advances the file
-    pointer to a position after the end of the stream.
-
-    The caller is responsible for removing the end-of-stream if
-    necessary (this depends on the filter being used) and parsing
-    the end-of-stream token (likewise) if necessary.
-    """
-    # PDF 1.7, p. 216: The bytes between the ID and EI operators
-    # shall be treated the same as a stream object’s data (see
-    # 7.3.8, "Stream Objects"), even though they do not follow the
-    # standard stream syntax.
-    data = []  # list of blocks
-    partial = b""  # partially seen target
-    pos = 0
-    while True:
-        # Did we see part of the target at the end of the last
-        # block?  Then scan ahead and try to find the rest (we
-        # assume the stream is buffered)
-        if partial:
-            extra_len = len(target) - len(partial)
-            extra = fp.read(extra_len)
-            if partial + extra == target:
-                pos -= len(partial)
-                data.append(extra)
-                break
-            # Put it back (assume buffering!)
-            fp.seek(-extra_len, io.SEEK_CUR)
-            partial = b""
-            # Fall through (the target could be at the beginning)
-        buf = fp.read(blocksize)
-        tpos = buf.find(target)
-        if tpos != -1:
-            data.append(buf[: tpos + len(target)])
-            # Put the extra back (assume buffering!)
-            fp.seek(tpos - len(buf) + len(target), io.SEEK_CUR)
-            pos += tpos
-            break
-        else:
-            pos += len(buf)
-            # look for the longest partial match at the end
-            plen = len(target) - 1
-            while plen > 0:
-                ppos = len(buf) - plen
-                if buf[ppos:] == target[:plen]:
-                    partial = buf[ppos:]
-                    break
-                plen -= 1
-            data.append(buf)
-    return (pos, b"".join(data))
-
-
 class PDFContentParser(PSStackParser[Union[PSKeyword, PDFStream]]):
+    """Parse the concatenation of multiple content streams, as
+    described in the spec (PDF 1.7, p.86):
+
+    ...the effect shall be as if all of the streams in the array were
+    concatenated, in order, to form a single stream.  Conforming
+    writers can create image objects and other resources as they
+    occur, even though they interrupt the content stream. The division
+    between streams may occur only at the boundaries between lexical
+    tokens (see 7.2, "Lexical Conventions") but shall be unrelated to
+    the page’s logical content or organization.
+    """
+
     def __init__(self, streams: Sequence[object]) -> None:
-        self.streams = streams
-        self.istream = 0
-        # PSStackParser.__init__(fp=None) is safe only because we've overloaded
-        # all the methods that would attempt to access self.fp without first
-        # calling self.fillfp().
-        PSStackParser.__init__(self, None)  # type: ignore[arg-type]
+        self.streamiter = iter(streams)
+        try:
+            stream = stream_value(next(self.streamiter))
+        except StopIteration:
+            raise PSEOF
+        log.debug("PDFContentParser starting stream %r", stream)
+        super().__init__(stream.get_data())
 
-    def fillfp(self) -> None:
-        if not self.fp:
-            if self.istream < len(self.streams):
-                strm = stream_value(self.streams[self.istream])
-                self.istream += 1
-            else:
-                raise PSEOF("Unexpected EOF, file truncated?")
-            self.fp = BytesIO(strm.get_data())
-
-    def seek(self, pos: int) -> None:
-        self.fillfp()
-        super().seek(pos)
+    def __next__(self) -> Tuple[int, PSBaseParserToken]:
+        while True:
+            try:
+                return super().__next__()
+            except StopIteration:
+                # Will also raise StopIteration if there are no more,
+                # which is exactly what we want
+                stream = stream_value(next(self.streamiter))
+                log.debug("PDFContentParser starting stream %r", stream)
+                self.reinit(stream.get_data())
 
     def flush(self) -> None:
         self.add_results(*self.popall())
@@ -360,7 +318,7 @@ class PDFContentParser(PSStackParser[Union[PSKeyword, PDFStream]]):
                 # interpreted as the first byte of image data.
                 if eos == b"EI":
                     self.seek(pos + len(token.name) + 1)
-                    (pos, data) = get_inline_data(self.fp, target=eos)
+                    (pos, data) = self.get_inline_data(target=eos)
                     # FIXME: it is totally unspecified what to do with
                     # a newline between the end of the data and "EI",
                     # since there is no explicit stream length.  (PDF
@@ -371,7 +329,9 @@ class PDFContentParser(PSStackParser[Union[PSKeyword, PDFStream]]):
                     data = data[: -len(eos)]
                 else:
                     self.seek(pos + len(token.name))
-                    (pos, data) = get_inline_data(self.fp, target=eos)
+                    (pos, data) = self.get_inline_data(target=eos)
+                if pos == -1:
+                    raise PDFSyntaxError("End of inline stream %r not found" % eos)
                 obj = PDFStream(d, data)
                 self.push((pos, obj))
                 # This was included in the data but we need to "parse" it

@@ -139,7 +139,6 @@ def keyword_name(x: Any) -> Any:
 
 
 EOL = b"\r\n"
-SPC = re.compile(rb"\s")
 WHITESPACE = b" \t\n\r\f\v"
 NUMBER = b"0123456789"
 HEX = NUMBER + b"abcdef" + b"ABCDEF"
@@ -162,14 +161,19 @@ ESC_STRING = {
 PSBaseParserToken = Union[float, bool, PSLiteral, PSKeyword, bytes]
 
 
-class PSBaseParser:
+class PSFileParser:
+    """
+    Parser (actually a lexer) for PDF data from a buffered file object.
+    """
+
     def __init__(self, fp: BinaryIO):
         self.fp = fp
         self._tokens: Deque[Tuple[int, PSBaseParserToken]] = deque()
         self.seek(0)
 
-    def flush(self) -> None:
-        pass
+    def reinit(self, fp: BinaryIO):
+        self.fp = fp
+        self.seek(0)
 
     def seek(self, pos: int) -> None:
         self.fp.seek(pos)
@@ -180,6 +184,10 @@ class PSBaseParser:
 
     def tell(self) -> int:
         return self.fp.tell()
+
+    def read(self, pos: int, objlen: int) -> bytes:
+        self.fp.seek(pos)
+        return self.fp.read(objlen)
 
     def nextline(self) -> Tuple[int, bytes]:
         r"""Fetches a next line that ends either with \r, \n, or \r\n."""
@@ -226,6 +234,65 @@ class PSBaseParser:
             else:
                 buf = c + buf
         yield buf
+
+    def get_inline_data(
+        self, target: bytes = b"EI", blocksize: int = 4096
+    ) -> Tuple[int, bytes]:
+        """Get the data for an inline image up to the target
+        end-of-stream marker.
+
+        Returns a tuple of the position of the target in the data and the
+        data *including* the end of stream marker.  Advances the file
+        pointer to a position after the end of the stream.
+
+        The caller is responsible for removing the end-of-stream if
+        necessary (this depends on the filter being used) and parsing
+        the end-of-stream token (likewise) if necessary.
+        """
+        # PDF 1.7, p. 216: The bytes between the ID and EI operators
+        # shall be treated the same as a stream object’s data (see
+        # 7.3.8, "Stream Objects"), even though they do not follow the
+        # standard stream syntax.
+        data = []  # list of blocks
+        partial = b""  # partially seen target
+        pos = 0
+        while True:
+            # Did we see part of the target at the end of the last
+            # block?  Then scan ahead and try to find the rest (we
+            # assume the stream is buffered)
+            if partial:
+                extra_len = len(target) - len(partial)
+                extra = self.fp.read(extra_len)
+                if partial + extra == target:
+                    pos -= len(partial)
+                    data.append(extra)
+                    break
+                # Put it back (assume buffering!)
+                self.fp.seek(-extra_len, io.SEEK_CUR)
+                partial = b""
+                # Fall through (the target could be at the beginning)
+            buf = self.fp.read(blocksize)
+            if not buf:
+                return (-1, b"")
+            tpos = buf.find(target)
+            if tpos != -1:
+                data.append(buf[: tpos + len(target)])
+                # Put the extra back (assume buffering!)
+                self.fp.seek(tpos - len(buf) + len(target), io.SEEK_CUR)
+                pos += tpos
+                break
+            else:
+                pos += len(buf)
+                # look for the longest partial match at the end
+                plen = len(target) - 1
+                while plen > 0:
+                    ppos = len(buf) - plen
+                    if buf[ppos:] == target[:plen]:
+                        partial = buf[ppos:]
+                        break
+                    plen -= 1
+                data.append(buf)
+        return (pos, b"".join(data))
 
     def __iter__(self):
         return self
@@ -458,7 +525,7 @@ class PSBaseParser:
             chrcode = int(self.oct, 8)
             if chrcode >= 256:
                 # PDF1.7 p.16: "high-order overflow shall be ignored."
-                log.warning("Invalid octal %s (%d)", repr(self.oct), chrcode)
+                log.warning("Invalid octal %r (%d)", self.oct, chrcode)
             else:
                 self._curtoken += bytes((chrcode,))
             # Back to normal string parsing
@@ -509,6 +576,218 @@ class PSBaseParser:
         return c
 
 
+LEXER = re.compile(
+    rb"""(?:
+      (?P<whitespace> \s+)
+    | (?P<comment> %[^\r\n]*[\r\n])
+    | (?P<name> /(?: \#[A-Fa-f\d][A-Fa-f\d] | [^#/%\[\]()<>{}\s])+ )
+    | (?P<number> [-+]? (?: \d*\.\d+ | \d+ ) )
+    | (?P<keyword> [A-Za-z] [^#/%\[\]()<>{}\s]*)
+    | (?P<startstr> \([^()\\]*)
+    | (?P<hexstr> <[A-Fa-f\d\s]+>)
+    | (?P<startdict> <<)
+    | (?P<enddict> >>)
+    | (?P<other> .)
+)
+""",
+    re.VERBOSE,
+)
+STRLEXER = re.compile(
+    rb"""(?:
+      (?P<octal> \\\d{1,3})
+    | (?P<linebreak> \\(?:\r\n?|\n))
+    | (?P<escape> \\.)
+    | (?P<parenleft> \()
+    | (?P<parenright> \))
+    | (?P<other> .)
+)""",
+    re.VERBOSE,
+)
+HEXDIGIT = re.compile(rb"#([A-Fa-f\d][A-Fa-f\d])")
+EOLR = re.compile(rb"\r\n?|\n")
+SPC = re.compile(rb"\s")
+
+
+class PSInMemoryParser:
+    """
+    Parser for in-memory data streams.
+    """
+
+    def __init__(self, data: bytes):
+        self.data = data
+        self.pos = 0
+        self.end = len(data)
+        self._tokens: Deque[Tuple[int, PSBaseParserToken]] = deque()
+
+    def reinit(self, data: bytes):
+        self.data = data
+        self.seek(0)
+
+    def seek(self, pos: int) -> None:
+        self.pos = pos
+        self._curtoken = b""
+        self._curtokenpos = 0
+        self._tokens.clear()
+
+    def tell(self) -> int:
+        return self.pos
+
+    def read(self, pos: int, objlen: int) -> bytes:
+        self.pos = max(pos + objlen, len(self.data))
+        return self.data[pos : self.pos]
+
+    def nextline(self) -> Tuple[int, bytes]:
+        r"""Fetches a next line that ends either with \r, \n, or \r\n."""
+        if self.pos == self.end:
+            raise PSEOF
+        linepos = self.pos
+        m = EOLR.search(self.data, self.pos)
+        if m is None:
+            self.pos = self.end
+        else:
+            self.pos = m.end()
+        return (linepos, self.data[linepos : self.pos])
+
+    def revreadlines(self) -> Iterator[bytes]:
+        """Fetches a next line backwards.
+
+        This is used to locate the trailers at the end of a file.  So,
+        it isn't actually used in PSInMemoryParser, but is here for
+        completeness.
+        """
+        endline = pos = self.end
+        while True:
+            nidx = self.data.rfind(ord(b"\n"), 0, pos)
+            ridx = self.data.rfind(ord(b"\r"), 0, pos)
+            best = max(nidx, ridx)
+            if best == -1:
+                yield self.data[:endline]
+                break
+            yield self.data[best + 1 : endline]
+            endline = best + 1
+            pos = best
+            if pos > 0 and self.data[pos - 1 : pos + 1] == b"\r\n":
+                pos -= 1
+
+    def get_inline_data(
+        self, target: bytes = b"EI", blocksize: int = -1
+    ) -> Tuple[int, bytes]:
+        """Get the data for an inline image up to the target
+        end-of-stream marker.
+
+        Returns a tuple of the position of the target in the data and the
+        data *including* the end of stream marker.  Advances the file
+        pointer to a position after the end of the stream.
+
+        The caller is responsible for removing the end-of-stream if
+        necessary (this depends on the filter being used) and parsing
+        the end-of-stream token (likewise) if necessary.
+        """
+        tpos = self.data.find(target, self.pos)
+        if tpos != -1:
+            nextpos = tpos + len(target)
+            result = (tpos, self.data[self.pos : nextpos])
+            self.pos = nextpos
+            return result
+        return (-1, b"")
+
+    def __iter__(self):
+        return self
+
+    def nexttoken(self) -> Tuple[int, PSBaseParserToken]:
+        try:
+            return self.__next__()
+        except StopIteration:
+            raise PSEOF
+
+    def __next__(self) -> Tuple[int, PSBaseParserToken]:
+        """Lexer (most of the work is done in regular expressions, but
+        PDF syntax is not entirely regular due to the use of balanced
+        parentheses in strings)."""
+        while True:
+            m = LEXER.match(self.data, self.pos)
+            if m is None:  # can only happen at EOS
+                raise StopIteration
+            self._curtokenpos = m.start()
+            self.pos = m.end()
+            if m.lastgroup not in ("whitespace", "comment"):
+                # Okay, we got a token or something
+                break
+        self._curtoken = m[0]
+        if m.lastgroup == "name":
+            self._curtoken = m[0][1:]
+            self._curtoken = HEXDIGIT.sub(
+                lambda x: bytes((int(x[1], 16),)), self._curtoken
+            )
+            try:
+                tok = LIT(self._curtoken.decode("utf-8"))
+            except UnicodeDecodeError:
+                tok = LIT(self._curtoken)
+            return (self._curtokenpos, tok)
+        if m.lastgroup == "number":
+            if b"." in self._curtoken:
+                return (self._curtokenpos, float(self._curtoken))
+            else:
+                return (self._curtokenpos, int(self._curtoken))
+        if m.lastgroup == "startdict":
+            return (self._curtokenpos, KEYWORD_DICT_BEGIN)
+        if m.lastgroup == "enddict":
+            return (self._curtokenpos, KEYWORD_DICT_END)
+        if m.lastgroup == "startstr":
+            return self._parse_endstr(self.data[m.start() + 1 : m.end()], m.end())
+        if m.lastgroup == "hexstr":
+            self._curtoken = SPC.sub(b"", self._curtoken[1:-1])
+            if len(self._curtoken) % 2 == 1:
+                self._curtoken += b"0"
+            return (self._curtokenpos, unhexlify(self._curtoken))
+        # Anything else is treated as a keyword (whether explicitly matched or not)
+        if self._curtoken == b"true":
+            return (self._curtokenpos, True)
+        elif self._curtoken == b"false":
+            return (self._curtokenpos, False)
+        else:
+            return (self._curtokenpos, KWD(self._curtoken))
+
+    def _parse_endstr(self, start: bytes, pos: int) -> Tuple[int, PSBaseParserToken]:
+        """Parse the remainder of a string."""
+        parts = [start]
+        paren = 1
+        for m in STRLEXER.finditer(self.data, pos):
+            self.pos = m.end()
+            if m.lastgroup == "parenright":
+                paren -= 1
+                if paren == 0:
+                    # By far the most common situation!
+                    break
+                parts.append(m[0])
+            elif m.lastgroup == "parenleft":
+                parts.append(m[0])
+                paren += 1
+            elif m.lastgroup == "escape":
+                chr = m[0][1:2]
+                if chr not in ESC_STRING:
+                    log.warning("Unrecognized escape %r", m[0])
+                    parts.append(chr)
+                else:
+                    parts.append(bytes((ESC_STRING[chr],)))
+            elif m.lastgroup == "octal":
+                chrcode = int(m[0][1:], 8)
+                if chrcode >= 256:
+                    # PDF1.7 p.16: "high-order overflow shall be
+                    # ignored."
+                    log.warning("Invalid octal %r (%d)", m[0][1:], chrcode)
+                else:
+                    parts.append(bytes((chrcode,)))
+            elif m.lastgroup == "linebreak":
+                pass
+            else:
+                parts.append(m[0])
+        if paren != 0:
+            log.warning("Unterminated string at %d", pos)
+            raise StopIteration
+        return (self._curtokenpos, b"".join(EOLR.sub(b"\n", part) for part in parts))
+
+
 # Stack slots may by occupied by any of:
 #  * the name of a literal
 #  * the PSBaseParserToken types
@@ -520,9 +799,17 @@ PSStackType = Union[str, float, bool, PSLiteral, bytes, List, Dict, ExtraT]
 PSStackEntry = Tuple[int, PSStackType[ExtraT]]
 
 
-class PSStackParser(PSBaseParser, Generic[ExtraT]):
-    def __init__(self, reader: BinaryIO) -> None:
-        PSBaseParser.__init__(self, reader)
+class PSStackParser(Generic[ExtraT]):
+    def __init__(self, reader: Union[BinaryIO, bytes]) -> None:
+        self.reinit(reader)
+
+    def reinit(self, reader: Union[BinaryIO, bytes]) -> None:
+        if isinstance(reader, bytes):
+            self._parser: Union[PSInMemoryParser, PSFileParser] = PSInMemoryParser(
+                reader
+            )
+        else:
+            self._parser = PSFileParser(reader)
         self.reset()
 
     def reset(self) -> None:
@@ -532,7 +819,7 @@ class PSStackParser(PSBaseParser, Generic[ExtraT]):
         self.results: List[PSStackEntry[ExtraT]] = []
 
     def seek(self, pos: int) -> None:
-        PSBaseParser.seek(self, pos)
+        self._parser.seek(pos)
         self.reset()
 
     def push(self, *objs: PSStackEntry[ExtraT]) -> None:
@@ -571,6 +858,9 @@ class PSStackParser(PSBaseParser, Generic[ExtraT]):
     def do_keyword(self, pos: int, token: PSKeyword) -> None:
         pass
 
+    def flush(self) -> None:
+        pass
+
     def nextobject(self) -> PSStackEntry[ExtraT]:
         """Yields a list of objects.
 
@@ -580,7 +870,7 @@ class PSStackParser(PSBaseParser, Generic[ExtraT]):
         :return: keywords, literals, strings, numbers, arrays and dictionaries.
         """
         while not self.results:
-            (pos, token) = self.nexttoken()
+            (pos, token) = self._parser.nexttoken()
             if isinstance(token, (int, float, bool, str, bytes, PSLiteral)):
                 # normal token
                 self.push((pos, token))
@@ -643,10 +933,32 @@ class PSStackParser(PSBaseParser, Generic[ExtraT]):
             if self.context:
                 continue
             else:
-                self.flush()  # FIXME: what does it do?
+                self.flush()  # Does nothing here, but in subclasses... (ugh)
         obj = self.results.pop(0)
         try:
             log.debug("nextobject: %r", obj)
         except Exception:
             log.debug("nextobject: (unprintable object)")
         return obj
+
+    # Delegation follows
+    def nextline(self) -> Tuple[int, bytes]:
+        return self._parser.nextline()
+
+    def revreadlines(self) -> Iterator[bytes]:
+        return self._parser.revreadlines()
+
+    def read(self, pos: int, objlen: int) -> bytes:
+        return self._parser.read(pos, objlen)
+
+    def nexttoken(self) -> Tuple[int, PSBaseParserToken]:
+        return self._parser.nexttoken()
+
+    def get_inline_data(self, target: bytes = b"EI") -> Tuple[int, bytes]:
+        return self._parser.get_inline_data(target)
+
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        return next(self._parser)
