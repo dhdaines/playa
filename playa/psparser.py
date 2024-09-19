@@ -870,7 +870,7 @@ class PSStackParser(Generic[ExtraT]):
         :return: keywords, literals, strings, numbers, arrays and dictionaries.
         """
         while not self.results:
-            (pos, token) = self._parser.nexttoken()
+            (pos, token) = self.nexttoken()
             if isinstance(token, (int, float, bool, str, bytes, PSLiteral)):
                 # normal token
                 self.push((pos, token))
@@ -952,7 +952,10 @@ class PSStackParser(Generic[ExtraT]):
         return self._parser.read(pos, objlen)
 
     def nexttoken(self) -> Tuple[int, PSBaseParserToken]:
-        return self._parser.nexttoken()
+        try:
+            return self.__next__()
+        except StopIteration:
+            raise PSEOF
 
     def get_inline_data(self, target: bytes = b"EI") -> Tuple[int, bytes]:
         return self._parser.get_inline_data(target)
@@ -961,4 +964,4 @@ class PSStackParser(Generic[ExtraT]):
         return self
 
     def __next__(self):
-        return next(self._parser)
+        return self._parser.__next__()
