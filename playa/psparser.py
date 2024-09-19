@@ -649,7 +649,7 @@ class PSInMemoryParser:
     def read(self, pos: int, objlen: int) -> bytes:
         """Read data from a specified position, moving the current
         position to the end of this data."""
-        self.pos = max(pos + objlen, len(self.data))
+        self.pos = min(pos + objlen, len(self.data))
         return self.data[pos : self.pos]
 
     def nextline(self) -> Tuple[int, bytes]:
@@ -673,8 +673,8 @@ class PSInMemoryParser:
         """
         endline = pos = self.end
         while True:
-            nidx = self.data.rfind(ord(b"\n"), 0, pos)
-            ridx = self.data.rfind(ord(b"\r"), 0, pos)
+            nidx = self.data.rfind(b"\n", 0, pos)
+            ridx = self.data.rfind(b"\r", 0, pos)
             best = max(nidx, ridx)
             if best == -1:
                 yield self.data[:endline]
