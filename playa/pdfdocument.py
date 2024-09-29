@@ -33,6 +33,7 @@ from playa.exceptions import (
     PDFKeyError,
     PDFNoOutlines,
     PDFNoPageLabels,
+    PDFNoPageTree,
     PDFNoValidXRef,
     PDFObjectNotFound,
     PDFPasswordIncorrect,
@@ -913,7 +914,7 @@ class PDFDocument:
 
     PageType = Dict[Any, Dict[Any, Any]]
 
-    def get_pages_from_xrefs(self) -> Iterator[Tuple[int, PageType]]:
+    def pages_from_xrefs(self) -> Iterator[Tuple[int, PageType]]:
         """Find pages from the cross-reference tables if the page tree
         is missing (note that this only happens in invalid PDFs, but
         it happens.)
@@ -929,12 +930,14 @@ class PDFDocument:
                 except PDFObjectNotFound:
                     pass
 
-    def walk_page_tree(self) -> Iterator[Tuple[int, PageType]]:
+    def page_tree(self) -> Iterator[Tuple[int, PageType]]:
         """Iterate over the flattened page tree in reading order, propagating
         inheritable attributes.  Returns an iterator over (objid, dict) pairs.
 
-        Will raise an IndexError if there is no page tree.
+        Will raise PDFNoPageTree if there is no page tree.
         """
+        if "Pages" not in self.catalog:
+            raise PDFNoPageTree("No 'Pages' entry in catalog")
         stack = [(self.catalog["Pages"], self.catalog)]
         visited = set()
         while stack:
@@ -976,6 +979,20 @@ class PDFDocument:
             elif object_type is LITERAL_PAGE:
                 log.debug("Page: %r", object_properties)
                 yield object_id, object_properties
+
+    def get_pages(self) -> Iterator["PDFPage"]:
+        from playa.pdfpage import PDFPage
+        try:
+            page_labels: Iterator[Optional[str]] = self.get_page_labels()
+        except PDFNoPageLabels:
+            page_labels = itertools.repeat(None)
+        try:
+            page_tree = self.page_tree()
+        except PDFNoPageTree:
+            page_tree = self.pages_from_xrefs()
+
+        for (objid, properties), label in zip(page_tree, page_labels):
+            yield PDFPage(self, objid, properties, label)
 
     def lookup_name(self, cat: str, key: Union[str, bytes]) -> Any:
         try:

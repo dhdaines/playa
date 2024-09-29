@@ -40,7 +40,7 @@ def test_page_labels():
 
 def test_page_tree():
     with playa.open(TESTDIR / "contrib" / "PSC_Station.pdf") as doc:
-        page_objects = list(doc.walk_page_tree())
+        page_objects = list(doc.get_pages())
         assert len(page_objects) == 15
 
 

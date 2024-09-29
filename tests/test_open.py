@@ -46,7 +46,7 @@ def test_inline_data():
         rsrc = PDFResourceManager()
         agg = PDFPageAggregator(rsrc, pageno=1)
         interp = PDFPageInterpreter(rsrc, agg)
-        page = next(PDFPage.create_pages(doc))
+        page = next(doc.get_pages())
         interp.process_page(page)
 
 
@@ -56,7 +56,7 @@ def test_multiple_contents():
         rsrc = PDFResourceManager()
         agg = PDFPageAggregator(rsrc, pageno=1)
         interp = PDFPageInterpreter(rsrc, agg)
-        page = next(PDFPage.create_pages(doc))
+        page = next(doc.get_pages())
         assert len(page.contents) > 1
         interp.process_page(page)
 
