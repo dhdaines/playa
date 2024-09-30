@@ -2,7 +2,6 @@ import logging
 from typing import Dict, List, Optional
 
 from playa.exceptions import PDFValueError
-from playa.pdfdocument import PDFDocument
 from playa.pdftypes import dict_value, int_value, resolve1
 from playa.psparser import LIT
 from playa.utils import parse_rect
@@ -23,7 +22,6 @@ class PDFPage:
 
     Attributes
     ----------
-      doc: a PDFDocument object.
       pageid: any Python object that can uniquely identify the page.
       attrs: a dictionary of page attributes.
       contents: a list of PDFStream objects that represents the page content.
@@ -40,7 +38,6 @@ class PDFPage:
 
     def __init__(
         self,
-        doc: PDFDocument,
         pageid: object,
         attrs: object,
         label: Optional[str],
@@ -52,7 +49,6 @@ class PDFPage:
         attrs: a dictionary of page attributes.
         label: page label string.
         """
-        self.doc = doc
         self.pageid = pageid
         self.attrs = dict_value(attrs)
         self.label = label

@@ -54,6 +54,7 @@ from playa.pdftypes import (
     uint_value,
 )
 from playa.psparser import KWD, LIT, literal_name
+from playa.pdfpage import PDFPage
 from playa.utils import (
     choplist,
     decode_text,
@@ -980,8 +981,10 @@ class PDFDocument:
                 log.debug("Page: %r", object_properties)
                 yield object_id, object_properties
 
-    def get_pages(self) -> Iterator["PDFPage"]:
-        from playa.pdfpage import PDFPage
+    def get_pages(self) -> Iterator[PDFPage]:
+        """Get an iterator over PDFPage objects, which contain
+        information about the pages in the document.
+        """
         try:
             page_labels: Iterator[Optional[str]] = self.get_page_labels()
         except PDFNoPageLabels:
@@ -992,7 +995,7 @@ class PDFDocument:
             page_tree = self.pages_from_xrefs()
 
         for (objid, properties), label in zip(page_tree, page_labels):
-            yield PDFPage(self, objid, properties, label)
+            yield PDFPage(objid, properties, label)
 
     def lookup_name(self, cat: str, key: Union[str, bytes]) -> Any:
         try:

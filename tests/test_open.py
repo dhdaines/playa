@@ -11,7 +11,6 @@ from playa.converter import PDFPageAggregator
 
 # These APIs will go away soon
 from playa.pdfinterp import PDFPageInterpreter, PDFResourceManager
-from playa.pdfpage import PDFPage
 
 TESTDIR = Path(__file__).parent.parent / "samples"
 ALLPDFS = TESTDIR.glob("**/*.pdf")

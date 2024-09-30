@@ -38,11 +38,7 @@ def test_page_labels():
         assert labels == ["iii", "iv", "1", "2", "1", "2", "3", "4", "5", "6"]
 
 
-def test_page_tree():
+def test_pages():
     with playa.open(TESTDIR / "contrib" / "PSC_Station.pdf") as doc:
         page_objects = list(doc.get_pages())
         assert len(page_objects) == 15
-
-
-def test_pages():
-    pass
