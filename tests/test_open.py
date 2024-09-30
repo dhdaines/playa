@@ -11,7 +11,6 @@ from playa.converter import PDFPageAggregator
 
 # These APIs will go away soon
 from playa.pdfinterp import PDFPageInterpreter, PDFResourceManager
-from playa.pdfpage import PDFPage
 
 TESTDIR = Path(__file__).parent.parent / "samples"
 ALLPDFS = TESTDIR.glob("**/*.pdf")
@@ -46,7 +45,7 @@ def test_inline_data():
         rsrc = PDFResourceManager()
         agg = PDFPageAggregator(rsrc, pageno=1)
         interp = PDFPageInterpreter(rsrc, agg)
-        page = next(PDFPage.create_pages(doc))
+        page = next(doc.get_pages())
         interp.process_page(page)
 
 
@@ -56,7 +55,7 @@ def test_multiple_contents():
         rsrc = PDFResourceManager()
         agg = PDFPageAggregator(rsrc, pageno=1)
         interp = PDFPageInterpreter(rsrc, agg)
-        page = next(PDFPage.create_pages(doc))
+        page = next(doc.get_pages())
         assert len(page.contents) > 1
         interp.process_page(page)
 
