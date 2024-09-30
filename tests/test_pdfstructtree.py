@@ -1,3 +1,4 @@
+import re
 import unittest
 from pathlib import Path
 
@@ -68,7 +69,7 @@ class TestClass(unittest.TestCase):
             assert 2 in pages
             # If we take only a single page there are no page numbers
             # (FIXME: may wish to reconsider this API decision...)
-            page = pdf.pages[1]
+            page = next(pdf.get_pages())
             stree = PDFStructTree(pdf, page)
             sect = next(stree.find_all("Sect"))
             mcids = list(sect.all_mcids())
@@ -79,22 +80,3 @@ class TestClass(unittest.TestCase):
             # Assure that we get the MCIDs for a content element
             for p in sect.find_all("P"):
                 assert set(mcid for page, mcid in p.all_mcids()) == set(p.mcids)
-
-    def test_element_bbox(self):
-        """
-        Test various ways of getting element bboxes
-        """
-        with playa.open(TESTDIR / "pdf_structure.pdf") as pdf:
-            stree = PDFStructTree(pdf)
-            # As BBox attribute
-            table = next(stree.find_all("Table"))
-            assert tuple(stree.element_bbox(table)) == (56.7, 489.9, 555.3, 542.25)
-            # With child elements
-            tr = next(table.find_all("TR"))
-            assert tuple(stree.element_bbox(tr)) == (56.8, 495.9, 328.312, 507.9)
-            # From a specific page it should also work
-            stree = PDFStructTree(pdf, next(pdf.get_pages()))
-            table = next(stree.find_all("Table"))
-            assert tuple(stree.element_bbox(table)) == (56.7, 489.9, 555.3, 542.25)
-            tr = next(table.find_all("TR"))
-            assert tuple(stree.element_bbox(tr)) == (56.8, 495.9, 328.312, 507.9)

@@ -632,10 +632,13 @@ PDFDocEncoding = "".join(
 
 def decode_text(s: bytes) -> str:
     """Decodes a PDFDocEncoding string to Unicode."""
-    if s.startswith(b"\xfe\xff"):
+    if isinstance(s, bytes) and s.startswith(b"\xfe\xff"):
         return str(s[2:], "utf-16be", "ignore")
-    else:
-        return "".join(PDFDocEncoding[c] for c in s)
+    try:
+        ords = (ord(c) if isinstance(c, str) else c for c in s)
+        return "".join(PDFDocEncoding[o] for o in ords)
+    except IndexError:
+        return str(s)
 
 
 def enc(x: str) -> str:

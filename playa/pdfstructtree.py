@@ -1,11 +1,23 @@
 import logging
+import re
 from collections import deque
 from dataclasses import asdict, dataclass, field
-from typing import Any, Dict, Iterator, List, Union, Tuple, TYPE_CHECKING
+from typing import (
+    Any,
+    Callable,
+    Dict,
+    Iterator,
+    Iterable,
+    List,
+    Pattern,
+    Union,
+    Tuple,
+    TYPE_CHECKING,
+)
 
 from playa.data_structures import NumberTree
 from playa.pdfpage import PDFPage
-from playa.pdfparser import PDFParser
+from playa.pdfparser import KEYWORD_NULL
 from playa.pdftypes import PDFObjRef, resolve1
 from playa.psparser import PSLiteral
 from playa.utils import decode_text
@@ -17,8 +29,73 @@ if TYPE_CHECKING:
     from playa.pdfdocument import PDFDocument
 
 
+MatchFunc = Callable[["PDFStructElement"], bool]
+
+
+def _find_all(
+    elements: Iterable["PDFStructElement"],
+    matcher: Union[str, Pattern[str], MatchFunc],
+) -> Iterator["PDFStructElement"]:
+    """
+    Common code for `find_all()` in trees and elements.
+    """
+
+    def match_tag(x: "PDFStructElement") -> bool:
+        """Match an element name."""
+        return x.type == matcher
+
+    def match_regex(x: "PDFStructElement") -> bool:
+        """Match an element name by regular expression."""
+        return matcher.match(x.type)  # type: ignore
+
+    if isinstance(matcher, str):
+        match_func = match_tag
+    elif isinstance(matcher, re.Pattern):
+        match_func = match_regex
+    else:
+        match_func = matcher  # type: ignore
+    d = deque(elements)
+    while d:
+        el = d.popleft()
+        if match_func(el):
+            yield el
+        d.extendleft(reversed(el.children))
+
+
+class Findable:
+    """find() and find_all() methods that can be inherited to avoid
+    repeating oneself"""
+
+    children: List["PDFStructElement"]
+
+    def find_all(
+        self, matcher: Union[str, Pattern[str], MatchFunc]
+    ) -> Iterator["PDFStructElement"]:
+        """Iterate depth-first over matching elements in subtree.
+
+        The `matcher` argument is either an element name, a regular
+        expression, or a function taking a `PDFStructElement` and
+        returning `True` if the element matches.
+        """
+        return _find_all(self.children, matcher)
+
+    def find(
+        self, matcher: Union[str, Pattern[str], MatchFunc]
+    ) -> Union["PDFStructElement", None]:
+        """Find the first matching element in subtree.
+
+        The `matcher` argument is either an element name, a regular
+        expression, or a function taking a `PDFStructElement` and
+        returning `True` if the element matches.
+        """
+        try:
+            return next(_find_all(self.children, matcher))
+        except StopIteration:
+            return None
+
+
 @dataclass
-class PDFStructElement:
+class PDFStructElement(Findable):
     type: str
     revision: Union[int, None]
     id: Union[str, None]
@@ -34,9 +111,24 @@ class PDFStructElement:
     def __iter__(self) -> Iterator["PDFStructElement"]:
         return iter(self.children)
 
+    def all_mcids(self) -> Iterator[Tuple[Union[int, None], int]]:
+        """Collect all MCIDs (with their page numbers, if there are
+        multiple pages in the tree) inside a structure element.
+        """
+        # Collect them depth-first to preserve ordering
+        for mcid in self.mcids:
+            yield self.page_number, mcid
+        d = deque(self.children)
+        while d:
+            el = d.popleft()
+            for mcid in el.mcids:
+                yield el.page_number, mcid
+            d.extendleft(reversed(el.children))
+
     def to_dict(self) -> Dict[str, Any]:
         """Return a compacted dict representation."""
         r = asdict(self)
+        # Prune empty values (does not matter in which order)
         d = deque([r])
         while d:
             el = d.popleft()
@@ -48,7 +140,7 @@ class PDFStructElement:
         return r
 
 
-class PDFStructTree:
+class PDFStructTree(Findable):
     """Parse the structure tree of a PDF.
 
     This class creates a representation of the portion of the
@@ -75,24 +167,30 @@ class PDFStructTree:
         # If we have a specific page then we will work backwards from
         # its ParentTree - this is because structure elements could
         # span multiple pages, and the "Pg" attribute is *optional*,
-        # so this is the approved way to get a page's structure
+        # so this is the approved way to get a page's structure...
         if page is not None:
             self.page = page
             self.page_dict = None
-            parent_tree = NumberTree(self.root["ParentTree"])
-            # If there is no marked content in the structure tree for
-            # this page (which can happen even when there is a
-            # structure tree) then there is no `StructParents`.
-            # Note however that if there are XObjects in a page,
-            # *they* may have `StructParent` (not `StructParents`)
-            if "StructParents" not in self.page.attrs:
-                return
-            parent_id = self.page.attrs["StructParents"]
-            # NumberTree should have a `get` method like it does in pdf.js...
-            parent_array = resolve1(
-                next(array for num, array in parent_tree.values if num == parent_id)
-            )
-            self._parse_parent_tree(parent_array)
+            # ...EXCEPT that the ParentTree is sometimes missing, in which
+            # case we fall back to the non-approved way.
+            parent_tree_obj = self.root.get("ParentTree")
+            if parent_tree_obj is None:
+                self._parse_struct_tree()
+            else:
+                parent_tree = NumberTree(parent_tree_obj)
+                # If there is no marked content in the structure tree for
+                # this page (which can happen even when there is a
+                # structure tree) then there is no `StructParents`.
+                # Note however that if there are XObjects in a page,
+                # *they* may have `StructParent` (not `StructParents`)
+                if "StructParents" not in self.page.attrs:
+                    return
+                parent_id = self.page.attrs["StructParents"]
+                # NumberTree should have a `get` method like it does in pdf.js...
+                parent_array = resolve1(
+                    next(array for num, array in parent_tree.values if num == parent_id)
+                )
+                self._parse_parent_tree(parent_array)
         else:
             self.page = None
             # Overhead of creating pages shouldn't be too bad we hope!
@@ -174,11 +272,13 @@ class PDFStructTree:
             children = [obj["K"]]
         revision = obj.get("R")
         attributes = self._make_attributes(obj, revision)
-        element_id = decode_text(obj["ID"]) if "ID" in obj else None
-        title = decode_text(obj["T"]) if "T" in obj else None
-        lang = decode_text(obj["Lang"]) if "Lang" in obj else None
-        alt_text = decode_text(obj["Alt"]) if "Alt" in obj else None
-        actual_text = decode_text(obj["ActualText"]) if "ActualText" in obj else None
+        element_id = decode_text(resolve1(obj["ID"])) if "ID" in obj else None
+        title = decode_text(resolve1(obj["T"])) if "T" in obj else None
+        lang = decode_text(resolve1(obj["Lang"])) if "Lang" in obj else None
+        alt_text = decode_text(resolve1(obj["Alt"])) if "Alt" in obj else None
+        actual_text = (
+            decode_text(resolve1(obj["ActualText"])) if "ActualText" in obj else None
+        )
         element = PDFStructElement(
             type=obj_tag,
             id=element_id,
@@ -203,7 +303,7 @@ class PDFStructTree:
             ref = d.popleft()
             # In the case where an MCID is not associated with any
             # structure, there will be a "null" in the parent tree.
-            if ref == PDFParser.KEYWORD_NULL:
+            if ref == KEYWORD_NULL:
                 continue
             if repr(ref) in s:
                 continue
