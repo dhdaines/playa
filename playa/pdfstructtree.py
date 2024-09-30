@@ -1,34 +1,32 @@
 import logging
 from collections import deque
 from dataclasses import asdict, dataclass, field
-from typing import TYPE_CHECKING, Any, Dict, Iterator, List, Optional, Tuple
+from typing import Any, Dict, Iterator, List, Union, Tuple, TYPE_CHECKING
 
 from playa.data_structures import NumberTree
-from playa.pdfdocument import PDFDocument
 from playa.pdfpage import PDFPage
 from playa.pdfparser import PDFParser
 from playa.pdftypes import PDFObjRef, resolve1
 from playa.psparser import PSLiteral
 from playa.utils import decode_text
+from playa.exceptions import PDFNoStructTree
 
 logger = logging.getLogger(__name__)
 
-
-if TYPE_CHECKING:  # pragma: nocover
-    from .page import Page
-    from .pdf import PDF
+if TYPE_CHECKING:
+    from playa.pdfdocument import PDFDocument
 
 
 @dataclass
 class PDFStructElement:
     type: str
-    revision: Optional[int]
-    id: Optional[str]
-    lang: Optional[str]
-    alt_text: Optional[str]
-    actual_text: Optional[str]
-    title: Optional[str]
-    page_number: Optional[int]
+    revision: Union[int, None]
+    id: Union[str, None]
+    lang: Union[str, None]
+    alt_text: Union[str, None]
+    actual_text: Union[str, None]
+    title: Union[str, None]
+    page_number: Union[int, None]
     attributes: Dict[str, Any] = field(default_factory=dict)
     mcids: List[int] = field(default_factory=list)
     children: List["PDFStructElement"] = field(default_factory=list)
@@ -50,16 +48,8 @@ class PDFStructElement:
         return r
 
 
-class StructTreeMissing(ValueError):
-    pass
-
-
 class PDFStructTree:
     """Parse the structure tree of a PDF.
-
-    The constructor takes a `PDFDocument` and optionally a
-    `PDFPage`.  To avoid creating the entire tree for a large
-    document it is recommended to provide a page.
 
     This class creates a representation of the portion of the
     structure tree that reaches marked content sections, either for a
@@ -68,17 +58,16 @@ class PDFStructTree:
     also include structure elements with no content.
 
     If the PDF has no structure, the constructor will raise
-    `StructTreeMissing`.
+    `PDFNoStructTree`.
 
     """
 
-    page: Optional[PDFPage]
+    page: Union[PDFPage, None]
 
-    def __init__(self, doc: "PDF", page: Optional["Page"] = None):
-        self.doc = doc.doc
-        if "StructTreeRoot" not in self.doc.catalog:
-            raise StructTreeMissing("PDF has no structure")
-        self.root = resolve1(self.doc.catalog["StructTreeRoot"])
+    def __init__(self, doc: "PDFDocument", page: Union[PDFPage, None] = None):
+        if "StructTreeRoot" not in doc.catalog:
+            raise PDFNoStructTree("Catalog has no 'StructTreeRoot' entry")
+        self.root = resolve1(doc.catalog["StructTreeRoot"])
         self.role_map = resolve1(self.root.get("RoleMap", {}))
         self.class_map = resolve1(self.root.get("ClassMap", {}))
         self.children: List[PDFStructElement] = []
@@ -88,7 +77,7 @@ class PDFStructTree:
         # span multiple pages, and the "Pg" attribute is *optional*,
         # so this is the approved way to get a page's structure
         if page is not None:
-            self.page = page.page_obj
+            self.page = page
             self.page_dict = None
             parent_tree = NumberTree(self.root["ParentTree"])
             # If there is no marked content in the structure tree for
@@ -108,12 +97,12 @@ class PDFStructTree:
             self.page = None
             # Overhead of creating pages shouldn't be too bad we hope!
             self.page_dict = {
-                page.page_obj.pageid: page.page_number for page in doc.pages
+                page.pageid: idx + 1 for idx, page in enumerate(doc.get_pages())
             }
             self._parse_struct_tree()
 
     def _make_attributes(
-        self, obj: Dict[str, Any], revision: Optional[int]
+        self, obj: Dict[str, Any], revision: Union[int, None]
     ) -> Dict[str, Any]:
         attr_obj_list = []
         for key in "C", "A":
@@ -161,7 +150,9 @@ class PDFStructTree:
                     attr[k] = obj[k]
         return attr
 
-    def _make_element(self, obj: Any) -> Tuple[Optional[PDFStructElement], List[Any]]:
+    def _make_element(
+        self, obj: Any
+    ) -> Tuple[Union[PDFStructElement, None], List[Any]]:
         # We hopefully caught these earlier
         assert "MCID" not in obj, "Uncaught MCR: %s" % obj
         assert "Obj" not in obj, "Uncaught OBJR: %s" % obj

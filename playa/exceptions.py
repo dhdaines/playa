@@ -75,6 +75,10 @@ class PDFNoPageTree(PDFException):
     pass
 
 
+class PDFNoStructTree(PDFException):
+    pass
+
+
 class PDFDestinationNotFound(PDFException):
     pass
 
