@@ -9,6 +9,7 @@ from typing import (
 
 from playa.layout import (
     LAParams,
+    LTItem,
     LTChar,
     LTCurve,
     LTFigure,
@@ -21,7 +22,8 @@ from playa.layout import (
 from playa.pdfcolor import PDFColorSpace
 from playa.pdfdevice import PDFTextDevice
 from playa.pdffont import PDFFont, PDFUnicodeNotDefined
-from playa.pdfinterp import PDFGraphicState, PDFResourceManager
+from playa.pdfinterp import PDFGraphicState, PDFResourceManager, PDFStackT
+from playa.psparser import PSLiteral
 from playa.pdfpage import PDFPage
 from playa.pdftypes import PDFStream
 from playa.utils import (
@@ -30,6 +32,7 @@ from playa.utils import (
     Point,
     Rect,
     apply_matrix_pt,
+    decode_text,
     mult_matrix,
 )
 
@@ -39,6 +42,8 @@ log = logging.getLogger(__name__)
 class PDFLayoutAnalyzer(PDFTextDevice):
     cur_item: LTLayoutContainer
     ctm: Matrix
+    cur_mcid: Optional[int] = None
+    cur_tag: Optional[str] = None
 
     def __init__(
         self,
@@ -76,6 +81,24 @@ class PDFLayoutAnalyzer(PDFTextDevice):
         self.cur_item = self._stack.pop()
         self.cur_item.add(fig)
 
+    def begin_tag(self, tag: PSLiteral, props: Optional[PDFStackT] = None) -> None:
+        """Handle beginning of tag, setting current MCID if any."""
+        self.cur_tag = decode_text(tag.name)
+        if isinstance(props, dict) and "MCID" in props:
+            self.cur_mcid = props["MCID"]
+        else:
+            self.cur_mcid = None
+
+    def end_tag(self) -> None:
+        """Handle beginning of tag, clearing current MCID."""
+        self.cur_tag = None
+        self.cur_mcid = None
+
+    def add_item(self, item: LTItem) -> None:
+        item.mcid = self.cur_mcid
+        item.tag = self.cur_tag
+        self.cur_item.add(item)
+
     def render_image(self, name: str, stream: PDFStream) -> None:
         assert isinstance(self.cur_item, LTFigure), str(type(self.cur_item))
         item = LTImage(
@@ -83,7 +106,7 @@ class PDFLayoutAnalyzer(PDFTextDevice):
             stream,
             (self.cur_item.x0, self.cur_item.y0, self.cur_item.x1, self.cur_item.y1),
         )
-        self.cur_item.add(item)
+        self.add_item(item)
 
     def paint_path(
         self,
@@ -154,7 +177,7 @@ class PDFLayoutAnalyzer(PDFTextDevice):
                     original_path=transformed_path,
                     dashing_style=gstate.dash,
                 )
-                self.cur_item.add(line)
+                self.add_item(line)
 
             elif shape in {"mlllh", "mllll"}:
                 (x0, y0), (x1, y1), (x2, y2), (x3, y3), _ = pts
@@ -175,7 +198,7 @@ class PDFLayoutAnalyzer(PDFTextDevice):
                         transformed_path,
                         gstate.dash,
                     )
-                    self.cur_item.add(rect)
+                    self.add_item(rect)
                 else:
                     curve = LTCurve(
                         gstate.linewidth,
@@ -188,7 +211,7 @@ class PDFLayoutAnalyzer(PDFTextDevice):
                         transformed_path,
                         gstate.dash,
                     )
-                    self.cur_item.add(curve)
+                    self.add_item(curve)
             else:
                 curve = LTCurve(
                     gstate.linewidth,
@@ -201,7 +224,7 @@ class PDFLayoutAnalyzer(PDFTextDevice):
                     transformed_path,
                     gstate.dash,
                 )
-                self.cur_item.add(curve)
+                self.add_item(curve)
 
     def render_char(
         self,
@@ -233,7 +256,7 @@ class PDFLayoutAnalyzer(PDFTextDevice):
             ncs,
             graphicstate,
         )
-        self.cur_item.add(item)
+        self.add_item(item)
         return item.adv
 
     def handle_undefined_char(self, font: PDFFont, cid: int) -> str:

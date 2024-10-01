@@ -126,6 +126,11 @@ class LAParams:
 class LTItem:
     """Interface for things that can be analyzed"""
 
+    # Any item could be in a marked content section
+    mcid: Optional[int] = None
+    # Which could have a tag
+    tag: Optional[str] = None
+
     def analyze(self, laparams: LAParams) -> None:
         """Perform the layout analysis."""
 
