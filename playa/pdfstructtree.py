@@ -172,6 +172,7 @@ class PDFStructTree(Findable):
         self.role_map = resolve1(self.root.get("RoleMap", {}))
         self.class_map = resolve1(self.root.get("ClassMap", {}))
         self.children: List[PDFStructElement] = []
+        self.page_dict: Dict[Any, Union[int, None]]
 
         if pages is None:
             self.page_dict = {
@@ -199,11 +200,7 @@ class PDFStructTree(Findable):
                 if "StructParents" not in page.attrs:
                     return
                 parent_id = page.attrs["StructParents"]
-                # FIXME: NumberTree should have a `get` method like it
-                # does in pdf.js... (we can fix this now)
-                parent_array = resolve1(
-                    next(array for num, array in parent_tree.values if num == parent_id)
-                )
+                parent_array = resolve1(parent_tree[parent_id])
                 self._parse_parent_tree(parent_array)
             else:
                 # ...EXCEPT that the ParentTree is sometimes missing, in which
