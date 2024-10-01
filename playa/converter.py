@@ -115,6 +115,8 @@ class PDFLayoutAnalyzer(PDFTextDevice):
         fill: bool,
         evenodd: bool,
         path: Sequence[PathSegment],
+        ncs: Optional[PDFColorSpace] = None,
+        scs: Optional[PDFColorSpace] = None,
     ) -> None:
         """Paint paths described in section 4.4 of the PDF reference manual"""
         shape = "".join(x[0] for x in path)
@@ -132,7 +134,7 @@ class PDFLayoutAnalyzer(PDFTextDevice):
             # recurse if there are multiple m's in this shape
             for m in re.finditer(r"m[^m]+", shape):
                 subpath = path[m.start(0) : m.end(0)]
-                self.paint_path(gstate, stroke, fill, evenodd, subpath)
+                self.paint_path(gstate, stroke, fill, evenodd, subpath, ncs, scs)
 
         else:
             # Although the 'h' command does not not literally provide a
@@ -176,6 +178,7 @@ class PDFLayoutAnalyzer(PDFTextDevice):
                     gstate.ncolor,
                     original_path=transformed_path,
                     dashing_style=gstate.dash,
+                    ncs=ncs, scs=scs
                 )
                 self.add_item(line)
 
@@ -197,6 +200,7 @@ class PDFLayoutAnalyzer(PDFTextDevice):
                         gstate.ncolor,
                         transformed_path,
                         gstate.dash,
+                        ncs, scs
                     )
                     self.add_item(rect)
                 else:
@@ -210,6 +214,7 @@ class PDFLayoutAnalyzer(PDFTextDevice):
                         gstate.ncolor,
                         transformed_path,
                         gstate.dash,
+                        ncs, scs
                     )
                     self.add_item(curve)
             else:
@@ -223,6 +228,7 @@ class PDFLayoutAnalyzer(PDFTextDevice):
                     gstate.ncolor,
                     transformed_path,
                     gstate.dash,
+                    ncs, scs
                 )
                 self.add_item(curve)
 
@@ -234,8 +240,9 @@ class PDFLayoutAnalyzer(PDFTextDevice):
         scaling: float,
         rise: float,
         cid: int,
-        ncs: PDFColorSpace,
         graphicstate: PDFGraphicState,
+        ncs: Optional[PDFColorSpace] = None,
+        scs: Optional[PDFColorSpace] = None,
     ) -> float:
         try:
             text = font.to_unichr(cid)
@@ -253,8 +260,9 @@ class PDFLayoutAnalyzer(PDFTextDevice):
             text,
             textwidth,
             textdisp,
-            ncs,
             graphicstate,
+            ncs,
+            scs,
         )
         self.add_item(item)
         return item.adv

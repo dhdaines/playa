@@ -79,6 +79,8 @@ class PDFDevice:
         fill: bool,
         evenodd: bool,
         path: Sequence[PathSegment],
+        ncs: Optional[PDFColorSpace] = None,
+        scs: Optional[PDFColorSpace] = None,
     ) -> None:
         pass
 
@@ -89,8 +91,9 @@ class PDFDevice:
         self,
         textstate: "PDFTextState",
         seq: PDFTextSeq,
-        ncs: PDFColorSpace,
         graphicstate: "PDFGraphicState",
+        ncs: Optional[PDFColorSpace] = None,
+        scs: Optional[PDFColorSpace] = None,
     ) -> None:
         pass
 
@@ -100,8 +103,9 @@ class PDFTextDevice(PDFDevice):
         self,
         textstate: "PDFTextState",
         seq: PDFTextSeq,
-        ncs: PDFColorSpace,
         graphicstate: "PDFGraphicState",
+        ncs: Optional[PDFColorSpace] = None,
+        scs: Optional[PDFColorSpace] = None,
     ) -> None:
         assert self.ctm is not None
         matrix = utils.mult_matrix(textstate.matrix, self.ctm)
@@ -127,8 +131,9 @@ class PDFTextDevice(PDFDevice):
                 wordspace,
                 rise,
                 dxscale,
-                ncs,
                 graphicstate,
+                ncs,
+                scs,
             )
         else:
             textstate.linematrix = self.render_string_horizontal(
@@ -142,8 +147,9 @@ class PDFTextDevice(PDFDevice):
                 wordspace,
                 rise,
                 dxscale,
-                ncs,
                 graphicstate,
+                ncs,
+                scs,
             )
 
     def render_string_horizontal(
@@ -158,8 +164,9 @@ class PDFTextDevice(PDFDevice):
         wordspace: float,
         rise: float,
         dxscale: float,
-        ncs: PDFColorSpace,
         graphicstate: "PDFGraphicState",
+        ncs: Optional[PDFColorSpace] = None,
+        scs: Optional[PDFColorSpace] = None,
     ) -> Point:
         (x, y) = pos
         needcharspace = False
@@ -182,8 +189,9 @@ class PDFTextDevice(PDFDevice):
                         scaling,
                         rise,
                         cid,
-                        ncs,
                         graphicstate,
+                        ncs,
+                        scs,
                     )
                     if cid == 32 and wordspace:
                         x += wordspace
@@ -202,8 +210,9 @@ class PDFTextDevice(PDFDevice):
         wordspace: float,
         rise: float,
         dxscale: float,
-        ncs: PDFColorSpace,
         graphicstate: "PDFGraphicState",
+        ncs: Optional[PDFColorSpace] = None,
+        scs: Optional[PDFColorSpace] = None,
     ) -> Point:
         (x, y) = pos
         needcharspace = False
@@ -226,8 +235,9 @@ class PDFTextDevice(PDFDevice):
                         scaling,
                         rise,
                         cid,
-                        ncs,
                         graphicstate,
+                        ncs,
+                        scs,
                     )
                     if cid == 32 and wordspace:
                         y += wordspace
@@ -242,8 +252,9 @@ class PDFTextDevice(PDFDevice):
         scaling: float,
         rise: float,
         cid: int,
-        ncs: PDFColorSpace,
         graphicstate: "PDFGraphicState",
+        ncs: Optional[PDFColorSpace] = None,
+        scs: Optional[PDFColorSpace] = None,
     ) -> float:
         return 0
 
@@ -265,8 +276,9 @@ class TagExtractor(PDFDevice):
         self,
         textstate: "PDFTextState",
         seq: PDFTextSeq,
-        ncs: PDFColorSpace,
         graphicstate: "PDFGraphicState",
+        ncs: Optional[PDFColorSpace] = None,
+        scs: Optional[PDFColorSpace] = None,
     ) -> None:
         font = textstate.font
         assert font is not None
