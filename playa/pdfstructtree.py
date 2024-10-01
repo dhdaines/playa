@@ -144,60 +144,68 @@ class PDFStructTree(Findable):
     """Parse the structure tree of a PDF.
 
     This class creates a representation of the portion of the
-    structure tree that reaches marked content sections, either for a
-    single page, or for the whole document.  Note that this is slightly
-    different from the behaviour of other PDF libraries which will
-    also include structure elements with no content.
+    structure tree that reaches marked content sections for a document
+    or a subset of its pages.  Note that this is slightly different
+    from the behaviour of other PDF libraries which will also include
+    structure elements with no content.
 
     If the PDF has no structure, the constructor will raise
     `PDFNoStructTree`.
 
+    Args:
+      doc: Document from which to extract structure tree
+      pages: List of (number, page) pairs - numbers will be used to
+             identify pages in the tree through the `page_number`
+             attribute of `PDFStructElement`.
     """
 
     page: Union[PDFPage, None]
 
-    def __init__(self, doc: "PDFDocument", page: Union[PDFPage, None] = None):
+    def __init__(
+        self,
+        doc: "PDFDocument",
+        pages: Union[Iterable[Tuple[Union[int, None], PDFPage]], None] = None,
+    ):
         if "StructTreeRoot" not in doc.catalog:
             raise PDFNoStructTree("Catalog has no 'StructTreeRoot' entry")
         self.root = resolve1(doc.catalog["StructTreeRoot"])
         self.role_map = resolve1(self.root.get("RoleMap", {}))
         self.class_map = resolve1(self.root.get("ClassMap", {}))
         self.children: List[PDFStructElement] = []
+        self.page_dict: Dict[Any, Union[int, None]]
 
-        # If we have a specific page then we will work backwards from
-        # its ParentTree - this is because structure elements could
-        # span multiple pages, and the "Pg" attribute is *optional*,
-        # so this is the approved way to get a page's structure...
-        if page is not None:
-            self.page = page
-            self.page_dict = None
-            # ...EXCEPT that the ParentTree is sometimes missing, in which
-            # case we fall back to the non-approved way.
+        if pages is None:
+            self.page_dict = {
+                page.pageid: idx + 1 for idx, page in enumerate(doc.get_pages())
+            }
+            self._parse_struct_tree()
+        else:
+            pagelist = list(pages)
+            self.page_dict = {
+                page.pageid: page_number for page_number, page in pagelist
+            }
             parent_tree_obj = self.root.get("ParentTree")
-            if parent_tree_obj is None:
-                self._parse_struct_tree()
-            else:
+            # If we have a single page then we will work backwards from
+            # its ParentTree - this is because structure elements could
+            # span multiple pages, and the "Pg" attribute is *optional*,
+            # so this is the approved way to get a page's structure...
+            if len(pagelist) == 1 and parent_tree_obj is not None:
+                _, page = pagelist[0]
                 parent_tree = NumberTree(parent_tree_obj)
                 # If there is no marked content in the structure tree for
                 # this page (which can happen even when there is a
                 # structure tree) then there is no `StructParents`.
                 # Note however that if there are XObjects in a page,
                 # *they* may have `StructParent` (not `StructParents`)
-                if "StructParents" not in self.page.attrs:
+                if "StructParents" not in page.attrs:
                     return
-                parent_id = self.page.attrs["StructParents"]
-                # NumberTree should have a `get` method like it does in pdf.js...
-                parent_array = resolve1(
-                    next(array for num, array in parent_tree.values if num == parent_id)
-                )
+                parent_id = page.attrs["StructParents"]
+                parent_array = resolve1(parent_tree[parent_id])
                 self._parse_parent_tree(parent_array)
-        else:
-            self.page = None
-            # Overhead of creating pages shouldn't be too bad we hope!
-            self.page_dict = {
-                page.pageid: idx + 1 for idx, page in enumerate(doc.get_pages())
-            }
-            self._parse_struct_tree()
+            else:
+                # ...EXCEPT that the ParentTree is sometimes missing, in which
+                # case we fall back to the non-approved way.
+                self._parse_struct_tree()
 
     def _make_attributes(
         self, obj: Dict[str, Any], revision: Union[int, None]
@@ -327,13 +335,7 @@ class PDFStructTree(Findable):
         if "Pg" not in obj:
             return True
         page_objid = obj["Pg"].objid
-        if self.page_dict is not None:
-            return page_objid in self.page_dict
-        if self.page is not None:
-            # We have to do this to satisfy mypy
-            if page_objid != self.page.pageid:
-                return False
-        return True
+        return page_objid in self.page_dict
 
     def _parse_struct_tree(self) -> None:
         """Populate the structure tree starting from the root, skipping

@@ -126,6 +126,11 @@ class LAParams:
 class LTItem:
     """Interface for things that can be analyzed"""
 
+    # Any item could be in a marked content section
+    mcid: Optional[int] = None
+    # Which could have a tag
+    tag: Optional[str] = None
+
     def analyze(self, laparams: LAParams) -> None:
         """Perform the layout analysis."""
 
@@ -234,9 +239,13 @@ class LTCurve(LTComponent):
         non_stroking_color: Optional[Color] = None,
         original_path: Optional[List[PathSegment]] = None,
         dashing_style: Optional[Tuple[object, object]] = None,
+        ncs: Optional[PDFColorSpace] = None,
+        scs: Optional[PDFColorSpace] = None,
     ) -> None:
         LTComponent.__init__(self, get_bound(pts))
         self.pts = pts
+        self.ncs = ncs
+        self.scs = scs
         self.linewidth = linewidth
         self.stroke = stroke
         self.fill = fill
@@ -268,6 +277,8 @@ class LTLine(LTCurve):
         non_stroking_color: Optional[Color] = None,
         original_path: Optional[List[PathSegment]] = None,
         dashing_style: Optional[Tuple[object, object]] = None,
+        ncs: Optional[PDFColorSpace] = None,
+        scs: Optional[PDFColorSpace] = None,
     ) -> None:
         LTCurve.__init__(
             self,
@@ -280,6 +291,7 @@ class LTLine(LTCurve):
             non_stroking_color,
             original_path,
             dashing_style,
+            ncs, scs,
         )
 
 
@@ -300,6 +312,8 @@ class LTRect(LTCurve):
         non_stroking_color: Optional[Color] = None,
         original_path: Optional[List[PathSegment]] = None,
         dashing_style: Optional[Tuple[object, object]] = None,
+        ncs: Optional[PDFColorSpace] = None,
+        scs: Optional[PDFColorSpace] = None,
     ) -> None:
         (x0, y0, x1, y1) = bbox
         LTCurve.__init__(
@@ -313,6 +327,7 @@ class LTRect(LTCurve):
             non_stroking_color,
             original_path,
             dashing_style,
+            ncs, scs,
         )
 
 
@@ -365,14 +380,16 @@ class LTChar(LTComponent, LTText):
         text: str,
         textwidth: float,
         textdisp: Union[float, Tuple[Optional[float], float]],
-        ncs: PDFColorSpace,
         graphicstate: PDFGraphicState,
+        ncs: Optional[PDFColorSpace] = None,
+        scs: Optional[PDFColorSpace] = None,
     ) -> None:
         LTText.__init__(self)
         self._text = text
         self.matrix = matrix
         self.fontname = font.fontname
         self.ncs = ncs
+        self.scs = scs
         self.graphicstate = graphicstate
         self.adv = textwidth * fontsize * scaling
         # compute the boundary rectangle.

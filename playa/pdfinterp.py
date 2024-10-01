@@ -553,7 +553,7 @@ class PDFPageInterpreter:
 
     def do_S(self) -> None:
         """Stroke path"""
-        self.device.paint_path(self.graphicstate, True, False, False, self.curpath)
+        self.device.paint_path(self.graphicstate, True, False, False, self.curpath, self.ncs, self.scs)
         self.curpath = []
 
     def do_s(self) -> None:
@@ -563,7 +563,7 @@ class PDFPageInterpreter:
 
     def do_f(self) -> None:
         """Fill path using nonzero winding number rule"""
-        self.device.paint_path(self.graphicstate, False, True, False, self.curpath)
+        self.device.paint_path(self.graphicstate, False, True, False, self.curpath, self.ncs, self.scs)
         self.curpath = []
 
     def do_F(self) -> None:
@@ -571,17 +571,17 @@ class PDFPageInterpreter:
 
     def do_f_a(self) -> None:
         """Fill path using even-odd rule"""
-        self.device.paint_path(self.graphicstate, False, True, True, self.curpath)
+        self.device.paint_path(self.graphicstate, False, True, True, self.curpath, self.ncs, self.scs)
         self.curpath = []
 
     def do_B(self) -> None:
         """Fill and stroke path using nonzero winding number rule"""
-        self.device.paint_path(self.graphicstate, True, True, False, self.curpath)
+        self.device.paint_path(self.graphicstate, True, True, False, self.curpath, self.ncs, self.scs)
         self.curpath = []
 
     def do_B_a(self) -> None:
         """Fill and stroke path using even-odd rule"""
-        self.device.paint_path(self.graphicstate, True, True, True, self.curpath)
+        self.device.paint_path(self.graphicstate, True, True, True, self.curpath, self.ncs, self.scs)
         self.curpath = []
 
     def do_b(self) -> None:
@@ -865,12 +865,15 @@ class PDFPageInterpreter:
             if settings.STRICT:
                 raise PDFInterpreterError("No font specified!")
             return
+        # FIXME: Are we sure?
         assert self.ncs is not None
+        assert self.scs is not None
         self.device.render_string(
             self.textstate,
             cast(PDFTextSeq, seq),
-            self.ncs,
             self.graphicstate.copy(),
+            self.ncs,
+            self.scs,
         )
 
     def do_Tj(self, s: PDFStackT) -> None:

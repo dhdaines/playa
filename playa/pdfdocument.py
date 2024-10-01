@@ -1116,35 +1116,43 @@ class PDFDocument:
 class PageLabels(NumberTree):
     """PageLabels from the document catalog.
 
-    See Section 8.3.1 in the PDF Reference.
+    See Section 12.4.2 in the PDF 1.7 Reference.
     """
 
     @property
     def labels(self) -> Iterator[str]:
-        ranges = self.values
-
-        # The tree must begin with page index 0
-        if len(ranges) == 0 or ranges[0][0] != 0:
+        itor = iter(self)
+        try:
+            start, label_dict_unchecked = next(itor)
+            # The tree must begin with page index 0
+            if start != 0:
+                if settings.STRICT:
+                    raise PDFSyntaxError("PageLabels is missing page index 0")
+                else:
+                    # Try to cope, by assuming empty labels for the initial pages
+                    start = 0
+        except StopIteration:
             if settings.STRICT:
-                raise PDFSyntaxError("PageLabels is missing page index 0")
-            else:
-                # Try to cope, by assuming empty labels for the initial pages
-                ranges.insert(0, (0, {}))
+                raise PDFSyntaxError("PageLabels is empty")
+            start = 0
+            label_dict_unchecked = {}
 
-        for next, (start, label_dict_unchecked) in enumerate(ranges, 1):
+        while True:  # forever!
             label_dict = dict_value(label_dict_unchecked)
             style = label_dict.get("S")
             prefix = decode_text(str_value(label_dict.get("P", b"")))
             first_value = int_value(label_dict.get("St", 1))
 
-            if next == len(ranges):
+            try:
+                next_start, label_dict_unchecked = next(itor)
+            except StopIteration:
                 # This is the last specified range. It continues until the end
                 # of the document.
                 values: Iterable[int] = itertools.count(first_value)
             else:
-                end, _ = ranges[next]
-                range_length = end - start
+                range_length = next_start - start
                 values = range(first_value, first_value + range_length)
+                start = next_start
 
             for value in values:
                 label = self._format_page_label(value, style)

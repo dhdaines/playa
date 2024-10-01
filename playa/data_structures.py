@@ -1,4 +1,4 @@
-from typing import Any, Iterable, List, Optional, Tuple
+from typing import Any, Dict, Iterator, List, Tuple
 
 from playa import settings
 from playa.pdfparser import PDFSyntaxError
@@ -6,41 +6,45 @@ from playa.pdftypes import dict_value, int_value, list_value
 from playa.utils import choplist
 
 
+def walk_number_tree(tree: Dict[str, Any]) -> Iterator[Tuple[int, Any]]:
+    stack = [tree]
+    while stack:
+        item = dict_value(stack.pop())
+        if "Nums" in item:
+            for k, v in choplist(2, list_value(item["Nums"])):
+                yield int_value(k), v
+        if "Kids" in item:
+            stack.extend(reversed(list_value(item["Kids"])))
+
+
 class NumberTree:
     """A PDF number tree.
 
-    See Section 3.8.6 of the PDF Reference.
+    See Section 7.9.7 of the PDF 1.7 Reference.
     """
 
     def __init__(self, obj: Any):
         self._obj = dict_value(obj)
-        self.nums: Optional[Iterable[Any]] = None
-        self.kids: Optional[Iterable[Any]] = None
-        self.limits: Optional[Iterable[Any]] = None
 
-        if "Nums" in self._obj:
-            self.nums = list_value(self._obj["Nums"])
-        if "Kids" in self._obj:
-            self.kids = list_value(self._obj["Kids"])
-        if "Limits" in self._obj:
-            self.limits = list_value(self._obj["Limits"])
+    def __iter__(self) -> Iterator[Tuple[int, Any]]:
+        return walk_number_tree(self._obj)
 
-    def _parse(self) -> List[Tuple[int, Any]]:
-        items = []
-        if self.nums:  # Leaf node
-            for k, v in choplist(2, self.nums):
-                items.append((int_value(k), v))
+    def __contains__(self, num) -> bool:
+        for idx, val in self:
+            if idx == num:
+                return True
+        return False
 
-        if self.kids:  # Root or intermediate node
-            for child_ref in self.kids:
-                items += NumberTree(child_ref)._parse()
-
-        return items
+    def __getitem__(self, num) -> Any:
+        for idx, val in self:
+            if idx == num:
+                return val
+        raise IndexError(f"Number {num} not in tree")
 
     @property
     def values(self) -> List[Tuple[int, Any]]:
-        values = self._parse()
-
+        values = list(self)
+        # NOTE: They are supposed to be sorted! (but, I suppose, often aren't)
         if settings.STRICT:
             if not all(a[0] <= b[0] for a, b in zip(values, values[1:])):
                 raise PDFSyntaxError("Number tree elements are out of order")
