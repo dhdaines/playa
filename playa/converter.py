@@ -9,7 +9,7 @@ from typing import (
 
 from playa.layout import (
     LAParams,
-    LTItem,
+    LTComponent,
     LTChar,
     LTCurve,
     LTFigure,
@@ -94,7 +94,7 @@ class PDFLayoutAnalyzer(PDFTextDevice):
         self.cur_tag = None
         self.cur_mcid = None
 
-    def add_item(self, item: LTItem) -> None:
+    def add_item(self, item: LTComponent) -> None:
         item.mcid = self.cur_mcid
         item.tag = self.cur_tag
         self.cur_item.add(item)
