@@ -67,8 +67,7 @@ class TestClass(unittest.TestCase):
             pages = set(page for page, mcid in mcids)
             assert 1 in pages
             assert 2 in pages
-            # If we take only a single page there are no page numbers
-            # (FIXME: may wish to reconsider this API decision...)
+
             page = next(pdf.get_pages())
             stree = PDFStructTree(pdf, page)
             sect = next(stree.find_all("Sect"))
@@ -79,4 +78,7 @@ class TestClass(unittest.TestCase):
             assert 2 not in pages
             # Assure that we get the MCIDs for a content element
             for p in sect.find_all("P"):
-                assert set(mcid for page, mcid in p.all_mcids()) == set(p.mcids)
+                # p.mcids is the MCIDs for just this element,
+                # all_mcids includes children (unsure why this is
+                # different in pdfplumber?)
+                assert set(mcid for page, mcid in p.all_mcids()).issuperset(p.mcids)
