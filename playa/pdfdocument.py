@@ -1116,7 +1116,7 @@ class PDFDocument:
 class PageLabels(NumberTree):
     """PageLabels from the document catalog.
 
-    See Section 8.3.1 in the PDF Reference.
+    See Section 12.4.2 in the PDF 1.7 Reference.
     """
 
     @property
