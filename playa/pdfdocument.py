@@ -1001,12 +1001,11 @@ class PDFDocument:
         except PDFNoPageLabels:
             page_labels = itertools.repeat(None)
         try:
-            page_tree = self.page_tree()
+            for (objid, properties), label in zip(self.page_tree(), page_labels):
+                yield PDFPage(objid, properties, label)
         except PDFNoPageTree:
-            page_tree = self.pages_from_xrefs()
-
-        for (objid, properties), label in zip(page_tree, page_labels):
-            yield PDFPage(objid, properties, label)
+            for (objid, properties), label in zip(self.pages_from_xrefs(), page_labels):
+                yield PDFPage(objid, properties, label)
 
     def lookup_name(self, cat: str, key: Union[str, bytes]) -> Any:
         try:
