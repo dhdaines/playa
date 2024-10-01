@@ -1,3 +1,4 @@
+import io
 import itertools
 import logging
 import re
@@ -27,6 +28,7 @@ from playa.arcfour import Arcfour
 from playa.data_structures import NumberTree
 from playa.exceptions import (
     PSEOF,
+    PSException,
     PDFDestinationNotFound,
     PDFEncryptionError,
     PDFException,
@@ -644,7 +646,14 @@ def read_header(fp: BinaryIO) -> str:
     except IOError as err:
         raise PDFSyntaxError("Failed to read PDF header") from err
     if not hdr.startswith(b"%PDF-"):
-        raise PDFSyntaxError("Expected b'%%PDF-', got %r, is this a PDF?" % hdr)
+        # Try harder... there might be some extra junk before it
+        fp.seek(0)
+        hdr += fp.read(4096)
+        start = hdr.find(b"%PDF-")
+        if start == -1:
+            raise PDFSyntaxError("Could not find b'%%PDF-', is this a PDF?")
+        hdr = hdr[start:start + 8]
+        fp.seek(start)
     try:
         version = hdr[5:].decode("ascii")
     except UnicodeDecodeError as err:
@@ -697,6 +706,8 @@ class PDFDocument:
         self.decipher: Optional[DecipherCallable] = None
         self._cached_objs: Dict[int, Tuple[object, int]] = {}
         self._parsed_objs: Dict[int, Tuple[List[object], int]] = {}
+        if isinstance(fp, io.TextIOBase):
+            raise PSException("fp is not a binary file")
         self.pdf_version = read_header(fp)
         self.parser = PDFParser(fp)
         self.parser.set_document(self)  # FIXME: annoying circular reference
