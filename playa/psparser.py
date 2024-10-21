@@ -80,22 +80,24 @@ _NameT = TypeVar("_NameT", str, bytes)
 class PSSymbolTable(Generic[_SymbolT, _NameT]):
     """Store globally unique name objects or language keywords."""
 
-    def __init__(self, klass: Type[_SymbolT]) -> None:
+    def __init__(self, table_type: Type[_SymbolT], name_type: Type[_NameT]) -> None:
         self.dict: Dict[_NameT, _SymbolT] = {}
-        self.klass: Type[_SymbolT] = klass
+        self.table_type: Type[_SymbolT] = table_type
+        self.name_type: Type[_NameT] = name_type
 
     def intern(self, name: _NameT) -> _SymbolT:
+        if not isinstance(name, self.name_type):
+            raise ValueError(f"{self.table_type} can only store {self.name_type}")
         if name in self.dict:
             lit = self.dict[name]
         else:
-            # Does not seem possible to link PSLiteral/str or PSKeyword/bytes
-            lit = self.klass(name)  # type: ignore
-            self.dict[name] = lit
+            lit = self.table_type(name)  # type: ignore
+        self.dict[name] = lit
         return lit
 
 
-PSLiteralTable = PSSymbolTable[PSLiteral, str](PSLiteral)
-PSKeywordTable = PSSymbolTable[PSKeyword, bytes](PSKeyword)
+PSLiteralTable = PSSymbolTable(PSLiteral, str)
+PSKeywordTable = PSSymbolTable(PSKeyword, bytes)
 LIT = PSLiteralTable.intern
 KWD = PSKeywordTable.intern
 KEYWORD_PROC_BEGIN = KWD(b"{")

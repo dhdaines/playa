@@ -3,6 +3,8 @@ import tempfile
 from io import BytesIO
 from typing import Any, List, Tuple
 
+import pytest
+
 from playa.exceptions import PSEOF
 from playa.psparser import (
     KEYWORD_DICT_BEGIN,
@@ -408,3 +410,11 @@ def test_literals():
     # Invalid UTF-8, but we will treat it as "ISO-8859-1"
     # (i.e. Unicode code points 0-255)
     assert keyword_name(KWD(b"\x80\x83\xfe\xff")) == "\x80\x83\xfe\xff"
+
+
+def test_interns():
+    """Verify that interning only accepts certain values."""
+    with pytest.raises(ValueError):
+        _ = KWD("not-a-bytes")
+    with pytest.raises(ValueError):
+        _ = LIT(b"not-a-str")
