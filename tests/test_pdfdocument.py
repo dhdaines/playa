@@ -9,6 +9,7 @@ import pytest
 
 import playa
 import playa.settings
+from playa.data_structures import NameTree
 from playa.exceptions import PDFSyntaxError
 from playa.pdfdocument import read_header
 
@@ -42,3 +43,17 @@ def test_pages():
     with playa.open(TESTDIR / "contrib" / "PSC_Station.pdf") as doc:
         page_objects = list(doc.pages)
         assert len(page_objects) == 15
+
+
+def test_names():
+    with playa.open(TESTDIR / "contrib" / "issue-625-identity-cmap.pdf") as doc:
+        ef = NameTree(doc.names["EmbeddedFiles"])
+        # Because yes, they can be UTF-16...
+        names = [name.decode("UTF-16") for name, _ in ef]
+        assert names == ["382901691/01_UBL.xml", "382901691/02_EAN_UCC.xml"]
+
+
+def test_dests():
+    with playa.open(TESTDIR / "pdf_js_issue620f.pdf") as doc:
+        names = [name for name, _ in doc.dests]
+        assert names == [b"Page.1", b"Page.2"]

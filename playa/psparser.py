@@ -121,6 +121,7 @@ def literal_name(x: Any) -> str:
         try:
             return str(x.name, "utf-8")
         except UnicodeDecodeError:
+            # FIXME: This DOES NOT WORK!
             return str(x.name)
     else:
         if settings.STRICT:

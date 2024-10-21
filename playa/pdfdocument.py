@@ -1039,26 +1039,26 @@ class PDFDocument:
         return dict_value(self.catalog["Names"])
 
     @property
-    def dests(self) -> Union[Dict[str, Any], NameTree]:
-        """Dictionary-like object containing named destinations (PDF
-        1.7 sec 12.3.2). Raises KeyError if no destination dictionary
-        exists.
+    def dests(self) -> Iterable[Tuple[bytes, Any]]:
+        """Iterator over named destinations as (name, object) tuples
+        (PDF 1.7 sec 12.3.2). Raises KeyError if no destination
+        dictionary exists.
 
-        FIXME: There is a big problem here, which is that NameTrees
-        are not like the dictionaries we return, in that their keys
-        are *strings* and not *name objects*.  Since PDF strings are
-        just sequences of bytes with no defined encoding this means
-        that we can't represent them as `str`, unlike name objects
-        which are sorta-kinda-defined as UTF-8 strings (PDF 1.7 sec
-        7.3.5).  This means that PDF 1.1 destinations and PDF 1.2
-        destinations are incompatible.
+        Note that to give a uniform interface to PDF 1.1 and 1.2
+        destinations the names are *always* `bytes` since they could be
+        either PDF name objects or PDF strings.  You cannot even
+        presume that they are UTF-8 (hey buddy, I don't write the
+        standards)
         """
         try:
             # PDF-1.2 or later
             return NameTree(self.names["Dests"])
         except KeyError:
             # PDF-1.1 or prior
-            return dict_value(self.catalog["Dests"])
+            return (
+                (k.encode("utf-8"), v)
+                for k, v in dict_value(self.catalog["Dests"]).items()
+            )
 
     # find_xref
     def find_xref(self) -> int:

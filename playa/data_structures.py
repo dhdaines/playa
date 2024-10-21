@@ -47,8 +47,8 @@ class NumberTree:
 
 
 def walk_name_tree(
-    tree: Dict[str, Any], key: Union[str, bytes, None] = None
-) -> Iterator[Tuple[Union[str, bytes], Any]]:
+    tree: Dict[str, Any], key: Union[bytes, None] = None
+) -> Iterator[Tuple[bytes, Any]]:
     stack = [tree]
     while stack:
         item = dict_value(stack.pop())
@@ -72,16 +72,16 @@ class NameTree:
     def __init__(self, obj: Any):
         self._obj = dict_value(obj)
 
-    def __iter__(self) -> Iterator[Tuple[Union[str, bytes], Any]]:
+    def __iter__(self) -> Iterator[Tuple[bytes, Any]]:
         return walk_name_tree(self._obj, None)
 
-    def __contains__(self, name: Union[str, bytes]) -> bool:
+    def __contains__(self, name: bytes) -> bool:
         for idx, val in self:
             if idx == name:
                 return True
         return False
 
-    def __getitem__(self, name: Union[str, bytes]) -> Any:
+    def __getitem__(self, name: bytes) -> Any:
         for idx, val in self:
             if idx == name:
                 return val

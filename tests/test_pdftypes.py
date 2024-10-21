@@ -2,7 +2,7 @@
 Test PDF types and data structures.
 """
 
-from playa.data_structures import NumberTree, NameTree
+from playa.data_structures import NameTree, NumberTree
 
 NUMTREE1 = {
     "Kids": [
