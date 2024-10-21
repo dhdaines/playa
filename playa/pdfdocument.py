@@ -11,11 +11,12 @@ from typing import (
     Dict,
     Iterable,
     Iterator,
-    KeysView,
     List,
     Optional,
+    Protocol,
     Sequence,
     Tuple,
+    TypeAlias,
     Union,
     cast,
 )
@@ -79,32 +80,29 @@ KEYWORD_OBJ = KWD(b"obj")
 INHERITABLE_PAGE_ATTRS = {"Resources", "MediaBox", "CropBox", "Rotate"}
 
 
-class PDFBaseXRef:
-    def get_trailer(self) -> Dict[str, Any]:
-        raise NotImplementedError
+class PDFXRef(Protocol):
+    """
+    Duck-typing for XRef table implementations, which are expected to be read-only.
+    """
 
-    def get_objids(self) -> Iterable[int]:
-        return []
-
-    # Must return
-    #     (strmid, index, genno)
-    #  or (None, pos, genno)
-    def get_pos(self, objid: int) -> Tuple[Optional[int], int, int]:
-        raise PDFKeyError(objid)
-
-    def load(self, parser: PDFParser) -> None:
-        raise NotImplementedError
+    @property
+    def trailer(self) -> Dict[str, Any]: ...
+    @property
+    def objids(self) -> Iterable[int]: ...
+    def get_pos(self, objid: int) -> Tuple[Optional[int], int, int]: ...
 
 
-class PDFXRef(PDFBaseXRef):
-    def __init__(self) -> None:
+class PDFXRefTable:
+    """Simplest (PDF 1.0) implementation of cross-reference table, in
+    plain text at the end of the file.
+    """
+
+    def __init__(self, parser: PDFParser) -> None:
         self.offsets: Dict[int, Tuple[Optional[int], int, int]] = {}
         self.trailer: Dict[str, Any] = {}
+        self._load(parser)
 
-    def __repr__(self) -> str:
-        return "<PDFXRef: offsets=%r>" % (self.offsets.keys())
-
-    def load(self, parser: PDFParser) -> None:
+    def _load(self, parser: PDFParser) -> None:
         while True:
             try:
                 (pos, line) = parser.nextline()
@@ -140,9 +138,9 @@ class PDFXRef(PDFBaseXRef):
                     continue
                 self.offsets[objid] = (None, int(pos_b), int(genno_b))
         log.debug("xref objects: %r", self.offsets)
-        self.load_trailer(parser)
+        self._load_trailer(parser)
 
-    def load_trailer(self, parser: PDFParser) -> None:
+    def _load_trailer(self, parser: PDFParser) -> None:
         try:
             (_, kwd) = parser.nexttoken()
             assert kwd is KWD(b"trailer"), str(kwd)
@@ -155,23 +153,29 @@ class PDFXRef(PDFBaseXRef):
         self.trailer.update(dict_value(dic))
         log.debug("trailer=%r", self.trailer)
 
-    def get_trailer(self) -> Dict[str, Any]:
-        return self.trailer
+    def __repr__(self) -> str:
+        return "<PDFXRefTable: offsets=%r>" % (self.offsets.keys())
 
-    def get_objids(self) -> KeysView[int]:
+    @property
+    def objids(self) -> Iterable[int]:
         return self.offsets.keys()
 
     def get_pos(self, objid: int) -> Tuple[Optional[int], int, int]:
         return self.offsets[objid]
 
 
-class PDFXRefFallback(PDFXRef):
+PDFOBJ_CUE = re.compile(r"^(\d+)\s+(\d+)\s+obj\b")
+
+
+class PDFXRefFallback(PDFXRefTable):
+    """Fallback implementation of cross-reference table, for broken
+    PDFs I guess?
+    """
+
     def __repr__(self) -> str:
         return "<PDFXRefFallback: offsets=%r>" % (self.offsets.keys())
 
-    PDFOBJ_CUE = re.compile(r"^(\d+)\s+(\d+)\s+obj\b")
-
-    def load(self, parser: PDFParser) -> None:
+    def _load(self, parser: PDFParser) -> None:
         parser.seek(0)
         while 1:
             try:
@@ -180,11 +184,11 @@ class PDFXRefFallback(PDFXRef):
                 break
             if line_bytes.startswith(b"trailer"):
                 parser.seek(pos)
-                self.load_trailer(parser)
+                self._load_trailer(parser)
                 log.debug("trailer: %r", self.trailer)
                 break
             line = line_bytes.decode("latin-1")  # default pdf encoding
-            m = self.PDFOBJ_CUE.match(line)
+            m = PDFOBJ_CUE.match(line)
             if not m:
                 continue
             (objid_s, genno_s) = m.groups()
@@ -216,19 +220,22 @@ class PDFXRefFallback(PDFXRef):
                     self.offsets[objid1] = (objid, index, 0)
 
 
-class PDFXRefStream(PDFBaseXRef):
-    def __init__(self) -> None:
+class PDFXRefStream:
+    """Cross-reference stream (as of PDF 1.5)"""
+
+    def __init__(self, parser: PDFParser) -> None:
         self.data: Optional[bytes] = None
         self.entlen: Optional[int] = None
         self.fl1: Optional[int] = None
         self.fl2: Optional[int] = None
         self.fl3: Optional[int] = None
         self.ranges: List[Tuple[int, int]] = []
+        self._load(parser)
 
     def __repr__(self) -> str:
         return "<PDFXRefStream: ranges=%r>" % (self.ranges)
 
-    def load(self, parser: PDFParser) -> None:
+    def _load(self, parser: PDFParser) -> None:
         (_, objid) = parser.nexttoken()  # ignored
         (_, genno) = parser.nexttoken()  # ignored
         (_, kwd) = parser.nexttoken()
@@ -253,10 +260,8 @@ class PDFXRefStream(PDFBaseXRef):
             self.fl3,
         )
 
-    def get_trailer(self) -> Dict[str, Any]:
-        return self.trailer
-
-    def get_objids(self) -> Iterator[int]:
+    @property
+    def objids(self) -> Iterator[int]:
         for start, nobjs in self.ranges:
             for i in range(nobjs):
                 assert self.entlen is not None
@@ -294,11 +299,14 @@ class PDFXRefStream(PDFBaseXRef):
             raise PDFKeyError(objid)
 
 
+PASSWORD_PADDING = (
+    b"(\xbfN^Nu\x8aAd\x00NV\xff\xfa\x01\x08" b"..\x00\xb6\xd0h>\x80/\x0c\xa9\xfedSiz"
+)
+
+
 class PDFStandardSecurityHandler:
-    PASSWORD_PADDING = (
-        b"(\xbfN^Nu\x8aAd\x00NV\xff\xfa\x01\x08"
-        b"..\x00\xb6\xd0h>\x80/\x0c\xa9\xfedSiz"
-    )
+    """Basic security handler for basic encryption types."""
+
     supported_revisions: Tuple[int, ...] = (2, 3)
 
     def __init__(
@@ -332,22 +340,25 @@ class PDFStandardSecurityHandler:
         if self.key is None:
             raise PDFPasswordIncorrect
 
+    @property
     def is_printable(self) -> bool:
         return bool(self.p & 4)
 
+    @property
     def is_modifiable(self) -> bool:
         return bool(self.p & 8)
 
+    @property
     def is_extractable(self) -> bool:
         return bool(self.p & 16)
 
     def compute_u(self, key: bytes) -> bytes:
         if self.r == 2:
             # Algorithm 3.4
-            return Arcfour(key).encrypt(self.PASSWORD_PADDING)  # 2
+            return Arcfour(key).encrypt(PASSWORD_PADDING)  # 2
         else:
             # Algorithm 3.5
-            hash = md5(self.PASSWORD_PADDING)  # 2
+            hash = md5(PASSWORD_PADDING)  # 2
             hash.update(self.docid[0])  # 3
             result = Arcfour(key).encrypt(hash.digest())  # 4
             for i in range(1, 20):  # 5
@@ -358,7 +369,7 @@ class PDFStandardSecurityHandler:
 
     def compute_encryption_key(self, password: bytes) -> bytes:
         # Algorithm 3.2
-        password = (password + self.PASSWORD_PADDING)[:32]  # 1
+        password = (password + PASSWORD_PADDING)[:32]  # 1
         hash = md5(password)  # 2
         hash.update(self.o)  # 3
         # See https://github.com/pdfminer/pdfminer.six/issues/186
@@ -398,7 +409,7 @@ class PDFStandardSecurityHandler:
 
     def authenticate_owner_password(self, password: bytes) -> Optional[bytes]:
         # Algorithm 3.7
-        password = (password + self.PASSWORD_PADDING)[:32]
+        password = (password + PASSWORD_PADDING)[:32]
         hash = md5(password)
         if self.r >= 3:
             for _ in range(50):
@@ -434,6 +445,8 @@ class PDFStandardSecurityHandler:
 
 
 class PDFStandardSecurityHandlerV4(PDFStandardSecurityHandler):
+    """Security handler for encryption type 4."""
+
     supported_revisions: Tuple[int, ...] = (4,)
 
     def init_params(self) -> None:
@@ -506,6 +519,8 @@ class PDFStandardSecurityHandlerV4(PDFStandardSecurityHandler):
 
 
 class PDFStandardSecurityHandlerV5(PDFStandardSecurityHandlerV4):
+    """Security handler for encryption types 5 and 6."""
+
     supported_revisions = (5, 6)
 
     def init_params(self) -> None:
@@ -652,7 +667,7 @@ def read_header(fp: BinaryIO) -> str:
         start = hdr.find(b"%PDF-")
         if start == -1:
             raise PDFSyntaxError("Could not find b'%%PDF-', is this a PDF?")
-        hdr = hdr[start:start + 8]
+        hdr = hdr[start : start + 8]
         fp.seek(start)
     try:
         version = hdr[5:].decode("ascii")
@@ -663,6 +678,9 @@ def read_header(fp: BinaryIO) -> str:
     if not re.match(r"\d\.\d", version):
         raise PDFSyntaxError("Version number in  %r is invalid" % hdr)
     return version
+
+
+OutlineType: TypeAlias = Tuple[Any, Any, Any, Any, Any]
 
 
 class PDFDocument:
@@ -699,7 +717,7 @@ class PDFDocument:
         fp: BinaryIO,
         password: str = "",
     ) -> None:
-        self.xrefs: List[PDFBaseXRef] = []
+        self.xrefs: List[PDFXRef] = []
         self.info = []
         self.catalog: Dict[str, Any] = {}
         self.encryption: Optional[Tuple[Any, Any]] = None
@@ -723,12 +741,11 @@ class PDFDocument:
         except PDFNoValidXRef:
             log.warning("Using fallback XRef parsing")
             self.parser.fallback = True
-            newxref = PDFXRefFallback()
-            newxref.load(self.parser)
+            newxref = PDFXRefFallback(self.parser)
             self.xrefs.append(newxref)
         # Now find the trailer
         for xref in self.xrefs:
-            trailer = xref.get_trailer()
+            trailer = xref.trailer
             if not trailer:
                 continue
             # If there's an encryption info, remember it.
@@ -776,9 +793,9 @@ class PDFDocument:
             raise PDFEncryptionError("Unknown algorithm: param=%r" % param)
         handler = factory(docid, param, password)
         self.decipher = handler.decrypt
-        self.is_printable = handler.is_printable()
-        self.is_modifiable = handler.is_modifiable()
-        self.is_extractable = handler.is_extractable()
+        self.is_printable = handler.is_printable
+        self.is_modifiable = handler.is_modifiable
+        self.is_extractable = handler.is_extractable
         assert self.parser is not None
         self.parser.fallback = False  # need to read streams with exact length
 
@@ -883,13 +900,12 @@ class PDFDocument:
             self._cached_objs[objid] = (obj, genno)
         return obj
 
-    OutlineType = Tuple[Any, Any, Any, Any, Any]
-
-    def get_outlines(self) -> Iterator[OutlineType]:
+    @property
+    def outlines(self) -> Iterator[OutlineType]:
         if "Outlines" not in self.catalog:
             raise PDFNoOutlines
 
-        def search(entry: object, level: int) -> Iterator[PDFDocument.OutlineType]:
+        def search(entry: object, level: int) -> Iterator[OutlineType]:
             entry = dict_value(entry)
             if "Title" in entry:
                 if "A" in entry or "Dest" in entry:
@@ -905,7 +921,8 @@ class PDFDocument:
 
         return search(self.catalog["Outlines"], 0)
 
-    def get_page_labels(self) -> Iterator[str]:
+    @property
+    def page_labels(self) -> Iterator[str]:
         """Generate page label strings for the PDF document.
 
         If the document includes page labels, generates strings, one per page.
@@ -926,7 +943,7 @@ class PDFDocument:
 
     PageType = Dict[Any, Dict[Any, Any]]
 
-    def pages_from_xrefs(self) -> Iterator[Tuple[int, PageType]]:
+    def get_pages_from_xrefs(self) -> Iterator[Tuple[int, PageType]]:
         """Find pages from the cross-reference tables if the page tree
         is missing (note that this only happens in invalid PDFs, but
         it happens.)
@@ -934,7 +951,7 @@ class PDFDocument:
         Returns an iterator over (objid, dict) pairs.
         """
         for xref in self.xrefs:
-            for object_id in xref.get_objids():
+            for object_id in xref.objids:
                 try:
                     obj = self.getobj(object_id)
                     if isinstance(obj, dict) and obj.get("Type") is LITERAL_PAGE:
@@ -942,6 +959,7 @@ class PDFDocument:
                 except PDFObjectNotFound:
                     pass
 
+    @property
     def page_tree(self) -> Iterator[Tuple[int, PageType]]:
         """Iterate over the flattened page tree in reading order, propagating
         inheritable attributes.  Returns an iterator over (objid, dict) pairs.
@@ -992,19 +1010,22 @@ class PDFDocument:
                 log.debug("Page: %r", object_properties)
                 yield object_id, object_properties
 
-    def get_pages(self) -> Iterator[PDFPage]:
+    @property
+    def pages(self) -> Iterator[PDFPage]:
         """Get an iterator over PDFPage objects, which contain
         information about the pages in the document.
         """
         try:
-            page_labels: Iterator[Optional[str]] = self.get_page_labels()
+            page_labels: Iterator[Optional[str]] = self.page_labels
         except PDFNoPageLabels:
             page_labels = itertools.repeat(None)
         try:
-            for (objid, properties), label in zip(self.page_tree(), page_labels):
+            for (objid, properties), label in zip(self.page_tree, page_labels):
                 yield PDFPage(objid, properties, label)
         except PDFNoPageTree:
-            for (objid, properties), label in zip(self.pages_from_xrefs(), page_labels):
+            for (objid, properties), label in zip(
+                self.get_pages_from_xrefs(), page_labels
+            ):
                 yield PDFPage(objid, properties, label)
 
     def lookup_name(self, cat: str, key: Union[str, bytes]) -> Any:
@@ -1080,7 +1101,7 @@ class PDFDocument:
     def read_xref_from(
         self,
         start: int,
-        xrefs: List[PDFBaseXRef],
+        xrefs: List[PDFXRef],
     ) -> None:
         """Reads XRefs from the given location."""
         self.parser.seek(start)
@@ -1094,15 +1115,13 @@ class PDFDocument:
             # XRefStream: PDF-1.5
             self.parser.seek(pos)
             self.parser.reset()
-            xref: PDFBaseXRef = PDFXRefStream()
-            xref.load(self.parser)
+            xref: PDFXRef = PDFXRefStream(self.parser)
         else:
             if token is KEYWORD_XREF:
                 self.parser.nextline()
-            xref = PDFXRef()
-            xref.load(self.parser)
+            xref = PDFXRefTable(self.parser)
         xrefs.append(xref)
-        trailer = xref.get_trailer()
+        trailer = xref.trailer
         log.debug("trailer: %r", trailer)
         if "XRefStm" in trailer:
             pos = int_value(trailer["XRefStm"])

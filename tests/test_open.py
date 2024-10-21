@@ -27,7 +27,7 @@ PASSWORDS = {
 
 
 @pytest.mark.parametrize("path", ALLPDFS, ids=str)
-def test_open(path: Path):
+def test_open(path: Path) -> None:
     """Open all the documents"""
     passwords = PASSWORDS.get(path.name, [""])
     for password in passwords:
@@ -37,7 +37,7 @@ def test_open(path: Path):
         assert pdf.parser.doc is None
 
 
-def test_inline_data():
+def test_inline_data() -> None:
     # No, there's no easy way to unit test PDFContentParser directly.
     # The necessary mocking would be useless considering that I will
     # shortly demolish these redundant and confusing APIs.
@@ -46,17 +46,17 @@ def test_inline_data():
         rsrc = PDFResourceManager()
         agg = PDFPageAggregator(rsrc, pageno=1)
         interp = PDFPageInterpreter(rsrc, agg)
-        page = next(doc.get_pages())
+        page = next(doc.pages)
         interp.process_page(page)
 
 
-def test_multiple_contents():
+def test_multiple_contents() -> None:
     # See above...
     with playa.open(TESTDIR / "jo.pdf") as doc:
         rsrc = PDFResourceManager()
         agg = PDFPageAggregator(rsrc, pageno=1)
         interp = PDFPageInterpreter(rsrc, agg)
-        page = next(doc.get_pages())
+        page = next(doc.pages)
         assert len(page.contents) > 1
         interp.process_page(page)
 

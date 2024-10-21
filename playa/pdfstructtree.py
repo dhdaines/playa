@@ -176,7 +176,7 @@ class PDFStructTree(Findable):
 
         if pages is None:
             self.page_dict = {
-                page.pageid: idx + 1 for idx, page in enumerate(doc.get_pages())
+                page.pageid: idx + 1 for idx, page in enumerate(doc.pages)
             }
             self._parse_struct_tree()
         else:

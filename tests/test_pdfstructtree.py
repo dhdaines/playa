@@ -11,18 +11,18 @@ TESTDIR = Path(__file__).parent.parent / "samples"
 class TestClass(unittest.TestCase):
     """Test the underlying Structure tree class"""
 
-    def test_structure_tree_class(self):
+    def test_structure_tree_class(self) -> None:
         with playa.open(TESTDIR / "image_structure.pdf") as pdf:
-            stree = PDFStructTree(pdf, [(1, next(pdf.get_pages()))])
+            stree = PDFStructTree(pdf, [(1, next(pdf.pages))])
             doc_elem = next(iter(stree))
             assert [k.type for k in doc_elem] == ["P", "P", "Figure"]
 
-    def test_find_all_tree(self):
+    def test_find_all_tree(self) -> None:
         """
         Test find_all() and find() on trees
         """
         with playa.open(TESTDIR / "image_structure.pdf") as pdf:
-            stree = PDFStructTree(pdf, [(1, next(pdf.get_pages()))])
+            stree = PDFStructTree(pdf, [(1, next(pdf.pages))])
             figs = list(stree.find_all("Figure"))
             assert len(figs) == 1
             fig = stree.find("Figure")
@@ -39,7 +39,7 @@ class TestClass(unittest.TestCase):
             figs = list(stree.find_all(lambda x: x.type == "Flogger"))
             assert len(figs) == 0
 
-    def test_find_all_element(self):
+    def test_find_all_element(self) -> None:
         """
         Test find_all() and find() on elements
         """
@@ -55,7 +55,7 @@ class TestClass(unittest.TestCase):
                     assert body1 == body[0]
                     assert item.find("Loonie") is None
 
-    def test_all_mcids(self):
+    def test_all_mcids(self) -> None:
         """
         Test all_mcids()
         """
@@ -64,15 +64,15 @@ class TestClass(unittest.TestCase):
             stree = PDFStructTree(pdf)
             sect = next(stree.find_all("Sect"))
             mcids = list(sect.all_mcids())
-            pages = set(page for page, mcid in mcids)
-            assert 1 in pages
-            assert 2 in pages
+            page_numbers = set(page for page, mcid in mcids)
+            assert 1 in page_numbers
+            assert 2 in page_numbers
 
-            pages = list(pdf.get_pages())
+            pages = list(pdf.pages)
             stree = PDFStructTree(pdf, [(2, pages[1])])
             sect = next(stree.find_all("Sect"))
             mcids = list(sect.all_mcids())
-            pages = set(page for page, mcid in mcids)
-            assert pages == {2}
+            page_numbers = set(page for page, mcid in mcids)
+            assert page_numbers == {2}
             for p in sect.find_all("P"):
                 assert set(mcid for page, mcid in p.all_mcids()) == set(p.mcids)
