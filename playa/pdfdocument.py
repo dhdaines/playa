@@ -742,8 +742,8 @@ class PDFDocument:
         try:
             pos = self.find_xref()
             self.read_xref_from(pos, self.xrefs)
-        except PDFNoValidXRef:
-            log.warning("Using fallback XRef parsing")
+        except PDFNoValidXRef as e:
+            log.warning("Using fallback XRef parsing: %s", e)
             self.parser.fallback = True
             newxref = PDFXRefFallback(self.parser)
             self.xrefs.append(newxref)
