@@ -704,12 +704,18 @@ class PDFDocument:
 
     """
 
+    _fp: Union[BinaryIO, None] = None
+
     def __enter__(self) -> "PDFDocument":
         return self
 
     def __exit__(self, exc_type, exc_value, traceback) -> None:
         # Undo the circular reference
         self.parser.set_document(None)
+        # If we were opened from a file then close it
+        if self._fp:
+            self._fp.close()
+            self._fp = None
 
     def __init__(
         self,

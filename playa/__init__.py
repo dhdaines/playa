@@ -7,18 +7,16 @@ Basic usage:
 """
 
 import builtins
-from contextlib import contextmanager
 from os import PathLike
-from typing import Iterator
 
 from playa.pdfdocument import PDFDocument
 
 __version__ = "0.0.1"
 
 
-@contextmanager
-def open(path: PathLike, password: str = "") -> Iterator[PDFDocument]:  # noqa: A001
+def open(path: PathLike, password: str = "") -> PDFDocument:
     """Open a PDF document from a path on the filesystem."""
-    with builtins.open(path, "rb") as infh:
-        with PDFDocument(infh, password) as pdf:
-            yield pdf
+    fp = builtins.open(path, "rb")
+    pdf = PDFDocument(fp, password)
+    pdf._fp = fp
+    return pdf
