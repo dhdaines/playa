@@ -12,6 +12,7 @@ import playa.settings
 from playa.data_structures import NameTree
 from playa.exceptions import PDFSyntaxError
 from playa.pdfdocument import read_header
+from playa.utils import decode_text
 
 playa.settings.STRICT = True
 
@@ -48,12 +49,15 @@ def test_pages():
 def test_names():
     with playa.open(TESTDIR / "contrib" / "issue-625-identity-cmap.pdf") as doc:
         ef = NameTree(doc.names["EmbeddedFiles"])
-        # Because yes, they can be UTF-16...
-        names = [name.decode("UTF-16") for name, _ in ef]
+        # Because yes, they can be UTF-16... (the spec says nothing
+        # about this but it appears some authoring tools assume that
+        # the names here are equivalent to the `UF` entries in a file
+        # specification dictionary)
+        names = [decode_text(name) for name, _ in ef]
         assert names == ["382901691/01_UBL.xml", "382901691/02_EAN_UCC.xml"]
 
 
 def test_dests():
     with playa.open(TESTDIR / "pdf_js_issue620f.pdf") as doc:
         names = [name for name, _ in doc.dests]
-        assert names == [b"Page.1", b"Page.2"]
+        assert names == ["Page.1", "Page.2"]

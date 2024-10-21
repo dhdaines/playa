@@ -1039,26 +1039,26 @@ class PDFDocument:
         return dict_value(self.catalog["Names"])
 
     @property
-    def dests(self) -> Iterable[Tuple[bytes, Any]]:
-        """Iterator over named destinations as (name, object) tuples
+    def dests(self) -> Iterable[Tuple[str, Any]]:
+        """Iterable of named destinations as (name, object) tuples
         (PDF 1.7 sec 12.3.2). Raises KeyError if no destination
         dictionary exists.
 
-        Note that to give a uniform interface to PDF 1.1 and 1.2
-        destinations the names are *always* `bytes` since they could be
-        either PDF name objects or PDF strings.  You cannot even
-        presume that they are UTF-8 (hey buddy, I don't write the
-        standards)
+        Note that we assume the names of destinations are either "name
+        objects" (that's PDF for UTF-8) or "text strings", since the
+        PDF spec says (p. 367):
+
+        > The keys in the name tree may be treated as text strings for
+        > display purposes.
+
+        therefore, you get them as `str`.
         """
         try:
             # PDF-1.2 or later
-            return NameTree(self.names["Dests"])
+            return ((decode_text(k), v) for k, v in NameTree(self.names["Dests"]))
         except KeyError:
             # PDF-1.1 or prior
-            return (
-                (k.encode("utf-8"), v)
-                for k, v in dict_value(self.catalog["Dests"]).items()
-            )
+            return dict_value(self.catalog["Dests"]).items()
 
     # find_xref
     def find_xref(self) -> int:
