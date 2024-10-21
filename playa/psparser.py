@@ -48,6 +48,7 @@ class PSLiteral(PSObject):
     Always use PSLiteralTable.intern().
     """
 
+    # FIXME: No no no no no.  Only str.  No bytes.  Please.
     NameType = Union[str, bytes]
 
     def __init__(self, name: NameType) -> None:
@@ -115,14 +116,28 @@ KEYWORD_GT = KWD(b">")
 
 
 def literal_name(x: Any) -> str:
+    """Get the string representation for a name literal.
+
+    According to the PDF 1.7 spec (p.18):
+
+    > Ordinarily, the bytes making up the name are never treated as
+    > text to be presented to a human user or to an application
+    > external to a conforming reader. However, occasionally the need
+    > arises to treat a name object as text... In such situations, the
+    > sequence of bytes (after expansion of NUMBER SIGN sequences, if
+    > any) should be interpreted according to UTF-8.
+
+    Accordingly, if they *can* be decoded to UTF-8, then they *will*
+    be, and if not, we will just decode them as ISO-8859-1 since that
+    gives a unique (if possibly nonsensical) value for an 8-bit string.
+    """
     if isinstance(x, PSLiteral):
         if isinstance(x.name, str):
             return x.name
         try:
-            return str(x.name, "utf-8")
+            return x.name.decode("utf-8")
         except UnicodeDecodeError:
-            # FIXME: This DOES NOT WORK!
-            return str(x.name)
+            return x.name.decode("iso-8859-1")
     else:
         if settings.STRICT:
             raise PSTypeError(f"Literal required: {x!r}")
@@ -136,7 +151,10 @@ def keyword_name(x: Any) -> Any:
         else:
             name = x
     else:
-        name = str(x.name, "utf-8", "ignore")
+        # PDF keywords are *not* UTF-8 (they aren't ISO-8859-1 either,
+        # but this isn't very important, we just want some
+        # unique representation of 8-bit characters, as above)
+        name = x.name.decode("iso-8859-1")
     return name
 
 
