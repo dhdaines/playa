@@ -1043,6 +1043,15 @@ class PDFDocument:
         """Dictionary-like object containing named destinations (PDF
         1.7 sec 12.3.2). Raises KeyError if no destination dictionary
         exists.
+
+        FIXME: There is a big problem here, which is that NameTrees
+        are not like the dictionaries we return, in that their keys
+        are *strings* and not *name objects*.  Since PDF strings are
+        just sequences of bytes with no defined encoding this means
+        that we can't represent them as `str`, unlike name objects
+        which are sorta-kinda-defined as UTF-8 strings (PDF 1.7 sec
+        7.3.5).  This means that PDF 1.1 destinations and PDF 1.2
+        destinations are incompatible.
         """
         try:
             # PDF-1.2 or later
