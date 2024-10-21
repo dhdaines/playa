@@ -2,7 +2,7 @@
 Test PDF types and data structures.
 """
 
-from playa.data_structures import NumberTree
+from playa.data_structures import NumberTree, NameTree
 
 NUMTREE1 = {
     "Kids": [
@@ -37,4 +37,41 @@ def test_number_tree():
         (12, "xxx"),
         (15, "yyy"),
         (20, 456),
+    ]
+
+
+NAMETREE1 = {
+    "Kids": [
+        {"Names": [b"bletch", "a", b"foobie", "b"], "Limits": [b"bletch", b"foobie"]},
+        {
+            "Kids": [
+                {
+                    "Names": [b"gargantua", 35, b"gorgon", 42],
+                    "Limits": [b"gargantua", b"gorgon"],
+                },
+                {
+                    "Names": [b"xylophone", 123, b"zzyzx", {"x": "y"}],
+                    "Limits": [b"xylophone", b"zzyzx"],
+                },
+            ],
+            "Limits": [b"gargantua", b"zzyzx"],
+        },
+    ]
+}
+
+
+def test_name_tree():
+    """Test NameTrees."""
+    nt = NameTree(NAMETREE1)
+    assert b"bletch" in nt
+    assert b"zzyzx" in nt
+    assert b"gorgon" in nt
+    assert nt[b"zzyzx"] == {"x": "y"}
+    assert list(nt) == [
+        (b"bletch", "a"),
+        (b"foobie", "b"),
+        (b"gargantua", 35),
+        (b"gorgon", 42),
+        (b"xylophone", 123),
+        (b"zzyzx", {"x": "y"}),
     ]

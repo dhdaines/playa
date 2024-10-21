@@ -75,10 +75,6 @@ class PDFNoStructTree(PDFException):
     pass
 
 
-class PDFDestinationNotFound(PDFException):
-    pass
-
-
 class PDFEncryptionError(PDFException):
     pass
 

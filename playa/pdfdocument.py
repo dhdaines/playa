@@ -26,10 +26,9 @@ from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 
 from playa import settings
 from playa.arcfour import Arcfour
-from playa.data_structures import NumberTree
+from playa.data_structures import NameTree, NumberTree
 from playa.exceptions import (
     PSEOF,
-    PDFDestinationNotFound,
     PDFEncryptionError,
     PDFException,
     PDFKeyError,
@@ -1032,47 +1031,25 @@ class PDFDocument:
             ):
                 yield PDFPage(objid, properties, label)
 
-    def lookup_name(self, cat: str, key: Union[str, bytes]) -> Any:
-        try:
-            names = dict_value(self.catalog["Names"])
-        except (PDFTypeError, KeyError):
-            raise PDFKeyError((cat, key))
-        # may raise KeyError
-        d0 = dict_value(names[cat])
+    @property
+    def names(self) -> Dict[str, Any]:
+        """PDF name dictionary (PDF 1.7 sec 7.7.4). Raises KeyError if
+        nonexistent.
+        """
+        return dict_value(self.catalog["Names"])
 
-        def lookup(d: Dict[str, Any]) -> Any:
-            if "Limits" in d:
-                (k1, k2) = list_value(d["Limits"])
-                if key < k1 or k2 < key:
-                    return None
-            if "Names" in d:
-                objs = list_value(d["Names"])
-                names = dict(
-                    cast(Iterator[Tuple[Union[str, bytes], Any]], choplist(2, objs)),
-                )
-                return names[key]
-            if "Kids" in d:
-                for c in list_value(d["Kids"]):
-                    v = lookup(dict_value(c))
-                    if v:
-                        return v
-            raise PDFKeyError((cat, key))
-
-        return lookup(d0)
-
-    def get_dest(self, name: Union[str, bytes]) -> Any:
+    @property
+    def dests(self) -> Union[Dict[str, Any], NameTree]:
+        """Dictionary-like object containing named destinations (PDF
+        1.7 sec 12.3.2). Raises KeyError if no destination dictionary
+        exists.
+        """
         try:
             # PDF-1.2 or later
-            obj = self.lookup_name("Dests", name)
+            return NameTree(self.names["Dests"])
         except KeyError:
             # PDF-1.1 or prior
-            if "Dests" not in self.catalog:
-                raise PDFDestinationNotFound(name)
-            d0 = dict_value(self.catalog["Dests"])
-            if name not in d0:
-                raise PDFDestinationNotFound(name)
-            obj = d0[name]
-        return obj
+            return dict_value(self.catalog["Dests"])
 
     # find_xref
     def find_xref(self) -> int:
