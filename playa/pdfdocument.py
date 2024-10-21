@@ -743,7 +743,7 @@ class PDFDocument:
             pos = self.find_xref()
             self.read_xref_from(pos, self.xrefs)
         except PDFNoValidXRef as e:
-            log.warning("Using fallback XRef parsing: %s", e)
+            log.debug("Using fallback XRef parsing: %s", e)
             self.parser.fallback = True
             newxref = PDFXRefFallback(self.parser)
             self.xrefs.append(newxref)
@@ -1065,27 +1065,22 @@ class PDFDocument:
         """Internal function used to locate the first XRef."""
         # search the last xref table by scanning the file backwards.
         prev = b""
+        # FIXME: This will scan *the whole file* looking for an xref
+        # table, it should maybe give up sooner?
         for line in self.parser.revreadlines():
             line = line.strip()
             log.debug("find_xref: %r", line)
-
             if line == b"startxref":
                 log.debug("xref found: pos=%r", prev)
-
                 if not prev.isdigit():
                     raise PDFNoValidXRef(f"Invalid xref position: {prev!r}")
-
                 start = int(prev)
-
                 if not start >= 0:
                     raise PDFNoValidXRef(f"Invalid negative xref position: {start}")
-
                 return start
-
             if line:
                 prev = line
-
-        raise PDFNoValidXRef("Unexpected EOF")
+        raise PDFNoValidXRef("No xref table found at end of file")
 
     # read xref table
     def read_xref_from(
@@ -1099,7 +1094,7 @@ class PDFDocument:
         try:
             (pos, token) = self.parser.nexttoken()
         except PSEOF:
-            raise PDFNoValidXRef("Unexpected EOF")
+            raise PDFNoValidXRef("Unexpected EOF at {start}")
         log.debug("read_xref_from: start=%d, token=%r", start, token)
         if isinstance(token, int):
             # XRefStream: PDF-1.5
