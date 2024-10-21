@@ -37,7 +37,6 @@ from playa.exceptions import (
     PDFNoPageLabels,
     PDFNoPageTree,
     PDFNoValidXRef,
-    PDFObjectNotFound,
     PDFPasswordIncorrect,
     PDFSyntaxError,
     PDFTypeError,
@@ -861,12 +860,11 @@ class PDFDocument:
         (_, obj) = self.parser.nextobject()
         return obj
 
-    # can raise PDFObjectNotFound
-    def getobj(self, objid: int) -> object:
+    def __getitem__(self, objid: int) -> object:
         """Get object from PDF
 
         :raises PDFException if PDFDocument is not initialized
-        :raises PDFObjectNotFound if objid does not exist in PDF
+        :raises IndexError if objid does not exist in PDF
         """
         if not self.xrefs:
             raise PDFException("PDFDocument is not initialized")
@@ -882,7 +880,7 @@ class PDFDocument:
                     continue
                 try:
                     if strmid is not None:
-                        stream = stream_value(self.getobj(strmid))
+                        stream = stream_value(self[strmid])
                         obj = self._getobj_objstm(stream, index, objid)
                     else:
                         obj = self._getobj_parse(index, objid)
@@ -895,7 +893,7 @@ class PDFDocument:
                 except (PSEOF, PDFSyntaxError):
                     continue
             if obj is None:
-                raise PDFObjectNotFound(objid)
+                raise IndexError(f"Object with ID {objid} not found")
             log.debug("register: objid=%r: %r", objid, obj)
             self._cached_objs[objid] = (obj, genno)
         return obj
@@ -953,14 +951,14 @@ class PDFDocument:
         for xref in self.xrefs:
             for object_id in xref.objids:
                 try:
-                    obj = self.getobj(object_id)
+                    obj = self[object_id]
                     if isinstance(obj, dict) and obj.get("Type") is LITERAL_PAGE:
                         yield object_id, obj
-                except PDFObjectNotFound:
+                except IndexError:
                     pass
 
     @property
-    def page_tree(self) -> Iterator[Tuple[int, PageType]]:
+    def page_objects(self) -> Iterator[Tuple[int, PageType]]:
         """Iterate over the flattened page tree in reading order, propagating
         inheritable attributes.  Returns an iterator over (objid, dict) pairs.
 
@@ -983,7 +981,7 @@ class PDFDocument:
                 object_id = obj
             else:
                 log.warning("Page tree contains unknown object: %r", obj)
-            page_object = dict_value(self.getobj(object_id))
+            page_object = dict_value(self[object_id])
 
             # Avoid recursion errors by keeping track of visited nodes
             # (again, this should never actually happen in a valid PDF)
@@ -1012,7 +1010,7 @@ class PDFDocument:
 
     @property
     def pages(self) -> Iterator[PDFPage]:
-        """Get an iterator over PDFPage objects, which contain
+        """Iterator over PDFPage objects, which contain
         information about the pages in the document.
         """
         try:
@@ -1020,7 +1018,7 @@ class PDFDocument:
         except PDFNoPageLabels:
             page_labels = itertools.repeat(None)
         try:
-            for (objid, properties), label in zip(self.page_tree, page_labels):
+            for (objid, properties), label in zip(self.page_objects, page_labels):
                 yield PDFPage(objid, properties, label)
         except PDFNoPageTree:
             for (objid, properties), label in zip(

@@ -20,7 +20,6 @@ from playa.ccitt import ccittfaxdecode
 from playa.exceptions import (
     PDFException,
     PDFNotImplementedError,
-    PDFObjectNotFound,
     PDFTypeError,
     PDFValueError,
 )
@@ -92,8 +91,8 @@ class PDFObjRef(PDFObject):
     def resolve(self, default: object = None) -> Any:
         assert self.doc is not None
         try:
-            return self.doc.getobj(self.objid)
-        except PDFObjectNotFound:
+            return self.doc[self.objid]
+        except IndexError:
             return default
 
 
