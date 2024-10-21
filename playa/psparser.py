@@ -48,15 +48,11 @@ class PSLiteral(PSObject):
     Always use PSLiteralTable.intern().
     """
 
-    # FIXME: No no no no no.  Only str.  No bytes.  Please.
-    NameType = Union[str, bytes]
-
-    def __init__(self, name: NameType) -> None:
+    def __init__(self, name: str) -> None:
         self.name = name
 
     def __repr__(self) -> str:
-        name = self.name
-        return "/%r" % name
+        return "/%r" % self.name
 
 
 class PSKeyword(PSObject):
@@ -74,36 +70,32 @@ class PSKeyword(PSObject):
         self.name = name
 
     def __repr__(self) -> str:
-        name = self.name
-        return "/%r" % name
+        return "/%r" % self.name
 
 
 _SymbolT = TypeVar("_SymbolT", PSLiteral, PSKeyword)
+_NameT = TypeVar("_NameT", str, bytes)
 
 
-class PSSymbolTable(Generic[_SymbolT]):
-    """A utility class for storing PSLiteral/PSKeyword objects.
-
-    Interned objects can be checked its identity with "is" operator.
-    """
+class PSSymbolTable(Generic[_SymbolT, _NameT]):
+    """Store globally unique name objects or language keywords."""
 
     def __init__(self, klass: Type[_SymbolT]) -> None:
-        self.dict: Dict[PSLiteral.NameType, _SymbolT] = {}
+        self.dict: Dict[_NameT, _SymbolT] = {}
         self.klass: Type[_SymbolT] = klass
 
-    def intern(self, name: PSLiteral.NameType) -> _SymbolT:
+    def intern(self, name: _NameT) -> _SymbolT:
         if name in self.dict:
             lit = self.dict[name]
         else:
-            # Type confusion issue: PSKeyword always takes bytes as name
-            #                       PSLiteral uses either str or bytes
-            lit = self.klass(name)  # type: ignore[arg-type]
+            # Does not seem possible to link PSLiteral/str or PSKeyword/bytes
+            lit = self.klass(name)  # type: ignore
             self.dict[name] = lit
         return lit
 
 
-PSLiteralTable = PSSymbolTable(PSLiteral)
-PSKeywordTable = PSSymbolTable(PSKeyword)
+PSLiteralTable = PSSymbolTable[PSLiteral, str](PSLiteral)
+PSKeywordTable = PSSymbolTable[PSKeyword, bytes](PSKeyword)
 LIT = PSLiteralTable.intern
 KWD = PSKeywordTable.intern
 KEYWORD_PROC_BEGIN = KWD(b"{")
@@ -115,8 +107,8 @@ KEYWORD_DICT_END = KWD(b">>")
 KEYWORD_GT = KWD(b">")
 
 
-def literal_name(x: Any) -> str:
-    """Get the string representation for a name literal.
+def name_str(x: bytes) -> str:
+    """Get the string representation for a name object.
 
     According to the PDF 1.7 spec (p.18):
 
@@ -131,25 +123,27 @@ def literal_name(x: Any) -> str:
     be, and if not, we will just decode them as ISO-8859-1 since that
     gives a unique (if possibly nonsensical) value for an 8-bit string.
     """
-    if isinstance(x, PSLiteral):
-        if isinstance(x.name, str):
-            return x.name
-        try:
-            return x.name.decode("utf-8")
-        except UnicodeDecodeError:
-            return x.name.decode("iso-8859-1")
-    else:
+    try:
+        return x.decode("utf-8")
+    except UnicodeDecodeError:
+        return x.decode("iso-8859-1")
+
+
+def literal_name(x: Any) -> str:
+    if not isinstance(x, PSLiteral):
         if settings.STRICT:
             raise PSTypeError(f"Literal required: {x!r}")
         return str(x)
+    else:
+        return x.name
 
 
-def keyword_name(x: Any) -> Any:
+def keyword_name(x: Any) -> str:
     if not isinstance(x, PSKeyword):
         if settings.STRICT:
             raise PSTypeError("Keyword required: %r" % x)
         else:
-            name = x
+            return str(x)
     else:
         # PDF keywords are *not* UTF-8 (they aren't ISO-8859-1 either,
         # but this isn't very important, we just want some
@@ -404,10 +398,7 @@ class PSFileParser:
         elif c in NOTLITERAL:
             if c:
                 self.fp.seek(-1, io.SEEK_CUR)
-            try:
-                self._add_token(LIT(self._curtoken.decode("utf-8")))
-            except UnicodeDecodeError:
-                self._add_token(LIT(self._curtoken))
+            self._add_token(LIT(name_str(self._curtoken)))
             self._parse1 = self._parse_main
         else:
             self._curtoken += c
@@ -428,10 +419,7 @@ class PSFileParser:
                 log.warning("Invalid hex digit %r in literal", c)
                 self.fp.seek(-1, io.SEEK_CUR)
                 # Add the intervening junk, just in case
-                try:
-                    tok = LIT(self._curtoken.decode("utf-8"))
-                except UnicodeDecodeError:
-                    tok = LIT(self._curtoken)
+                tok = LIT(name_str(self._curtoken))
                 self._add_token(tok)
                 self._curtokenpos = self.tell() - 1 - len(self.hex)
                 self._add_token(KWD(b"#" + self.hex))
@@ -768,10 +756,7 @@ class PSInMemoryParser:
             self._curtoken = HEXDIGIT.sub(
                 lambda x: bytes((int(x[1], 16),)), self._curtoken
             )
-            try:
-                tok = LIT(self._curtoken.decode("utf-8"))
-            except UnicodeDecodeError:
-                tok = LIT(self._curtoken)
+            tok = LIT(name_str(self._curtoken))
             return (self._curtokenpos, tok)
         if m.lastgroup == "number":  # type: ignore
             if b"." in self._curtoken:

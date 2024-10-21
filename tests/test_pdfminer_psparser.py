@@ -12,8 +12,8 @@ from playa.psparser import (
     PSFileParser,
     PSInMemoryParser,
     PSStackParser,
-    literal_name,
     keyword_name,
+    literal_name,
 )
 
 logger = logging.getLogger(__name__)
@@ -402,11 +402,9 @@ def test_get_inline_data() -> None:
 
 
 def test_literals():
-    """Verify the rules for interpreting literals as strings"""
+    """Test the (actually internal) functions for interpreting
+    literals as strings"""
     assert literal_name(LIT("touché")) == "touché"
     # Invalid UTF-8, but we will treat it as "ISO-8859-1"
     # (i.e. Unicode code points 0-255)
-    # FIXME: We should *not* allow bytes as the type of a literal name
-    assert literal_name(LIT(b"\x80\x83\xfe\xff")) == "\x80\x83\xfe\xff"
-    # Likewise for keywords
     assert keyword_name(KWD(b"\x80\x83\xfe\xff")) == "\x80\x83\xfe\xff"
