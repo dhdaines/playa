@@ -3,25 +3,25 @@ import re
 from collections import deque
 from dataclasses import asdict, dataclass, field
 from typing import (
+    TYPE_CHECKING,
     Any,
     Callable,
     Dict,
-    Iterator,
     Iterable,
+    Iterator,
     List,
     Pattern,
-    Union,
     Tuple,
-    TYPE_CHECKING,
+    Union,
 )
 
 from playa.data_structures import NumberTree
+from playa.exceptions import PDFNoStructTree
 from playa.pdfpage import PDFPage
 from playa.pdfparser import KEYWORD_NULL
 from playa.pdftypes import PDFObjRef, resolve1
 from playa.psparser import PSLiteral
 from playa.utils import decode_text
-from playa.exceptions import PDFNoStructTree
 
 logger = logging.getLogger(__name__)
 

@@ -4,7 +4,6 @@ Test PDF types and data structures.
 
 from playa.data_structures import NumberTree
 
-
 NUMTREE1 = {
     "Kids": [
         {"Nums": [1, "a", 3, "b", 7, "c"], "Limits": [1, 7]},

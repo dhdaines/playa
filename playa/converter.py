@@ -9,8 +9,8 @@ from typing import (
 
 from playa.layout import (
     LAParams,
-    LTComponent,
     LTChar,
+    LTComponent,
     LTCurve,
     LTFigure,
     LTImage,
@@ -23,9 +23,9 @@ from playa.pdfcolor import PDFColorSpace
 from playa.pdfdevice import PDFTextDevice
 from playa.pdffont import PDFFont, PDFUnicodeNotDefined
 from playa.pdfinterp import PDFGraphicState, PDFResourceManager, PDFStackT
-from playa.psparser import PSLiteral
 from playa.pdfpage import PDFPage
 from playa.pdftypes import PDFStream
+from playa.psparser import PSLiteral
 from playa.utils import (
     Matrix,
     PathSegment,
@@ -178,7 +178,8 @@ class PDFLayoutAnalyzer(PDFTextDevice):
                     gstate.ncolor,
                     original_path=transformed_path,
                     dashing_style=gstate.dash,
-                    ncs=ncs, scs=scs
+                    ncs=ncs,
+                    scs=scs,
                 )
                 self.add_item(line)
 
@@ -200,7 +201,8 @@ class PDFLayoutAnalyzer(PDFTextDevice):
                         gstate.ncolor,
                         transformed_path,
                         gstate.dash,
-                        ncs, scs
+                        ncs,
+                        scs,
                     )
                     self.add_item(rect)
                 else:
@@ -214,7 +216,8 @@ class PDFLayoutAnalyzer(PDFTextDevice):
                         gstate.ncolor,
                         transformed_path,
                         gstate.dash,
-                        ncs, scs
+                        ncs,
+                        scs,
                     )
                     self.add_item(curve)
             else:
@@ -228,7 +231,8 @@ class PDFLayoutAnalyzer(PDFTextDevice):
                     gstate.ncolor,
                     transformed_path,
                     gstate.dash,
-                    ncs, scs
+                    ncs,
+                    scs,
                 )
                 self.add_item(curve)
 

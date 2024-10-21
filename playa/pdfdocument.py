@@ -28,7 +28,6 @@ from playa.arcfour import Arcfour
 from playa.data_structures import NumberTree
 from playa.exceptions import (
     PSEOF,
-    PSException,
     PDFDestinationNotFound,
     PDFEncryptionError,
     PDFException,
@@ -41,7 +40,9 @@ from playa.exceptions import (
     PDFPasswordIncorrect,
     PDFSyntaxError,
     PDFTypeError,
+    PSException,
 )
+from playa.pdfpage import PDFPage
 from playa.pdfparser import KEYWORD_XREF, PDFParser, PDFStreamParser
 from playa.pdftypes import (
     DecipherCallable,
@@ -56,7 +57,6 @@ from playa.pdftypes import (
     uint_value,
 )
 from playa.psparser import KWD, LIT, literal_name
-from playa.pdfpage import PDFPage
 from playa.utils import (
     choplist,
     decode_text,

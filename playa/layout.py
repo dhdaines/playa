@@ -291,7 +291,8 @@ class LTLine(LTCurve):
             non_stroking_color,
             original_path,
             dashing_style,
-            ncs, scs,
+            ncs,
+            scs,
         )
 
 
@@ -327,7 +328,8 @@ class LTRect(LTCurve):
             non_stroking_color,
             original_path,
             dashing_style,
-            ncs, scs,
+            ncs,
+            scs,
         )
 
 

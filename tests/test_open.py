@@ -33,6 +33,7 @@ def test_open(path: Path):
     for password in passwords:
         with playa.open(TESTDIR / path, password=password) as pdf:
             pass
+        # Ensure that the context manager functions properly
         assert pdf.parser.doc is None
 
 
