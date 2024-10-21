@@ -32,7 +32,7 @@ def benchmark_one_pdf(path: Path):
     passwords = PASSWORDS.get(path.name, [""])
     for password in passwords:
         LOG.debug("Reading %s", path)
-        with playa.open(TESTDIR / path, password=password) as pdf:
+        with playa.open(path, password=password) as pdf:
             # Seriously WTF is all this... just to get a page... OMG
             rsrc = PDFResourceManager()
             agg = PDFPageAggregator(rsrc, pageno=1)
@@ -51,7 +51,7 @@ def benchmark_one_pdfminer(path: Path):
 
     passwords = PASSWORDS.get(path.name, [""])
     for password in passwords:
-        with open(TESTDIR / path, "rb") as infh:
+        with open(path, "rb") as infh:
             LOG.debug("Reading %s", path)
             rsrc = PDFResourceManager()
             agg = PDFPageAggregator(rsrc, pageno=1)
