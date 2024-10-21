@@ -32,11 +32,7 @@ from playa.utils import choplist
 log = logging.getLogger(__name__)
 
 
-class PSObject:
-    """Base class for all PS or PDF-related data types."""
-
-
-class PSLiteral(PSObject):
+class PSLiteral:
     """A class that represents a PostScript literal.
 
     Postscript literals are used as identifiers, such as
@@ -55,7 +51,7 @@ class PSLiteral(PSObject):
         return "/%r" % self.name
 
 
-class PSKeyword(PSObject):
+class PSKeyword:
     """A class that represents a PostScript keyword.
 
     PostScript keywords are a dozen of predefined words.

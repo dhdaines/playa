@@ -24,7 +24,7 @@ from playa.exceptions import (
     PDFValueError,
 )
 from playa.lzw import lzwdecode
-from playa.psparser import LIT, PSObject
+from playa.psparser import LIT
 from playa.runlength import rldecode
 from playa.utils import apply_png_predictor
 
@@ -60,14 +60,10 @@ class DecipherCallable(Protocol):
         raise NotImplementedError
 
 
-class PDFObject(PSObject):
-    pass
-
-
 _DEFAULT = object()
 
 
-class PDFObjRef(PDFObject):
+class PDFObjRef:
     def __init__(
         self,
         doc: Optional["PDFDocument"],
@@ -231,7 +227,7 @@ def decompress_corrupted(data: bytes) -> bytes:
     return result_str
 
 
-class PDFStream(PDFObject):
+class PDFStream:
     def __init__(
         self,
         attrs: Dict[str, Any],
