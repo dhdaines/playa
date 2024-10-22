@@ -244,8 +244,8 @@ class PDFLayoutAnalyzer(PDFTextDevice):
         scaling: float,
         rise: float,
         cid: int,
+        ncs: PDFColorSpace,
         graphicstate: PDFGraphicState,
-        ncs: Optional[PDFColorSpace] = None,
         scs: Optional[PDFColorSpace] = None,
     ) -> float:
         try:
@@ -264,8 +264,8 @@ class PDFLayoutAnalyzer(PDFTextDevice):
             text,
             textwidth,
             textdisp,
-            graphicstate,
             ncs,
+            graphicstate,
             scs,
         )
         self.add_item(item)

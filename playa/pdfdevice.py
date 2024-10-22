@@ -91,8 +91,9 @@ class PDFDevice:
         self,
         textstate: "PDFTextState",
         seq: PDFTextSeq,
+        ncs: PDFColorSpace,
         graphicstate: "PDFGraphicState",
-        ncs: Optional[PDFColorSpace] = None,
+        # Ordering is odd but must match pdfminer.six
         scs: Optional[PDFColorSpace] = None,
     ) -> None:
         pass
@@ -103,8 +104,8 @@ class PDFTextDevice(PDFDevice):
         self,
         textstate: "PDFTextState",
         seq: PDFTextSeq,
+        ncs: PDFColorSpace,
         graphicstate: "PDFGraphicState",
-        ncs: Optional[PDFColorSpace] = None,
         scs: Optional[PDFColorSpace] = None,
     ) -> None:
         assert self.ctm is not None
@@ -131,8 +132,8 @@ class PDFTextDevice(PDFDevice):
                 wordspace,
                 rise,
                 dxscale,
-                graphicstate,
                 ncs,
+                graphicstate,
                 scs,
             )
         else:
@@ -147,8 +148,8 @@ class PDFTextDevice(PDFDevice):
                 wordspace,
                 rise,
                 dxscale,
-                graphicstate,
                 ncs,
+                graphicstate,
                 scs,
             )
 
@@ -164,8 +165,8 @@ class PDFTextDevice(PDFDevice):
         wordspace: float,
         rise: float,
         dxscale: float,
+        ncs: PDFColorSpace,
         graphicstate: "PDFGraphicState",
-        ncs: Optional[PDFColorSpace] = None,
         scs: Optional[PDFColorSpace] = None,
     ) -> Point:
         (x, y) = pos
@@ -189,8 +190,8 @@ class PDFTextDevice(PDFDevice):
                         scaling,
                         rise,
                         cid,
-                        graphicstate,
                         ncs,
+                        graphicstate,
                         scs,
                     )
                     if cid == 32 and wordspace:
@@ -210,8 +211,8 @@ class PDFTextDevice(PDFDevice):
         wordspace: float,
         rise: float,
         dxscale: float,
+        ncs: PDFColorSpace,
         graphicstate: "PDFGraphicState",
-        ncs: Optional[PDFColorSpace] = None,
         scs: Optional[PDFColorSpace] = None,
     ) -> Point:
         (x, y) = pos
@@ -235,8 +236,8 @@ class PDFTextDevice(PDFDevice):
                         scaling,
                         rise,
                         cid,
-                        graphicstate,
                         ncs,
+                        graphicstate,
                         scs,
                     )
                     if cid == 32 and wordspace:
@@ -252,8 +253,8 @@ class PDFTextDevice(PDFDevice):
         scaling: float,
         rise: float,
         cid: int,
+        ncs: PDFColorSpace,
         graphicstate: "PDFGraphicState",
-        ncs: Optional[PDFColorSpace] = None,
         scs: Optional[PDFColorSpace] = None,
     ) -> float:
         return 0
@@ -276,8 +277,8 @@ class TagExtractor(PDFDevice):
         self,
         textstate: "PDFTextState",
         seq: PDFTextSeq,
+        ncs: PDFColorSpace,
         graphicstate: "PDFGraphicState",
-        ncs: Optional[PDFColorSpace] = None,
         scs: Optional[PDFColorSpace] = None,
     ) -> None:
         font = textstate.font

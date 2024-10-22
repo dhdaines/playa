@@ -881,8 +881,8 @@ class PDFPageInterpreter:
         self.device.render_string(
             self.textstate,
             cast(PDFTextSeq, seq),
-            self.graphicstate.copy(),
             self.ncs,
+            self.graphicstate.copy(),
             self.scs,
         )
 

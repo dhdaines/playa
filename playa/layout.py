@@ -382,8 +382,9 @@ class LTChar(LTComponent, LTText):
         text: str,
         textwidth: float,
         textdisp: Union[float, Tuple[Optional[float], float]],
+        ncs: PDFColorSpace,
         graphicstate: PDFGraphicState,
-        ncs: Optional[PDFColorSpace] = None,
+        # The ordering may seem strange but it needs to match pdfminer.
         scs: Optional[PDFColorSpace] = None,
     ) -> None:
         LTText.__init__(self)
