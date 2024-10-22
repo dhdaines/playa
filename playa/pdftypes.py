@@ -78,6 +78,7 @@ class PDFObjRef:
             if settings.STRICT:
                 raise PDFValueError("PDF object id cannot be 0.")
 
+        # FIXME: Circular reference here that will leak lots of memory
         self.doc = doc
         self.objid = objid
 

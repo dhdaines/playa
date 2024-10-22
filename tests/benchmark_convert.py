@@ -3,6 +3,7 @@ Benchmark the converter on all of the sample documents.
 """
 
 import logging
+import sys
 import time
 from pathlib import Path
 
@@ -63,11 +64,13 @@ def benchmark_one_pdfminer(path: Path):
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
-    start = time.time()
-    for path in ALLPDFS:
-        benchmark_one_pdf(path)
-    LOG.info("PLAYA took %f", time.time() - start)
-    start = time.time()
-    for path in ALLPDFS:
-        benchmark_one_pdfminer(path)
-    LOG.info("pdfminer.six took %f", time.time() - start)
+    if len(sys.argv) == 1 or "pdfminer" in sys.argv[1:]:
+        start = time.time()
+        for path in ALLPDFS:
+            benchmark_one_pdfminer(path)
+        LOG.info("pdfminer.six took %f", time.time() - start)
+    if len(sys.argv) == 1 or "playa" in sys.argv[1:]:
+        start = time.time()
+        for path in ALLPDFS:
+            benchmark_one_pdf(path)
+        LOG.info("PLAYA took %f", time.time() - start)

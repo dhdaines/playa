@@ -54,6 +54,8 @@ def test_names():
         # the names here are equivalent to the `UF` entries in a file
         # specification dictionary)
         names = [decode_text(name) for name, _ in ef]
+        # FIXME: perhaps we want to have an iterator over NameTrees
+        # that decodes text strings for you
         assert names == ["382901691/01_UBL.xml", "382901691/02_EAN_UCC.xml"]
 
 
@@ -64,7 +66,9 @@ def test_dests():
 
 
 def test_outlines():
-    with playa.open("samples/2023-04-06-ODJ et Résolutions-séance xtra 6 avril 2023.pdf") as doc:
+    with playa.open(
+        "samples/2023-04-06-ODJ et Résolutions-séance xtra 6 avril 2023.pdf"
+    ) as doc:
         titles = [o.title for o in doc.outlines]
         assert titles == [
             "2023-04-06-ODJ_xtra-6 avril 2023.pdf",

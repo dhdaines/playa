@@ -43,7 +43,6 @@ from playa.exceptions import (
 )
 from playa.pdfpage import PDFPage
 from playa.pdfparser import KEYWORD_XREF, PDFParser, PDFStreamParser
-from playa.psparser import PSLiteral
 from playa.pdftypes import (
     DecipherCallable,
     PDFObjRef,
@@ -52,12 +51,12 @@ from playa.pdftypes import (
     dict_value,
     int_value,
     list_value,
+    resolve1,
     str_value,
     stream_value,
     uint_value,
-    resolve1
 )
-from playa.psparser import KWD, LIT, literal_name
+from playa.psparser import KWD, LIT, PSLiteral, literal_name
 from playa.utils import (
     choplist,
     decode_text,
@@ -682,6 +681,7 @@ def read_header(fp: BinaryIO) -> str:
 
 class OutlineItem(NamedTuple):
     """The most relevant fields of an outline item dictionary."""
+
     level: int
     title: str
     dest: Union[PSLiteral, bytes, list, None]
@@ -924,7 +924,9 @@ class PDFDocument:
                     dest = entry.get("Dest")
                     action = entry.get("A")
                     se = entry.get("SE")
-                    yield OutlineItem(level, title, resolve1(dest), resolve1(action), se)
+                    yield OutlineItem(
+                        level, title, resolve1(dest), resolve1(action), se
+                    )
             if "First" in entry and "Last" in entry:
                 yield from search(entry["First"], level + 1)
             if "Next" in entry:
