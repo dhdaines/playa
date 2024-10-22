@@ -8,13 +8,14 @@ Basic usage:
 
 import builtins
 from os import PathLike
+from typing import Union
 
 from playa.pdfdocument import PDFDocument
 
 __version__ = "0.0.1"
 
 
-def open(path: PathLike, password: str = "") -> PDFDocument:
+def open(path: Union[PathLike, str], password: str = "") -> PDFDocument:
     """Open a PDF document from a path on the filesystem."""
     fp = builtins.open(path, "rb")
     pdf = PDFDocument(fp, password)
