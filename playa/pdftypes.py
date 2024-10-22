@@ -1,6 +1,7 @@
 import io
 import logging
 import zlib
+import weakref
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -66,7 +67,7 @@ _DEFAULT = object()
 class PDFObjRef:
     def __init__(
         self,
-        doc: Optional["PDFDocument"],
+        doc: "PDFDocument",
         objid: int,
     ) -> None:
         """Reference to a PDF object.
@@ -78,17 +79,18 @@ class PDFObjRef:
             if settings.STRICT:
                 raise PDFValueError("PDF object id cannot be 0.")
 
-        # FIXME: Circular reference here that will leak lots of memory
-        self.doc = doc
+        self.doc = weakref.ref(doc)
         self.objid = objid
 
     def __repr__(self) -> str:
         return "<PDFObjRef:%d>" % (self.objid)
 
     def resolve(self, default: object = None) -> Any:
-        assert self.doc is not None
+        doc = self.doc()
+        if doc is None:
+            raise RuntimeError("Document no longer exists")
         try:
-            return self.doc[self.objid]
+            return doc[self.objid]
         except IndexError:
             return default
 
