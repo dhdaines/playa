@@ -61,3 +61,15 @@ def test_dests():
     with playa.open(TESTDIR / "pdf_js_issue620f.pdf") as doc:
         names = [name for name, _ in doc.dests]
         assert names == ["Page.1", "Page.2"]
+
+
+def test_outlines():
+    with playa.open("samples/2023-04-06-ODJ et Résolutions-séance xtra 6 avril 2023.pdf") as doc:
+        titles = [o.title for o in doc.outlines]
+        assert titles == [
+            "2023-04-06-ODJ_xtra-6 avril 2023.pdf",
+            "1.1 - Réso - Adop ODJ-6 avril 2023",
+            "6.1 - Réso - Aut signature-PRACIM",
+            "11.1 - Réso - Adop du règlement 1330-1",
+            "15 - Résolution - Levée de la séance",
+        ]

@@ -12,11 +12,11 @@ from typing import (
     Iterable,
     Iterator,
     List,
+    NamedTuple,
     Optional,
     Protocol,
     Sequence,
     Tuple,
-    TypeAlias,
     Union,
     cast,
 )
@@ -43,6 +43,7 @@ from playa.exceptions import (
 )
 from playa.pdfpage import PDFPage
 from playa.pdfparser import KEYWORD_XREF, PDFParser, PDFStreamParser
+from playa.psparser import PSLiteral
 from playa.pdftypes import (
     DecipherCallable,
     PDFObjRef,
@@ -54,6 +55,7 @@ from playa.pdftypes import (
     str_value,
     stream_value,
     uint_value,
+    resolve1
 )
 from playa.psparser import KWD, LIT, literal_name
 from playa.utils import (
@@ -678,7 +680,13 @@ def read_header(fp: BinaryIO) -> str:
     return version
 
 
-OutlineType: TypeAlias = Tuple[Any, Any, Any, Any, Any]
+class OutlineItem(NamedTuple):
+    """The most relevant fields of an outline item dictionary."""
+    level: int
+    title: str
+    dest: Union[PSLiteral, bytes, list, None]
+    action: Union[dict, None]
+    se: Union[PDFObjRef, None]
 
 
 class PDFDocument:
@@ -904,11 +912,11 @@ class PDFDocument:
         return obj
 
     @property
-    def outlines(self) -> Iterator[OutlineType]:
+    def outlines(self) -> Iterator[OutlineItem]:
         if "Outlines" not in self.catalog:
             raise PDFNoOutlines
 
-        def search(entry: object, level: int) -> Iterator[OutlineType]:
+        def search(entry: object, level: int) -> Iterator[OutlineItem]:
             entry = dict_value(entry)
             if "Title" in entry:
                 if "A" in entry or "Dest" in entry:
@@ -916,7 +924,7 @@ class PDFDocument:
                     dest = entry.get("Dest")
                     action = entry.get("A")
                     se = entry.get("SE")
-                    yield (level, title, dest, action, se)
+                    yield OutlineItem(level, title, resolve1(dest), resolve1(action), se)
             if "First" in entry and "Last" in entry:
                 yield from search(entry["First"], level + 1)
             if "Next" in entry:
