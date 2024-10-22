@@ -386,6 +386,8 @@ class LTChar(LTComponent, LTText):
         graphicstate: PDFGraphicState,
         # The ordering may seem strange but it needs to match pdfminer.
         scs: Optional[PDFColorSpace] = None,
+        stroking_color: Optional[Color] = None,
+        non_stroking_color: Optional[Color] = None,
     ) -> None:
         LTText.__init__(self)
         self._text = text
@@ -393,6 +395,8 @@ class LTChar(LTComponent, LTText):
         self.fontname = font.fontname
         self.ncs = ncs
         self.scs = scs
+        self.stroking_color = stroking_color
+        self.non_stroking_color = non_stroking_color
         self.graphicstate = graphicstate
         self.adv = textwidth * fontsize * scaling
         # compute the boundary rectangle.

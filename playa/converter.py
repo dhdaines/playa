@@ -267,6 +267,8 @@ class PDFLayoutAnalyzer(PDFTextDevice):
             ncs,
             graphicstate,
             scs,
+            graphicstate.scolor,
+            graphicstate.ncolor,
         )
         self.add_item(item)
         return item.adv
