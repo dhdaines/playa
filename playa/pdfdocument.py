@@ -962,8 +962,7 @@ class PDFDocument:
                 except IndexError:
                     pass
 
-    @property
-    def page_objects(self) -> Iterator[Tuple[int, PageType]]:
+    def get_page_objects(self) -> Iterator[Tuple[int, PageType]]:
         """Iterate over the flattened page tree in reading order, propagating
         inheritable attributes.  Returns an iterator over (objid, dict) pairs.
 
@@ -1023,7 +1022,7 @@ class PDFDocument:
         except PDFNoPageLabels:
             page_labels = itertools.repeat(None)
         try:
-            for (objid, properties), label in zip(self.page_objects, page_labels):
+            for (objid, properties), label in zip(self.get_page_objects(), page_labels):
                 yield PDFPage(objid, properties, label)
         except PDFNoPageTree:
             for (objid, properties), label in zip(
