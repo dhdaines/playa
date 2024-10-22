@@ -61,5 +61,15 @@ def test_multiple_contents() -> None:
         interp.process_page(page)
 
 
+def test_weakrefs() -> None:
+    """Verify that PDFDocument really gets deleted even if we have
+    PDFObjRefs hanging around."""
+    with playa.open(TESTDIR / "simple5.pdf") as doc:
+        ref = doc.catalog["Pages"]
+    del doc
+    with pytest.raises(RuntimeError):
+        _ = ref.resolve()
+
+
 if __name__ == "__main__":
     test_open(TESTDIR / "simple5.pdf")
