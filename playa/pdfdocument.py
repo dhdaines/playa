@@ -684,6 +684,7 @@ class OutlineItem(NamedTuple):
 
     level: int
     title: str
+    # FIXME: Create Destination and Action types
     dest: Union[PSLiteral, bytes, list, None]
     action: Union[dict, None]
     se: Union[PDFObjRef, None]
@@ -1048,10 +1049,10 @@ class PDFDocument:
         return dict_value(self.catalog["Names"])
 
     @property
-    def dests(self) -> Iterable[Tuple[str, Any]]:
-        """Iterable of named destinations as (name, object) tuples
+    def dests(self) -> Iterable[Tuple[str, list]]:
+        """Iterable of named destinations as (name, destination) tuples
         (PDF 1.7 sec 12.3.2). Raises KeyError if no destination
-        dictionary exists.
+        tree exists.
 
         Note that we assume the names of destinations are either "name
         objects" (that's PDF for UTF-8) or "text strings", since the
@@ -1061,13 +1062,24 @@ class PDFDocument:
         > display purposes.
 
         therefore, you get them as `str`.
+
+        FIXME: create a Destination type, don't just return list
         """
         try:
             # PDF-1.2 or later
-            return ((decode_text(k), v) for k, v in NameTree(self.names["Dests"]))
+            dests = (
+                (decode_text(k), resolve1(v)) for k, v in NameTree(self.names["Dests"])
+            )
         except KeyError:
             # PDF-1.1 or prior
-            return dict_value(self.catalog["Dests"]).items()
+            dests = (
+                (k, resolve1(v)) for k, v in dict_value(self.catalog["Dests"]).items()
+            )
+        for name, dest in dests:
+            if isinstance(dest, dict):
+                yield name, resolve1(dest["D"])
+            else:
+                yield name, dest
 
     # find_xref
     def find_xref(self) -> int:
