@@ -8,9 +8,8 @@ from typing import (
 )
 
 from playa.layout import (
-    LAParams,
-    LTComponent,
     LTChar,
+    LTComponent,
     LTCurve,
     LTFigure,
     LTImage,
@@ -23,9 +22,9 @@ from playa.pdfcolor import PDFColorSpace
 from playa.pdfdevice import PDFTextDevice
 from playa.pdffont import PDFFont, PDFUnicodeNotDefined
 from playa.pdfinterp import PDFGraphicState, PDFResourceManager, PDFStackT
-from playa.psparser import PSLiteral
 from playa.pdfpage import PDFPage
 from playa.pdftypes import PDFStream
+from playa.psparser import PSLiteral
 from playa.utils import (
     Matrix,
     PathSegment,
@@ -49,11 +48,9 @@ class PDFLayoutAnalyzer(PDFTextDevice):
         self,
         rsrcmgr: PDFResourceManager,
         pageno: int = 1,
-        laparams: Optional[LAParams] = None,
     ) -> None:
         PDFTextDevice.__init__(self, rsrcmgr)
         self.pageno = pageno
-        self.laparams = laparams
         self._stack: List[LTLayoutContainer] = []
 
     def begin_page(self, page: PDFPage, ctm: Matrix) -> None:
@@ -66,8 +63,6 @@ class PDFLayoutAnalyzer(PDFTextDevice):
     def end_page(self, page: PDFPage) -> None:
         assert not self._stack, str(len(self._stack))
         assert isinstance(self.cur_item, LTPage), str(type(self.cur_item))
-        if self.laparams is not None:
-            self.cur_item.analyze(self.laparams)
         self.pageno += 1
         self.receive_layout(self.cur_item)
 
@@ -178,7 +173,8 @@ class PDFLayoutAnalyzer(PDFTextDevice):
                     gstate.ncolor,
                     original_path=transformed_path,
                     dashing_style=gstate.dash,
-                    ncs=ncs, scs=scs
+                    ncs=ncs,
+                    scs=scs,
                 )
                 self.add_item(line)
 
@@ -200,7 +196,8 @@ class PDFLayoutAnalyzer(PDFTextDevice):
                         gstate.ncolor,
                         transformed_path,
                         gstate.dash,
-                        ncs, scs
+                        ncs,
+                        scs,
                     )
                     self.add_item(rect)
                 else:
@@ -214,7 +211,8 @@ class PDFLayoutAnalyzer(PDFTextDevice):
                         gstate.ncolor,
                         transformed_path,
                         gstate.dash,
-                        ncs, scs
+                        ncs,
+                        scs,
                     )
                     self.add_item(curve)
             else:
@@ -228,7 +226,8 @@ class PDFLayoutAnalyzer(PDFTextDevice):
                     gstate.ncolor,
                     transformed_path,
                     gstate.dash,
-                    ncs, scs
+                    ncs,
+                    scs,
                 )
                 self.add_item(curve)
 
@@ -240,8 +239,8 @@ class PDFLayoutAnalyzer(PDFTextDevice):
         scaling: float,
         rise: float,
         cid: int,
+        ncs: PDFColorSpace,
         graphicstate: PDFGraphicState,
-        ncs: Optional[PDFColorSpace] = None,
         scs: Optional[PDFColorSpace] = None,
     ) -> float:
         try:
@@ -260,9 +259,11 @@ class PDFLayoutAnalyzer(PDFTextDevice):
             text,
             textwidth,
             textdisp,
-            graphicstate,
             ncs,
+            graphicstate,
             scs,
+            graphicstate.scolor,
+            graphicstate.ncolor,
         )
         self.add_item(item)
         return item.adv
@@ -280,9 +281,8 @@ class PDFPageAggregator(PDFLayoutAnalyzer):
         self,
         rsrcmgr: PDFResourceManager,
         pageno: int = 1,
-        laparams: Optional[LAParams] = None,
     ) -> None:
-        PDFLayoutAnalyzer.__init__(self, rsrcmgr, pageno=pageno, laparams=laparams)
+        PDFLayoutAnalyzer.__init__(self, rsrcmgr, pageno=pageno)
         self.result: Optional[LTPage] = None
 
     def receive_layout(self, ltpage: LTPage) -> None:

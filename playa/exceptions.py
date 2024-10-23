@@ -39,10 +39,6 @@ class PDFValueError(PDFException, ValueError):
     pass
 
 
-class PDFObjectNotFound(PDFException):
-    pass
-
-
 class PDFNotImplementedError(PDFException, NotImplementedError):
     pass
 
@@ -76,10 +72,6 @@ class PDFNoPageTree(PDFException):
 
 
 class PDFNoStructTree(PDFException):
-    pass
-
-
-class PDFDestinationNotFound(PDFException):
     pass
 
 

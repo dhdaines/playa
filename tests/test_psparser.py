@@ -3,6 +3,8 @@ import tempfile
 from io import BytesIO
 from typing import Any, List, Tuple
 
+import pytest
+
 from playa.exceptions import PSEOF
 from playa.psparser import (
     KEYWORD_DICT_BEGIN,
@@ -12,6 +14,8 @@ from playa.psparser import (
     PSFileParser,
     PSInMemoryParser,
     PSStackParser,
+    keyword_name,
+    literal_name,
 )
 
 logger = logging.getLogger(__name__)
@@ -397,3 +401,20 @@ def test_get_inline_data() -> None:
             nexttoken=(8, kwd_omg),
             blocksize=blocksize,
         )
+
+
+def test_literals():
+    """Test the (actually internal) functions for interpreting
+    literals as strings"""
+    assert literal_name(LIT("touché")) == "touché"
+    # Invalid UTF-8, but we will treat it as "ISO-8859-1"
+    # (i.e. Unicode code points 0-255)
+    assert keyword_name(KWD(b"\x80\x83\xfe\xff")) == "\x80\x83\xfe\xff"
+
+
+def test_interns():
+    """Verify that interning only accepts certain values."""
+    with pytest.raises(ValueError):
+        _ = KWD("not-a-bytes")
+    with pytest.raises(ValueError):
+        _ = LIT(b"not-a-str")

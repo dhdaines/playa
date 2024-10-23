@@ -1,5 +1,6 @@
 import io
 import logging
+import weakref
 import zlib
 from typing import (
     TYPE_CHECKING,
@@ -20,12 +21,11 @@ from playa.ccitt import ccittfaxdecode
 from playa.exceptions import (
     PDFException,
     PDFNotImplementedError,
-    PDFObjectNotFound,
     PDFTypeError,
     PDFValueError,
 )
 from playa.lzw import lzwdecode
-from playa.psparser import LIT, PSObject
+from playa.psparser import LIT
 from playa.runlength import rldecode
 from playa.utils import apply_png_predictor
 
@@ -61,17 +61,13 @@ class DecipherCallable(Protocol):
         raise NotImplementedError
 
 
-class PDFObject(PSObject):
-    pass
-
-
 _DEFAULT = object()
 
 
-class PDFObjRef(PDFObject):
+class PDFObjRef:
     def __init__(
         self,
-        doc: Optional["PDFDocument"],
+        doc: weakref.ReferenceType["PDFDocument"],
         objid: int,
     ) -> None:
         """Reference to a PDF object.
@@ -90,10 +86,12 @@ class PDFObjRef(PDFObject):
         return "<PDFObjRef:%d>" % (self.objid)
 
     def resolve(self, default: object = None) -> Any:
-        assert self.doc is not None
+        doc = self.doc()
+        if doc is None:
+            raise RuntimeError("Document no longer exists")
         try:
-            return self.doc.getobj(self.objid)
-        except PDFObjectNotFound:
+            return doc[self.objid]
+        except IndexError:
             return default
 
 
@@ -232,7 +230,7 @@ def decompress_corrupted(data: bytes) -> bytes:
     return result_str
 
 
-class PDFStream(PDFObject):
+class PDFStream:
     def __init__(
         self,
         attrs: Dict[str, Any],

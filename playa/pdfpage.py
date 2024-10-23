@@ -1,10 +1,15 @@
 import logging
-from typing import Dict, List, Optional
+import weakref
+from typing import TYPE_CHECKING, Dict, List, Optional
 
 from playa.exceptions import PDFValueError
 from playa.pdftypes import dict_value, int_value, resolve1
 from playa.psparser import LIT
 from playa.utils import parse_rect
+
+if TYPE_CHECKING:
+    from playa.layout import LTPage
+    from playa.pdfdocument import PDFDocument
 
 log = logging.getLogger(__name__)
 
@@ -38,9 +43,11 @@ class PDFPage:
 
     def __init__(
         self,
+        doc: "PDFDocument",
         pageid: object,
         attrs: object,
         label: Optional[str],
+        page_number: int = 1,
     ) -> None:
         """Initialize a page object.
 
@@ -48,10 +55,13 @@ class PDFPage:
         pageid: any Python object that can uniquely identify the page.
         attrs: a dictionary of page attributes.
         label: page label string.
+        page_number: page number (starting from 1)
         """
+        self.doc = weakref.ref(doc)
         self.pageid = pageid
         self.attrs = dict_value(attrs)
         self.label = label
+        self.page_number = page_number
         self.lastmod = resolve1(self.attrs.get("LastModified"))
         self.resources: Dict[object, object] = resolve1(
             self.attrs.get("Resources", dict()),
@@ -84,6 +94,28 @@ class PDFPage:
                 self.contents = [self.contents]
         else:
             self.contents = []
+        self._layout: Optional["LTPage"] = None
+
+    @property
+    def layout(self) -> "LTPage":
+        if self._layout is not None:
+            return self._layout
+        from playa.converter import PDFPageAggregator
+        from playa.pdfinterp import PDFPageInterpreter
+
+        doc = self.doc()
+        if doc is None:
+            raise RuntimeError("Document no longer exists!")
+        # Q: How many classes does does it take a Java programmer to
+        # install a lightbulb?
+        device = PDFPageAggregator(
+            doc.rsrcmgr,
+            pageno=self.page_number,
+        )
+        interpreter = PDFPageInterpreter(doc.rsrcmgr, device)
+        interpreter.process_page(self)
+        self._layout = device.get_result()
+        return self._layout
 
     def __repr__(self) -> str:
         return f"<PDFPage: Resources={self.resources!r}, MediaBox={self.mediabox!r}>"

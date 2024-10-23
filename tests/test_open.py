@@ -27,16 +27,25 @@ PASSWORDS = {
 
 
 @pytest.mark.parametrize("path", ALLPDFS, ids=str)
-def test_open(path: Path):
+def test_open(path: Path) -> None:
     """Open all the documents"""
     passwords = PASSWORDS.get(path.name, [""])
     for password in passwords:
-        with playa.open(TESTDIR / path, password=password) as pdf:
+        with playa.open(TESTDIR / path, password=password) as _pdf:
             pass
-        assert pdf.parser.doc is None
 
 
-def test_inline_data():
+def test_analyze() -> None:
+    """Test the layout analyzer (FIXME: PLAYA Ain't a Layout Analyzer)"""
+    with playa.open(
+        TESTDIR / "2023-04-06-ODJ et Résolutions-séance xtra 6 avril 2023.pdf"
+    ) as pdf:
+        for page in pdf.pages:
+            page_objs = list(page.layout)
+            print(len(page_objs))
+
+
+def test_inline_data() -> None:
     # No, there's no easy way to unit test PDFContentParser directly.
     # The necessary mocking would be useless considering that I will
     # shortly demolish these redundant and confusing APIs.
@@ -45,19 +54,29 @@ def test_inline_data():
         rsrc = PDFResourceManager()
         agg = PDFPageAggregator(rsrc, pageno=1)
         interp = PDFPageInterpreter(rsrc, agg)
-        page = next(doc.get_pages())
+        page = next(doc.pages)
         interp.process_page(page)
 
 
-def test_multiple_contents():
-    # See above...
+def test_multiple_contents() -> None:
     with playa.open(TESTDIR / "jo.pdf") as doc:
+        page = next(doc.pages)
+        assert len(page.contents) > 1
+        # See above...
         rsrc = PDFResourceManager()
         agg = PDFPageAggregator(rsrc, pageno=1)
         interp = PDFPageInterpreter(rsrc, agg)
-        page = next(doc.get_pages())
-        assert len(page.contents) > 1
         interp.process_page(page)
+
+
+def test_weakrefs() -> None:
+    """Verify that PDFDocument really gets deleted even if we have
+    PDFObjRefs hanging around."""
+    with playa.open(TESTDIR / "simple5.pdf") as doc:
+        ref = doc.catalog["Pages"]
+    del doc
+    with pytest.raises(RuntimeError):
+        _ = ref.resolve()
 
 
 if __name__ == "__main__":

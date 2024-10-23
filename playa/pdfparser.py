@@ -1,5 +1,6 @@
 import logging
-from typing import TYPE_CHECKING, BinaryIO, Optional, Union
+import weakref
+from typing import TYPE_CHECKING, BinaryIO, Union
 
 from playa import settings
 from playa.casting import safe_int
@@ -39,14 +40,10 @@ class PDFParser(PSStackParser[Union[PSKeyword, PDFStream, PDFObjRef, None]]):
 
     """
 
-    def __init__(self, data: Union[BinaryIO, bytes]) -> None:
+    def __init__(self, data: Union[BinaryIO, bytes], doc: "PDFDocument") -> None:
         super().__init__(data)
-        self.doc: Optional[PDFDocument] = None
+        self.doc = weakref.ref(doc)
         self.fallback = False
-
-    def set_document(self, doc: Union["PDFDocument", None]) -> None:
-        """Associates the parser with a PDFDocument object."""
-        self.doc = doc
 
     def do_keyword(self, pos: int, token: PSKeyword) -> None:
         """Handles PDF-related keywords."""
@@ -116,8 +113,10 @@ class PDFParser(PSStackParser[Union[PSKeyword, PDFStream, PDFObjRef, None]]):
                 dic,
                 data[:10],
             )
-            assert self.doc is not None
-            stream = PDFStream(dic, bytes(data), self.doc.decipher)
+            doc = self.doc()
+            if doc is None:
+                raise RuntimeError("Document no longer exists!")
+            stream = PDFStream(dic, bytes(data), doc.decipher)
             self.push((pos, stream))
 
         else:
@@ -133,8 +132,8 @@ class PDFStreamParser(PDFParser):
     indirect references to other objects in the same document.
     """
 
-    def __init__(self, data: bytes) -> None:
-        super().__init__(data)
+    def __init__(self, data: bytes, doc: "PDFDocument") -> None:
+        super().__init__(data, doc)
 
     def flush(self) -> None:
         self.add_results(*self.popall())

@@ -32,11 +32,7 @@ from playa.utils import choplist
 log = logging.getLogger(__name__)
 
 
-class PSObject:
-    """Base class for all PS or PDF-related data types."""
-
-
-class PSLiteral(PSObject):
+class PSLiteral:
     """A class that represents a PostScript literal.
 
     Postscript literals are used as identifiers, such as
@@ -48,17 +44,14 @@ class PSLiteral(PSObject):
     Always use PSLiteralTable.intern().
     """
 
-    NameType = Union[str, bytes]
-
-    def __init__(self, name: NameType) -> None:
+    def __init__(self, name: str) -> None:
         self.name = name
 
     def __repr__(self) -> str:
-        name = self.name
-        return "/%r" % name
+        return "/%r" % self.name
 
 
-class PSKeyword(PSObject):
+class PSKeyword:
     """A class that represents a PostScript keyword.
 
     PostScript keywords are a dozen of predefined words.
@@ -73,36 +66,34 @@ class PSKeyword(PSObject):
         self.name = name
 
     def __repr__(self) -> str:
-        name = self.name
-        return "/%r" % name
+        return "/%r" % self.name
 
 
 _SymbolT = TypeVar("_SymbolT", PSLiteral, PSKeyword)
+_NameT = TypeVar("_NameT", str, bytes)
 
 
-class PSSymbolTable(Generic[_SymbolT]):
-    """A utility class for storing PSLiteral/PSKeyword objects.
+class PSSymbolTable(Generic[_SymbolT, _NameT]):
+    """Store globally unique name objects or language keywords."""
 
-    Interned objects can be checked its identity with "is" operator.
-    """
+    def __init__(self, table_type: Type[_SymbolT], name_type: Type[_NameT]) -> None:
+        self.dict: Dict[_NameT, _SymbolT] = {}
+        self.table_type: Type[_SymbolT] = table_type
+        self.name_type: Type[_NameT] = name_type
 
-    def __init__(self, klass: Type[_SymbolT]) -> None:
-        self.dict: Dict[PSLiteral.NameType, _SymbolT] = {}
-        self.klass: Type[_SymbolT] = klass
-
-    def intern(self, name: PSLiteral.NameType) -> _SymbolT:
+    def intern(self, name: _NameT) -> _SymbolT:
+        if not isinstance(name, self.name_type):
+            raise ValueError(f"{self.table_type} can only store {self.name_type}")
         if name in self.dict:
             lit = self.dict[name]
         else:
-            # Type confusion issue: PSKeyword always takes bytes as name
-            #                       PSLiteral uses either str or bytes
-            lit = self.klass(name)  # type: ignore[arg-type]
-            self.dict[name] = lit
+            lit = self.table_type(name)  # type: ignore
+        self.dict[name] = lit
         return lit
 
 
-PSLiteralTable = PSSymbolTable(PSLiteral)
-PSKeywordTable = PSSymbolTable(PSKeyword)
+PSLiteralTable = PSSymbolTable(PSLiteral, str)
+PSKeywordTable = PSSymbolTable(PSKeyword, bytes)
 LIT = PSLiteralTable.intern
 KWD = PSKeywordTable.intern
 KEYWORD_PROC_BEGIN = KWD(b"{")
@@ -114,28 +105,48 @@ KEYWORD_DICT_END = KWD(b">>")
 KEYWORD_GT = KWD(b">")
 
 
+def name_str(x: bytes) -> str:
+    """Get the string representation for a name object.
+
+    According to the PDF 1.7 spec (p.18):
+
+    > Ordinarily, the bytes making up the name are never treated as
+    > text to be presented to a human user or to an application
+    > external to a conforming reader. However, occasionally the need
+    > arises to treat a name object as text... In such situations, the
+    > sequence of bytes (after expansion of NUMBER SIGN sequences, if
+    > any) should be interpreted according to UTF-8.
+
+    Accordingly, if they *can* be decoded to UTF-8, then they *will*
+    be, and if not, we will just decode them as ISO-8859-1 since that
+    gives a unique (if possibly nonsensical) value for an 8-bit string.
+    """
+    try:
+        return x.decode("utf-8")
+    except UnicodeDecodeError:
+        return x.decode("iso-8859-1")
+
+
 def literal_name(x: Any) -> str:
-    if isinstance(x, PSLiteral):
-        if isinstance(x.name, str):
-            return x.name
-        try:
-            return str(x.name, "utf-8")
-        except UnicodeDecodeError:
-            return str(x.name)
-    else:
+    if not isinstance(x, PSLiteral):
         if settings.STRICT:
             raise PSTypeError(f"Literal required: {x!r}")
         return str(x)
+    else:
+        return x.name
 
 
-def keyword_name(x: Any) -> Any:
+def keyword_name(x: Any) -> str:
     if not isinstance(x, PSKeyword):
         if settings.STRICT:
             raise PSTypeError("Keyword required: %r" % x)
         else:
-            name = x
+            return str(x)
     else:
-        name = str(x.name, "utf-8", "ignore")
+        # PDF keywords are *not* UTF-8 (they aren't ISO-8859-1 either,
+        # but this isn't very important, we just want some
+        # unique representation of 8-bit characters, as above)
+        name = x.name.decode("iso-8859-1")
     return name
 
 
@@ -385,10 +396,7 @@ class PSFileParser:
         elif c in NOTLITERAL:
             if c:
                 self.fp.seek(-1, io.SEEK_CUR)
-            try:
-                self._add_token(LIT(self._curtoken.decode("utf-8")))
-            except UnicodeDecodeError:
-                self._add_token(LIT(self._curtoken))
+            self._add_token(LIT(name_str(self._curtoken)))
             self._parse1 = self._parse_main
         else:
             self._curtoken += c
@@ -409,10 +417,7 @@ class PSFileParser:
                 log.warning("Invalid hex digit %r in literal", c)
                 self.fp.seek(-1, io.SEEK_CUR)
                 # Add the intervening junk, just in case
-                try:
-                    tok = LIT(self._curtoken.decode("utf-8"))
-                except UnicodeDecodeError:
-                    tok = LIT(self._curtoken)
+                tok = LIT(name_str(self._curtoken))
                 self._add_token(tok)
                 self._curtokenpos = self.tell() - 1 - len(self.hex)
                 self._add_token(KWD(b"#" + self.hex))
@@ -749,10 +754,7 @@ class PSInMemoryParser:
             self._curtoken = HEXDIGIT.sub(
                 lambda x: bytes((int(x[1], 16),)), self._curtoken
             )
-            try:
-                tok = LIT(self._curtoken.decode("utf-8"))
-            except UnicodeDecodeError:
-                tok = LIT(self._curtoken)
+            tok = LIT(name_str(self._curtoken))
             return (self._curtokenpos, tok)
         if m.lastgroup == "number":  # type: ignore
             if b"." in self._curtoken:

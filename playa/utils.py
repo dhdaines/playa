@@ -631,10 +631,14 @@ PDFDocEncoding = "".join(
 
 
 def decode_text(s: Union[str, bytes]) -> str:
-    """Decodes a PDFDocEncoding string to Unicode."""
+    """Decodes a text string (see PDF 1.7 section 7.9.2.2 - it could
+    be PDFDocEncoding or UTF-16BE) to a `str`.
+    """
     if isinstance(s, bytes) and s.startswith(b"\xfe\xff"):
-        return str(s[2:], "utf-16be", "ignore")
+        return s.decode("UTF-16")
     try:
+        # FIXME: This seems bad. If it's already a `str` then what are
+        # those PDFDocEncoding characters doing in it?!?
         if isinstance(s, str):
             return "".join(PDFDocEncoding[ord(c)] for c in s)
         else:
