@@ -205,7 +205,10 @@ class PDFXRefFallback(PDFXRefTable):
                     if settings.STRICT:
                         raise PDFSyntaxError("N is not defined: %r" % stream)
                     n = 0
-                parser1 = PDFStreamParser(stream.get_data())
+                doc = parser.doc()
+                if doc is None:
+                    raise RuntimeError("Document no longer exists!")
+                parser1 = PDFStreamParser(stream.get_data(), doc)
                 objs: List[int] = []
                 try:
                     while 1:
@@ -718,8 +721,6 @@ class PDFDocument:
         return self
 
     def __exit__(self, exc_type, exc_value, traceback) -> None:
-        # Undo the circular reference (FIXME: could also use weakref here)
-        self.parser.set_document(None)
         # If we were opened from a file then close it
         if self._fp:
             self._fp.close()
@@ -740,8 +741,7 @@ class PDFDocument:
         if isinstance(fp, io.TextIOBase):
             raise PSException("fp is not a binary file")
         self.pdf_version = read_header(fp)
-        self.parser = PDFParser(fp)
-        self.parser.set_document(self)  # FIXME: annoying circular reference
+        self.parser = PDFParser(fp, self)
         self.is_printable = self.is_modifiable = self.is_extractable = True
         # Getting the XRef table and trailer is done non-lazily
         # because they contain encryption information among other
@@ -836,8 +836,7 @@ class PDFDocument:
             if settings.STRICT:
                 raise PDFSyntaxError("N is not defined: %r" % stream)
             n = 0
-        parser = PDFStreamParser(stream.get_data())
-        parser.set_document(self)
+        parser = PDFStreamParser(stream.get_data(), self)
         objs: List[object] = []
         try:
             while 1:

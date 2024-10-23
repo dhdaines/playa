@@ -1,7 +1,7 @@
 import io
 import logging
-import zlib
 import weakref
+import zlib
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -67,7 +67,7 @@ _DEFAULT = object()
 class PDFObjRef:
     def __init__(
         self,
-        doc: "PDFDocument",
+        doc: weakref.ReferenceType["PDFDocument"],
         objid: int,
     ) -> None:
         """Reference to a PDF object.
@@ -79,7 +79,7 @@ class PDFObjRef:
             if settings.STRICT:
                 raise PDFValueError("PDF object id cannot be 0.")
 
-        self.doc = weakref.ref(doc)
+        self.doc = doc
         self.objid = objid
 
     def __repr__(self) -> str:
