@@ -41,6 +41,7 @@ from playa.exceptions import (
     PDFTypeError,
     PSException,
 )
+from playa.pdfinterp import PDFResourceManager
 from playa.pdfpage import PDFPage
 from playa.pdfparser import KEYWORD_XREF, PDFParser, PDFStreamParser
 from playa.pdftypes import (
@@ -705,9 +706,7 @@ class PDFDocument:
     the moment).
 
     Some metadata, such as the structure tree and page tree, will be
-    loaded lazily and cached.  Because PLAYA is a LAYout Analyzer, we
-    do not handle modification of PDFs, and all such data can be
-    assumed to be constant and read-only.
+    loaded lazily and cached.  We do not handle modification of PDFs.
 
     Args:
       fp: File-like object in binary mode.  Must support random access.
@@ -783,6 +782,8 @@ class PDFDocument:
         if self.catalog.get("Type") is not LITERAL_CATALOG:
             if settings.STRICT:
                 raise PDFSyntaxError("Catalog not found!")
+        # NOTE: This does nearly nothing at all
+        self.rsrcmgr = PDFResourceManager(True)
 
     def _initialize_password(self, password: str = "") -> None:
         """Initialize the decryption handler with a given password, if any.
@@ -1032,13 +1033,15 @@ class PDFDocument:
         except PDFNoPageLabels:
             page_labels = itertools.repeat(None)
         try:
-            for (objid, properties), label in zip(self.get_page_objects(), page_labels):
-                yield PDFPage(objid, properties, label)
-        except PDFNoPageTree:
-            for (objid, properties), label in zip(
-                self.get_pages_from_xrefs(), page_labels
+            for page_number, ((objid, properties), label) in enumerate(
+                zip(self.get_page_objects(), page_labels)
             ):
-                yield PDFPage(objid, properties, label)
+                yield PDFPage(self, objid, properties, label, page_number + 1)
+        except PDFNoPageTree:
+            for page_number, ((objid, properties), label) in enumerate(
+                zip(self.get_pages_from_xrefs(), page_labels)
+            ):
+                yield PDFPage(self, objid, properties, label, page_number + 1)
 
     @property
     def names(self) -> Dict[str, Any]:

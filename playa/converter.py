@@ -8,7 +8,6 @@ from typing import (
 )
 
 from playa.layout import (
-    LAParams,
     LTChar,
     LTComponent,
     LTCurve,
@@ -49,11 +48,9 @@ class PDFLayoutAnalyzer(PDFTextDevice):
         self,
         rsrcmgr: PDFResourceManager,
         pageno: int = 1,
-        laparams: Optional[LAParams] = None,
     ) -> None:
         PDFTextDevice.__init__(self, rsrcmgr)
         self.pageno = pageno
-        self.laparams = laparams
         self._stack: List[LTLayoutContainer] = []
 
     def begin_page(self, page: PDFPage, ctm: Matrix) -> None:
@@ -66,8 +63,6 @@ class PDFLayoutAnalyzer(PDFTextDevice):
     def end_page(self, page: PDFPage) -> None:
         assert not self._stack, str(len(self._stack))
         assert isinstance(self.cur_item, LTPage), str(type(self.cur_item))
-        if self.laparams is not None:
-            self.cur_item.analyze(self.laparams)
         self.pageno += 1
         self.receive_layout(self.cur_item)
 
@@ -286,9 +281,8 @@ class PDFPageAggregator(PDFLayoutAnalyzer):
         self,
         rsrcmgr: PDFResourceManager,
         pageno: int = 1,
-        laparams: Optional[LAParams] = None,
     ) -> None:
-        PDFLayoutAnalyzer.__init__(self, rsrcmgr, pageno=pageno, laparams=laparams)
+        PDFLayoutAnalyzer.__init__(self, rsrcmgr, pageno=pageno)
         self.result: Optional[LTPage] = None
 
     def receive_layout(self, ltpage: LTPage) -> None:

@@ -61,7 +61,6 @@ def test_names():
 
 def test_dests():
     with playa.open(TESTDIR / "pdf_js_issue620f.pdf") as doc:
-        print(list(doc.dests))
         names = [name for name, _ in doc.dests]
         assert names == ["Page.1", "Page.2"]
 

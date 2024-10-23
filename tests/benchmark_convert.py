@@ -64,13 +64,16 @@ def benchmark_one_pdfminer(path: Path):
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
+    niter = 10
     if len(sys.argv) == 1 or "pdfminer" in sys.argv[1:]:
         start = time.time()
-        for path in ALLPDFS:
-            benchmark_one_pdfminer(path)
+        for _ in range(niter):
+            for path in ALLPDFS:
+                benchmark_one_pdfminer(path)
         LOG.info("pdfminer.six took %f", time.time() - start)
     if len(sys.argv) == 1 or "playa" in sys.argv[1:]:
         start = time.time()
-        for path in ALLPDFS:
-            benchmark_one_pdf(path)
+        for _ in range(niter):
+            for path in ALLPDFS:
+                benchmark_one_pdf(path)
         LOG.info("PLAYA took %f", time.time() - start)
