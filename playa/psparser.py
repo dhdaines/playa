@@ -838,9 +838,14 @@ PSStackEntry = Tuple[int, PSStackType[ExtraT]]
 class PSStackParser(Generic[ExtraT]):
     """Basic parser for PDF objects, can take a file or a `bytes` as
     input."""
+    _mmap: Optional[mmap.mmap] = None
 
     def __init__(self, reader: Union[BinaryIO, bytes]) -> None:
         self.reinit(reader)
+
+    def __del__(self):
+        if self._mmap is not None:
+            self._mmap.close()
 
     def reinit(self, reader: Union[BinaryIO, bytes]) -> None:
         """Reinitialize parser with a new file or buffer."""
@@ -850,6 +855,9 @@ class PSStackParser(Generic[ExtraT]):
             )
         else:
             try:
+                if self._mmap is not None:
+                    self._mmap.close()
+                    self._mmap = None
                 self._mmap = mmap.mmap(reader.fileno(), 0, access=mmap.ACCESS_READ)
                 self._parser = PSInMemoryParser(self._mmap)
             except io.UnsupportedOperation:
