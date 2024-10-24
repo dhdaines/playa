@@ -28,84 +28,9 @@ from playa.exceptions import PDFSyntaxError, PDFTypeError, PDFValueError
 if TYPE_CHECKING:
     from playa.layout import LTComponent
 
-import charset_normalizer  # For str encoding detection
-
 # from sys import maxint as INF doesn't work anymore under Python3, but PDF
 # still uses 32 bits ints
 INF = (1 << 31) - 1
-
-
-FileOrName = Union[pathlib.PurePath, str, io.IOBase]
-AnyIO = Union[TextIO, BinaryIO]
-
-
-class open_filename:
-    """Context manager that allows opening a filename
-    (str or pathlib.PurePath type is supported) and closes it on exit,
-    (just like `open`), but does nothing for file-like objects.
-    """
-
-    def __init__(self, filename: FileOrName, *args: Any, **kwargs: Any) -> None:
-        if isinstance(filename, pathlib.PurePath):
-            filename = str(filename)
-        if isinstance(filename, str):
-            self.file_handler: AnyIO = open(filename, *args, **kwargs)
-            self.closing = True
-        elif isinstance(filename, io.IOBase):
-            self.file_handler = cast(AnyIO, filename)
-            self.closing = False
-        else:
-            raise PDFTypeError("Unsupported input type: %s" % type(filename))
-
-    def __enter__(self) -> AnyIO:
-        return self.file_handler
-
-    def __exit__(self, exc_type: object, exc_val: object, exc_tb: object) -> None:
-        if self.closing:
-            self.file_handler.close()
-
-
-def make_compat_bytes(in_str: str) -> bytes:
-    """Converts to bytes, encoding to unicode."""
-    assert isinstance(in_str, str), str(type(in_str))
-    return in_str.encode()
-
-
-def make_compat_str(o: object) -> str:
-    """Converts everything to string, if bytes guessing the encoding."""
-    if isinstance(o, bytes):
-        result = charset_normalizer.from_bytes(o)
-        if result is None:
-            return str(o)
-        return str(result.best())
-    else:
-        return str(o)
-
-
-def shorten_str(s: str, size: int) -> str:
-    if size < 7:
-        return s[:size]
-    if len(s) > size:
-        length = (size - 5) // 2
-        return f"{s[:length]} ... {s[-length:]}"
-    else:
-        return s
-
-
-def compatible_encode_method(
-    bytesorstring: Union[bytes, str],
-    encoding: str = "utf-8",
-    erraction: str = "ignore",
-) -> str:
-    """When Py2 str.encode is called, it often means bytes.encode in Py3.
-
-    This does either.
-    """
-    if isinstance(bytesorstring, str):
-        return bytesorstring
-    assert isinstance(bytesorstring, bytes), str(type(bytesorstring))
-    return bytesorstring.decode(encoding, erraction)
-
 
 def paeth_predictor(left: int, above: int, upper_left: int) -> int:
     # From http://www.libpng.org/pub/png/spec/1.2/PNG-Filters.html
@@ -295,33 +220,6 @@ def isnumber(x: object) -> bool:
 _T = TypeVar("_T")
 
 
-def uniq(objs: Iterable[_T]) -> Iterator[_T]:
-    """Eliminates duplicated elements."""
-    done = set()
-    for obj in objs:
-        if obj in done:
-            continue
-        done.add(obj)
-        yield obj
-
-
-def fsplit(pred: Callable[[_T], bool], objs: Iterable[_T]) -> Tuple[List[_T], List[_T]]:
-    """Split a list into two classes according to the predicate."""
-    t = []
-    f = []
-    for obj in objs:
-        if pred(obj):
-            t.append(obj)
-        else:
-            f.append(obj)
-    return t, f
-
-
-def drange(v0: float, v1: float, d: int) -> range:
-    """Returns a discrete range."""
-    return range(int(v0) // d, int(v1 + d) // d)
-
-
 def get_bound(pts: Iterable[Point]) -> Rect:
     """Compute a minimal rectangle that covers all the points."""
     limit: Rect = (INF, INF, -INF, -INF)
@@ -332,20 +230,6 @@ def get_bound(pts: Iterable[Point]) -> Rect:
         x1 = max(x1, x)
         y1 = max(y1, y)
     return x0, y0, x1, y1
-
-
-def pick(
-    seq: Iterable[_T],
-    func: Callable[[_T], float],
-    maxobj: Optional[_T] = None,
-) -> Optional[_T]:
-    """Picks the object obj where func(obj) has the highest value."""
-    maxscore = None
-    for obj in seq:
-        score = func(obj)
-        if maxscore is None or maxscore < score:
-            (maxscore, maxobj) = (score, obj)
-    return maxobj
 
 
 def choplist(n: int, seq: Iterable[_T]) -> Iterator[Tuple[_T, ...]]:
@@ -647,13 +531,6 @@ def decode_text(s: Union[str, bytes]) -> str:
         return str(s)
 
 
-def enc(x: str) -> str:
-    """Encodes a string for SGML/XML/HTML"""
-    if isinstance(x, bytes):
-        return ""
-    return escape(x)
-
-
 def bbox2str(bbox: Rect) -> str:
     (x0, y0, x1, y1) = bbox
     return f"{x0:.3f},{y0:.3f},{x1:.3f},{y1:.3f}"
@@ -662,115 +539,6 @@ def bbox2str(bbox: Rect) -> str:
 def matrix2str(m: Matrix) -> str:
     (a, b, c, d, e, f) = m
     return f"[{a:.2f},{b:.2f},{c:.2f},{d:.2f}, ({e:.2f},{f:.2f})]"
-
-
-def vecBetweenBoxes(obj1: "LTComponent", obj2: "LTComponent") -> Point:
-    """A distance function between two TextBoxes.
-
-    Consider the bounding rectangle for obj1 and obj2.
-    Return vector between 2 boxes boundaries if they don't overlap, otherwise
-    returns vector betweeen boxes centers
-
-             +------+..........+ (x1, y1)
-             | obj1 |          :
-             +------+www+------+
-             :          | obj2 |
-    (x0, y0) +..........+------+
-    """
-    (x0, y0) = (min(obj1.x0, obj2.x0), min(obj1.y0, obj2.y0))
-    (x1, y1) = (max(obj1.x1, obj2.x1), max(obj1.y1, obj2.y1))
-    (ow, oh) = (x1 - x0, y1 - y0)
-    (iw, ih) = (ow - obj1.width - obj2.width, oh - obj1.height - obj2.height)
-    if iw < 0 and ih < 0:
-        # if one is inside another we compute euclidean distance
-        (xc1, yc1) = ((obj1.x0 + obj1.x1) / 2, (obj1.y0 + obj1.y1) / 2)
-        (xc2, yc2) = ((obj2.x0 + obj2.x1) / 2, (obj2.y0 + obj2.y1) / 2)
-        return xc1 - xc2, yc1 - yc2
-    else:
-        return max(0, iw), max(0, ih)
-
-
-LTComponentT = TypeVar("LTComponentT", bound="LTComponent")
-
-
-class Plane(Generic[LTComponentT]):
-    """A set-like data structure for objects placed on a plane.
-
-    Can efficiently find objects in a certain rectangular area.
-    It maintains two parallel lists of objects, each of
-    which is sorted by its x or y coordinate.
-    """
-
-    def __init__(self, bbox: Rect, gridsize: int = 50) -> None:
-        self._seq: List[LTComponentT] = []  # preserve the object order.
-        self._objs: Set[LTComponentT] = set()
-        self._grid: Dict[Point, List[LTComponentT]] = {}
-        self.gridsize = gridsize
-        (self.x0, self.y0, self.x1, self.y1) = bbox
-
-    def __repr__(self) -> str:
-        return "<Plane objs=%r>" % list(self)
-
-    def __iter__(self) -> Iterator[LTComponentT]:
-        return (obj for obj in self._seq if obj in self._objs)
-
-    def __len__(self) -> int:
-        return len(self._objs)
-
-    def __contains__(self, obj: object) -> bool:
-        return obj in self._objs
-
-    def _getrange(self, bbox: Rect) -> Iterator[Point]:
-        (x0, y0, x1, y1) = bbox
-        if x1 <= self.x0 or self.x1 <= x0 or y1 <= self.y0 or self.y1 <= y0:
-            return
-        x0 = max(self.x0, x0)
-        y0 = max(self.y0, y0)
-        x1 = min(self.x1, x1)
-        y1 = min(self.y1, y1)
-        for grid_y in drange(y0, y1, self.gridsize):
-            for grid_x in drange(x0, x1, self.gridsize):
-                yield (grid_x, grid_y)
-
-    def extend(self, objs: Iterable[LTComponentT]) -> None:
-        for obj in objs:
-            self.add(obj)
-
-    def add(self, obj: LTComponentT) -> None:
-        """Place an object."""
-        for k in self._getrange((obj.x0, obj.y0, obj.x1, obj.y1)):
-            if k not in self._grid:
-                r: List[LTComponentT] = []
-                self._grid[k] = r
-            else:
-                r = self._grid[k]
-            r.append(obj)
-        self._seq.append(obj)
-        self._objs.add(obj)
-
-    def remove(self, obj: LTComponentT) -> None:
-        """Displace an object."""
-        for k in self._getrange((obj.x0, obj.y0, obj.x1, obj.y1)):
-            try:
-                self._grid[k].remove(obj)
-            except (KeyError, ValueError):
-                pass
-        self._objs.remove(obj)
-
-    def find(self, bbox: Rect) -> Iterator[LTComponentT]:
-        """Finds objects that are in a certain area."""
-        (x0, y0, x1, y1) = bbox
-        done = set()
-        for k in self._getrange(bbox):
-            if k not in self._grid:
-                continue
-            for obj in self._grid[k]:
-                if obj in done:
-                    continue
-                done.add(obj)
-                if obj.x1 <= x0 or x1 <= obj.x0 or obj.y1 <= y0 or y1 <= obj.y0:
-                    continue
-                yield obj
 
 
 ROMAN_ONES = ["i", "x", "c", "m"]

@@ -30,13 +30,10 @@ class PDFPage:
       pageid: any Python object that can uniquely identify the page.
       attrs: a dictionary of page attributes.
       contents: a list of PDFStream objects that represents the page content.
-      lastmod: the last modified time of the page.
       resources: a dictionary of resources used by the page.
       mediabox: the physical size of the page.
       cropbox: the crop rectangle of the page.
       rotate: the page rotation (in degree).
-      annots: the page annotations.
-      beads: a chain that represents natural reading order.
       label: the page's label (typically, the logical page number).
 
     """
