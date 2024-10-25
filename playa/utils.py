@@ -1,36 +1,33 @@
 """Miscellaneous Routines."""
 
-import io
-import pathlib
 import string
-from html import escape
 from typing import (
     TYPE_CHECKING,
     Any,
-    BinaryIO,
-    Callable,
-    Dict,
-    Generic,
     Iterable,
     Iterator,
     List,
-    Optional,
-    Set,
-    TextIO,
     Tuple,
     TypeVar,
     Union,
-    cast,
 )
 
-from playa.exceptions import PDFSyntaxError, PDFTypeError, PDFValueError
+from playa.exceptions import PDFSyntaxError, PDFValueError
 
 if TYPE_CHECKING:
-    from playa.layout import LTComponent
+    pass
+
+
+def make_compat_bytes(in_str: str) -> bytes:
+    """Converts to bytes, encoding to unicode."""
+    assert isinstance(in_str, str), str(type(in_str))
+    return in_str.encode()
+
 
 # from sys import maxint as INF doesn't work anymore under Python3, but PDF
 # still uses 32 bits ints
 INF = (1 << 31) - 1
+
 
 def paeth_predictor(left: int, above: int, upper_left: int) -> int:
     # From http://www.libpng.org/pub/png/spec/1.2/PNG-Filters.html

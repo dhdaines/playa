@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 import playa
-from playa.converter import PDFPageAggregator
+from playa.converter import PDFLayoutAnalyzer
 
 # These APIs will go away soon
 from playa.pdfinterp import PDFPageInterpreter, PDFResourceManager
@@ -52,7 +52,7 @@ def test_inline_data() -> None:
     with playa.open(TESTDIR / "contrib" / "issue-1008-inline-ascii85.pdf") as doc:
         # Seriously WTF is all this... just to get a page... OMG
         rsrc = PDFResourceManager()
-        agg = PDFPageAggregator(rsrc, pageno=1)
+        agg = PDFLayoutAnalyzer(rsrc, pageno=1)
         interp = PDFPageInterpreter(rsrc, agg)
         page = next(doc.pages)
         interp.process_page(page)
@@ -64,7 +64,7 @@ def test_multiple_contents() -> None:
         assert len(page.contents) > 1
         # See above...
         rsrc = PDFResourceManager()
-        agg = PDFPageAggregator(rsrc, pageno=1)
+        agg = PDFLayoutAnalyzer(rsrc, pageno=1)
         interp = PDFPageInterpreter(rsrc, agg)
         interp.process_page(page)
 

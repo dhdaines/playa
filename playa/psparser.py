@@ -838,6 +838,7 @@ PSStackEntry = Tuple[int, PSStackType[ExtraT]]
 class PSStackParser(Generic[ExtraT]):
     """Basic parser for PDF objects, can take a file or a `bytes` as
     input."""
+
     _mmap: Optional[mmap.mmap] = None
 
     def __init__(self, reader: Union[BinaryIO, bytes]) -> None:

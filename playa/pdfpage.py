@@ -97,21 +97,23 @@ class PDFPage:
     def layout(self) -> "LTPage":
         if self._layout is not None:
             return self._layout
-        from playa.converter import PDFPageAggregator
+        from playa.converter import PDFLayoutAnalyzer
         from playa.pdfinterp import PDFPageInterpreter
 
         doc = self.doc()
         if doc is None:
             raise RuntimeError("Document no longer exists!")
         # Q: How many classes does does it take a Java programmer to
+
         # install a lightbulb?
-        device = PDFPageAggregator(
+        device = PDFLayoutAnalyzer(
             doc.rsrcmgr,
             pageno=self.page_number,
         )
         interpreter = PDFPageInterpreter(doc.rsrcmgr, device)
         interpreter.process_page(self)
-        self._layout = device.get_result()
+        assert device.result is not None
+        self._layout = device.result
         return self._layout
 
     def __repr__(self) -> str:

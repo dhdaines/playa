@@ -1,5 +1,16 @@
 import logging
-from typing import Dict, List, Mapping, Optional, Sequence, Tuple, Union, cast
+from typing import (
+    TYPE_CHECKING,
+    Dict,
+    Iterable,
+    List,
+    Mapping,
+    Optional,
+    Sequence,
+    Tuple,
+    Union,
+    cast,
+)
 
 from playa import settings
 from playa.casting import safe_float
@@ -12,7 +23,6 @@ from playa.exceptions import (
     PSTypeError,
 )
 from playa.pdfcolor import PREDEFINED_COLORSPACE, PDFColorSpace
-from playa.pdfdevice import PDFDevice, PDFTextSeq
 from playa.pdffont import (
     PDFCIDFont,
     PDFFont,
@@ -52,6 +62,8 @@ from playa.utils import (
     mult_matrix,
 )
 
+if TYPE_CHECKING:
+    from playa.converter import PDFLayoutAnalyzer
 log = logging.getLogger(__name__)
 
 
@@ -68,6 +80,7 @@ LITERAL_TEXT = LIT("Text")
 LITERAL_FONT = LIT("Font")
 LITERAL_FORM = LIT("Form")
 LITERAL_IMAGE = LIT("Image")
+PDFTextSeq = Iterable[Union[int, float, bytes]]
 
 
 class PDFTextState:
@@ -354,7 +367,9 @@ class PDFPageInterpreter:
     Reference: PDF Reference, Appendix A, Operator Summary
     """
 
-    def __init__(self, rsrcmgr: PDFResourceManager, device: PDFDevice) -> None:
+    def __init__(
+        self, rsrcmgr: PDFResourceManager, device: "PDFLayoutAnalyzer"
+    ) -> None:
         self.rsrcmgr = rsrcmgr
         self.device = device
 
@@ -962,6 +977,9 @@ class PDFPageInterpreter:
     def process_page(self, page: PDFPage) -> None:
         log.debug("Processing page: %r", page)
         (x0, y0, x1, y1) = page.mediabox
+        # FIXME: NO, this is bad, pdfplumber has a bug related to it
+        # (specifically the translation, the rotation is kind of okay
+        # it seems)
         if page.rotate == 90:
             ctm = (0, -1, 1, 0, -y0, x1)
         elif page.rotate == 180:

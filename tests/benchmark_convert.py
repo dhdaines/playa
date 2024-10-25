@@ -27,7 +27,7 @@ PASSWORDS = {
 def benchmark_one_pdf(path: Path):
     """Open one of the documents"""
     import playa
-    from playa.converter import PDFPageAggregator
+    from playa.converter import PDFLayoutAnalyzer
     from playa.pdfinterp import PDFPageInterpreter, PDFResourceManager
 
     passwords = PASSWORDS.get(path.name, [""])
@@ -36,7 +36,7 @@ def benchmark_one_pdf(path: Path):
         with playa.open(path, password=password) as pdf:
             # Seriously WTF is all this... just to get a page... OMG
             rsrc = PDFResourceManager()
-            agg = PDFPageAggregator(rsrc, pageno=1)
+            agg = PDFLayoutAnalyzer(rsrc, pageno=1)
             interp = PDFPageInterpreter(rsrc, agg)
             for page in pdf.pages:
                 interp.process_page(page)

@@ -19,9 +19,14 @@ from playa.layout import (
     LTRect,
 )
 from playa.pdfcolor import PDFColorSpace
-from playa.pdfdevice import PDFTextDevice
 from playa.pdffont import PDFFont, PDFUnicodeNotDefined
-from playa.pdfinterp import PDFGraphicState, PDFResourceManager, PDFStackT
+from playa.pdfinterp import (
+    PDFGraphicState,
+    PDFResourceManager,
+    PDFStackT,
+    PDFTextSeq,
+    PDFTextState,
+)
 from playa.pdfpage import PDFPage
 from playa.pdftypes import PDFStream
 from playa.psparser import PSLiteral
@@ -32,13 +37,15 @@ from playa.utils import (
     Rect,
     apply_matrix_pt,
     decode_text,
+    make_compat_bytes,
     mult_matrix,
+    translate_matrix,
 )
 
 log = logging.getLogger(__name__)
 
 
-class PDFLayoutAnalyzer(PDFTextDevice):
+class PDFLayoutAnalyzer:
     cur_item: LTLayoutContainer
     ctm: Matrix
     cur_mcid: Optional[int] = None
@@ -49,9 +56,13 @@ class PDFLayoutAnalyzer(PDFTextDevice):
         rsrcmgr: PDFResourceManager,
         pageno: int = 1,
     ) -> None:
-        PDFTextDevice.__init__(self, rsrcmgr)
+        self.rsrcmgr = rsrcmgr
         self.pageno = pageno
         self._stack: List[LTLayoutContainer] = []
+        self.result: Optional[LTPage] = None
+
+    def set_ctm(self, ctm: Matrix) -> None:
+        self.ctm = ctm
 
     def begin_page(self, page: PDFPage, ctm: Matrix) -> None:
         (x0, y0, x1, y1) = page.mediabox
@@ -83,6 +94,9 @@ class PDFLayoutAnalyzer(PDFTextDevice):
             self.cur_mcid = props["MCID"]
         else:
             self.cur_mcid = None
+
+    def do_tag(self, tag: PSLiteral, props: Optional["PDFStackT"] = None) -> None:
+        pass
 
     def end_tag(self) -> None:
         """Handle beginning of tag, clearing current MCID."""
@@ -268,26 +282,154 @@ class PDFLayoutAnalyzer(PDFTextDevice):
         self.add_item(item)
         return item.adv
 
+    def render_string(
+        self,
+        textstate: "PDFTextState",
+        seq: PDFTextSeq,
+        ncs: PDFColorSpace,
+        graphicstate: "PDFGraphicState",
+        scs: Optional[PDFColorSpace] = None,
+    ) -> None:
+        assert self.ctm is not None
+        matrix = mult_matrix(textstate.matrix, self.ctm)
+        font = textstate.font
+        fontsize = textstate.fontsize
+        scaling = textstate.scaling * 0.01
+        charspace = textstate.charspace * scaling
+        wordspace = textstate.wordspace * scaling
+        rise = textstate.rise
+        assert font is not None
+        if font.is_multibyte():
+            wordspace = 0
+        dxscale = 0.001 * fontsize * scaling
+        if font.is_vertical():
+            textstate.linematrix = self.render_string_vertical(
+                seq,
+                matrix,
+                textstate.linematrix,
+                font,
+                fontsize,
+                scaling,
+                charspace,
+                wordspace,
+                rise,
+                dxscale,
+                ncs,
+                graphicstate,
+                scs,
+            )
+        else:
+            textstate.linematrix = self.render_string_horizontal(
+                seq,
+                matrix,
+                textstate.linematrix,
+                font,
+                fontsize,
+                scaling,
+                charspace,
+                wordspace,
+                rise,
+                dxscale,
+                ncs,
+                graphicstate,
+                scs,
+            )
+
+    def render_string_horizontal(
+        self,
+        seq: PDFTextSeq,
+        matrix: Matrix,
+        pos: Point,
+        font: PDFFont,
+        fontsize: float,
+        scaling: float,
+        charspace: float,
+        wordspace: float,
+        rise: float,
+        dxscale: float,
+        ncs: PDFColorSpace,
+        graphicstate: "PDFGraphicState",
+        scs: Optional[PDFColorSpace] = None,
+    ) -> Point:
+        (x, y) = pos
+        needcharspace = False
+        for obj in seq:
+            if isinstance(obj, (int, float)):
+                x -= obj * dxscale
+                needcharspace = True
+            else:
+                if isinstance(obj, str):
+                    obj = make_compat_bytes(obj)
+                if not isinstance(obj, bytes):
+                    continue
+                for cid in font.decode(obj):
+                    if needcharspace:
+                        x += charspace
+                    x += self.render_char(
+                        translate_matrix(matrix, (x, y)),
+                        font,
+                        fontsize,
+                        scaling,
+                        rise,
+                        cid,
+                        ncs,
+                        graphicstate,
+                        scs,
+                    )
+                    if cid == 32 and wordspace:
+                        x += wordspace
+                    needcharspace = True
+        return (x, y)
+
+    def render_string_vertical(
+        self,
+        seq: PDFTextSeq,
+        matrix: Matrix,
+        pos: Point,
+        font: PDFFont,
+        fontsize: float,
+        scaling: float,
+        charspace: float,
+        wordspace: float,
+        rise: float,
+        dxscale: float,
+        ncs: PDFColorSpace,
+        graphicstate: "PDFGraphicState",
+        scs: Optional[PDFColorSpace] = None,
+    ) -> Point:
+        (x, y) = pos
+        needcharspace = False
+        for obj in seq:
+            if isinstance(obj, (int, float)):
+                y -= obj * dxscale
+                needcharspace = True
+            else:
+                if isinstance(obj, str):
+                    obj = make_compat_bytes(obj)
+                if not isinstance(obj, bytes):
+                    continue
+                for cid in font.decode(obj):
+                    if needcharspace:
+                        y += charspace
+                    y += self.render_char(
+                        translate_matrix(matrix, (x, y)),
+                        font,
+                        fontsize,
+                        scaling,
+                        rise,
+                        cid,
+                        ncs,
+                        graphicstate,
+                        scs,
+                    )
+                    if cid == 32 and wordspace:
+                        y += wordspace
+                    needcharspace = True
+        return (x, y)
+
     def handle_undefined_char(self, font: PDFFont, cid: int) -> str:
         log.debug("undefined: %r, %r", font, cid)
         return "(cid:%d)" % cid
 
     def receive_layout(self, ltpage: LTPage) -> None:
-        pass
-
-
-class PDFPageAggregator(PDFLayoutAnalyzer):
-    def __init__(
-        self,
-        rsrcmgr: PDFResourceManager,
-        pageno: int = 1,
-    ) -> None:
-        PDFLayoutAnalyzer.__init__(self, rsrcmgr, pageno=pageno)
-        self.result: Optional[LTPage] = None
-
-    def receive_layout(self, ltpage: LTPage) -> None:
         self.result = ltpage
-
-    def get_result(self) -> LTPage:
-        assert self.result is not None
-        return self.result
