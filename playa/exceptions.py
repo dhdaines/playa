@@ -55,6 +55,10 @@ class PDFIOError(PDFException, IOError):
     pass
 
 
+class PDFInterpreterError(PDFException):
+    pass
+
+
 class PDFNoValidXRef(PDFSyntaxError):
     pass
 
@@ -84,4 +88,12 @@ class PDFPasswordIncorrect(PDFEncryptionError):
 
 
 class PDFTextExtractionNotAllowed(PDFEncryptionError):
+    pass
+
+
+class PDFFontError(PDFException):
+    pass
+
+
+class PDFUnicodeNotDefined(PDFFontError):
     pass

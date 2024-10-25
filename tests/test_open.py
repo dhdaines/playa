@@ -7,10 +7,6 @@ from pathlib import Path
 import pytest
 
 import playa
-from playa.converter import PDFLayoutAnalyzer
-
-# These APIs will go away soon
-from playa.pdfinterp import PDFPageInterpreter, PDFResourceManager
 
 TESTDIR = Path(__file__).parent.parent / "samples"
 ALLPDFS = TESTDIR.glob("**/*.pdf")
@@ -50,23 +46,15 @@ def test_inline_data() -> None:
     # The necessary mocking would be useless considering that I will
     # shortly demolish these redundant and confusing APIs.
     with playa.open(TESTDIR / "contrib" / "issue-1008-inline-ascii85.pdf") as doc:
-        # Seriously WTF is all this... just to get a page... OMG
-        rsrc = PDFResourceManager()
-        agg = PDFLayoutAnalyzer(rsrc, pageno=1)
-        interp = PDFPageInterpreter(rsrc, agg)
         page = next(doc.pages)
-        interp.process_page(page)
+        _ = page.layout
 
 
 def test_multiple_contents() -> None:
     with playa.open(TESTDIR / "jo.pdf") as doc:
         page = next(doc.pages)
         assert len(page.contents) > 1
-        # See above...
-        rsrc = PDFResourceManager()
-        agg = PDFLayoutAnalyzer(rsrc, pageno=1)
-        interp = PDFPageInterpreter(rsrc, agg)
-        interp.process_page(page)
+        _ = page.layout
 
 
 def test_weakrefs() -> None:

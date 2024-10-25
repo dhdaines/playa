@@ -321,9 +321,7 @@ def bench_bytesio():
 
 
 def bench_playa():
-    from playa.converter import PDFPageAggregator
     from playa.pdfdocument import PDFDocument
-    from playa.pdfinterp import PDFPageInterpreter, PDFResourceManager
     from playa.pdfpage import PDFPage
     from playa.psparser import PSFileParser
 
@@ -353,12 +351,9 @@ def bench_playa():
     start = time.time()
     for _ in range(runs):
         with open(TESTDIR / "contrib" / "pagelabels.pdf", "rb") as infh:
-            rsrc = PDFResourceManager()
-            agg = PDFPageAggregator(rsrc, pageno=1)
-            interp = PDFPageInterpreter(rsrc, agg)
             doc = PDFDocument(infh)
             page = next(PDFPage.create_pages(doc))
-            interp.process_page(page)
+            _ = page.layout
     print(
         "PLAYA Interpreter: %dms / run" % ((time.time() - start) / runs * 1000),
     )

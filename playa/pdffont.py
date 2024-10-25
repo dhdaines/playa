@@ -2,7 +2,6 @@ import logging
 import struct
 from io import BytesIO
 from typing import (
-    TYPE_CHECKING,
     Any,
     BinaryIO,
     Dict,
@@ -27,7 +26,14 @@ from playa.cmapdb import (
     UnicodeMap,
 )
 from playa.encodingdb import EncodingDB, name2unicode
-from playa.exceptions import PSEOF, PDFException, PDFKeyError, PDFValueError
+from playa.exceptions import (
+    PSEOF,
+    PDFException,
+    PDFFontError,
+    PDFKeyError,
+    PDFUnicodeNotDefined,
+    PDFValueError,
+)
 from playa.fontmetrics import FONT_METRICS
 from playa.pdftypes import (
     PDFStream,
@@ -48,9 +54,6 @@ from playa.psparser import (
     literal_name,
 )
 from playa.utils import Matrix, Point, Rect, apply_matrix_norm, choplist, nunpack
-
-if TYPE_CHECKING:
-    from playa.pdfinterp import PDFResourceManager
 
 log = logging.getLogger(__name__)
 
@@ -838,14 +841,6 @@ class TrueTypeFont:
         return unicode_map
 
 
-class PDFFontError(PDFException):
-    pass
-
-
-class PDFUnicodeNotDefined(PDFFontError):
-    pass
-
-
 LITERAL_STANDARD_ENCODING = LIT("StandardEncoding")
 LITERAL_TYPE1C = LIT("Type1C")
 
@@ -984,7 +979,7 @@ class PDFSimpleFont(PDFFont):
 
 
 class PDFType1Font(PDFSimpleFont):
-    def __init__(self, rsrcmgr: "PDFResourceManager", spec: Mapping[str, Any]) -> None:
+    def __init__(self, spec: Mapping[str, Any]) -> None:
         try:
             self.basefont = literal_name(spec["BaseFont"])
         except KeyError:
@@ -1021,7 +1016,7 @@ class PDFTrueTypeFont(PDFType1Font):
 
 
 class PDFType3Font(PDFSimpleFont):
-    def __init__(self, rsrcmgr: "PDFResourceManager", spec: Mapping[str, Any]) -> None:
+    def __init__(self, spec: Mapping[str, Any]) -> None:
         firstchar = int_value(spec.get("FirstChar", 0))
         # lastchar = int_value(spec.get('LastChar', 0))
         width_list = list_value(spec.get("Widths", [0] * 256))
@@ -1044,7 +1039,6 @@ class PDFCIDFont(PDFFont):
 
     def __init__(
         self,
-        rsrcmgr: "PDFResourceManager",
         spec: Mapping[str, Any],
         strict: bool = settings.STRICT,
     ) -> None:

@@ -14,7 +14,6 @@ from typing import (
 from playa.exceptions import PDFValueError
 from playa.pdfcolor import PDFColorSpace
 from playa.pdffont import PDFFont
-from playa.pdfinterp import Color, PDFGraphicState
 from playa.pdftypes import PDFStream
 from playa.utils import (
     INF,
@@ -29,6 +28,61 @@ from playa.utils import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+Color = Union[
+    float,  # Greyscale
+    Tuple[float, float, float],  # R, G, B
+    Tuple[float, float, float, float],  # C, M, Y, K
+]
+
+
+class PDFGraphicState:
+    def __init__(self) -> None:
+        self.linewidth: float = 0
+        self.linecap: Optional[object] = None
+        self.linejoin: Optional[object] = None
+        self.miterlimit: Optional[object] = None
+        self.dash: Optional[Tuple[object, object]] = None
+        self.intent: Optional[object] = None
+        self.flatness: Optional[object] = None
+
+        # stroking color
+        self.scolor: Optional[Color] = None
+
+        # non stroking color
+        self.ncolor: Optional[Color] = None
+
+    def copy(self) -> "PDFGraphicState":
+        obj = PDFGraphicState()
+        obj.linewidth = self.linewidth
+        obj.linecap = self.linecap
+        obj.linejoin = self.linejoin
+        obj.miterlimit = self.miterlimit
+        obj.dash = self.dash
+        obj.intent = self.intent
+        obj.flatness = self.flatness
+        obj.scolor = self.scolor
+        obj.ncolor = self.ncolor
+        return obj
+
+    def __repr__(self) -> str:
+        return (
+            "<PDFGraphicState: linewidth=%r, linecap=%r, linejoin=%r, "
+            " miterlimit=%r, dash=%r, intent=%r, flatness=%r, "
+            " stroking color=%r, non stroking color=%r>"
+            % (
+                self.linewidth,
+                self.linecap,
+                self.linejoin,
+                self.miterlimit,
+                self.dash,
+                self.intent,
+                self.flatness,
+                self.scolor,
+                self.ncolor,
+            )
+        )
 
 
 class LTItem:
