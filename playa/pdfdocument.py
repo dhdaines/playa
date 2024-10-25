@@ -3,6 +3,7 @@ import itertools
 import logging
 import re
 import struct
+from collections import deque
 from hashlib import md5, sha256, sha384, sha512
 from typing import (
     Any,
@@ -850,27 +851,36 @@ class PDFDocument:
     def _getobj_parse(self, pos: int, objid: int) -> object:
         assert self.parser is not None
         self.parser.seek(pos)
-        (_, objid1) = self.parser.nexttoken()  # objid
-        (_, genno) = self.parser.nexttoken()  # genno
-        (_, kwd) = self.parser.nexttoken()
-        # hack around malformed pdf files
-        # copied from https://github.com/jaepil/pdfminer3k/blob/master/
+        (_, token) = self.parser.nexttoken()
+
+        # Hack around malformed pdf files where the offset in the xref
+        # table doesn't point exactly at the object definition
+        # (probably more frequent than you think).  Parse forward
+        # until we find "obj" and hope it's the right object (FIXME:
+        # could also back up a bit?)
+        # originally copied from https://github.com/jaepil/pdfminer3k/blob/master/
         # pdfminer/pdfparser.py#L399
         # to solve https://github.com/pdfminer/pdfminer.six/issues/56
-        # assert objid1 == objid, str((objid1, objid))
-        if objid1 != objid:
-            x = []
-            while kwd is not KEYWORD_OBJ:
-                (_, kwd) = self.parser.nexttoken()
-                x.append(kwd)
-            if len(x) >= 2:
-                objid1 = x[-2]
-        # #### end hack around malformed pdf files
-        if objid1 != objid:
-            raise PDFSyntaxError(f"objid mismatch: {objid1!r}={objid!r}")
-
-        if kwd != KWD(b"obj"):
-            raise PDFSyntaxError("Invalid object spec: offset=%r" % pos)
+        if token != objid:
+            q = deque([token], 3)
+            while True:
+                try:
+                    (_, token) = self.parser.nexttoken()
+                except PSEOF:
+                    raise PDFSyntaxError(
+                        f"object {objid!r} not found at or after position {pos}"
+                    )
+                q.append(token)
+                if len(q) == 3 and token is KEYWORD_OBJ:
+                    break
+            objid1, genno, kwd = q
+            if objid1 != objid:
+                raise PDFSyntaxError(f"objid mismatch: {objid1!r}={objid!r}")
+        else:
+            (_, genno) = self.parser.nexttoken()
+            (_, kwd) = self.parser.nexttoken()
+            if kwd != KEYWORD_OBJ:
+                raise PDFSyntaxError("Invalid object spec: offset=%r" % pos)
         (_, obj) = self.parser.nextobject()
         return obj
 
