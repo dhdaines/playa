@@ -13,7 +13,7 @@ class TestClass(unittest.TestCase):
 
     def test_structure_tree_class(self) -> None:
         with playa.open(TESTDIR / "image_structure.pdf") as pdf:
-            stree = PDFStructTree(pdf, [(1, next(pdf.pages))])
+            stree = PDFStructTree(pdf, [pdf.pages[0]])
             doc_elem = next(iter(stree))
             assert [k.type for k in doc_elem] == ["P", "P", "Figure"]
 
@@ -22,7 +22,7 @@ class TestClass(unittest.TestCase):
         Test find_all() and find() on trees
         """
         with playa.open(TESTDIR / "image_structure.pdf") as pdf:
-            stree = PDFStructTree(pdf, [(1, next(pdf.pages))])
+            stree = PDFStructTree(pdf, [pdf.pages[0]])
             figs = list(stree.find_all("Figure"))
             assert len(figs) == 1
             fig = stree.find("Figure")
@@ -68,8 +68,7 @@ class TestClass(unittest.TestCase):
             assert 1 in page_numbers
             assert 2 in page_numbers
 
-            pages = list(pdf.pages)
-            stree = PDFStructTree(pdf, [(2, pages[1])])
+            stree = PDFStructTree(pdf, [pdf.pages[1]])
             sect = next(stree.find_all("Sect"))
             mcids = list(sect.all_mcids())
             page_numbers = set(page for page, mcid in mcids)

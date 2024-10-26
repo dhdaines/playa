@@ -46,13 +46,12 @@ def test_inline_data() -> None:
     # The necessary mocking would be useless considering that I will
     # shortly demolish these redundant and confusing APIs.
     with playa.open(TESTDIR / "contrib" / "issue-1008-inline-ascii85.pdf") as doc:
-        page = next(doc.pages)
-        _ = page.layout
+        _ = doc.pages[0].layout
 
 
 def test_multiple_contents() -> None:
     with playa.open(TESTDIR / "jo.pdf") as doc:
-        page = next(doc.pages)
+        page = doc.pages[0]
         assert len(page.contents) > 1
         _ = page.layout
 

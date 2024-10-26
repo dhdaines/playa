@@ -164,7 +164,7 @@ class PDFStructTree(Findable):
     def __init__(
         self,
         doc: "PDFDocument",
-        pages: Union[Iterable[Tuple[Union[int, None], PDFPage]], None] = None,
+        pages: Union[Iterable[PDFPage], None] = None,
     ):
         if "StructTreeRoot" not in doc.catalog:
             raise PDFNoStructTree("Catalog has no 'StructTreeRoot' entry")
@@ -175,22 +175,18 @@ class PDFStructTree(Findable):
         self.page_dict: Dict[Any, Union[int, None]]
 
         if pages is None:
-            self.page_dict = {
-                page.pageid: idx + 1 for idx, page in enumerate(doc.pages)
-            }
+            self.page_dict = {page.pageid: page.page_number for page in doc.pages}
             self._parse_struct_tree()
         else:
             pagelist = list(pages)
-            self.page_dict = {
-                page.pageid: page_number for page_number, page in pagelist
-            }
+            self.page_dict = {page.pageid: page.page_number for page in pagelist}
             parent_tree_obj = self.root.get("ParentTree")
             # If we have a single page then we will work backwards from
             # its ParentTree - this is because structure elements could
             # span multiple pages, and the "Pg" attribute is *optional*,
             # so this is the approved way to get a page's structure...
             if len(pagelist) == 1 and parent_tree_obj is not None:
-                _, page = pagelist[0]
+                page = pagelist[0]
                 parent_tree = NumberTree(parent_tree_obj)
                 # If there is no marked content in the structure tree for
                 # this page (which can happen even when there is a

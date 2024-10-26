@@ -800,6 +800,7 @@ class PDFDocument:
     """
 
     _fp: Union[BinaryIO, None] = None
+    _pages: Union[List[PDFPage], None] = None
 
     def __enter__(self) -> "PDFDocument":
         return self
@@ -1118,24 +1119,23 @@ class PDFDocument:
                 yield object_id, object_properties
 
     @property
-    def pages(self) -> Iterator[PDFPage]:
-        """Iterator over PDFPage objects, which contain
-        information about the pages in the document.
-        """
-        try:
-            page_labels: Iterator[Optional[str]] = self.page_labels
-        except PDFNoPageLabels:
-            page_labels = itertools.repeat(None)
-        try:
-            for page_number, ((objid, properties), label) in enumerate(
-                zip(self.get_page_objects(), page_labels)
-            ):
-                yield PDFPage(self, objid, properties, label, page_number + 1)
-        except PDFNoPageTree:
-            for page_number, ((objid, properties), label) in enumerate(
-                zip(self.get_pages_from_xrefs(), page_labels)
-            ):
-                yield PDFPage(self, objid, properties, label, page_number + 1)
+    def pages(self) -> List[PDFPage]:
+        if self._pages is None:
+            try:
+                page_labels: Iterator[Optional[str]] = self.page_labels
+            except PDFNoPageLabels:
+                page_labels = itertools.repeat(None)
+            try:
+                self._pages = [PDFPage(self, objid, properties, label, page_number + 1)
+                               for page_number, ((objid, properties), label) in enumerate(
+                                       zip(self.get_page_objects(), page_labels)
+                               )]
+            except PDFNoPageTree:
+                self._pages = [PDFPage(self, objid, properties, label, page_number + 1)
+                               for page_number, ((objid, properties), label) in enumerate(
+                                       zip(self.get_pages_from_xrefs(), page_labels)
+                               )]
+        return self._pages
 
     @property
     def names(self) -> Dict[str, Any]:
