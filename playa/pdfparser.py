@@ -27,17 +27,18 @@ KEYWORD_OBJ = KWD(b"obj")
 # PDFParser stack holds all the base types plus PDFStream, PDFObjRef, and None
 class PDFParser(Parser[Union[PSKeyword, PDFStream, PDFObjRef, None]]):
     """PDFParser fetch PDF objects from a file stream.
-    It can handle indirect references by referring to
-    a PDF document set by set_document method.
     It also reads XRefs at the end of every PDF file.
+    It holds a weak reference to the document in order to
+    resolve indirect references.  If the document is deleted
+    then this will obviously no longer work.
 
     Typical usage:
-      parser = PDFParser(fp)
+      parser = PDFParser(fp, doc)
       parser.read_xref()
       parser.read_xref(fallback=True) # optional
-      parser.set_document(doc)
       parser.seek(offset)
-      parser.nextobject()
+      for object in parser:
+          ...
 
     """
 

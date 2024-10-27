@@ -284,10 +284,7 @@ class CMapParser(Parser[PSKeyword]):
         self._warnings: Set[str] = set()
 
     def run(self) -> None:
-        try:
-            _ = next(self)
-        except StopIteration:
-            pass
+        next(self, None)
 
     KEYWORD_BEGINCMAP = KWD(b"begincmap")
     KEYWORD_ENDCMAP = KWD(b"endcmap")

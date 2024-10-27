@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 import logging
+import mmap
 import re
 from binascii import unhexlify
 from collections import deque
-from mmap import mmap
 from typing import (
     Any,
     Deque,
@@ -204,16 +204,11 @@ SPC = re.compile(rb"\s")
 class Lexer:
     """Lexer for PDF data."""
 
-    def __init__(self, data: Union[bytes, mmap]) -> None:
+    def __init__(self, data: Union[bytes, mmap.mmap]) -> None:
         self.data = data
         self.pos = 0
         self.end = len(data)
         self._tokens: Deque[Tuple[int, PSBaseParserToken]] = deque()
-
-    def reinit(self, data: bytes) -> None:
-        """Reinitialize parser with a new buffer."""
-        self.data = data
-        self.seek(0)
 
     def seek(self, pos: int) -> None:
         """Seek to a position and reinitialize parser state."""
@@ -396,10 +391,10 @@ PSStackEntry = Tuple[int, PSStackType[ExtraT]]
 class Parser(Generic[ExtraT]):
     """Basic parser for PDF objects in a bytes-like object."""
 
-    def __init__(self, data: Union[bytes, mmap]) -> None:
+    def __init__(self, data: Union[bytes, mmap.mmap]) -> None:
         self.reinit(data)
 
-    def reinit(self, data: Union[bytes, mmap]) -> None:
+    def reinit(self, data: Union[bytes, mmap.mmap]) -> None:
         """Reinitialize with new data (FIXME: Should go away, use a
         new parser for each stream as it's clearer and safer)"""
         self._lexer = Lexer(data)
