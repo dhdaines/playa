@@ -140,7 +140,7 @@ def int_value(x: object) -> int:
     x = resolve1(x)
     if not isinstance(x, int):
         if settings.STRICT:
-            raise PDFTypeError("Integer required: %r" % x)
+            raise PDFTypeError("Integer required: %r" % (x,))
         return 0
     return x
 
@@ -149,7 +149,7 @@ def float_value(x: object) -> float:
     x = resolve1(x)
     if not isinstance(x, float):
         if settings.STRICT:
-            raise PDFTypeError("Float required: %r" % x)
+            raise PDFTypeError("Float required: %r" % (x,))
         return 0.0
     return x
 
