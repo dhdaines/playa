@@ -67,3 +67,11 @@ ban-relative-imports = "all"
 [tool.pytest.ini_options]
 testpaths = [ "tests" ]
 
+[tool.hatch.envs.bench]
+dependencies = [ "pdfminer.six" ]
+
+[tool.hatch.envs.bench.scripts]
+all = [
+    "python tests/benchmark_parser.py",
+    "python tests/benchmark_convert.py",
+]
