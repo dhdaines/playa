@@ -1,30 +1,22 @@
 import logging
-import tempfile
-from io import BytesIO
 from typing import Any, List, Tuple
 
 import pytest
 
-from playa.exceptions import PSEOF
 from playa.psparser import (
     KEYWORD_DICT_BEGIN,
     KEYWORD_DICT_END,
     KWD,
     LIT,
-    PSFileParser,
-    PSInMemoryParser,
-    PSStackParser,
+    Lexer,
+    Parser,
     keyword_name,
     literal_name,
 )
 
 logger = logging.getLogger(__name__)
 
-
-class TestPSFileParser:
-    """Simplistic Test cases"""
-
-    TESTDATA = rb"""%!PS
+TESTDATA1 = rb"""%!PS
 begin end
  "  @ #
 /a/BCD /Some_Name /foo#5f#xbaa
@@ -43,132 +35,113 @@ func/a/b{(c)do*}def
 [ 1 (z) ! ]
 << /foo (bar) >>
 """
-
-    TOKENS = [
-        (5, KWD(b"begin")),
-        (11, KWD(b"end")),
-        (16, KWD(b'"')),
-        (19, KWD(b"@")),
-        (21, KWD(b"#")),
-        (23, LIT("a")),
-        (25, LIT("BCD")),
-        (30, LIT("Some_Name")),
-        (41, LIT("foo_")),
-        (48, KWD(b"#")),
-        (49, KWD(b"xbaa")),
-        (54, 0),
-        (56, 1),
-        (59, -2),
-        (62, 0.5),
-        (65, 1.234),
-        (71, b"abc"),
-        (77, b""),
-        (80, b"abc ( def ) ghi"),
-        (98, b"def \x00 4ghi"),
-        (118, b"bach\\slask"),
-        (132, b"foo\nbaa"),
-        (143, b"this % is not a comment."),
-        (170, b"foo\nbaa"),
-        (180, b"foobaa"),
-        (191, b""),
-        (194, b" "),
-        (199, b"@@ "),
-        (211, b"\xab\xcd\x00\x124\x50"),
-        (226, KWD(b"func")),
-        (230, LIT("a")),
-        (232, LIT("b")),
-        (234, KWD(b"{")),
-        (235, b"c"),
-        (238, KWD(b"do*")),
-        (241, KWD(b"}")),
-        (242, KWD(b"def")),
-        (246, KWD(b"[")),
-        (248, 1),
-        (250, b"z"),
-        (254, KWD(b"!")),
-        (256, KWD(b"]")),
-        (258, KWD(b"<<")),
-        (261, LIT("foo")),
-        (266, b"bar"),
-        (272, KWD(b">>")),
-    ]
-
-    OBJS = [
-        (23, LIT("a")),
-        (25, LIT("BCD")),
-        (30, LIT("Some_Name")),
-        (41, LIT("foo_")),
-        (54, 0),
-        (56, 1),
-        (59, -2),
-        (62, 0.5),
-        (65, 1.234),
-        (71, b"abc"),
-        (77, b""),
-        (80, b"abc ( def ) ghi"),
-        (98, b"def \x00 4ghi"),
-        (118, b"bach\\slask"),
-        (132, b"foo\nbaa"),
-        (143, b"this % is not a comment."),
-        (170, b"foo\nbaa"),
-        (180, b"foobaa"),
-        (191, b""),
-        (194, b" "),
-        (199, b"@@ "),
-        (211, b"\xab\xcd\x00\x124\x50"),
-        (230, LIT("a")),
-        (232, LIT("b")),
-        (234, [b"c"]),
-        (246, [1, b"z"]),
-        (258, {"foo": b"bar"}),
-    ]
-
-    def get_tokens(self, s):
-        class MyParser(PSFileParser):
-            def flush(self):
-                self.add_results(*self.popall())
-
-        parser = MyParser(BytesIO(s))
-        r = []
-        try:
-            while True:
-                r.append(parser.nexttoken())
-        except PSEOF:
-            pass
-        return r
-
-    def get_objects(self, s):
-        class MyParser(PSStackParser):
-            def flush(self):
-                self.add_results(*self.popall())
-
-        parser = MyParser(s)
-        r = []
-        try:
-            while True:
-                r.append(parser.nextobject())
-        except PSEOF:
-            pass
-        return r
-
-    def test_1(self):
-        tokens = self.get_tokens(self.TESTDATA)
-        logger.info(tokens)
-        assert tokens == self.TOKENS
-
-    def test_2(self):
-        objs = self.get_objects(self.TESTDATA)
-        logger.info(objs)
-        assert objs == self.OBJS
+TOKENS1 = [
+    (5, KWD(b"begin")),
+    (11, KWD(b"end")),
+    (16, KWD(b'"')),
+    (19, KWD(b"@")),
+    (21, KWD(b"#")),
+    (23, LIT("a")),
+    (25, LIT("BCD")),
+    (30, LIT("Some_Name")),
+    (41, LIT("foo_")),
+    (48, KWD(b"#")),
+    (49, KWD(b"xbaa")),
+    (54, 0),
+    (56, 1),
+    (59, -2),
+    (62, 0.5),
+    (65, 1.234),
+    (71, b"abc"),
+    (77, b""),
+    (80, b"abc ( def ) ghi"),
+    (98, b"def \x00 4ghi"),
+    (118, b"bach\\slask"),
+    (132, b"foo\nbaa"),
+    (143, b"this % is not a comment."),
+    (170, b"foo\nbaa"),
+    (180, b"foobaa"),
+    (191, b""),
+    (194, b" "),
+    (199, b"@@ "),
+    (211, b"\xab\xcd\x00\x124\x50"),
+    (226, KWD(b"func")),
+    (230, LIT("a")),
+    (232, LIT("b")),
+    (234, KWD(b"{")),
+    (235, b"c"),
+    (238, KWD(b"do*")),
+    (241, KWD(b"}")),
+    (242, KWD(b"def")),
+    (246, KWD(b"[")),
+    (248, 1),
+    (250, b"z"),
+    (254, KWD(b"!")),
+    (256, KWD(b"]")),
+    (258, KWD(b"<<")),
+    (261, LIT("foo")),
+    (266, b"bar"),
+    (272, KWD(b">>")),
+]
+OBJS1 = [
+    (23, LIT("a")),
+    (25, LIT("BCD")),
+    (30, LIT("Some_Name")),
+    (41, LIT("foo_")),
+    (54, 0),
+    (56, 1),
+    (59, -2),
+    (62, 0.5),
+    (65, 1.234),
+    (71, b"abc"),
+    (77, b""),
+    (80, b"abc ( def ) ghi"),
+    (98, b"def \x00 4ghi"),
+    (118, b"bach\\slask"),
+    (132, b"foo\nbaa"),
+    (143, b"this % is not a comment."),
+    (170, b"foo\nbaa"),
+    (180, b"foobaa"),
+    (191, b""),
+    (194, b" "),
+    (199, b"@@ "),
+    (211, b"\xab\xcd\x00\x124\x50"),
+    (230, LIT("a")),
+    (232, LIT("b")),
+    (234, [b"c"]),
+    (246, [1, b"z"]),
+    (258, {"foo": b"bar"}),
+]
 
 
-TESTDATA = b"""
+def test_lexer_miner():
+    """Lexer test case from pdfminer"""
+    tokens = list(Lexer(TESTDATA1))
+    logger.info(tokens)
+    assert tokens == TOKENS1
+
+
+def test_parser_miner():
+    """Parser test case from pdfminer"""
+
+    # FIXME: Still relying on subclassing
+    class MyParser(Parser):
+        def flush(self) -> None:
+            objs = self.popall()
+            self.add_results(*objs)
+
+    objs = list(MyParser(TESTDATA1))
+    logger.info(objs)
+    assert objs == OBJS1
+
+
+TESTDATA2 = b"""
 ugh
 foo\r
 bar\rbaz
 quxx
 bog"""
-EXPECTED = [
+EXPECTED2 = [
     (0, b"\n"),
     (1, b"ugh\n"),
     (5, b"foo\r\n"),
@@ -179,54 +152,26 @@ EXPECTED = [
 ]
 
 
-def run_parsers(data: bytes, expected: List[Any], makefunc: Any) -> None:
-    """Test stuff on both BytesIO and BinaryIO."""
-    bp = PSInMemoryParser(data)
-    output = []
-    func = makefunc(bp)
-    while True:
-        try:
-            output.append(func())
-        except PSEOF:
-            break
-    assert output == expected
-    with tempfile.NamedTemporaryFile() as tf:
-        with open(tf.name, "wb") as outfh:
-            outfh.write(data)
-        with open(tf.name, "rb") as infh:
-            fp = PSFileParser(infh)
-            func = makefunc(fp)
-            output = []
-            while True:
-                try:
-                    output.append(func())
-                except PSEOF:
-                    break
-            assert output == expected
-
-
 def test_nextline() -> None:
     """Verify that we replicate the old nextline method."""
-    run_parsers(TESTDATA, EXPECTED, lambda foo: foo.nextline)
+    parser = Lexer(TESTDATA2)
+    output = []
+    # FIXME: replace with parser.iter_lines() or similar
+    while True:
+        try:
+            output.append(parser.nextline())
+        except StopIteration:
+            break
+    assert output == EXPECTED2
 
 
 def test_revreadlines() -> None:
     """Verify that we replicate the old revreadlines method."""
-    expected = list(reversed([line for pos, line in EXPECTED]))
-
-    def make_next(parser: Any) -> Any:
-        itor = parser.revreadlines()
-
-        def nextor() -> Any:
-            try:
-                line = next(itor)
-            except StopIteration:
-                raise PSEOF
-            return line
-
-        return nextor
-
-    run_parsers(TESTDATA, expected, make_next)
+    expected = list(reversed([line for pos, line in EXPECTED2]))
+    parser = Lexer(TESTDATA2)
+    # FIXME: replace with parser.reverse_iter_lines() or similar
+    output = list(parser.revreadlines())
+    assert output == expected
 
 
 SIMPLE1 = b"""1 0 obj
@@ -258,22 +203,12 @@ SIMPLETOK = [
 
 
 def list_parsers(data: bytes, expected: List[Any], discard_pos: bool = False) -> None:
-    bp = PSInMemoryParser(data)
+    bp = Lexer(data)
     if discard_pos:
         tokens: List[Any] = [tok for pos, tok in list(bp)]
     else:
         tokens = list(bp)
     assert tokens == expected
-    with tempfile.NamedTemporaryFile() as tf:
-        with open(tf.name, "wb") as outfh:
-            outfh.write(data)
-        with open(tf.name, "rb") as infh:
-            fp = PSFileParser(infh)
-            if discard_pos:
-                tokens = [tok for pos, tok in list(fp)]
-            else:
-                tokens = list(fp)
-            assert tokens == expected
 
 
 def test_new_parser() -> None:
@@ -364,18 +299,10 @@ def inline_parsers(
     nexttoken: Any = None,
     blocksize: int = 16,
 ) -> None:
-    bp = PSInMemoryParser(data)
+    bp = Lexer(data)
     assert bp.get_inline_data(target=target, blocksize=blocksize) == expected
     if nexttoken is not None:
         assert bp.nexttoken() == nexttoken
-    with tempfile.NamedTemporaryFile() as tf:
-        with open(tf.name, "wb") as outfh:
-            outfh.write(data)
-        with open(tf.name, "rb") as infh:
-            fp = PSFileParser(infh)
-            assert fp.get_inline_data(target=target, blocksize=blocksize) == expected
-            if nexttoken is not None:
-                assert fp.nexttoken() == nexttoken
 
 
 def test_get_inline_data() -> None:
