@@ -1,6 +1,7 @@
 import io
 import itertools
 import logging
+import mmap
 import re
 import struct
 from collections import deque
@@ -31,7 +32,6 @@ from playa.arcfour import Arcfour
 from playa.cmapdb import CMap, CMapBase, CMapDB
 from playa.data_structures import NameTree, NumberTree
 from playa.exceptions import (
-    PSEOF,
     PDFEncryptionError,
     PDFException,
     PDFFontError,
@@ -122,7 +122,7 @@ class PDFXRefTable:
                 line = line.strip()
                 if not line:
                     continue
-            except PSEOF:
+            except StopIteration:
                 raise PDFNoValidXRef("Unexpected EOF - file corrupted?")
             if line.startswith(b"trailer"):
                 parser.seek(pos)
@@ -140,7 +140,7 @@ class PDFXRefTable:
                 try:
                     (_, line) = parser.nextline()
                     line = line.strip()
-                except PSEOF:
+                except StopIteration:
                     raise PDFNoValidXRef("Unexpected EOF - file corrupted?")
                 f = line.split(b" ")
                 if len(f) != 3:
@@ -157,8 +157,8 @@ class PDFXRefTable:
         try:
             (_, kwd) = parser.nexttoken()
             assert kwd is KWD(b"trailer"), str(kwd)
-            (_, dic) = parser.nextobject()
-        except PSEOF:
+            (_, dic) = next(parser)
+        except StopIteration:
             x = parser.pop(1)
             if not x:
                 raise PDFNoValidXRef("Unexpected EOF - file corrupted")
@@ -193,7 +193,7 @@ class PDFXRefFallback(PDFXRefTable):
         while 1:
             try:
                 (pos, line_bytes) = parser.nextline()
-            except PSEOF:
+            except StopIteration:
                 break
             if line_bytes.startswith(b"trailer"):
                 parser.seek(pos)
@@ -210,7 +210,7 @@ class PDFXRefFallback(PDFXRefTable):
             self.offsets[objid] = (None, pos, genno)
             # expand ObjStm.
             parser.seek(pos)
-            (_, obj) = parser.nextobject()
+            (_, obj) = next(parser)
             if isinstance(obj, PDFStream) and obj.get("Type") is LITERAL_OBJSTM:
                 stream = stream_value(obj)
                 try:
@@ -223,13 +223,8 @@ class PDFXRefFallback(PDFXRefTable):
                 if doc is None:
                     raise RuntimeError("Document no longer exists!")
                 parser1 = PDFStreamParser(stream.get_data(), doc)
-                objs: List[int] = []
-                try:
-                    while 1:
-                        (_, obj) = parser1.nextobject()
-                        objs.append(cast(int, obj))
-                except PSEOF:
-                    pass
+                objs: List = [obj for _, obj in parser1]
+                # FIXME: This is choplist
                 n = min(n, len(objs) // 2)
                 for index in range(n):
                     objid1 = objs[index * 2]
@@ -255,9 +250,9 @@ class PDFXRefStream:
         (_, objid) = parser.nexttoken()  # ignored
         (_, genno) = parser.nexttoken()  # ignored
         (_, kwd) = parser.nexttoken()
-        (_, stream) = parser.nextobject()
+        (_, stream) = next(parser)
         if not isinstance(stream, PDFStream) or stream.get("Type") is not LITERAL_XREF:
-            raise PDFNoValidXRef("Invalid PDF stream spec.")
+            raise PDFNoValidXRef(f"Invalid PDF stream spec {stream!r}")
         size = stream["Size"]
         index_array = stream.get("Index", (0, size))
         if len(index_array) % 2 != 0:
@@ -826,7 +821,14 @@ class PDFDocument:
         if isinstance(fp, io.TextIOBase):
             raise PSException("fp is not a binary file")
         self.pdf_version = read_header(fp)
-        self.parser = PDFParser(fp, self)
+        try:
+            self.buffer: Union[bytes, mmap.mmap] = mmap.mmap(
+                fp.fileno(), 0, access=mmap.ACCESS_READ
+            )
+        except io.UnsupportedOperation:
+            log.warning("mmap not supported on %r, reading document into memory", fp)
+            self.buffer = fp.read()
+        self.parser = PDFParser(self.buffer, self)
         self.is_printable = self.is_modifiable = self.is_extractable = True
         # Getting the XRef table and trailer is done non-lazily
         # because they contain encryption information among other
@@ -924,13 +926,7 @@ class PDFDocument:
                 raise PDFSyntaxError("N is not defined: %r" % stream)
             n = 0
         parser = PDFStreamParser(stream.get_data(), self)
-        objs: List[object] = []
-        try:
-            while 1:
-                (_, obj) = parser.nextobject()
-                objs.append(obj)
-        except PSEOF:
-            pass
+        objs: List[object] = [obj for _, obj in parser]
         return (objs, n)
 
     def _getobj_parse(self, pos: int, objid: int) -> object:
@@ -951,7 +947,7 @@ class PDFDocument:
             while True:
                 try:
                     (_, token) = self.parser.nexttoken()
-                except PSEOF:
+                except StopIteration:
                     raise PDFSyntaxError(
                         f"object {objid!r} not found at or after position {pos}"
                     )
@@ -966,7 +962,7 @@ class PDFDocument:
             (_, kwd) = self.parser.nexttoken()
             if kwd != KEYWORD_OBJ:
                 raise PDFSyntaxError("Invalid object spec: offset=%r" % pos)
-        (_, obj) = self.parser.nextobject()
+        (_, obj) = next(self.parser)
         return obj
 
     def __getitem__(self, objid: int) -> object:
@@ -999,7 +995,7 @@ class PDFDocument:
                     if isinstance(obj, PDFStream):
                         obj.set_objid(objid, genno)
                     break
-                except (PSEOF, PDFSyntaxError):
+                except (StopIteration, PDFSyntaxError):
                     continue
             if obj is None:
                 raise IndexError(f"Object with ID {objid} not found")
@@ -1126,15 +1122,19 @@ class PDFDocument:
             except PDFNoPageLabels:
                 page_labels = itertools.repeat(None)
             try:
-                self._pages = [PDFPage(self, objid, properties, label, page_number + 1)
-                               for page_number, ((objid, properties), label) in enumerate(
-                                       zip(self.get_page_objects(), page_labels)
-                               )]
+                self._pages = [
+                    PDFPage(self, objid, properties, label, page_number + 1)
+                    for page_number, ((objid, properties), label) in enumerate(
+                        zip(self.get_page_objects(), page_labels)
+                    )
+                ]
             except PDFNoPageTree:
-                self._pages = [PDFPage(self, objid, properties, label, page_number + 1)
-                               for page_number, ((objid, properties), label) in enumerate(
-                                       zip(self.get_pages_from_xrefs(), page_labels)
-                               )]
+                self._pages = [
+                    PDFPage(self, objid, properties, label, page_number + 1)
+                    for page_number, ((objid, properties), label) in enumerate(
+                        zip(self.get_pages_from_xrefs(), page_labels)
+                    )
+                ]
         return self._pages
 
     @property
@@ -1210,7 +1210,7 @@ class PDFDocument:
         self.parser.reset()
         try:
             (pos, token) = self.parser.nexttoken()
-        except PSEOF:
+        except StopIteration:
             raise PDFNoValidXRef("Unexpected EOF at {start}")
         log.debug("read_xref_from: start=%d, token=%r", start, token)
         if isinstance(token, int):

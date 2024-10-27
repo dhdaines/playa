@@ -27,7 +27,6 @@ from playa.cmapdb import (
 )
 from playa.encodingdb import EncodingDB, name2unicode
 from playa.exceptions import (
-    PSEOF,
     PDFException,
     PDFFontError,
     PDFKeyError,
@@ -48,9 +47,9 @@ from playa.pdftypes import (
 from playa.psparser import (
     KWD,
     LIT,
+    Parser,
     PSKeyword,
     PSLiteral,
-    PSStackParser,
     literal_name,
 )
 from playa.utils import Matrix, Point, Rect, apply_matrix_norm, choplist, nunpack
@@ -106,8 +105,8 @@ class FontMetricsDB:
         return FONT_METRICS[fontname]
 
 
-# int here means that we're not extending PSStackParser with additional types.
-class Type1FontHeaderParser(PSStackParser[int]):
+# int here means that we're not extending Parser with additional types.
+class Type1FontHeaderParser(Parser[int]):
     KEYWORD_BEGIN = KWD(b"begin")
     KEYWORD_END = KWD(b"end")
     KEYWORD_DEF = KWD(b"def")
@@ -137,8 +136,8 @@ class Type1FontHeaderParser(PSStackParser[int]):
         """
         while 1:
             try:
-                (cid, name) = self.nextobject()
-            except PSEOF:
+                (cid, name) = next(self)
+            except StopIteration:
                 break
             try:
                 self._cid2unicode[cid] = name2unicode(cast(str, name))

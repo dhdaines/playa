@@ -16,7 +16,6 @@ from typing import (
 from playa import settings
 from playa.casting import safe_float
 from playa.exceptions import (
-    PSEOF,
     PDFInterpreterError,
     PDFSyntaxError,
     PDFUnicodeNotDefined,
@@ -53,10 +52,10 @@ from playa.pdftypes import (
 from playa.psparser import (
     KWD,
     LIT,
+    Parser,
     PSBaseParserToken,
     PSKeyword,
     PSLiteral,
-    PSStackParser,
     PSStackType,
     keyword_name,
     literal_name,
@@ -248,7 +247,7 @@ KEYWORD_ID = KWD(b"ID")
 KEYWORD_EI = KWD(b"EI")
 
 
-class PDFContentParser(PSStackParser[Union[PSKeyword, PDFStream]]):
+class PDFContentParser(Parser[Union[PSKeyword, PDFStream]]):
     """Parse the concatenation of multiple content streams, as
     described in the spec (PDF 1.7, p.86):
 
@@ -263,17 +262,14 @@ class PDFContentParser(PSStackParser[Union[PSKeyword, PDFStream]]):
 
     def __init__(self, streams: Sequence[object]) -> None:
         self.streamiter = iter(streams)
-        try:
-            stream = stream_value(next(self.streamiter))
-        except StopIteration:
-            raise PSEOF
+        stream = stream_value(next(self.streamiter))
         log.debug("PDFContentParser starting stream %r", stream)
         super().__init__(stream.get_data())
 
-    def __next__(self) -> Tuple[int, PSBaseParserToken]:
+    def nexttoken(self) -> Tuple[int, PSBaseParserToken]:
         while True:
             try:
-                return super().__next__()
+                return super().nexttoken()
             except StopIteration:
                 # Will also raise StopIteration if there are no more,
                 # which is exactly what we want
@@ -1383,13 +1379,13 @@ class PDFPageInterpreter:
     def execute(self, streams: Sequence[object]) -> None:
         try:
             parser = PDFContentParser(streams)
-        except PSEOF:
+        except StopIteration:
             # empty page
             return
         while True:
             try:
-                (_, obj) = parser.nextobject()
-            except PSEOF:
+                (_, obj) = next(parser)
+            except StopIteration:
                 break
             if isinstance(obj, PSKeyword):
                 name = keyword_name(obj)

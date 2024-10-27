@@ -32,8 +32,8 @@ from typing import (
 )
 
 from playa.encodingdb import name2unicode
-from playa.exceptions import PSEOF, PDFException, PDFTypeError, PSSyntaxError
-from playa.psparser import KWD, PSKeyword, PSLiteral, PSStackParser, literal_name
+from playa.exceptions import PDFException, PDFTypeError, PSSyntaxError
+from playa.psparser import KWD, Parser, PSKeyword, PSLiteral, literal_name
 from playa.utils import choplist, nunpack
 
 log = logging.getLogger(__name__)
@@ -275,7 +275,7 @@ class CMapDB:
         return cls._umap_cache[name][vertical]
 
 
-class CMapParser(PSStackParser[PSKeyword]):
+class CMapParser(Parser[PSKeyword]):
     def __init__(self, cmap: CMapBase, data: bytes) -> None:
         super().__init__(data)
         self.cmap = cmap
@@ -285,8 +285,8 @@ class CMapParser(PSStackParser[PSKeyword]):
 
     def run(self) -> None:
         try:
-            self.nextobject()
-        except PSEOF:
+            _ = next(self)
+        except StopIteration:
             pass
 
     KEYWORD_BEGINCMAP = KWD(b"begincmap")

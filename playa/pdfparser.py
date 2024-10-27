@@ -1,12 +1,13 @@
 import logging
+import mmap
 import weakref
-from typing import TYPE_CHECKING, BinaryIO, Union
+from typing import TYPE_CHECKING, Union
 
 from playa import settings
 from playa.casting import safe_int
-from playa.exceptions import PSEOF, PDFSyntaxError
+from playa.exceptions import PDFSyntaxError
 from playa.pdftypes import PDFObjRef, PDFStream, dict_value, int_value
-from playa.psparser import KWD, PSKeyword, PSStackParser
+from playa.psparser import KWD, Parser, PSKeyword
 
 if TYPE_CHECKING:
     from playa.pdfdocument import PDFDocument
@@ -24,7 +25,7 @@ KEYWORD_OBJ = KWD(b"obj")
 
 
 # PDFParser stack holds all the base types plus PDFStream, PDFObjRef, and None
-class PDFParser(PSStackParser[Union[PSKeyword, PDFStream, PDFObjRef, None]]):
+class PDFParser(Parser[Union[PSKeyword, PDFStream, PDFObjRef, None]]):
     """PDFParser fetch PDF objects from a file stream.
     It can handle indirect references by referring to
     a PDF document set by set_document method.
@@ -40,7 +41,7 @@ class PDFParser(PSStackParser[Union[PSKeyword, PDFStream, PDFObjRef, None]]):
 
     """
 
-    def __init__(self, data: Union[BinaryIO, bytes], doc: "PDFDocument") -> None:
+    def __init__(self, data: Union[bytes, mmap.mmap], doc: "PDFDocument") -> None:
         super().__init__(data)
         self.doc = weakref.ref(doc)
         self.fallback = False
@@ -82,7 +83,7 @@ class PDFParser(PSStackParser[Union[PSKeyword, PDFStream, PDFObjRef, None]]):
             self.seek(pos)
             try:
                 (_, line) = self.nextline()  # 'stream\n'
-            except PSEOF:
+            except StopIteration:
                 if settings.STRICT:
                     raise PDFSyntaxError("Unexpected EOF")
                 return
@@ -91,7 +92,7 @@ class PDFParser(PSStackParser[Union[PSKeyword, PDFStream, PDFObjRef, None]]):
             while True:
                 try:
                     (linepos, line) = self.nextline()
-                except PSEOF:
+                except StopIteration:
                     if settings.STRICT:
                         raise PDFSyntaxError("Unexpected EOF")
                     break
