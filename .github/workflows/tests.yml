@@ -17,4 +17,4 @@ jobs:
       - name: Install Hatch
         uses: pypa/hatch@install
       - name: Run tests
-        run: hatch test
+        run: hatch test --cover
