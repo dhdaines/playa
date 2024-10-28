@@ -738,7 +738,13 @@ class PDFDocument:
         self._cached_fonts: Dict[object, PDFFont] = {}
         if isinstance(fp, io.TextIOBase):
             raise PSException("fp is not a binary file")
-        self.pdf_version = read_header(fp)
+        # The header is frequently mangled, in which case we will try to read the
+        # file anyway.
+        try:
+            self.pdf_version = read_header(fp)
+        except PDFSyntaxError:
+            log.warning("PDF header not found, will try to read the file anyway")
+            self.pdf_version = "UNKNOWN"
         try:
             self.buffer: Union[bytes, mmap.mmap] = mmap.mmap(
                 fp.fileno(), 0, access=mmap.ACCESS_READ
