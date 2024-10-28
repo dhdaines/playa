@@ -285,10 +285,6 @@ class Lexer:
         """Iterate over tokens."""
         return self
 
-    def nexttoken(self) -> Tuple[int, PSBaseParserToken]:
-        """Get the next token in iteration, raising StopIteration when done."""
-        return self.__next__()
-
     def __next__(self) -> Tuple[int, PSBaseParserToken]:
         """Get the next token in iteration, raising StopIteration when
         done."""
@@ -455,7 +451,7 @@ class Parser(Generic[ExtraT]):
         return
 
     def __next__(self) -> PSStackEntry[ExtraT]:
-        """Return the next object, returning StopIteration at EOF.
+        """Return the next object, raising StopIteration at EOF.
 
         Arrays and dictionaries are represented as Python lists and
         dictionaries.
@@ -575,4 +571,4 @@ class Parser(Generic[ExtraT]):
     def nexttoken(self) -> Tuple[int, PSBaseParserToken]:
         """Get the next token in iteration, raising StopIteration when
         done."""
-        return self._lexer.__next__()
+        return next(self._lexer)

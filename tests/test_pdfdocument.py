@@ -34,6 +34,12 @@ def test_read_header():
     assert read_header(BytesIO(b"%PDF-1.7")) == "1.7"
 
 
+def test_objects():
+    with playa.open(TESTDIR / "simple1.pdf") as doc:
+        for obj in doc:
+            print(obj)
+
+
 def test_page_labels():
     with playa.open(TESTDIR / "contrib" / "pagelabels.pdf") as doc:
         labels = [label for _, label in zip(range(10), doc.page_labels)]

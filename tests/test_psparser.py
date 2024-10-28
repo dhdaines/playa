@@ -296,7 +296,7 @@ def inline_parsers(
     bp = Lexer(data)
     assert bp.get_inline_data(target=target, blocksize=blocksize) == expected
     if nexttoken is not None:
-        assert bp.nexttoken() == nexttoken
+        assert next(bp) == nexttoken
 
 
 def test_get_inline_data() -> None:

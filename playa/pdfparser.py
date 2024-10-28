@@ -50,6 +50,7 @@ class PDFParser(Parser[Union[PSKeyword, PDFStream, PDFObjRef, None]]):
             self.add_results(*self.pop(1))
 
         elif token is KEYWORD_ENDOBJ:
+            # objid genno "obj" ... and the object itself
             self.add_results(*self.pop(4))
 
         elif token is KEYWORD_NULL:

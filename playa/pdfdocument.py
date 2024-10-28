@@ -794,6 +794,7 @@ class PDFDocument:
         if self.catalog.get("Type") is not LITERAL_CATALOG:
             if settings.STRICT:
                 raise PDFSyntaxError("Catalog not found!")
+        self.parser.seek(0)
 
     def _initialize_password(self, password: str = "") -> None:
         """Initialize the decryption handler with a given password, if any.
@@ -822,6 +823,10 @@ class PDFDocument:
         self.is_extractable = handler.is_extractable
         assert self.parser is not None
         self.parser.fallback = False  # need to read streams with exact length
+
+    def __iter__(self) -> Iterator[Tuple[int, object]]:
+        """Iterate over positions and top-level PDF objects in the file."""
+        return self.parser
 
     def _getobj_objstm(self, stream: PDFStream, index: int, objid: int) -> object:
         if stream.objid in self._parsed_objs:
