@@ -76,7 +76,7 @@ from playa.utils import (
 )
 
 if TYPE_CHECKING:
-    from playa.pdfdocument import PDFDocument, PDFResourceManager
+    from playa.pdfdocument import PDFDocument
 
 log = logging.getLogger(__name__)
 
@@ -167,17 +167,10 @@ class PDFPage:
     def layout(self) -> "LTPage":
         if self._layout is not None:
             return self._layout
-
-        doc = self.doc()
-        if doc is None:
-            raise RuntimeError("Document no longer exists!")
-        # Q: How many classes does does it take a Java programmer to
-        # install a lightbulb?
         device = PDFLayoutAnalyzer(
-            doc.rsrcmgr,
             pageno=self.page_number,
         )
-        interpreter = PDFPageInterpreter(doc.rsrcmgr, device)
+        interpreter = PDFPageInterpreter(self.doc, device)
         interpreter.process_page(self)
         assert device.result is not None
         self._layout = device.result
@@ -343,10 +336,8 @@ class PDFLayoutAnalyzer:
 
     def __init__(
         self,
-        rsrcmgr: "PDFResourceManager",
         pageno: int = 1,
     ) -> None:
-        self.rsrcmgr = rsrcmgr
         self.pageno = pageno
         self._stack: List[LTLayoutContainer] = []
         self.result: Optional[LTPage] = None
@@ -732,13 +723,13 @@ class PDFPageInterpreter:
     """
 
     def __init__(
-        self, rsrcmgr: "PDFResourceManager", device: "PDFLayoutAnalyzer"
+        self, doc: weakref.ReferenceType["PDFDocument"], device: "PDFLayoutAnalyzer"
     ) -> None:
-        self.rsrcmgr = rsrcmgr
+        self.doc = doc
         self.device = device
 
     def dup(self) -> "PDFPageInterpreter":
-        return self.__class__(self.rsrcmgr, self.device)
+        return self.__class__(self.doc, self.device)
 
     def init_resources(self, resources: Dict[object, object]) -> None:
         """Prepare the fonts and XObjects listed in the Resource attribute."""
@@ -748,6 +739,9 @@ class PDFPageInterpreter:
         self.csmap: Dict[str, PDFColorSpace] = PREDEFINED_COLORSPACE.copy()
         if not resources:
             return
+        doc = self.doc()
+        if doc is None:
+            raise RuntimeError("Document no longer exists!")
 
         def get_colorspace(spec: object) -> Optional[PDFColorSpace]:
             if isinstance(spec, list):
@@ -769,14 +763,15 @@ class PDFPageInterpreter:
                     if isinstance(spec, PDFObjRef):
                         objid = spec.objid
                     spec = dict_value(spec)
-                    self.fontmap[fontid] = self.rsrcmgr.get_font(objid, spec)
+                    self.fontmap[fontid] = doc.get_font(objid, spec)
             elif k == "ColorSpace":
                 for csid, spec in dict_value(v).items():
                     colorspace = get_colorspace(resolve1(spec))
                     if colorspace is not None:
                         self.csmap[csid] = colorspace
             elif k == "ProcSet":
-                self.rsrcmgr.get_procset(list_value(v))
+                pass  # called get_procset which did exactly
+                      # nothing. perhaps we want to do something?
             elif k == "XObject":
                 for xobjid, xobjstrm in dict_value(v).items():
                     self.xobjmap[xobjid] = xobjstrm
@@ -1167,7 +1162,10 @@ class PDFPageInterpreter:
         except KeyError:
             if settings.STRICT:
                 raise PDFInterpreterError("Undefined Font id: %r" % fontid)
-            self.textstate.font = self.rsrcmgr.get_font(None, {})
+            doc = self.doc()
+            if doc is None:
+                raise RuntimeError("Document no longer exists!")
+            self.textstate.font = doc.get_font(None, {})
         self.textstate.fontsize = cast(float, fontsize)
 
     def do_Tr(self, render: PDFStackT) -> None:

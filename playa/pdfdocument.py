@@ -692,78 +692,6 @@ class OutlineItem(NamedTuple):
     se: Union[PDFObjRef, None]
 
 
-class PDFResourceManager:
-    """Repository of shared resources.
-
-    ResourceManager facilitates reuse of shared resources
-    such as fonts and images so that large objects are not
-    allocated multiple times.
-    """
-
-    def __init__(self, caching: bool = True) -> None:
-        self.caching = caching
-        self._cached_fonts: Dict[object, PDFFont] = {}
-
-    def get_procset(self, procs: Sequence[object]) -> None:
-        for proc in procs:
-            if proc is LITERAL_PDF or proc is LITERAL_TEXT:
-                pass
-            else:
-                pass
-
-    def get_cmap(self, cmapname: str, strict: bool = False) -> CMapBase:
-        try:
-            return CMapDB.get_cmap(cmapname)
-        except CMapDB.CMapNotFound:
-            if strict:
-                raise
-            return CMap()
-
-    def get_font(self, objid: object, spec: Mapping[str, object]) -> PDFFont:
-        if objid and objid in self._cached_fonts:
-            font = self._cached_fonts[objid]
-        else:
-            log.debug("get_font: create: objid=%r, spec=%r", objid, spec)
-            if settings.STRICT:
-                if spec["Type"] is not LITERAL_FONT:
-                    raise PDFFontError("Type is not /Font")
-            # Create a Font object.
-            if "Subtype" in spec:
-                subtype = literal_name(spec["Subtype"])
-            else:
-                if settings.STRICT:
-                    raise PDFFontError("Font Subtype is not specified.")
-                subtype = "Type1"
-            if subtype in ("Type1", "MMType1"):
-                # Type1 Font
-                font = PDFType1Font(spec)
-            elif subtype == "TrueType":
-                # TrueType Font
-                font = PDFTrueTypeFont(spec)
-            elif subtype == "Type3":
-                # Type3 Font
-                font = PDFType3Font(spec)
-            elif subtype in ("CIDFontType0", "CIDFontType2"):
-                # CID Font
-                font = PDFCIDFont(spec)
-            elif subtype == "Type0":
-                # Type0 Font
-                dfonts = list_value(spec["DescendantFonts"])
-                assert dfonts
-                subspec = dict_value(dfonts[0]).copy()
-                for k in ("Encoding", "ToUnicode"):
-                    if k in spec:
-                        subspec[k] = resolve1(spec[k])
-                font = self.get_font(None, subspec)
-            else:
-                if settings.STRICT:
-                    raise PDFFontError("Invalid Font spec: %r" % spec)
-                font = PDFType1Font(spec)  # FIXME: this is so wrong!
-            if objid and self.caching:
-                self._cached_fonts[objid] = font
-        return font
-
-
 class PDFDocument:
     """Representation of a PDF document on disk.
 
@@ -808,6 +736,7 @@ class PDFDocument:
         self.decipher: Optional[DecipherCallable] = None
         self._cached_objs: Dict[int, Tuple[object, int]] = {}
         self._parsed_objs: Dict[int, Tuple[List[object], int]] = {}
+        self._cached_fonts: Dict[object, PDFFont] = {}
         if isinstance(fp, io.TextIOBase):
             raise PSException("fp is not a binary file")
         self.pdf_version = read_header(fp)
@@ -860,8 +789,6 @@ class PDFDocument:
         if self.catalog.get("Type") is not LITERAL_CATALOG:
             if settings.STRICT:
                 raise PDFSyntaxError("Catalog not found!")
-        # NOTE: This does nearly nothing at all
-        self.rsrcmgr = PDFResourceManager(True)
 
     def _initialize_password(self, password: str = "") -> None:
         """Initialize the decryption handler with a given password, if any.
@@ -992,6 +919,50 @@ class PDFDocument:
             log.debug("register: objid=%r: %r", objid, obj)
             self._cached_objs[objid] = (obj, genno)
         return obj
+
+    def get_font(self, objid: object, spec: Mapping[str, object]) -> PDFFont:
+        if objid and objid in self._cached_fonts:
+            font = self._cached_fonts[objid]
+        else:
+            log.debug("get_font: create: objid=%r, spec=%r", objid, spec)
+            if settings.STRICT:
+                if spec["Type"] is not LITERAL_FONT:
+                    raise PDFFontError("Type is not /Font")
+            # Create a Font object.
+            if "Subtype" in spec:
+                subtype = literal_name(spec["Subtype"])
+            else:
+                if settings.STRICT:
+                    raise PDFFontError("Font Subtype is not specified.")
+                subtype = "Type1"
+            if subtype in ("Type1", "MMType1"):
+                # Type1 Font
+                font = PDFType1Font(spec)
+            elif subtype == "TrueType":
+                # TrueType Font
+                font = PDFTrueTypeFont(spec)
+            elif subtype == "Type3":
+                # Type3 Font
+                font = PDFType3Font(spec)
+            elif subtype in ("CIDFontType0", "CIDFontType2"):
+                # CID Font
+                font = PDFCIDFont(spec)
+            elif subtype == "Type0":
+                # Type0 Font
+                dfonts = list_value(spec["DescendantFonts"])
+                assert dfonts
+                subspec = dict_value(dfonts[0]).copy()
+                for k in ("Encoding", "ToUnicode"):
+                    if k in spec:
+                        subspec[k] = resolve1(spec[k])
+                font = self.get_font(None, subspec)
+            else:
+                if settings.STRICT:
+                    raise PDFFontError("Invalid Font spec: %r" % spec)
+                font = PDFType1Font(spec)  # FIXME: this is so wrong!
+            if objid:
+                self._cached_fonts[objid] = font
+        return font
 
     @property
     def outlines(self) -> Iterator[OutlineItem]:
