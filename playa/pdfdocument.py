@@ -29,7 +29,6 @@ from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 
 from playa import settings
 from playa.arcfour import Arcfour
-from playa.cmapdb import CMap, CMapBase, CMapDB
 from playa.data_structures import NameTree, NumberTree
 from playa.exceptions import (
     PDFEncryptionError,

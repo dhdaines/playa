@@ -771,7 +771,7 @@ class PDFPageInterpreter:
                         self.csmap[csid] = colorspace
             elif k == "ProcSet":
                 pass  # called get_procset which did exactly
-                      # nothing. perhaps we want to do something?
+                # nothing. perhaps we want to do something?
             elif k == "XObject":
                 for xobjid, xobjstrm in dict_value(v).items():
                     self.xobjmap[xobjid] = xobjstrm
