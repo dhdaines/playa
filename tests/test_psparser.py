@@ -152,25 +152,19 @@ EXPECTED2 = [
 ]
 
 
-def test_nextline() -> None:
+def test_lines() -> None:
     """Verify that we replicate the old nextline method."""
     parser = Lexer(TESTDATA2)
-    output = []
-    # FIXME: replace with parser.iter_lines() or similar
-    while True:
-        try:
-            output.append(parser.nextline())
-        except StopIteration:
-            break
+    output = list(parser.iter_lines())
     assert output == EXPECTED2
 
 
-def test_revreadlines() -> None:
+def test_revlines() -> None:
     """Verify that we replicate the old revreadlines method."""
     expected = list(reversed([line for pos, line in EXPECTED2]))
     parser = Lexer(TESTDATA2)
-    # FIXME: replace with parser.reverse_iter_lines() or similar
-    output = list(parser.revreadlines())
+    parser.seek(parser.end)
+    output = list(parser.reverse_iter_lines())
     assert output == expected
 
 

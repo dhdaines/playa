@@ -116,14 +116,11 @@ class PDFXRefTable:
         self._load(parser)
 
     def _load(self, parser: PDFParser) -> None:
-        while True:
-            try:
-                (pos, line) = parser.nextline()
-                line = line.strip()
-                if not line:
-                    continue
-            except StopIteration:
-                raise PDFNoValidXRef("Unexpected EOF - file corrupted?")
+        lines = parser.iter_lines()
+        for pos, line in lines:
+            line = line.strip()
+            if not line:
+                continue
             if line.startswith(b"trailer"):
                 parser.seek(pos)
                 break
@@ -137,11 +134,8 @@ class PDFXRefTable:
                 error_msg = f"Invalid line: {parser!r}: line={line!r}"
                 raise PDFNoValidXRef(error_msg)
             for objid in range(start, start + nobjs):
-                try:
-                    (_, line) = parser.nextline()
-                    line = line.strip()
-                except StopIteration:
-                    raise PDFNoValidXRef("Unexpected EOF - file corrupted?")
+                _, line = next(lines)
+                line = line.strip()
                 f = line.split(b" ")
                 if len(f) != 3:
                     error_msg = f"Invalid XRef format: {parser!r}, line={line!r}"
@@ -190,11 +184,7 @@ class PDFXRefFallback(PDFXRefTable):
 
     def _load(self, parser: PDFParser) -> None:
         parser.seek(0)
-        while 1:
-            try:
-                (pos, line_bytes) = parser.nextline()
-            except StopIteration:
-                break
+        for pos, line_bytes in parser.iter_lines():
             if line_bytes.startswith(b"trailer"):
                 parser.seek(pos)
                 self._load_trailer(parser)
@@ -1184,7 +1174,8 @@ class PDFDocument:
         prev = b""
         # FIXME: This will scan *the whole file* looking for an xref
         # table, it should maybe give up sooner?
-        for line in self.parser.revreadlines():
+        self.parser.seek(self.parser.end)
+        for line in self.parser.reverse_iter_lines():
             line = line.strip()
             log.debug("find_xref: %r", line)
             if line == b"startxref":
@@ -1220,7 +1211,7 @@ class PDFDocument:
             xref: PDFXRef = PDFXRefStream(self.parser)
         else:
             if token is KEYWORD_XREF:
-                self.parser.nextline()
+                next(self.parser.iter_lines())
             xref = PDFXRefTable(self.parser)
         xrefs.append(xref)
         trailer = xref.trailer

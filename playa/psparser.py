@@ -228,36 +228,36 @@ class Lexer:
         self.pos = min(pos + objlen, len(self.data))
         return self.data[pos : self.pos]
 
-    def nextline(self) -> Tuple[int, bytes]:
-        r"""Fetches a next line that ends either with \r, \n, or \r\n."""
-        if self.pos == self.end:
-            raise StopIteration
-        linepos = self.pos
-        m = EOLR.search(self.data, self.pos)
-        if m is None:
-            self.pos = self.end
-        else:
-            self.pos = m.end()
-        return (linepos, self.data[linepos : self.pos])
+    def iter_lines(self) -> Iterator[Tuple[int, bytes]]:
+        r"""Iterate over lines that end either with \r, \n, or \r\n,
+        starting at the current position."""
+        while self.pos < self.end:
+            linepos = self.pos
+            m = EOLR.search(self.data, self.pos)
+            if m is None:
+                self.pos = self.end
+            else:
+                self.pos = m.end()
+            yield (linepos, self.data[linepos : self.pos])
 
-    def revreadlines(self) -> Iterator[bytes]:
-        """Fetches a next line backwards.
+    def reverse_iter_lines(self) -> Iterator[bytes]:
+        """Iterate backwards over lines starting at the current position.
 
         This is used to locate the trailers at the end of a file.
         """
-        endline = pos = self.end
+        endline = self.pos
         while True:
-            nidx = self.data.rfind(b"\n", 0, pos)
-            ridx = self.data.rfind(b"\r", 0, pos)
+            nidx = self.data.rfind(b"\n", 0, self.pos)
+            ridx = self.data.rfind(b"\r", 0, self.pos)
             best = max(nidx, ridx)
             if best == -1:
                 yield self.data[:endline]
                 break
             yield self.data[best + 1 : endline]
             endline = best + 1
-            pos = best
-            if pos > 0 and self.data[pos - 1 : pos + 1] == b"\r\n":
-                pos -= 1
+            self.pos = best
+            if self.pos > 0 and self.data[self.pos - 1 : self.pos + 1] == b"\r\n":
+                self.pos -= 1
 
     def get_inline_data(
         self, target: bytes = b"EI", blocksize: int = -1
@@ -407,15 +407,6 @@ class Parser(Generic[ExtraT]):
         self.curstack: List[PSStackEntry[ExtraT]] = []
         self.results: List[PSStackEntry[ExtraT]] = []
 
-    def seek(self, pos: int) -> None:
-        """Seek to a position and reset parser state."""
-        self._lexer.seek(pos)
-        self.reset()
-
-    def tell(self) -> int:
-        """Get the current position in the file."""
-        return self._lexer.tell()
-
     def push(self, *objs: PSStackEntry[ExtraT]) -> None:
         """Push some objects onto the stack."""
         self.curstack.extend(objs)
@@ -546,17 +537,30 @@ class Parser(Generic[ExtraT]):
         return self
 
     # Delegation follows
-    def nextline(self) -> Tuple[int, bytes]:
-        r"""Fetches a next line that ends either with \r, \n, or
-        \r\n."""
-        return self._lexer.nextline()
+    def seek(self, pos: int) -> None:
+        """Seek to a position and reset parser state."""
+        self._lexer.seek(pos)
+        self.reset()
 
-    def revreadlines(self) -> Iterator[bytes]:
-        """Fetches a next line backwards.
+    def tell(self) -> int:
+        """Get the current position in the file."""
+        return self._lexer.tell()
+
+    @property
+    def end(self) -> int:
+        """End (or size) of file, for use with seek()."""
+        return self._lexer.end
+
+    def iter_lines(self) -> Iterator[Tuple[int, bytes]]:
+        r"""Iterate over lines that end either with \r, \n, or \r\n."""
+        return self._lexer.iter_lines()
+
+    def reverse_iter_lines(self) -> Iterator[bytes]:
+        """Iterate over lines starting at the end of the file
 
         This is used to locate the trailers at the end of a file.
         """
-        return self._lexer.revreadlines()
+        return self._lexer.reverse_iter_lines()
 
     def read(self, objlen: int) -> bytes:
         """Read data from a specified position, moving the current

@@ -60,7 +60,7 @@ if __name__ == "__main__":
     # Silence warnings about broken PDFs
     logging.basicConfig(level=logging.ERROR)
     niter = 10
-    miner_time = beach_time = 0
+    miner_time = beach_time = 0.
     for iter in range(niter + 1):
         for path in ALLPDFS:
             if len(sys.argv) == 1 or "playa" in sys.argv[1:]:

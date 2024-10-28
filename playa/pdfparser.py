@@ -26,16 +26,13 @@ KEYWORD_OBJ = KWD(b"obj")
 
 # PDFParser stack holds all the base types plus PDFStream, PDFObjRef, and None
 class PDFParser(Parser[Union[PSKeyword, PDFStream, PDFObjRef, None]]):
-    """PDFParser fetch PDF objects from a file stream.
-    It also reads XRefs at the end of every PDF file.
+    """PDFParser fetches PDF objects from a file stream.
     It holds a weak reference to the document in order to
     resolve indirect references.  If the document is deleted
     then this will obviously no longer work.
 
     Typical usage:
       parser = PDFParser(fp, doc)
-      parser.read_xref()
-      parser.read_xref(fallback=True) # optional
       parser.seek(offset)
       for object in parser:
           ...
@@ -69,7 +66,7 @@ class PDFParser(Parser[Union[PSKeyword, PDFStream, PDFObjRef, None]]):
                     self.push((pos, obj))
 
         elif token is KEYWORD_STREAM:
-            # stream object
+            # stream dictionary, which precedes "stream"
             ((_, dic),) = self.pop(1)
             dic = dict_value(dic)
             objlen = 0
@@ -83,20 +80,15 @@ class PDFParser(Parser[Union[PSKeyword, PDFStream, PDFObjRef, None]]):
             # the data starts after the trailing newline
             self.seek(pos)
             try:
-                (_, line) = self.nextline()  # 'stream\n'
+                _, line = next(self.iter_lines())  # 'stream\n'
             except StopIteration:
                 if settings.STRICT:
                     raise PDFSyntaxError("Unexpected EOF")
                 return
             pos = self.tell()
             data = self.read(objlen)
-            while True:
-                try:
-                    (linepos, line) = self.nextline()
-                except StopIteration:
-                    if settings.STRICT:
-                        raise PDFSyntaxError("Unexpected EOF")
-                    break
+            # FIXME: This is ... not really the right way to do this.
+            for linepos, line in self.iter_lines():
                 if b"endstream" in line:
                     i = line.index(b"endstream")
                     objlen += i
