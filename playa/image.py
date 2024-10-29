@@ -4,9 +4,6 @@ import struct
 from io import BytesIO
 from typing import BinaryIO, Literal, Tuple
 
-from playa.exceptions import PDFValueError
-from playa.jbig2 import JBIG2StreamReader, JBIG2StreamWriter
-from playa.layout import LTImage
 from playa.color import (
     LITERAL_DEVICE_CMYK,
     LITERAL_DEVICE_GRAY,
@@ -14,6 +11,9 @@ from playa.color import (
     LITERAL_INLINE_DEVICE_GRAY,
     LITERAL_INLINE_DEVICE_RGB,
 )
+from playa.exceptions import PDFValueError
+from playa.jbig2 import JBIG2StreamReader, JBIG2StreamWriter
+from playa.layout import LTImage
 from playa.pdftypes import (
     LITERALS_DCT_DECODE,
     LITERALS_FLATE_DECODE,

@@ -5,7 +5,7 @@ from typing import Dict, Iterable, Optional, cast
 from playa.exceptions import PDFKeyError
 from playa.glyphlist import glyphname2unicode
 from playa.latin_enc import ENCODING
-from playa.psparser import PSLiteral
+from playa.parser import PSLiteral
 
 HEXADECIMAL = re.compile(r"[0-9a-fA-F]+")
 

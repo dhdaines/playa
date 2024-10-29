@@ -1,11 +1,6 @@
-import logging
-from typing import Any, List, Tuple
 from pathlib import Path
 
-import pytest
-
-from playa.parser import PDFParser, ContentStream, ContentStreamParser
-
+from playa.parser import PDFParser
 
 TESTDIR = Path(__file__).parent.parent / "samples"
 
@@ -13,6 +8,7 @@ TESTDIR = Path(__file__).parent.parent / "samples"
 class MockDoc:
     def __call__(self):
         return self
+
     decipher = None
 
 

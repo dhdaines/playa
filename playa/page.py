@@ -15,6 +15,7 @@ from typing import (
 
 from playa import settings
 from playa.casting import safe_float
+from playa.color import PREDEFINED_COLORSPACE, PDFColorSpace
 from playa.exceptions import (
     PDFInterpreterError,
     PDFSyntaxError,
@@ -22,6 +23,7 @@ from playa.exceptions import (
     PDFValueError,
     PSTypeError,
 )
+from playa.font import PDFFont
 from playa.layout import (
     Color,
     LTChar,
@@ -35,30 +37,22 @@ from playa.layout import (
     LTRect,
     PDFGraphicState,
 )
-from playa.color import PREDEFINED_COLORSPACE, PDFColorSpace
-from playa.font import (
-    PDFFont,
-)
+from playa.parser import Parser, PSBaseParserToken, PSStackType
 from playa.pdftypes import (
-    LITERALS_ASCII85_DECODE,
-    ObjRef,
-    ContentStream,
-    dict_value,
-    int_value,
-    list_value,
-    resolve1,
-    stream_value,
-)
-from playa.psparser import (
     KWD,
     LIT,
-    Parser,
-    PSBaseParserToken,
+    LITERALS_ASCII85_DECODE,
+    ContentStream,
+    ObjRef,
     PSKeyword,
     PSLiteral,
-    PSStackType,
+    dict_value,
+    int_value,
     keyword_name,
+    list_value,
     literal_name,
+    resolve1,
+    stream_value,
 )
 from playa.utils import (
     MATRIX_IDENTITY,

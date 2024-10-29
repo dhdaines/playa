@@ -10,8 +10,8 @@ import pytest
 import playa
 import playa.settings
 from playa.data_structures import NameTree
-from playa.exceptions import PDFSyntaxError
 from playa.document import read_header
+from playa.exceptions import PDFSyntaxError
 from playa.utils import decode_text
 
 playa.settings.STRICT = True

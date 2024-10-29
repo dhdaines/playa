@@ -18,9 +18,8 @@ from typing import (
 from playa.data_structures import NumberTree
 from playa.exceptions import PDFNoStructTree
 from playa.page import PDFPage
-from playa.parser import KEYWORD_NULL
+from playa.parser import KEYWORD_NULL, PSLiteral
 from playa.pdftypes import ObjRef, resolve1
-from playa.psparser import PSLiteral
 from playa.utils import decode_text
 
 logger = logging.getLogger(__name__)

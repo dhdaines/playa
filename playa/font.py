@@ -34,6 +34,14 @@ from playa.exceptions import (
     PDFValueError,
 )
 from playa.fontmetrics import FONT_METRICS
+from playa.parser import (
+    KWD,
+    LIT,
+    Parser,
+    PSKeyword,
+    PSLiteral,
+    literal_name,
+)
 from playa.pdftypes import (
     ContentStream,
     dict_value,
@@ -43,14 +51,6 @@ from playa.pdftypes import (
     resolve1,
     resolve_all,
     stream_value,
-)
-from playa.psparser import (
-    KWD,
-    LIT,
-    Parser,
-    PSKeyword,
-    PSLiteral,
-    literal_name,
 )
 from playa.utils import Matrix, Point, Rect, apply_matrix_norm, choplist, nunpack
 

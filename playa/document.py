@@ -44,19 +44,22 @@ from playa.exceptions import (
     PDFTypeError,
     PSException,
 )
-from playa.font import (
-    PDFCIDFont,
-    PDFFont,
-    PDFTrueTypeFont,
-    PDFType1Font,
-    PDFType3Font,
-)
+from playa.font import PDFCIDFont, PDFFont, PDFTrueTypeFont, PDFType1Font, PDFType3Font
 from playa.page import PDFPage
-from playa.parser import KEYWORD_XREF, PDFParser, ContentStreamParser
+from playa.parser import (
+    KEYWORD_OBJ,
+    KEYWORD_TRAILER,
+    KEYWORD_XREF,
+    LIT,
+    ContentStreamParser,
+    PDFParser,
+    PSLiteral,
+    literal_name,
+)
 from playa.pdftypes import (
+    ContentStream,
     DecipherCallable,
     ObjRef,
-    ContentStream,
     decipher_all,
     dict_value,
     int_value,
@@ -66,7 +69,6 @@ from playa.pdftypes import (
     stream_value,
     uint_value,
 )
-from playa.psparser import KWD, LIT, PSLiteral, literal_name
 from playa.utils import (
     choplist,
     decode_text,
@@ -88,7 +90,6 @@ LITERAL_XREF = LIT("XRef")
 LITERAL_CATALOG = LIT("Catalog")
 LITERAL_PAGE = LIT("Page")
 LITERAL_PAGES = LIT("Pages")
-KEYWORD_OBJ = KWD(b"obj")
 INHERITABLE_PAGE_ATTRS = {"Resources", "MediaBox", "CropBox", "Rotate"}
 
 
@@ -149,8 +150,14 @@ class PDFXRefTable:
     def _load_trailer(self, parser: PDFParser) -> None:
         try:
             (_, kwd) = parser.nexttoken()
-            if kwd is not KWD(b"trailer"):
-                raise PDFSyntaxError("Expected b'trailer', got %r", kwd)
+            if kwd is not KEYWORD_TRAILER:
+                raise PDFSyntaxError(
+                    "Expected %r, got %r"
+                    % (
+                        KEYWORD_TRAILER,
+                        kwd,
+                    )
+                )
             (_, dic) = next(parser)
         except StopIteration:
             x = parser.pop(1)
@@ -241,7 +248,10 @@ class PDFXRefStream:
         (_, genno) = parser.nexttoken()  # ignored
         (_, kwd) = parser.nexttoken()
         (_, stream) = next(parser)
-        if not isinstance(stream, ContentStream) or stream.get("Type") is not LITERAL_XREF:
+        if (
+            not isinstance(stream, ContentStream)
+            or stream.get("Type") is not LITERAL_XREF
+        ):
             raise PDFNoValidXRef(f"Invalid PDF stream spec {stream!r}")
         size = stream["Size"]
         index_array = stream.get("Index", (0, size))

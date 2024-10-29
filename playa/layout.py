@@ -11,8 +11,8 @@ from typing import (
     cast,
 )
 
-from playa.exceptions import PDFValueError
 from playa.color import PDFColorSpace
+from playa.exceptions import PDFValueError
 from playa.font import PDFFont
 from playa.pdftypes import ContentStream
 from playa.utils import (

@@ -272,7 +272,7 @@ DATA = rb"""
 
 
 def bench_bytes():
-    from playa.psparser import Lexer
+    from playa.parser import Lexer
 
     runs = 100
     start = time.time()
@@ -286,7 +286,7 @@ def bench_bytes():
 def bench_mmap():
     import mmap
 
-    from playa.psparser import Lexer
+    from playa.parser import Lexer
 
     with tempfile.NamedTemporaryFile() as tf:
         runs = 100

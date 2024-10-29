@@ -3,13 +3,15 @@ from typing import Any, List, Tuple
 
 import pytest
 
-from playa.psparser import (
+from playa.parser import (
     KEYWORD_DICT_BEGIN,
     KEYWORD_DICT_END,
-    KWD,
-    LIT,
     Lexer,
     Parser,
+)
+from playa.pdftypes import (
+    KWD,
+    LIT,
     keyword_name,
     literal_name,
 )
