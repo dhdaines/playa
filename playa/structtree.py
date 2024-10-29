@@ -17,7 +17,7 @@ from typing import (
 
 from playa.data_structures import NumberTree
 from playa.exceptions import PDFNoStructTree
-from playa.page import PDFPage
+from playa.page import Page
 from playa.parser import KEYWORD_NULL, PSLiteral
 from playa.pdftypes import ObjRef, resolve1
 from playa.utils import decode_text
@@ -102,7 +102,7 @@ class PDFStructElement(Findable):
     alt_text: Union[str, None]
     actual_text: Union[str, None]
     title: Union[str, None]
-    page_number: Union[int, None]
+    page_idx: Union[int, None]
     attributes: Dict[str, Any] = field(default_factory=dict)
     mcids: List[int] = field(default_factory=list)
     children: List["PDFStructElement"] = field(default_factory=list)
@@ -116,12 +116,12 @@ class PDFStructElement(Findable):
         """
         # Collect them depth-first to preserve ordering
         for mcid in self.mcids:
-            yield self.page_number, mcid
+            yield self.page_idx, mcid
         d = deque(self.children)
         while d:
             el = d.popleft()
             for mcid in el.mcids:
-                yield el.page_number, mcid
+                yield el.page_idx, mcid
             d.extendleft(reversed(el.children))
 
     def to_dict(self) -> Dict[str, Any]:
@@ -153,17 +153,17 @@ class PDFStructTree(Findable):
 
     Args:
       doc: Document from which to extract structure tree
-      pages: List of (number, page) pairs - numbers will be used to
-             identify pages in the tree through the `page_number`
+      pages: List of (index, page) pairs - indices will be used to
+             identify pages in the tree through the `page_idx`
              attribute of `PDFStructElement`.
     """
 
-    page: Union[PDFPage, None]
+    page: Union[Page, None]
 
     def __init__(
         self,
         doc: "PDFDocument",
-        pages: Union[Iterable[PDFPage], None] = None,
+        pages: Union[Iterable[Page], None] = None,
     ):
         if "StructTreeRoot" not in doc.catalog:
             raise PDFNoStructTree("Catalog has no 'StructTreeRoot' entry")
@@ -174,11 +174,11 @@ class PDFStructTree(Findable):
         self.page_dict: Dict[Any, Union[int, None]]
 
         if pages is None:
-            self.page_dict = {page.pageid: page.page_number for page in doc.pages}
+            self.page_dict = {page.pageid: page.page_idx for page in doc.pages}
             self._parse_struct_tree()
         else:
             pagelist = list(pages)
-            self.page_dict = {page.pageid: page.page_number for page in pagelist}
+            self.page_dict = {page.pageid: page.page_idx for page in pagelist}
             parent_tree_obj = self.root.get("ParentTree")
             # If we have a single page then we will work backwards from
             # its ParentTree - this is because structure elements could
@@ -257,12 +257,12 @@ class PDFStructTree(Findable):
         # We hopefully caught these earlier
         assert "MCID" not in obj, "Uncaught MCR: %s" % obj
         assert "Obj" not in obj, "Uncaught OBJR: %s" % obj
-        # Get page number if necessary
-        page_number = None
+        # Get page index if necessary
+        page_idx = None
         if self.page_dict is not None and "Pg" in obj:
             page_objid = obj["Pg"].objid
             assert page_objid in self.page_dict, "Object on unparsed page: %s" % obj
-            page_number = self.page_dict[page_objid]
+            page_idx = self.page_dict[page_objid]
         obj_tag = ""
         if "S" in obj:
             obj_tag = decode_text(obj["S"].name)
@@ -285,7 +285,7 @@ class PDFStructTree(Findable):
         element = PDFStructElement(
             type=obj_tag,
             id=element_id,
-            page_number=page_number,
+            page_idx=page_idx,
             revision=revision,
             lang=lang,
             title=title,

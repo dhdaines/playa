@@ -438,8 +438,13 @@ class Parser(Generic[ExtraT]):
         return pos, obj
 
     def __iter__(self) -> Iterator[PSStackEntry[ExtraT]]:
-        """Iterate over objects, raising StopIteration at EOF."""
+        """Iterate over (position, object) tuples, raising StopIteration at EOF."""
         return self
+
+    @property
+    def tokens(self) -> Iterator[Tuple[int, PSBaseParserToken]]:
+        """Iterate over (position, token) tuples, raising StopIteration at EOF."""
+        return self._lexer
 
     # Delegation follows
     def seek(self, pos: int) -> None:
@@ -483,7 +488,6 @@ class Parser(Generic[ExtraT]):
         return next(self._lexer)
 
 
-# PDFParser stack holds all the base types plus ContentStream, ObjRef, and None
 class PDFParser(Parser[Union[PSKeyword, ContentStream, ObjRef, None]]):
     """PDFParser fetches PDF objects from a file stream.
     It holds a weak reference to the document in order to
@@ -579,11 +583,9 @@ class PDFParser(Parser[Union[PSKeyword, ContentStream, ObjRef, None]]):
 
 
 class ContentStreamParser(PDFParser):
-    """StreamParser is used to parse PDF content streams
-    that is contained in each page and has instructions
-    for rendering the page. A reference to a PDF document is
-    needed because a PDF content stream can also have
-    indirect references to other objects in the same document.
+    """StreamParser is used to parse PDF content streams and object
+    streams.  These have slightly different rules for how objects are
+    described than the top-level PDF file contents.
     """
 
     def __init__(self, data: bytes, doc: "PDFDocument") -> None:

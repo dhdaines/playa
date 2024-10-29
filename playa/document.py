@@ -45,7 +45,7 @@ from playa.exceptions import (
     PSException,
 )
 from playa.font import PDFCIDFont, PDFFont, PDFTrueTypeFont, PDFType1Font, PDFType3Font
-from playa.page import PDFPage
+from playa.page import Page
 from playa.parser import (
     KEYWORD_OBJ,
     KEYWORD_TRAILER,
@@ -53,6 +53,7 @@ from playa.parser import (
     LIT,
     ContentStreamParser,
     PDFParser,
+    PSBaseParserToken,
     PSLiteral,
     literal_name,
 )
@@ -723,7 +724,7 @@ class PDFDocument:
     """
 
     _fp: Union[BinaryIO, None] = None
-    _pages: Union[List[PDFPage], None] = None
+    _pages: Union[List[Page], None] = None
 
     def __enter__(self) -> "PDFDocument":
         return self
@@ -838,8 +839,13 @@ class PDFDocument:
         self.parser.fallback = False  # need to read streams with exact length
 
     def __iter__(self) -> Iterator[Tuple[int, object]]:
-        """Iterate over positions and top-level PDF objects in the file."""
+        """Iterate over (position, object) tuples, raising StopIteration at EOF."""
         return self.parser
+
+    @property
+    def tokens(self) -> Iterator[Tuple[int, PSBaseParserToken]]:
+        """Iterate over (position, token) tuples, raising StopIteration at EOF."""
+        return self.parser.tokens
 
     def _getobj_objstm(self, stream: ContentStream, index: int, objid: int) -> object:
         if stream.objid in self._parsed_objs:
@@ -1064,7 +1070,7 @@ class PDFDocument:
                 # The PDF specification *requires* both the Pages
                 # element of the catalog and the entries in Kids in
                 # the page tree to be indirect references.
-                object_id = obj.objid
+                object_id = int(obj.objid)
             elif isinstance(obj, int):
                 # Should not happen in a valid PDF, but probably does?
                 log.warning("Page tree contains bare integer: %r in %r", obj, parent)
@@ -1099,7 +1105,7 @@ class PDFDocument:
                 yield object_id, object_properties
 
     @property
-    def pages(self) -> List[PDFPage]:
+    def pages(self) -> List[Page]:
         if self._pages is None:
             try:
                 page_labels: Iterator[Optional[str]] = self.page_labels
@@ -1107,15 +1113,15 @@ class PDFDocument:
                 page_labels = itertools.repeat(None)
             try:
                 self._pages = [
-                    PDFPage(self, objid, properties, label, page_number + 1)
-                    for page_number, ((objid, properties), label) in enumerate(
+                    Page(self, objid, properties, label, page_idx)
+                    for page_idx, ((objid, properties), label) in enumerate(
                         zip(self.get_page_objects(), page_labels)
                     )
                 ]
             except PDFNoPageTree:
                 self._pages = [
-                    PDFPage(self, objid, properties, label, page_number + 1)
-                    for page_number, ((objid, properties), label) in enumerate(
+                    Page(self, objid, properties, label, page_idx)
+                    for page_idx, ((objid, properties), label) in enumerate(
                         zip(self.get_pages_from_xrefs(), page_labels)
                     )
                 ]

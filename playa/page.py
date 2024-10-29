@@ -82,16 +82,16 @@ LITERAL_IMAGE = LIT("Image")
 PDFTextSeq = Iterable[Union[int, float, bytes]]
 
 
-class PDFPage:
+class Page:
     """An object that holds the information about a page.
 
-    A PDFPage object is merely a convenience class that has a set
+    A Page object is merely a convenience class that has a set
     of keys and values, which describe the properties of a page
     and point to its contents.
 
     Attributes
     ----------
-      pageid: any Python object that can uniquely identify the page.
+      pageid: the integer object ID associated with the page in the page tree
       attrs: a dictionary of page attributes.
       contents: a list of ContentStream objects that represents the page content.
       resources: a dictionary of resources used by the page.
@@ -99,30 +99,31 @@ class PDFPage:
       cropbox: the crop rectangle of the page.
       rotate: the page rotation (in degree).
       label: the page's label (typically, the logical page number).
+      page_number: the "physical" page number, indexed from 1.
 
     """
 
     def __init__(
         self,
         doc: "PDFDocument",
-        pageid: object,
-        attrs: object,
+        pageid: int,
+        attrs: Dict,
         label: Optional[str],
-        page_number: int = 1,
+        page_idx: int = 0,
     ) -> None:
         """Initialize a page object.
 
         doc: a PDFDocument object.
-        pageid: any Python object that can uniquely identify the page.
+        pageid: the integer PDF object ID associated with the page in the page tree.
         attrs: a dictionary of page attributes.
         label: page label string.
-        page_number: page number (starting from 1)
+        page_idx: 0-based index of the page in the document.
         """
         self.doc = weakref.ref(doc)
         self.pageid = pageid
-        self.attrs = dict_value(attrs)
+        self.attrs = attrs
         self.label = label
-        self.page_number = page_number
+        self.page_idx = page_idx
         self.lastmod = resolve1(self.attrs.get("LastModified"))
         self.resources: Dict[object, object] = resolve1(
             self.attrs.get("Resources", dict()),
@@ -162,16 +163,16 @@ class PDFPage:
         if self._layout is not None:
             return self._layout
         device = PDFLayoutAnalyzer(
-            pageno=self.page_number,
+            page_idx=self.page_idx,
         )
-        interpreter = PDFPageInterpreter(self.doc, device)
+        interpreter = PageInterpreter(self.doc, device)
         interpreter.process_page(self)
         assert device.result is not None
         self._layout = device.result
         return self._layout
 
     def __repr__(self) -> str:
-        return f"<PDFPage: Resources={self.resources!r}, MediaBox={self.mediabox!r}>"
+        return f"<Page: Resources={self.resources!r}, MediaBox={self.mediabox!r}>"
 
 
 class PDFTextState:
@@ -330,26 +331,26 @@ class PDFLayoutAnalyzer:
 
     def __init__(
         self,
-        pageno: int = 1,
+        page_idx: int = 0,
     ) -> None:
-        self.pageno = pageno
+        self.page_idx = page_idx
         self._stack: List[LTLayoutContainer] = []
         self.result: Optional[LTPage] = None
 
     def set_ctm(self, ctm: Matrix) -> None:
         self.ctm = ctm
 
-    def begin_page(self, page: PDFPage, ctm: Matrix) -> None:
+    def begin_page(self, page: Page, ctm: Matrix) -> None:
         (x0, y0, x1, y1) = page.mediabox
         (x0, y0) = apply_matrix_pt(ctm, (x0, y0))
         (x1, y1) = apply_matrix_pt(ctm, (x1, y1))
         mediabox = (0, 0, abs(x0 - x1), abs(y0 - y1))
-        self.cur_item = LTPage(self.pageno, mediabox)
+        self.cur_item = LTPage(self.page_idx, mediabox)
 
-    def end_page(self, page: PDFPage) -> None:
+    def end_page(self, page: Page) -> None:
         assert not self._stack, str(len(self._stack))
         assert isinstance(self.cur_item, LTPage), str(type(self.cur_item))
-        self.pageno += 1
+        self.page_idx += 1
         self.receive_layout(self.cur_item)
 
     def begin_figure(self, name: str, bbox: Rect, matrix: Matrix) -> None:
@@ -710,7 +711,7 @@ class PDFLayoutAnalyzer:
         self.result = ltpage
 
 
-class PDFPageInterpreter:
+class PageInterpreter:
     """Processor for the content of a PDF page
 
     Reference: PDF Reference, Appendix A, Operator Summary
@@ -722,7 +723,7 @@ class PDFPageInterpreter:
         self.doc = doc
         self.device = device
 
-    def dup(self) -> "PDFPageInterpreter":
+    def dup(self) -> "PageInterpreter":
         return self.__class__(self.doc, self.device)
 
     def init_resources(self, resources: Dict[object, object]) -> None:
@@ -1330,7 +1331,7 @@ class PDFPageInterpreter:
             # unsupported xobject type.
             pass
 
-    def process_page(self, page: PDFPage) -> None:
+    def process_page(self, page: Page) -> None:
         log.debug("Processing page: %r", page)
         (x0, y0, x1, y1) = page.mediabox
         # FIXME: NO, this is bad, pdfplumber has a bug related to it
