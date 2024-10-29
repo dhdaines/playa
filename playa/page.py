@@ -35,14 +35,14 @@ from playa.layout import (
     LTRect,
     PDFGraphicState,
 )
-from playa.pdfcolor import PREDEFINED_COLORSPACE, PDFColorSpace
-from playa.pdffont import (
+from playa.color import PREDEFINED_COLORSPACE, PDFColorSpace
+from playa.font import (
     PDFFont,
 )
 from playa.pdftypes import (
     LITERALS_ASCII85_DECODE,
-    PDFObjRef,
-    PDFStream,
+    ObjRef,
+    ContentStream,
     dict_value,
     int_value,
     list_value,
@@ -76,7 +76,7 @@ from playa.utils import (
 )
 
 if TYPE_CHECKING:
-    from playa.pdfdocument import PDFDocument
+    from playa.document import PDFDocument
 
 log = logging.getLogger(__name__)
 
@@ -99,7 +99,7 @@ class PDFPage:
     ----------
       pageid: any Python object that can uniquely identify the page.
       attrs: a dictionary of page attributes.
-      contents: a list of PDFStream objects that represents the page content.
+      contents: a list of ContentStream objects that represents the page content.
       resources: a dictionary of resources used by the page.
       mediabox: the physical size of the page.
       cropbox: the crop rectangle of the page.
@@ -240,7 +240,7 @@ KEYWORD_ID = KWD(b"ID")
 KEYWORD_EI = KWD(b"EI")
 
 
-class PDFContentParser(Parser[Union[PSKeyword, PDFStream]]):
+class PDFContentParser(Parser[Union[PSKeyword, ContentStream]]):
     """Parse the concatenation of multiple content streams, as
     described in the spec (PDF 1.7, p.86):
 
@@ -312,7 +312,7 @@ class PDFContentParser(Parser[Union[PSKeyword, PDFStream]]):
                     (pos, data) = self.get_inline_data(target=eos)
                 if pos == -1:
                     raise PDFSyntaxError("End of inline stream %r not found" % eos)
-                obj = PDFStream(d, data)
+                obj = ContentStream(d, data)
                 self.push((pos, obj))
                 # This was included in the data but we need to "parse" it
                 if eos == b"EI":
@@ -324,7 +324,7 @@ class PDFContentParser(Parser[Union[PSKeyword, PDFStream]]):
             self.push((pos, token))
 
 
-PDFStackT = PSStackType[PDFStream]
+PDFStackT = PSStackType[ContentStream]
 """Types that may appear on the PDF argument stack."""
 
 
@@ -389,7 +389,7 @@ class PDFLayoutAnalyzer:
         item.tag = self.cur_tag
         self.cur_item.add(item)
 
-    def render_image(self, name: str, stream: PDFStream) -> None:
+    def render_image(self, name: str, stream: ContentStream) -> None:
         assert isinstance(self.cur_item, LTFigure), str(type(self.cur_item))
         item = LTImage(
             name,
@@ -760,7 +760,7 @@ class PDFPageInterpreter:
             if k == "Font":
                 for fontid, spec in dict_value(v).items():
                     objid = None
-                    if isinstance(spec, PDFObjRef):
+                    if isinstance(spec, ObjRef):
                         objid = spec.objid
                     spec = dict_value(spec)
                     self.fontmap[fontid] = doc.get_font(objid, spec)
@@ -1292,7 +1292,7 @@ class PDFPageInterpreter:
 
     def do_EI(self, obj: PDFStackT) -> None:
         """End inline image object"""
-        if isinstance(obj, PDFStream) and "W" in obj and "H" in obj:
+        if isinstance(obj, ContentStream) and "W" in obj and "H" in obj:
             iobjid = str(id(obj))
             self.device.begin_figure(iobjid, (0, 0, 1, 1), MATRIX_IDENTITY)
             self.device.render_image(iobjid, obj)

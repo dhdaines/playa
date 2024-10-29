@@ -6,11 +6,11 @@ from typing import TYPE_CHECKING, Union
 from playa import settings
 from playa.casting import safe_int
 from playa.exceptions import PDFSyntaxError
-from playa.pdftypes import PDFObjRef, PDFStream, dict_value, int_value
+from playa.pdftypes import ObjRef, ContentStream, dict_value, int_value
 from playa.psparser import KWD, Parser, PSKeyword
 
 if TYPE_CHECKING:
-    from playa.pdfdocument import PDFDocument
+    from playa.document import PDFDocument
 
 log = logging.getLogger(__name__)
 
@@ -24,8 +24,8 @@ KEYWORD_STARTXREF = KWD(b"startxref")
 KEYWORD_OBJ = KWD(b"obj")
 
 
-# PDFParser stack holds all the base types plus PDFStream, PDFObjRef, and None
-class PDFParser(Parser[Union[PSKeyword, PDFStream, PDFObjRef, None]]):
+# PDFParser stack holds all the base types plus ContentStream, ObjRef, and None
+class PDFParser(Parser[Union[PSKeyword, ContentStream, ObjRef, None]]):
     """PDFParser fetches PDF objects from a file stream.
     It holds a weak reference to the document in order to
     resolve indirect references.  If the document is deleted
@@ -63,7 +63,7 @@ class PDFParser(Parser[Union[PSKeyword, PDFStream, PDFObjRef, None]]):
                 (_, _object_id), _ = self.pop(2)
                 object_id = safe_int(_object_id)
                 if object_id is not None:
-                    obj = PDFObjRef(self.doc, object_id)
+                    obj = ObjRef(self.doc, object_id)
                     self.push((pos, obj))
 
         elif token is KEYWORD_STREAM:
@@ -102,7 +102,7 @@ class PDFParser(Parser[Union[PSKeyword, PDFStream, PDFObjRef, None]]):
             self.seek(pos + objlen)
             # XXX limit objlen not to exceed object boundary
             log.debug(
-                "Stream: pos=%d, objlen=%d, dic=%r, data=%r...",
+                "ContentStream: pos=%d, objlen=%d, dic=%r, data=%r...",
                 pos,
                 objlen,
                 dic,
@@ -111,7 +111,7 @@ class PDFParser(Parser[Union[PSKeyword, PDFStream, PDFObjRef, None]]):
             doc = self.doc()
             if doc is None:
                 raise RuntimeError("Document no longer exists!")
-            stream = PDFStream(dic, bytes(data), doc.decipher)
+            stream = ContentStream(dic, bytes(data), doc.decipher)
             self.push((pos, stream))
 
         else:
@@ -119,8 +119,8 @@ class PDFParser(Parser[Union[PSKeyword, PDFStream, PDFObjRef, None]]):
             self.push((pos, token))
 
 
-class PDFStreamParser(PDFParser):
-    """PDFStreamParser is used to parse PDF content streams
+class ContentStreamParser(PDFParser):
+    """StreamParser is used to parse PDF content streams
     that is contained in each page and has instructions
     for rendering the page. A reference to a PDF document is
     needed because a PDF content stream can also have
@@ -144,7 +144,7 @@ class PDFStreamParser(PDFParser):
                 )
             object_id = safe_int(_object_id)
             if object_id is not None:
-                obj = PDFObjRef(self.doc, object_id)
+                obj = ObjRef(self.doc, object_id)
                 self.push((pos, obj))
             return
 

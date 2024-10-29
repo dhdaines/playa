@@ -44,19 +44,19 @@ from playa.exceptions import (
     PDFTypeError,
     PSException,
 )
-from playa.pdffont import (
+from playa.font import (
     PDFCIDFont,
     PDFFont,
     PDFTrueTypeFont,
     PDFType1Font,
     PDFType3Font,
 )
-from playa.pdfpage import PDFPage
-from playa.pdfparser import KEYWORD_XREF, PDFParser, PDFStreamParser
+from playa.page import PDFPage
+from playa.parser import KEYWORD_XREF, PDFParser, ContentStreamParser
 from playa.pdftypes import (
     DecipherCallable,
-    PDFObjRef,
-    PDFStream,
+    ObjRef,
+    ContentStream,
     decipher_all,
     dict_value,
     int_value,
@@ -149,7 +149,8 @@ class PDFXRefTable:
     def _load_trailer(self, parser: PDFParser) -> None:
         try:
             (_, kwd) = parser.nexttoken()
-            assert kwd is KWD(b"trailer"), str(kwd)
+            if kwd is not KWD(b"trailer"):
+                raise PDFSyntaxError("Expected b'trailer', got %r", kwd)
             (_, dic) = next(parser)
         except StopIteration:
             x = parser.pop(1)
@@ -200,7 +201,7 @@ class PDFXRefFallback(PDFXRefTable):
             # expand ObjStm.
             parser.seek(pos)
             (_, obj) = next(parser)
-            if isinstance(obj, PDFStream) and obj.get("Type") is LITERAL_OBJSTM:
+            if isinstance(obj, ContentStream) and obj.get("Type") is LITERAL_OBJSTM:
                 stream = stream_value(obj)
                 try:
                     n = stream["N"]
@@ -211,7 +212,7 @@ class PDFXRefFallback(PDFXRefTable):
                 doc = parser.doc()
                 if doc is None:
                     raise RuntimeError("Document no longer exists!")
-                parser1 = PDFStreamParser(stream.get_data(), doc)
+                parser1 = ContentStreamParser(stream.get_data(), doc)
                 objs: List = [obj for _, obj in parser1]
                 # FIXME: This is choplist
                 n = min(n, len(objs) // 2)
@@ -240,7 +241,7 @@ class PDFXRefStream:
         (_, genno) = parser.nexttoken()  # ignored
         (_, kwd) = parser.nexttoken()
         (_, stream) = next(parser)
-        if not isinstance(stream, PDFStream) or stream.get("Type") is not LITERAL_XREF:
+        if not isinstance(stream, ContentStream) or stream.get("Type") is not LITERAL_XREF:
             raise PDFNoValidXRef(f"Invalid PDF stream spec {stream!r}")
         size = stream["Size"]
         index_array = stream.get("Index", (0, size))
@@ -688,7 +689,7 @@ class OutlineItem(NamedTuple):
     # FIXME: Create Destination and Action types
     dest: Union[PSLiteral, bytes, list, None]
     action: Union[dict, None]
-    se: Union[PDFObjRef, None]
+    se: Union[ObjRef, None]
 
 
 class PDFDocument:
@@ -794,6 +795,8 @@ class PDFDocument:
         if self.catalog.get("Type") is not LITERAL_CATALOG:
             if settings.STRICT:
                 raise PDFSyntaxError("Catalog not found!")
+        # Return to the start in the event that somebody wishes to
+        # iterate over top-level objects
         self.parser.seek(0)
 
     def _initialize_password(self, password: str = "") -> None:
@@ -828,7 +831,7 @@ class PDFDocument:
         """Iterate over positions and top-level PDF objects in the file."""
         return self.parser
 
-    def _getobj_objstm(self, stream: PDFStream, index: int, objid: int) -> object:
+    def _getobj_objstm(self, stream: ContentStream, index: int, objid: int) -> object:
         if stream.objid in self._parsed_objs:
             (objs, n) = self._parsed_objs[stream.objid]
         else:
@@ -842,7 +845,7 @@ class PDFDocument:
             raise PDFSyntaxError("index too big: %r" % index)
         return obj
 
-    def _get_objects(self, stream: PDFStream) -> Tuple[List[object], int]:
+    def _get_objects(self, stream: ContentStream) -> Tuple[List[object], int]:
         if stream.get("Type") is not LITERAL_OBJSTM:
             if settings.STRICT:
                 raise PDFSyntaxError("Not a stream object: %r" % stream)
@@ -852,7 +855,7 @@ class PDFDocument:
             if settings.STRICT:
                 raise PDFSyntaxError("N is not defined: %r" % stream)
             n = 0
-        parser = PDFStreamParser(stream.get_data(), self)
+        parser = ContentStreamParser(stream.get_data(), self)
         objs: List[object] = [obj for _, obj in parser]
         return (objs, n)
 
@@ -919,7 +922,7 @@ class PDFDocument:
                         if self.decipher:
                             obj = decipher_all(self.decipher, objid, genno, obj)
 
-                    if isinstance(obj, PDFStream):
+                    if isinstance(obj, ContentStream):
                         obj.set_objid(objid, genno)
                     break
                 except (StopIteration, PDFSyntaxError):
@@ -1047,7 +1050,7 @@ class PDFDocument:
         visited = set()
         while stack:
             (obj, parent) = stack.pop()
-            if isinstance(obj, PDFObjRef):
+            if isinstance(obj, ObjRef):
                 # The PDF specification *requires* both the Pages
                 # element of the catalog and the entries in Kids in
                 # the page tree to be indirect references.

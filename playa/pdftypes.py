@@ -30,7 +30,7 @@ from playa.runlength import rldecode
 from playa.utils import apply_png_predictor
 
 if TYPE_CHECKING:
-    from playa.pdfdocument import PDFDocument
+    from playa.document import PDFDocument
 
 logger = logging.getLogger(__name__)
 
@@ -64,7 +64,7 @@ class DecipherCallable(Protocol):
 _DEFAULT = object()
 
 
-class PDFObjRef:
+class ObjRef:
     def __init__(
         self,
         doc: weakref.ReferenceType["PDFDocument"],
@@ -83,7 +83,7 @@ class PDFObjRef:
         self.objid = objid
 
     def __repr__(self) -> str:
-        return "<PDFObjRef:%d>" % (self.objid)
+        return "<ObjRef:%d>" % (self.objid)
 
     def resolve(self, default: object = None) -> Any:
         doc = self.doc()
@@ -101,7 +101,7 @@ def resolve1(x: object, default: object = None) -> Any:
     If this is an array or dictionary, it may still contains
     some indirect objects inside.
     """
-    while isinstance(x, PDFObjRef):
+    while isinstance(x, ObjRef):
         x = x.resolve(default=default)
     return x
 
@@ -112,7 +112,7 @@ def resolve_all(x: object, default: object = None) -> Any:
     Make sure there is no indirect reference within the nested object.
     This procedure might be slow.
     """
-    while isinstance(x, PDFObjRef):
+    while isinstance(x, ObjRef):
         x = x.resolve(default=default)
     if isinstance(x, list):
         x = [resolve_all(v, default=default) for v in x]
@@ -200,12 +200,12 @@ def dict_value(x: object) -> Dict[Any, Any]:
     return x
 
 
-def stream_value(x: object) -> "PDFStream":
+def stream_value(x: object) -> "ContentStream":
     x = resolve1(x)
-    if not isinstance(x, PDFStream):
+    if not isinstance(x, ContentStream):
         if settings.STRICT:
-            raise PDFTypeError("PDFStream required: %r" % x)
-        return PDFStream({}, b"")
+            raise PDFTypeError("ContentStream required: %r" % x)
+        return ContentStream({}, b"")
     return x
 
 
@@ -230,7 +230,7 @@ def decompress_corrupted(data: bytes) -> bytes:
     return result_str
 
 
-class PDFStream:
+class ContentStream:
     def __init__(
         self,
         attrs: Dict[str, Any],
@@ -252,14 +252,14 @@ class PDFStream:
     def __repr__(self) -> str:
         if self.data is None:
             assert self.rawdata is not None
-            return "<PDFStream(%r): raw=%d, %r>" % (
+            return "<ContentStream(%r): raw=%d, %r>" % (
                 self.objid,
                 len(self.rawdata),
                 self.attrs,
             )
         else:
             assert self.data is not None
-            return "<PDFStream(%r): len=%d, %r>" % (
+            return "<ContentStream(%r): len=%d, %r>" % (
                 self.objid,
                 len(self.data),
                 self.attrs,

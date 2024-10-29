@@ -12,9 +12,9 @@ from typing import (
 )
 
 from playa.exceptions import PDFValueError
-from playa.pdfcolor import PDFColorSpace
-from playa.pdffont import PDFFont
-from playa.pdftypes import PDFStream
+from playa.color import PDFColorSpace
+from playa.font import PDFFont
+from playa.pdftypes import ContentStream
 from playa.utils import (
     INF,
     Matrix,
@@ -298,7 +298,7 @@ class LTImage(LTComponent):
     Embedded images can be in JPEG, Bitmap or JBIG2.
     """
 
-    def __init__(self, name: str, stream: PDFStream, bbox: Rect) -> None:
+    def __init__(self, name: str, stream: ContentStream, bbox: Rect) -> None:
         LTComponent.__init__(self, bbox)
         self.name = name
         self.stream = stream

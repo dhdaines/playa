@@ -17,16 +17,16 @@ from typing import (
 
 from playa.data_structures import NumberTree
 from playa.exceptions import PDFNoStructTree
-from playa.pdfpage import PDFPage
-from playa.pdfparser import KEYWORD_NULL
-from playa.pdftypes import PDFObjRef, resolve1
+from playa.page import PDFPage
+from playa.parser import KEYWORD_NULL
+from playa.pdftypes import ObjRef, resolve1
 from playa.psparser import PSLiteral
 from playa.utils import decode_text
 
 logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
-    from playa.pdfdocument import PDFDocument
+    from playa.document import PDFDocument
 
 
 MatchFunc = Callable[["PDFStructElement"], bool]
@@ -368,7 +368,7 @@ class PDFStructTree(Findable):
                         child = obj["Obj"]
                     elif "MCID" in obj:
                         continue
-                if isinstance(child, PDFObjRef):
+                if isinstance(child, ObjRef):
                     d.append(child)
 
         # Traverse depth-first, removing empty elements (unsure how to
@@ -438,7 +438,7 @@ class PDFStructTree(Findable):
                     elif "Obj" in obj:
                         child = obj["Obj"]
                 # NOTE: if, not elif, in case of OBJR above
-                if isinstance(child, PDFObjRef):
+                if isinstance(child, ObjRef):
                     child_element, _ = seen.get(repr(child), (None, None))
                     if child_element is not None:
                         element.children.append(child_element)

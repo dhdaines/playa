@@ -35,7 +35,7 @@ from playa.exceptions import (
 )
 from playa.fontmetrics import FONT_METRICS
 from playa.pdftypes import (
-    PDFStream,
+    ContentStream,
     dict_value,
     int_value,
     list_value,
@@ -1069,7 +1069,7 @@ class PDFCIDFont(PDFFont):
             ttf = TrueTypeFont(self.basefont, BytesIO(self.fontfile.get_data()))
         self.unicode_map: Optional[UnicodeMap] = None
         if "ToUnicode" in spec:
-            if isinstance(spec["ToUnicode"], PDFStream):
+            if isinstance(spec["ToUnicode"], ContentStream):
                 strm = stream_value(spec["ToUnicode"])
                 self.unicode_map = FileUnicodeMap()
                 CMapParser(self.unicode_map, strm.get_data()).run()
@@ -1147,8 +1147,8 @@ class PDFCIDFont(PDFFont):
             if strict:
                 raise PDFFontError("Encoding is unspecified")
 
-        if type(cmap_name) is PDFStream:  # type: ignore[comparison-overlap]
-            cmap_name_stream: PDFStream = cast(PDFStream, cmap_name)
+        if type(cmap_name) is ContentStream:  # type: ignore[comparison-overlap]
+            cmap_name_stream: ContentStream = cast(ContentStream, cmap_name)
             if "CMapName" in cmap_name_stream:
                 cmap_name = cmap_name_stream.get("CMapName").name
             elif strict:

@@ -304,7 +304,7 @@ def bench_mmap():
 
 
 def bench_playa():
-    from playa.pdfdocument import PDFDocument
+    from playa.document import PDFDocument
 
     bench_bytes()
     bench_mmap()

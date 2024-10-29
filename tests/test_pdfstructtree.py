@@ -3,7 +3,7 @@ import unittest
 from pathlib import Path
 
 import playa
-from playa.pdfstructtree import PDFStructTree
+from playa.structtree import PDFStructTree
 
 TESTDIR = Path(__file__).parent.parent / "samples"
 
