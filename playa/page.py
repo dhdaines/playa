@@ -32,13 +32,12 @@ from playa.layout import (
     LTCurve,
     LTFigure,
     LTImage,
-    LTLayoutContainer,
     LTLine,
     LTPage,
     LTRect,
     PDFGraphicState,
 )
-from playa.parser import Parser, PSBaseParserToken, PDFStackT
+from playa.parser import Parser, PDFStackT, PSBaseParserToken
 from playa.pdftypes import (
     KWD,
     LIT,
@@ -322,7 +321,12 @@ class PageInterpreter:
     cur_mcid: Optional[int] = None
     cur_tag: Optional[str] = None
 
-    def __init__(self, page: Page, resources: Union[Dict, None] = None, contents: Union[List, None] = None) -> None:
+    def __init__(
+        self,
+        page: Page,
+        resources: Union[Dict, None] = None,
+        contents: Union[List, None] = None,
+    ) -> None:
         self.page = page
         self.contents = page.contents if contents is None else contents
         (x0, y0, x1, y1) = page.mediabox
@@ -425,13 +429,16 @@ class PageInterpreter:
                         if len(args) == nargs:
                             gen = func(*args)
                         else:
-                            error_msg = "Insufficient arguments (%d) for operator: %r" % (len(args), name)
+                            error_msg = (
+                                "Insufficient arguments (%d) for operator: %r"
+                                % (len(args), name)
+                            )
                             raise PDFInterpreterError(error_msg)
                     else:
                         log.debug("exec: %s", name)
                         gen = func()
                     if gen is not None:
-                        yield from gen                        
+                        yield from gen
                 elif settings.STRICT:
                     error_msg = "Unknown operator: %r" % name
                     raise PDFInterpreterError(error_msg)
@@ -918,7 +925,9 @@ class PageInterpreter:
         self.do_T_a()
         yield from self.do_TJ([s])
 
-    def do__w(self, aw: PDFStackT, ac: PDFStackT, s: PDFStackT) -> Iterator[LTComponent]:
+    def do__w(
+        self, aw: PDFStackT, ac: PDFStackT, s: PDFStackT
+    ) -> Iterator[LTComponent]:
         """Set word and character spacing, move to next line, and show text
 
         The " (double quote) operator.
@@ -994,7 +1003,9 @@ class PageInterpreter:
         self.cur_tag = None
         self.cur_mcid = None
 
-    def render_image(self, name: str, stream: ContentStream, figure: LTFigure) -> LTImage:
+    def render_image(
+        self, name: str, stream: ContentStream, figure: LTFigure
+    ) -> LTImage:
         return LTImage(
             name,
             stream,
@@ -1027,7 +1038,9 @@ class PageInterpreter:
             # recurse if there are multiple m's in this shape
             for m in re.finditer(r"m[^m]+", shape):
                 subpath = path[m.start(0) : m.end(0)]
-                yield from self.paint_path(gstate, stroke, fill, evenodd, subpath, ncs, scs)
+                yield from self.paint_path(
+                    gstate, stroke, fill, evenodd, subpath, ncs, scs
+                )
 
         else:
             # Although the 'h' command does not not literally provide a
