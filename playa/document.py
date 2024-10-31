@@ -806,9 +806,6 @@ class PDFDocument:
         if self.catalog.get("Type") is not LITERAL_CATALOG:
             if settings.STRICT:
                 raise PDFSyntaxError("Catalog not found!")
-        # Return to the start in the event that somebody wishes to
-        # iterate over top-level objects
-        self.parser.seek(0)
 
     def _initialize_password(self, password: str = "") -> None:
         """Initialize the decryption handler with a given password, if any.
@@ -840,11 +837,15 @@ class PDFDocument:
 
     def __iter__(self) -> Iterator[Tuple[int, object]]:
         """Iterate over (position, object) tuples, raising StopIteration at EOF."""
+        # FIXME: Should create a new parser
+        self.parser.seek(0)
         return self.parser
 
     @property
     def tokens(self) -> Iterator[Tuple[int, PSBaseParserToken]]:
         """Iterate over (position, token) tuples, raising StopIteration at EOF."""
+        # FIXME: Should create a new parser
+        self.parser.seek(0)
         return self.parser.tokens
 
     def _getobj_objstm(self, stream: ContentStream, index: int, objid: int) -> object:
@@ -1104,6 +1105,7 @@ class PDFDocument:
                 log.debug("Page: %r", object_properties)
                 yield object_id, object_properties
 
+    # FIXME: Make an object that can be indexed by int or str
     @property
     def pages(self) -> List[Page]:
         if self._pages is None:
