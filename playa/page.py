@@ -5,6 +5,7 @@ from typing import (
     TYPE_CHECKING,
     Dict,
     Iterable,
+    Iterator,
     List,
     Optional,
     Sequence,
@@ -37,7 +38,7 @@ from playa.layout import (
     LTRect,
     PDFGraphicState,
 )
-from playa.parser import Parser, PSBaseParserToken, PSStackType
+from playa.parser import Parser, PSBaseParserToken, PDFStackT
 from playa.pdftypes import (
     KWD,
     LIT,
@@ -159,22 +160,14 @@ class Page:
         self._layout: Optional["LTPage"] = None
 
     @property
-    def layout(self) -> "LTPage":
-        if self._layout is not None:
-            return self._layout
-        device = PDFLayoutAnalyzer(
-            page_idx=self.page_idx,
-        )
-        interpreter = PageInterpreter(self.doc, device)
-        interpreter.process_page(self)
-        assert device.result is not None
-        self._layout = device.result
-        return self._layout
+    def layout(self) -> Iterator:
+        return iter(PageInterpreter(self))
 
     def __repr__(self) -> str:
         return f"<Page: Resources={self.resources!r}, MediaBox={self.mediabox!r}>"
 
 
+# FIXME: Make a dataclass or NamedTuple
 class PDFTextState:
     matrix: Matrix
     linematrix: Point
@@ -319,422 +312,43 @@ class PDFContentParser(Parser[Union[PSKeyword, ContentStream]]):
             self.push((pos, token))
 
 
-PDFStackT = PSStackType[ContentStream]
-"""Types that may appear on the PDF argument stack."""
-
-
-class PDFLayoutAnalyzer:
-    cur_item: LTLayoutContainer
-    ctm: Matrix
-    cur_mcid: Optional[int] = None
-    cur_tag: Optional[str] = None
-
-    def __init__(
-        self,
-        page_idx: int = 0,
-    ) -> None:
-        self.page_idx = page_idx
-        self._stack: List[LTLayoutContainer] = []
-        self.result: Optional[LTPage] = None
-
-    def set_ctm(self, ctm: Matrix) -> None:
-        self.ctm = ctm
-
-    def begin_page(self, page: Page, ctm: Matrix) -> None:
-        (x0, y0, x1, y1) = page.mediabox
-        (x0, y0) = apply_matrix_pt(ctm, (x0, y0))
-        (x1, y1) = apply_matrix_pt(ctm, (x1, y1))
-        mediabox = (0, 0, abs(x0 - x1), abs(y0 - y1))
-        self.cur_item = LTPage(self.page_idx, mediabox)
-
-    def end_page(self, page: Page) -> None:
-        assert not self._stack, str(len(self._stack))
-        assert isinstance(self.cur_item, LTPage), str(type(self.cur_item))
-        self.page_idx += 1
-        self.receive_layout(self.cur_item)
-
-    def begin_figure(self, name: str, bbox: Rect, matrix: Matrix) -> None:
-        self._stack.append(self.cur_item)
-        self.cur_item = LTFigure(name, bbox, mult_matrix(matrix, self.ctm))
-
-    def end_figure(self, _: str) -> None:
-        fig = self.cur_item
-        assert isinstance(self.cur_item, LTFigure), str(type(self.cur_item))
-        self.cur_item = self._stack.pop()
-        self.cur_item.add(fig)
-
-    def begin_tag(self, tag: PSLiteral, props: Optional[PDFStackT] = None) -> None:
-        """Handle beginning of tag, setting current MCID if any."""
-        self.cur_tag = decode_text(tag.name)
-        if isinstance(props, dict) and "MCID" in props:
-            self.cur_mcid = props["MCID"]
-        else:
-            self.cur_mcid = None
-
-    def do_tag(self, tag: PSLiteral, props: Optional["PDFStackT"] = None) -> None:
-        pass
-
-    def end_tag(self) -> None:
-        """Handle beginning of tag, clearing current MCID."""
-        self.cur_tag = None
-        self.cur_mcid = None
-
-    def add_item(self, item: LTComponent) -> None:
-        item.mcid = self.cur_mcid
-        item.tag = self.cur_tag
-        self.cur_item.add(item)
-
-    def render_image(self, name: str, stream: ContentStream) -> None:
-        assert isinstance(self.cur_item, LTFigure), str(type(self.cur_item))
-        item = LTImage(
-            name,
-            stream,
-            (self.cur_item.x0, self.cur_item.y0, self.cur_item.x1, self.cur_item.y1),
-        )
-        self.add_item(item)
-
-    def paint_path(
-        self,
-        gstate: PDFGraphicState,
-        stroke: bool,
-        fill: bool,
-        evenodd: bool,
-        path: Sequence[PathSegment],
-        ncs: Optional[PDFColorSpace] = None,
-        scs: Optional[PDFColorSpace] = None,
-    ) -> None:
-        """Paint paths described in section 4.4 of the PDF reference manual"""
-        shape = "".join(x[0] for x in path)
-
-        if shape[:1] != "m":
-            # Per PDF Reference Section 4.4.1, "path construction operators may
-            # be invoked in any sequence, but the first one invoked must be m
-            # or re to begin a new subpath." Since pdfminer.six already
-            # converts all `re` (rectangle) operators to their equivelent
-            # `mlllh` representation, paths ingested by `.paint_path(...)` that
-            # do not begin with the `m` operator are invalid.
-            pass
-
-        elif shape.count("m") > 1:
-            # recurse if there are multiple m's in this shape
-            for m in re.finditer(r"m[^m]+", shape):
-                subpath = path[m.start(0) : m.end(0)]
-                self.paint_path(gstate, stroke, fill, evenodd, subpath, ncs, scs)
-
-        else:
-            # Although the 'h' command does not not literally provide a
-            # point-position, its position is (by definition) equal to the
-            # subpath's starting point.
-            #
-            # And, per Section 4.4's Table 4.9, all other path commands place
-            # their point-position in their final two arguments. (Any preceding
-            # arguments represent control points on Bézier curves.)
-            raw_pts = [
-                cast(Point, p[-2:] if p[0] != "h" else path[0][-2:]) for p in path
-            ]
-            pts = [apply_matrix_pt(self.ctm, pt) for pt in raw_pts]
-
-            operators = [str(operation[0]) for operation in path]
-            transformed_points = [
-                [
-                    apply_matrix_pt(self.ctm, (float(operand1), float(operand2)))
-                    for operand1, operand2 in zip(operation[1::2], operation[2::2])
-                ]
-                for operation in path
-            ]
-            transformed_path = [
-                cast(PathSegment, (o, *p))
-                for o, p in zip(operators, transformed_points)
-            ]
-
-            if shape in {"mlh", "ml"}:
-                # single line segment
-                #
-                # Note: 'ml', in conditional above, is a frequent anomaly
-                # that we want to support.
-                line = LTLine(
-                    gstate.linewidth,
-                    pts[0],
-                    pts[1],
-                    stroke,
-                    fill,
-                    evenodd,
-                    gstate.scolor,
-                    gstate.ncolor,
-                    original_path=transformed_path,
-                    dashing_style=gstate.dash,
-                    ncs=ncs,
-                    scs=scs,
-                )
-                self.add_item(line)
-
-            elif shape in {"mlllh", "mllll"}:
-                (x0, y0), (x1, y1), (x2, y2), (x3, y3), _ = pts
-
-                is_closed_loop = pts[0] == pts[4]
-                has_square_coordinates = (
-                    x0 == x1 and y1 == y2 and x2 == x3 and y3 == y0
-                ) or (y0 == y1 and x1 == x2 and y2 == y3 and x3 == x0)
-                if is_closed_loop and has_square_coordinates:
-                    rect = LTRect(
-                        gstate.linewidth,
-                        (*pts[0], *pts[2]),
-                        stroke,
-                        fill,
-                        evenodd,
-                        gstate.scolor,
-                        gstate.ncolor,
-                        transformed_path,
-                        gstate.dash,
-                        ncs,
-                        scs,
-                    )
-                    self.add_item(rect)
-                else:
-                    curve = LTCurve(
-                        gstate.linewidth,
-                        pts,
-                        stroke,
-                        fill,
-                        evenodd,
-                        gstate.scolor,
-                        gstate.ncolor,
-                        transformed_path,
-                        gstate.dash,
-                        ncs,
-                        scs,
-                    )
-                    self.add_item(curve)
-            else:
-                curve = LTCurve(
-                    gstate.linewidth,
-                    pts,
-                    stroke,
-                    fill,
-                    evenodd,
-                    gstate.scolor,
-                    gstate.ncolor,
-                    transformed_path,
-                    gstate.dash,
-                    ncs,
-                    scs,
-                )
-                self.add_item(curve)
-
-    def render_char(
-        self,
-        matrix: Matrix,
-        font: PDFFont,
-        fontsize: float,
-        scaling: float,
-        rise: float,
-        cid: int,
-        ncs: PDFColorSpace,
-        graphicstate: PDFGraphicState,
-        scs: Optional[PDFColorSpace] = None,
-    ) -> float:
-        try:
-            text = font.to_unichr(cid)
-            assert isinstance(text, str), str(type(text))
-        except PDFUnicodeNotDefined:
-            text = self.handle_undefined_char(font, cid)
-        textwidth = font.char_width(cid)
-        textdisp = font.char_disp(cid)
-        item = LTChar(
-            matrix,
-            font,
-            fontsize,
-            scaling,
-            rise,
-            text,
-            textwidth,
-            textdisp,
-            ncs,
-            graphicstate,
-            scs,
-            graphicstate.scolor,
-            graphicstate.ncolor,
-        )
-        self.add_item(item)
-        return item.adv
-
-    def render_string(
-        self,
-        textstate: "PDFTextState",
-        seq: PDFTextSeq,
-        ncs: PDFColorSpace,
-        graphicstate: "PDFGraphicState",
-        scs: Optional[PDFColorSpace] = None,
-    ) -> None:
-        assert self.ctm is not None
-        matrix = mult_matrix(textstate.matrix, self.ctm)
-        font = textstate.font
-        fontsize = textstate.fontsize
-        scaling = textstate.scaling * 0.01
-        charspace = textstate.charspace * scaling
-        wordspace = textstate.wordspace * scaling
-        rise = textstate.rise
-        assert font is not None
-        if font.is_multibyte():
-            wordspace = 0
-        dxscale = 0.001 * fontsize * scaling
-        if font.is_vertical():
-            textstate.linematrix = self.render_string_vertical(
-                seq,
-                matrix,
-                textstate.linematrix,
-                font,
-                fontsize,
-                scaling,
-                charspace,
-                wordspace,
-                rise,
-                dxscale,
-                ncs,
-                graphicstate,
-                scs,
-            )
-        else:
-            textstate.linematrix = self.render_string_horizontal(
-                seq,
-                matrix,
-                textstate.linematrix,
-                font,
-                fontsize,
-                scaling,
-                charspace,
-                wordspace,
-                rise,
-                dxscale,
-                ncs,
-                graphicstate,
-                scs,
-            )
-
-    def render_string_horizontal(
-        self,
-        seq: PDFTextSeq,
-        matrix: Matrix,
-        pos: Point,
-        font: PDFFont,
-        fontsize: float,
-        scaling: float,
-        charspace: float,
-        wordspace: float,
-        rise: float,
-        dxscale: float,
-        ncs: PDFColorSpace,
-        graphicstate: "PDFGraphicState",
-        scs: Optional[PDFColorSpace] = None,
-    ) -> Point:
-        (x, y) = pos
-        needcharspace = False
-        for obj in seq:
-            if isinstance(obj, (int, float)):
-                x -= obj * dxscale
-                needcharspace = True
-            else:
-                if isinstance(obj, str):
-                    obj = make_compat_bytes(obj)
-                if not isinstance(obj, bytes):
-                    continue
-                for cid in font.decode(obj):
-                    if needcharspace:
-                        x += charspace
-                    x += self.render_char(
-                        translate_matrix(matrix, (x, y)),
-                        font,
-                        fontsize,
-                        scaling,
-                        rise,
-                        cid,
-                        ncs,
-                        graphicstate,
-                        scs,
-                    )
-                    if cid == 32 and wordspace:
-                        x += wordspace
-                    needcharspace = True
-        return (x, y)
-
-    def render_string_vertical(
-        self,
-        seq: PDFTextSeq,
-        matrix: Matrix,
-        pos: Point,
-        font: PDFFont,
-        fontsize: float,
-        scaling: float,
-        charspace: float,
-        wordspace: float,
-        rise: float,
-        dxscale: float,
-        ncs: PDFColorSpace,
-        graphicstate: "PDFGraphicState",
-        scs: Optional[PDFColorSpace] = None,
-    ) -> Point:
-        (x, y) = pos
-        needcharspace = False
-        for obj in seq:
-            if isinstance(obj, (int, float)):
-                y -= obj * dxscale
-                needcharspace = True
-            else:
-                if isinstance(obj, str):
-                    obj = make_compat_bytes(obj)
-                if not isinstance(obj, bytes):
-                    continue
-                for cid in font.decode(obj):
-                    if needcharspace:
-                        y += charspace
-                    y += self.render_char(
-                        translate_matrix(matrix, (x, y)),
-                        font,
-                        fontsize,
-                        scaling,
-                        rise,
-                        cid,
-                        ncs,
-                        graphicstate,
-                        scs,
-                    )
-                    if cid == 32 and wordspace:
-                        y += wordspace
-                    needcharspace = True
-        return (x, y)
-
-    def handle_undefined_char(self, font: PDFFont, cid: int) -> str:
-        log.debug("undefined: %r, %r", font, cid)
-        return "(cid:%d)" % cid
-
-    def receive_layout(self, ltpage: LTPage) -> None:
-        self.result = ltpage
-
-
 class PageInterpreter:
     """Processor for the content of a PDF page
 
     Reference: PDF Reference, Appendix A, Operator Summary
     """
 
-    def __init__(
-        self, doc: weakref.ReferenceType["PDFDocument"], device: "PDFLayoutAnalyzer"
-    ) -> None:
-        self.doc = doc
-        self.device = device
+    ctm: Matrix
+    cur_mcid: Optional[int] = None
+    cur_tag: Optional[str] = None
 
-    def dup(self) -> "PageInterpreter":
-        return self.__class__(self.doc, self.device)
+    def __init__(self, page: Page, resources: Union[Dict, None] = None, contents: Union[List, None] = None) -> None:
+        self.page = page
+        self.contents = page.contents if contents is None else contents
+        (x0, y0, x1, y1) = page.mediabox
+        # FIXME: NO, this is bad, pdfplumber has a bug related to it
+        # (specifically the translation, the rotation is kind of okay
+        # it seems)
+        if page.rotate == 90:
+            ctm = (0, -1, 1, 0, -y0, x1)
+        elif page.rotate == 180:
+            ctm = (-1, 0, 0, -1, x1, y1)
+        elif page.rotate == 270:
+            ctm = (0, 1, -1, 0, y1, -x0)
+        else:
+            ctm = (1, 0, 0, 1, -x0, -y0)
+        self.init_resources(page, page.resources if resources is None else resources)
+        self.init_state(ctm)
 
-    def init_resources(self, resources: Dict[object, object]) -> None:
+    def init_resources(self, page: Page, resources: Dict) -> None:
         """Prepare the fonts and XObjects listed in the Resource attribute."""
         self.resources = resources
         self.fontmap: Dict[object, PDFFont] = {}
         self.xobjmap = {}
         self.csmap: Dict[str, PDFColorSpace] = PREDEFINED_COLORSPACE.copy()
-        if not resources:
+        if not self.resources:
             return
-        doc = self.doc()
+        doc = page.doc()
         if doc is None:
             raise RuntimeError("Document no longer exists!")
 
@@ -750,7 +364,7 @@ class PageInterpreter:
             else:
                 return PREDEFINED_COLORSPACE.get(name)
 
-        for k, v in dict_value(resources).items():
+        for k, v in dict_value(self.resources).items():
             log.debug("Resource: %r: %r", k, v)
             if k == "Font":
                 for fontid, spec in dict_value(v).items():
@@ -776,7 +390,6 @@ class PageInterpreter:
         # gstack: stack for graphical states.
         self.gstack: List[Tuple[Matrix, PDFTextState, PDFGraphicState]] = []
         self.ctm = ctm
-        self.device.set_ctm(self.ctm)
         self.textstate = PDFTextState()
         self.graphicstate = PDFGraphicState()
         self.curpath: List[PathSegment] = []
@@ -787,6 +400,43 @@ class PageInterpreter:
         self.ncs: Optional[PDFColorSpace] = None
         if self.csmap:
             self.scs = self.ncs = next(iter(self.csmap.values()))
+
+    def __iter__(self) -> Iterator[LTComponent]:
+        log.debug(
+            "PageInterpreter: resources=%r, streams=%r, ctm=%r",
+            self.resources,
+            self.page.contents,
+            self.ctm,
+        )
+        parser = PDFContentParser(self.page.contents)
+        for _, obj in parser:
+            if isinstance(obj, PSKeyword):
+                name = keyword_name(obj)
+                method = "do_%s" % name.replace("*", "_a").replace('"', "_w").replace(
+                    "'",
+                    "_q",
+                )
+                if hasattr(self, method):
+                    func = getattr(self, method)
+                    nargs = func.__code__.co_argcount - 1
+                    if nargs:
+                        args = self.pop(nargs)
+                        log.debug("exec: %s %r", name, args)
+                        if len(args) == nargs:
+                            gen = func(*args)
+                        else:
+                            error_msg = "Insufficient arguments (%d) for operator: %r" % (len(args), name)
+                            raise PDFInterpreterError(error_msg)
+                    else:
+                        log.debug("exec: %s", name)
+                        gen = func()
+                    if gen is not None:
+                        yield from gen                        
+                elif settings.STRICT:
+                    error_msg = "Unknown operator: %r" % name
+                    raise PDFInterpreterError(error_msg)
+            else:
+                self.push(obj)
 
     def push(self, obj: PDFStackT) -> None:
         self.argstack.append(obj)
@@ -806,7 +456,6 @@ class PageInterpreter:
         state: Tuple[Matrix, PDFTextState, PDFGraphicState],
     ) -> None:
         (self.ctm, self.textstate, self.graphicstate) = state
-        self.device.set_ctm(self.ctm)
 
     def do_q(self) -> None:
         """Save graphics state"""
@@ -828,7 +477,6 @@ class PageInterpreter:
     ) -> None:
         """Concatenate matrix to current transformation matrix"""
         self.ctm = mult_matrix(cast(Matrix, (a1, b1, c1, d1, e1, f1)), self.ctm)
-        self.device.set_ctm(self.ctm)
 
     def do_w(self, linewidth: PDFStackT) -> None:
         """Set line width"""
@@ -920,21 +568,21 @@ class PageInterpreter:
         self.curpath.append(("l", x, y + h))
         self.curpath.append(("h",))
 
-    def do_S(self) -> None:
+    def do_S(self) -> Iterator[LTComponent]:
         """Stroke path"""
-        self.device.paint_path(
+        yield from self.paint_path(
             self.graphicstate, True, False, False, self.curpath, self.ncs, self.scs
         )
         self.curpath = []
 
-    def do_s(self) -> None:
+    def do_s(self) -> Iterator[LTComponent]:
         """Close and stroke path"""
         self.do_h()
-        self.do_S()
+        yield from self.do_S()
 
-    def do_f(self) -> None:
+    def do_f(self) -> Iterator[LTComponent]:
         """Fill path using nonzero winding number rule"""
-        self.device.paint_path(
+        yield from self.paint_path(
             self.graphicstate, False, True, False, self.curpath, self.ncs, self.scs
         )
         self.curpath = []
@@ -942,36 +590,36 @@ class PageInterpreter:
     def do_F(self) -> None:
         """Fill path using nonzero winding number rule (obsolete)"""
 
-    def do_f_a(self) -> None:
+    def do_f_a(self) -> Iterator[LTComponent]:
         """Fill path using even-odd rule"""
-        self.device.paint_path(
+        yield from self.paint_path(
             self.graphicstate, False, True, True, self.curpath, self.ncs, self.scs
         )
         self.curpath = []
 
-    def do_B(self) -> None:
+    def do_B(self) -> Iterator[LTComponent]:
         """Fill and stroke path using nonzero winding number rule"""
-        self.device.paint_path(
+        yield from self.paint_path(
             self.graphicstate, True, True, False, self.curpath, self.ncs, self.scs
         )
         self.curpath = []
 
-    def do_B_a(self) -> None:
+    def do_B_a(self) -> Iterator[LTComponent]:
         """Fill and stroke path using even-odd rule"""
-        self.device.paint_path(
+        yield from self.paint_path(
             self.graphicstate, True, True, True, self.curpath, self.ncs, self.scs
         )
         self.curpath = []
 
-    def do_b(self) -> None:
+    def do_b(self) -> Iterator[LTComponent]:
         """Close, fill, and stroke path using nonzero winding number rule"""
         self.do_h()
-        self.do_B()
+        yield from self.do_B()
 
-    def do_b_a(self) -> None:
+    def do_b_a(self) -> Iterator[LTComponent]:
         """Close, fill, and stroke path using even-odd rule"""
         self.do_h()
-        self.do_B_a()
+        yield from self.do_B_a()
 
     def do_n(self) -> None:
         """End path without filling or stroking"""
@@ -1093,23 +741,23 @@ class PageInterpreter:
 
     def do_MP(self, tag: PDFStackT) -> None:
         """Define marked-content point"""
-        self.device.do_tag(cast(PSLiteral, tag))
+        self.do_tag(cast(PSLiteral, tag))
 
     def do_DP(self, tag: PDFStackT, props: PDFStackT) -> None:
         """Define marked-content point with property list"""
-        self.device.do_tag(cast(PSLiteral, tag), props)
+        self.do_tag(cast(PSLiteral, tag), props)
 
     def do_BMC(self, tag: PDFStackT) -> None:
         """Begin marked-content sequence"""
-        self.device.begin_tag(cast(PSLiteral, tag))
+        self.begin_tag(cast(PSLiteral, tag))
 
     def do_BDC(self, tag: PDFStackT, props: PDFStackT) -> None:
         """Begin marked-content sequence with property list"""
-        self.device.begin_tag(cast(PSLiteral, tag), props)
+        self.begin_tag(cast(PSLiteral, tag), props)
 
     def do_EMC(self) -> None:
         """End marked-content sequence"""
-        self.device.end_tag()
+        self.end_tag()
 
     def do_Tc(self, space: PDFStackT) -> None:
         """Set character spacing.
@@ -1157,7 +805,7 @@ class PageInterpreter:
         except KeyError:
             if settings.STRICT:
                 raise PDFInterpreterError("Undefined Font id: %r" % fontid)
-            doc = self.doc()
+            doc = self.page.doc()
             if doc is None:
                 raise RuntimeError("Document no longer exists!")
             self.textstate.font = doc.get_font(None, {})
@@ -1241,7 +889,7 @@ class PageInterpreter:
         )
         self.textstate.linematrix = (0, 0)
 
-    def do_TJ(self, seq: PDFStackT) -> None:
+    def do_TJ(self, seq: PDFStackT) -> Iterator[LTComponent]:
         """Show text, allowing individual glyph positioning"""
         if self.textstate.font is None:
             if settings.STRICT:
@@ -1250,7 +898,7 @@ class PageInterpreter:
         # FIXME: Are we sure?
         assert self.ncs is not None
         assert self.scs is not None
-        self.device.render_string(
+        yield from self.render_string(
             self.textstate,
             cast(PDFTextSeq, seq),
             self.ncs,
@@ -1258,26 +906,26 @@ class PageInterpreter:
             self.scs,
         )
 
-    def do_Tj(self, s: PDFStackT) -> None:
+    def do_Tj(self, s: PDFStackT) -> Iterator[LTComponent]:
         """Show text"""
-        self.do_TJ([s])
+        yield from self.do_TJ([s])
 
-    def do__q(self, s: PDFStackT) -> None:
+    def do__q(self, s: PDFStackT) -> Iterator[LTComponent]:
         """Move to next line and show text
 
         The ' (single quote) operator.
         """
         self.do_T_a()
-        self.do_TJ([s])
+        yield from self.do_TJ([s])
 
-    def do__w(self, aw: PDFStackT, ac: PDFStackT, s: PDFStackT) -> None:
+    def do__w(self, aw: PDFStackT, ac: PDFStackT, s: PDFStackT) -> Iterator[LTComponent]:
         """Set word and character spacing, move to next line, and show text
 
         The " (double quote) operator.
         """
         self.do_Tw(aw)
         self.do_Tc(ac)
-        self.do_TJ([s])
+        yield from self.do_TJ([s])
 
     def do_BI(self) -> None:
         """Begin inline image object"""
@@ -1285,15 +933,15 @@ class PageInterpreter:
     def do_ID(self) -> None:
         """Begin inline image data"""
 
-    def do_EI(self, obj: PDFStackT) -> None:
+    def do_EI(self, obj: PDFStackT) -> Iterator[LTComponent]:
         """End inline image object"""
         if isinstance(obj, ContentStream) and "W" in obj and "H" in obj:
             iobjid = str(id(obj))
-            self.device.begin_figure(iobjid, (0, 0, 1, 1), MATRIX_IDENTITY)
-            self.device.render_image(iobjid, obj)
-            self.device.end_figure(iobjid)
+            fig = LTFigure(iobjid, (0, 0, 1, 1), self.ctm)
+            fig.add(self.render_image(iobjid, obj, fig))
+            yield fig
 
-    def do_Do(self, xobjid_arg: PDFStackT) -> None:
+    def do_Do(self, xobjid_arg: PDFStackT) -> Iterator[LTComponent]:
         """Invoke named XObject"""
         xobjid = literal_name(xobjid_arg)
         try:
@@ -1305,7 +953,6 @@ class PageInterpreter:
         log.debug("Processing xobj: %r", xobj)
         subtype = xobj.get("Subtype")
         if subtype is LITERAL_FORM and "BBox" in xobj:
-            interpreter = self.dup()
             bbox = cast(Rect, list_value(xobj["BBox"]))
             matrix = cast(Matrix, list_value(xobj.get("Matrix", MATRIX_IDENTITY)))
             # According to PDF reference 1.7 section 4.9.1, XObjects in
@@ -1313,92 +960,363 @@ class PageInterpreter:
             # instead of having their own Resources entry.
             xobjres = xobj.get("Resources")
             if xobjres:
-                resources = dict_value(xobjres)
+                interpreter = PageInterpreter(
+                    self.page, resources=dict_value(xobjres), contents=[xobj]
+                )
             else:
-                resources = self.resources.copy()
-            self.device.begin_figure(xobjid, bbox, matrix)
-            interpreter.render_contents(
-                resources,
-                [xobj],
-                ctm=mult_matrix(matrix, self.ctm),
-            )
-            self.device.end_figure(xobjid)
+                interpreter = PageInterpreter(self.page, contents=[xobj])
+            interpreter.ctm = mult_matrix(matrix, self.ctm)
+            fig = LTFigure(xobjid, bbox, interpreter.ctm)
+            for item in interpreter:
+                fig.add(item)
+            yield fig
         elif subtype is LITERAL_IMAGE and "Width" in xobj and "Height" in xobj:
-            self.device.begin_figure(xobjid, (0, 0, 1, 1), MATRIX_IDENTITY)
-            self.device.render_image(xobjid, xobj)
-            self.device.end_figure(xobjid)
+            fig = LTFigure(xobjid, (0, 0, 1, 1), self.ctm)
+            fig.add(self.render_image(xobjid, xobj, fig))
+            yield fig
         else:
             # unsupported xobject type.
             pass
 
-    def process_page(self, page: Page) -> None:
-        log.debug("Processing page: %r", page)
-        (x0, y0, x1, y1) = page.mediabox
-        # FIXME: NO, this is bad, pdfplumber has a bug related to it
-        # (specifically the translation, the rotation is kind of okay
-        # it seems)
-        if page.rotate == 90:
-            ctm = (0, -1, 1, 0, -y0, x1)
-        elif page.rotate == 180:
-            ctm = (-1, 0, 0, -1, x1, y1)
-        elif page.rotate == 270:
-            ctm = (0, 1, -1, 0, y1, -x0)
+    def begin_tag(self, tag: PSLiteral, props: Optional[PDFStackT] = None) -> None:
+        """Handle beginning of tag, setting current MCID if any."""
+        self.cur_tag = decode_text(tag.name)
+        if isinstance(props, dict) and "MCID" in props:
+            self.cur_mcid = props["MCID"]
         else:
-            ctm = (1, 0, 0, 1, -x0, -y0)
-        self.device.begin_page(page, ctm)
-        self.render_contents(page.resources, page.contents, ctm=ctm)
-        self.device.end_page(page)
+            self.cur_mcid = None
 
-    def render_contents(
-        self,
-        resources: Dict[object, object],
-        streams: Sequence[object],
-        ctm: Matrix = MATRIX_IDENTITY,
-    ) -> None:
-        """Render the content streams.
+    def do_tag(self, tag: PSLiteral, props: Optional["PDFStackT"] = None) -> None:
+        pass
 
-        This method may be called recursively.
-        """
-        log.debug(
-            "render_contents: resources=%r, streams=%r, ctm=%r",
-            resources,
-            streams,
-            ctm,
+    def end_tag(self) -> None:
+        """Handle beginning of tag, clearing current MCID."""
+        self.cur_tag = None
+        self.cur_mcid = None
+
+    def render_image(self, name: str, stream: ContentStream, figure: LTFigure) -> LTImage:
+        return LTImage(
+            name,
+            stream,
+            (figure.x0, figure.y0, figure.x1, figure.y1),
         )
-        self.init_resources(resources)
-        self.init_state(ctm)
-        self.execute(list_value(streams))
 
-    def execute(self, streams: Sequence[object]) -> None:
-        try:
-            parser = PDFContentParser(streams)
-        except StopIteration:
-            # empty page
-            return
-        while True:
-            try:
-                (_, obj) = next(parser)
-            except StopIteration:
-                break
-            if isinstance(obj, PSKeyword):
-                name = keyword_name(obj)
-                method = "do_%s" % name.replace("*", "_a").replace('"', "_w").replace(
-                    "'",
-                    "_q",
+    def paint_path(
+        self,
+        gstate: PDFGraphicState,
+        stroke: bool,
+        fill: bool,
+        evenodd: bool,
+        path: Sequence[PathSegment],
+        ncs: Optional[PDFColorSpace] = None,
+        scs: Optional[PDFColorSpace] = None,
+    ) -> Iterator[LTComponent]:
+        """Paint paths described in section 4.4 of the PDF reference manual"""
+        shape = "".join(x[0] for x in path)
+
+        if shape[:1] != "m":
+            # Per PDF Reference Section 4.4.1, "path construction operators may
+            # be invoked in any sequence, but the first one invoked must be m
+            # or re to begin a new subpath." Since pdfminer.six already
+            # converts all `re` (rectangle) operators to their equivelent
+            # `mlllh` representation, paths ingested by `.paint_path(...)` that
+            # do not begin with the `m` operator are invalid.
+            pass
+
+        elif shape.count("m") > 1:
+            # recurse if there are multiple m's in this shape
+            for m in re.finditer(r"m[^m]+", shape):
+                subpath = path[m.start(0) : m.end(0)]
+                yield from self.paint_path(gstate, stroke, fill, evenodd, subpath, ncs, scs)
+
+        else:
+            # Although the 'h' command does not not literally provide a
+            # point-position, its position is (by definition) equal to the
+            # subpath's starting point.
+            #
+            # And, per Section 4.4's Table 4.9, all other path commands place
+            # their point-position in their final two arguments. (Any preceding
+            # arguments represent control points on Bézier curves.)
+            raw_pts = [
+                cast(Point, p[-2:] if p[0] != "h" else path[0][-2:]) for p in path
+            ]
+            pts = [apply_matrix_pt(self.ctm, pt) for pt in raw_pts]
+
+            operators = [str(operation[0]) for operation in path]
+            transformed_points = [
+                [
+                    apply_matrix_pt(self.ctm, (float(operand1), float(operand2)))
+                    for operand1, operand2 in zip(operation[1::2], operation[2::2])
+                ]
+                for operation in path
+            ]
+            transformed_path = [
+                cast(PathSegment, (o, *p))
+                for o, p in zip(operators, transformed_points)
+            ]
+
+            if shape in {"mlh", "ml"}:
+                # single line segment
+                #
+                # Note: 'ml', in conditional above, is a frequent anomaly
+                # that we want to support.
+                line = LTLine(
+                    gstate.linewidth,
+                    pts[0],
+                    pts[1],
+                    stroke,
+                    fill,
+                    evenodd,
+                    gstate.scolor,
+                    gstate.ncolor,
+                    original_path=transformed_path,
+                    dashing_style=gstate.dash,
+                    ncs=ncs,
+                    scs=scs,
                 )
-                if hasattr(self, method):
-                    func = getattr(self, method)
-                    nargs = func.__code__.co_argcount - 1
-                    if nargs:
-                        args = self.pop(nargs)
-                        log.debug("exec: %s %r", name, args)
-                        if len(args) == nargs:
-                            func(*args)
-                    else:
-                        log.debug("exec: %s", name)
-                        func()
-                elif settings.STRICT:
-                    error_msg = "Unknown operator: %r" % name
-                    raise PDFInterpreterError(error_msg)
+                yield line
+
+            elif shape in {"mlllh", "mllll"}:
+                (x0, y0), (x1, y1), (x2, y2), (x3, y3), _ = pts
+
+                is_closed_loop = pts[0] == pts[4]
+                has_square_coordinates = (
+                    x0 == x1 and y1 == y2 and x2 == x3 and y3 == y0
+                ) or (y0 == y1 and x1 == x2 and y2 == y3 and x3 == x0)
+                if is_closed_loop and has_square_coordinates:
+                    rect = LTRect(
+                        gstate.linewidth,
+                        (*pts[0], *pts[2]),
+                        stroke,
+                        fill,
+                        evenodd,
+                        gstate.scolor,
+                        gstate.ncolor,
+                        transformed_path,
+                        gstate.dash,
+                        ncs,
+                        scs,
+                    )
+                    yield rect
+                else:
+                    curve = LTCurve(
+                        gstate.linewidth,
+                        pts,
+                        stroke,
+                        fill,
+                        evenodd,
+                        gstate.scolor,
+                        gstate.ncolor,
+                        transformed_path,
+                        gstate.dash,
+                        ncs,
+                        scs,
+                    )
+                    yield curve
             else:
-                self.push(obj)
+                curve = LTCurve(
+                    gstate.linewidth,
+                    pts,
+                    stroke,
+                    fill,
+                    evenodd,
+                    gstate.scolor,
+                    gstate.ncolor,
+                    transformed_path,
+                    gstate.dash,
+                    ncs,
+                    scs,
+                )
+                yield curve
+
+    def render_char(
+        self,
+        matrix: Matrix,
+        font: PDFFont,
+        fontsize: float,
+        scaling: float,
+        rise: float,
+        cid: int,
+        ncs: PDFColorSpace,
+        graphicstate: PDFGraphicState,
+        scs: Optional[PDFColorSpace] = None,
+    ) -> LTChar:
+        try:
+            text = font.to_unichr(cid)
+            assert isinstance(text, str), str(type(text))
+        except PDFUnicodeNotDefined:
+            text = self.handle_undefined_char(font, cid)
+        textwidth = font.char_width(cid)
+        textdisp = font.char_disp(cid)
+        item = LTChar(
+            matrix,
+            font,
+            fontsize,
+            scaling,
+            rise,
+            text,
+            textwidth,
+            textdisp,
+            ncs,
+            graphicstate,
+            scs,
+            graphicstate.scolor,
+            graphicstate.ncolor,
+        )
+        return item
+
+    def render_string(
+        self,
+        textstate: "PDFTextState",
+        seq: PDFTextSeq,
+        ncs: PDFColorSpace,
+        graphicstate: "PDFGraphicState",
+        scs: Optional[PDFColorSpace] = None,
+    ) -> Iterator[LTComponent]:
+        assert self.ctm is not None
+        matrix = mult_matrix(textstate.matrix, self.ctm)
+        font = textstate.font
+        fontsize = textstate.fontsize
+        scaling = textstate.scaling * 0.01
+        charspace = textstate.charspace * scaling
+        wordspace = textstate.wordspace * scaling
+        rise = textstate.rise
+        assert font is not None
+        if font.is_multibyte():
+            wordspace = 0
+        dxscale = 0.001 * fontsize * scaling
+        if font.is_vertical():
+            textstate.linematrix, chars = self.render_string_vertical(
+                seq,
+                matrix,
+                textstate.linematrix,
+                font,
+                fontsize,
+                scaling,
+                charspace,
+                wordspace,
+                rise,
+                dxscale,
+                ncs,
+                graphicstate,
+                scs,
+            )
+        else:
+            textstate.linematrix, chars = self.render_string_horizontal(
+                seq,
+                matrix,
+                textstate.linematrix,
+                font,
+                fontsize,
+                scaling,
+                charspace,
+                wordspace,
+                rise,
+                dxscale,
+                ncs,
+                graphicstate,
+                scs,
+            )
+        yield from chars
+
+    def render_string_horizontal(
+        self,
+        seq: PDFTextSeq,
+        matrix: Matrix,
+        pos: Point,
+        font: PDFFont,
+        fontsize: float,
+        scaling: float,
+        charspace: float,
+        wordspace: float,
+        rise: float,
+        dxscale: float,
+        ncs: PDFColorSpace,
+        graphicstate: "PDFGraphicState",
+        scs: Optional[PDFColorSpace] = None,
+    ) -> Tuple[Point, List[LTChar]]:
+        (x, y) = pos
+        needcharspace = False
+        chars = []
+        for obj in seq:
+            if isinstance(obj, (int, float)):
+                x -= obj * dxscale
+                needcharspace = True
+            else:
+                if isinstance(obj, str):
+                    obj = make_compat_bytes(obj)
+                if not isinstance(obj, bytes):
+                    continue
+                for cid in font.decode(obj):
+                    if needcharspace:
+                        x += charspace
+                    item = self.render_char(
+                        translate_matrix(matrix, (x, y)),
+                        font,
+                        fontsize,
+                        scaling,
+                        rise,
+                        cid,
+                        ncs,
+                        graphicstate,
+                        scs,
+                    )
+                    x += item.adv
+                    chars.append(item)
+                    if cid == 32 and wordspace:
+                        x += wordspace
+                    needcharspace = True
+        return ((x, y), chars)
+
+    def render_string_vertical(
+        self,
+        seq: PDFTextSeq,
+        matrix: Matrix,
+        pos: Point,
+        font: PDFFont,
+        fontsize: float,
+        scaling: float,
+        charspace: float,
+        wordspace: float,
+        rise: float,
+        dxscale: float,
+        ncs: PDFColorSpace,
+        graphicstate: "PDFGraphicState",
+        scs: Optional[PDFColorSpace] = None,
+    ) -> Tuple[Point, List[LTChar]]:
+        (x, y) = pos
+        needcharspace = False
+        chars = []
+        for obj in seq:
+            if isinstance(obj, (int, float)):
+                y -= obj * dxscale
+                needcharspace = True
+            else:
+                if isinstance(obj, str):
+                    obj = make_compat_bytes(obj)
+                if not isinstance(obj, bytes):
+                    continue
+                for cid in font.decode(obj):
+                    if needcharspace:
+                        y += charspace
+                    item = self.render_char(
+                        translate_matrix(matrix, (x, y)),
+                        font,
+                        fontsize,
+                        scaling,
+                        rise,
+                        cid,
+                        ncs,
+                        graphicstate,
+                        scs,
+                    )
+                    chars.append(item)
+                    y += item.adv
+                    if cid == 32 and wordspace:
+                        y += wordspace
+                    needcharspace = True
+        return ((x, y), chars)
+
+    def handle_undefined_char(self, font: PDFFont, cid: int) -> str:
+        log.debug("undefined: %r, %r", font, cid)
+        return "(cid:%d)" % cid

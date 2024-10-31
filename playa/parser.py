@@ -291,6 +291,7 @@ class Lexer:
 ExtraT = TypeVar("ExtraT")
 PSStackType = Union[str, float, bool, PSLiteral, bytes, List, Dict, ExtraT]
 PSStackEntry = Tuple[int, PSStackType[ExtraT]]
+PDFStackT = PSStackType[ContentStream]  # FIXME: Not entirely correct here
 
 
 class Parser(Generic[ExtraT]):
