@@ -764,6 +764,8 @@ class PDFDocument:
         except io.UnsupportedOperation:
             log.warning("mmap not supported on %r, reading document into memory", fp)
             self.buffer = fp.read()
+        except ValueError as e:
+            raise PSException from e
         self.parser = PDFParser(self.buffer, self)
         self.is_printable = self.is_modifiable = self.is_extractable = True
         # Getting the XRef table and trailer is done non-lazily
