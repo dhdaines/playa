@@ -1,14 +1,11 @@
 import logging
 from typing import (
-    Generic,
     Iterable,
     Iterator,
     List,
     Optional,
     Tuple,
-    TypeVar,
     Union,
-    cast,
 )
 
 from playa.color import PDFColorSpace
@@ -16,7 +13,6 @@ from playa.exceptions import PDFValueError
 from playa.font import PDFFont
 from playa.pdftypes import ContentStream
 from playa.utils import (
-    INF,
     Matrix,
     PathSegment,
     Point,
@@ -85,31 +81,10 @@ class PDFGraphicState:
         )
 
 
-class LTItem:
-    """Interface for things that can be analyzed"""
-
-    # Any item could be in a marked content section
-    mcid: Optional[int] = None
-    # Which could have a tag
-    tag: Optional[str] = None
-
-
-class LTText:
-    """Interface for things that have text"""
-
-    def __repr__(self) -> str:
-        return f"<{self.__class__.__name__} {self.get_text()!r}>"
-
-    def get_text(self) -> str:
-        """Text contained in this object"""
-        raise NotImplementedError
-
-
-class LTComponent(LTItem):
+class LTComponent:
     """Object with a bounding box"""
 
     def __init__(self, bbox: Rect) -> None:
-        LTItem.__init__(self)
         self.set_bbox(bbox)
 
     def __repr__(self) -> str:
@@ -313,22 +288,7 @@ class LTImage(LTComponent):
         return f"<{self.__class__.__name__}({self.name}) {bbox2str(self.bbox)} {self.srcsize!r}>"
 
 
-class LTAnno(LTItem, LTText):
-    """Actual letter in the text as a Unicode string.
-
-    Note that, while a LTChar object has actual boundaries, LTAnno objects does
-    not, as these are "virtual" characters, inserted by a layout analyzer
-    according to the relationship between two characters (e.g. a space).
-    """
-
-    def __init__(self, text: str) -> None:
-        self._text = text
-
-    def get_text(self) -> str:
-        return self._text
-
-
-class LTChar(LTComponent, LTText):
+class LTChar(LTComponent):
     """Actual letter in the text as a Unicode string."""
 
     def __init__(
@@ -348,7 +308,6 @@ class LTChar(LTComponent, LTText):
         stroking_color: Optional[Color] = None,
         non_stroking_color: Optional[Color] = None,
     ) -> None:
-        LTText.__init__(self)
         self._text = text
         self.matrix = matrix
         self.fontname = font.fontname
@@ -396,54 +355,7 @@ class LTChar(LTComponent, LTText):
         return self._text
 
 
-LTItemT = TypeVar("LTItemT", bound=LTItem)
-
-
-class LTContainer(LTComponent, Generic[LTItemT]):
-    """Object that can be extended and analyzed"""
-
-    def __init__(self, bbox: Rect) -> None:
-        LTComponent.__init__(self, bbox)
-        self._objs: List[LTItemT] = []
-
-    def __iter__(self) -> Iterator[LTItemT]:
-        return iter(self._objs)
-
-    def __len__(self) -> int:
-        return len(self._objs)
-
-    def add(self, obj: LTItemT) -> None:
-        self._objs.append(obj)
-
-    def extend(self, objs: Iterable[LTItemT]) -> None:
-        for obj in objs:
-            self.add(obj)
-
-
-class LTExpandableContainer(LTContainer[LTItemT]):
-    def __init__(self) -> None:
-        LTContainer.__init__(self, (+INF, +INF, -INF, -INF))
-
-    # Incompatible override: we take an LTComponent (with bounding box), but
-    # super() LTContainer only considers LTItem (no bounding box).
-    def add(self, obj: LTComponent) -> None:  # type: ignore[override]
-        LTContainer.add(self, cast(LTItemT, obj))
-        self.set_bbox(
-            (
-                min(self.x0, obj.x0),
-                min(self.y0, obj.y0),
-                max(self.x1, obj.x1),
-                max(self.y1, obj.y1),
-            ),
-        )
-
-
-class LTLayoutContainer(LTContainer[LTComponent]):
-    def __init__(self, bbox: Rect) -> None:
-        LTContainer.__init__(self, bbox)
-
-
-class LTFigure(LTLayoutContainer):
+class LTFigure(LTComponent):
     """Represents an area used by PDF Form objects.
 
     PDF Forms can be used to present figures or pictures by embedding yet
@@ -457,23 +369,21 @@ class LTFigure(LTLayoutContainer):
         (x, y, w, h) = bbox
         bounds = ((x, y), (x + w, y), (x, y + h), (x + w, y + h))
         bbox = get_bound(apply_matrix_pt(matrix, (p, q)) for (p, q) in bounds)
-        LTLayoutContainer.__init__(self, bbox)
+        LTComponent.__init__(self, bbox)
+        self._objs: List[LTComponent] = []
+
+    def __iter__(self) -> Iterator[LTComponent]:
+        return iter(self._objs)
+
+    def __len__(self) -> int:
+        return len(self._objs)
+
+    def add(self, obj: LTComponent) -> None:
+        self._objs.append(obj)
+
+    def extend(self, objs: Iterable[LTComponent]) -> None:
+        for obj in objs:
+            self.add(obj)
 
     def __repr__(self) -> str:
         return f"<{self.__class__.__name__}({self.name}) {bbox2str(self.bbox)} matrix={matrix2str(self.matrix)}>"
-
-
-class LTPage(LTLayoutContainer):
-    """Represents an entire page.
-
-    Like any other LTLayoutContainer, an LTPage can be iterated to obtain child
-    objects like LTTextBox, LTFigure, LTImage, LTRect, LTCurve and LTLine.
-    """
-
-    def __init__(self, pageid: int, bbox: Rect, rotate: float = 0) -> None:
-        LTLayoutContainer.__init__(self, bbox)
-        self.pageid = pageid
-        self.rotate = rotate
-
-    def __repr__(self) -> str:
-        return f"<{self.__class__.__name__}({self.pageid!r}) {bbox2str(self.bbox)} rotate={self.rotate!r}>"

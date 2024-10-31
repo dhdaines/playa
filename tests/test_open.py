@@ -31,29 +31,48 @@ def test_open(path: Path) -> None:
             pass
 
 
-def test_analyze() -> None:
-    """Test the layout analyzer (FIXME: PLAYA Ain't a Layout Analyzer)"""
-    with playa.open(
-        TESTDIR / "2023-04-06-ODJ et Résolutions-séance xtra 6 avril 2023.pdf"
-    ) as pdf:
+def test_layout() -> None:
+    """Compare layout analysis with pdfplumber."""
+    from pdfminer.converter import PDFPageAggregator
+    from pdfminer.pdfdocument import PDFDocument
+    from pdfminer.pdfinterp import PDFPageInterpreter, PDFResourceManager
+    from pdfminer.pdfpage import PDFPage
+    from pdfminer.pdfparser import PDFParser
+
+    path = TESTDIR / "2023-06-20-PV.pdf"
+    miner = []
+    with open(path, "rb") as infh:
+        rsrc = PDFResourceManager()
+        agg = PDFPageAggregator(rsrc, pageno=1)
+        interp = PDFPageInterpreter(rsrc, agg)
+        pdf = PDFDocument(PDFParser(infh))
+        for page in PDFPage.create_pages(pdf):
+            interp.process_page(page)
+            layout = agg.result
+            for item in layout:
+                miner.append((type(item).__name__, item.bbox))
+
+    itor = iter(miner)
+    with playa.open(path) as pdf:
         for page in pdf.pages:
-            page_objs = list(page.layout)
-            print(len(page_objs))
+            for item in page.layout:
+                thingy = (type(item).__name__, item.bbox)
+                assert thingy == next(itor)
 
 
 def test_inline_data() -> None:
-    # No, there's no easy way to unit test PDFContentParser directly.
-    # The necessary mocking would be useless considering that I will
-    # shortly demolish these redundant and confusing APIs.
     with playa.open(TESTDIR / "contrib" / "issue-1008-inline-ascii85.pdf") as doc:
-        _ = doc.pages[0].layout
+        page = doc.pages[0]
+        items = list(page.layout)
+        assert len(items) == 456
 
 
 def test_multiple_contents() -> None:
     with playa.open(TESTDIR / "jo.pdf") as doc:
         page = doc.pages[0]
         assert len(page.contents) > 1
-        _ = page.layout
+        items = list(page.layout)
+        assert len(items) == 898
 
 
 def test_weakrefs() -> None:

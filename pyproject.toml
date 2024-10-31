@@ -67,6 +67,9 @@ ban-relative-imports = "all"
 [tool.pytest.ini_options]
 testpaths = [ "tests" ]
 
+[tool.hatch.envs.hatch-test]
+dependencies = [ "pdfminer.six" ]
+
 [tool.hatch.envs.bench]
 dependencies = [ "pdfminer.six" ]
 

@@ -33,7 +33,6 @@ from playa.layout import (
     LTFigure,
     LTImage,
     LTLine,
-    LTPage,
     LTRect,
     PDFGraphicState,
 )
@@ -156,10 +155,9 @@ class Page:
                 self.contents = [self.contents]
         else:
             self.contents = []
-        self._layout: Optional["LTPage"] = None
 
     @property
-    def layout(self) -> Iterator:
+    def layout(self) -> Iterator[LTComponent]:
         return iter(PageInterpreter(self))
 
     def __repr__(self) -> str:
