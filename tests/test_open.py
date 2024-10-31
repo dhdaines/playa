@@ -75,6 +75,13 @@ def test_multiple_contents() -> None:
         assert len(items) == 898
 
 
+def test_xobjects() -> None:
+    with playa.open(TESTDIR / "encryption/aes-256.pdf", password="foo") as doc:
+        for page in doc.pages:
+            for item in page.layout:
+                print(item)
+
+
 def test_weakrefs() -> None:
     """Verify that PDFDocument really gets deleted even if we have
     PDFObjRefs hanging around."""
@@ -86,4 +93,6 @@ def test_weakrefs() -> None:
 
 
 if __name__ == "__main__":
-    test_open(TESTDIR / "simple5.pdf")
+    import logging
+    logging.basicConfig(level=logging.DEBUG)
+    test_xobjects()

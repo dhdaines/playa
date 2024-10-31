@@ -30,10 +30,10 @@ def benchmark_one_pdf(path: Path):
 
     passwords = PASSWORDS.get(path.name, [""])
     for password in passwords:
-        LOG.debug("Reading %s", path)
+        LOG.info("Reading %s", path)
         with playa.open(path, password=password) as pdf:
             for page in pdf.pages:
-                _ = page.layout
+                _ = list(page.layout)
 
 
 def benchmark_one_pdfminer(path: Path):

@@ -407,10 +407,10 @@ class PageInterpreter:
         log.debug(
             "PageInterpreter: resources=%r, streams=%r, ctm=%r",
             self.resources,
-            self.page.contents,
+            self.contents,
             self.ctm,
         )
-        parser = PDFContentParser(self.page.contents)
+        parser = PDFContentParser(self.contents)
         for _, obj in parser:
             if isinstance(obj, PSKeyword):
                 name = keyword_name(obj)
