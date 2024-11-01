@@ -134,6 +134,9 @@ class PDFStructElement(Findable):
             for k in list(el.keys()):
                 if el[k] is None or el[k] == [] or el[k] == {}:
                     del el[k]
+            if "page_idx" in el:
+                el["page_number"] = el["page_idx"] + 1
+                del el["page_idx"]
             if "children" in el:
                 d.extend(el["children"])
         return r
