@@ -10,11 +10,9 @@ import pytest
 import playa
 import playa.settings
 from playa.data_structures import NameTree
+from playa.document import read_header
 from playa.exceptions import PDFSyntaxError
-from playa.pdfdocument import read_header
 from playa.utils import decode_text
-
-playa.settings.STRICT = True
 
 TESTDIR = Path(__file__).parent.parent / "samples"
 
@@ -32,6 +30,12 @@ def test_read_header():
         read_header(BytesIO(b"%PDF-OMG"))
     assert "invalid" in str(e)
     assert read_header(BytesIO(b"%PDF-1.7")) == "1.7"
+
+
+def test_objects():
+    with playa.open(TESTDIR / "simple1.pdf") as doc:
+        for obj in doc:
+            print(obj)
 
 
 def test_page_labels():

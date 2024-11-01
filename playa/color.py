@@ -1,7 +1,7 @@
 import collections
 from typing import Dict
 
-from playa.psparser import LIT
+from playa.parser import LIT
 
 LITERAL_DEVICE_GRAY = LIT("DeviceGray")
 LITERAL_DEVICE_RGB = LIT("DeviceRGB")

@@ -10,7 +10,7 @@ import builtins
 from os import PathLike
 from typing import Union
 
-from playa.pdfdocument import PDFDocument
+from playa.document import PDFDocument
 
 __version__ = "0.0.1"
 

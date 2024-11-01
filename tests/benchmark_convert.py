@@ -30,10 +30,10 @@ def benchmark_one_pdf(path: Path):
 
     passwords = PASSWORDS.get(path.name, [""])
     for password in passwords:
-        LOG.debug("Reading %s", path)
+        LOG.info("Reading %s", path)
         with playa.open(path, password=password) as pdf:
             for page in pdf.pages:
-                _ = page.layout
+                _ = list(page.layout)
 
 
 def benchmark_one_pdfminer(path: Path):
@@ -57,17 +57,21 @@ def benchmark_one_pdfminer(path: Path):
 
 
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO)
+    # Silence warnings about broken PDFs
+    logging.basicConfig(level=logging.ERROR)
     niter = 10
-    if len(sys.argv) == 1 or "pdfminer" in sys.argv[1:]:
-        start = time.time()
-        for _ in range(niter):
-            for path in ALLPDFS:
-                benchmark_one_pdfminer(path)
-        LOG.info("pdfminer.six took %f", time.time() - start)
-    if len(sys.argv) == 1 or "playa" in sys.argv[1:]:
-        start = time.time()
-        for _ in range(niter):
-            for path in ALLPDFS:
+    miner_time = beach_time = 0.0
+    for iter in range(niter + 1):
+        for path in ALLPDFS:
+            if len(sys.argv) == 1 or "playa" in sys.argv[1:]:
+                start = time.time()
                 benchmark_one_pdf(path)
-        LOG.info("PLAYA took %f", time.time() - start)
+                if iter != 0:
+                    beach_time += time.time() - start
+            if len(sys.argv) == 1 or "pdfminer" in sys.argv[1:]:
+                start = time.time()
+                benchmark_one_pdfminer(path)
+                if iter != 0:
+                    miner_time += time.time() - start
+    print("pdfminer.six took %.2fs / iter" % (miner_time / niter,))
+    print("PLAYA took %.2fs / iter" % (beach_time / niter,))

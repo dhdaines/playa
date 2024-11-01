@@ -272,21 +272,21 @@ DATA = rb"""
 
 
 def bench_bytes():
-    from playa.psparser import PSInMemoryParser
+    from playa.parser import Lexer
 
     runs = 100
     start = time.time()
-    parser = PSInMemoryParser(DATA * runs)
+    parser = Lexer(DATA * runs)
     _ = list(parser)
     print(
-        "PLAYA Parser (bytes): %fms / run" % ((time.time() - start) / runs * 1000),
+        "PLAYA Lexer (bytes): %fms / run" % ((time.time() - start) / runs * 1000),
     )
 
 
 def bench_mmap():
     import mmap
 
-    from playa.psparser import PSInMemoryParser
+    from playa.parser import Lexer
 
     with tempfile.NamedTemporaryFile() as tf:
         runs = 100
@@ -295,55 +295,17 @@ def bench_mmap():
         with open(tf.name, "rb") as infh:
             start = time.time()
             mapping = mmap.mmap(infh.fileno(), 0, access=mmap.ACCESS_READ)
-            parser = PSInMemoryParser(mapping)
+            parser = Lexer(mapping)
             _ = list(parser)
             print(
-                "PLAYA Parser (mmap): %fms / run"
+                "PLAYA Lexer (mmap): %fms / run"
                 % ((time.time() - start) / runs * 1000),
             )
-
-
-def bench_bytesio():
-    from pdfminer.psparser import PSEOF, PSBaseParser
-
-    runs = 100
-    start = time.time()
-    parser = PSBaseParser(BytesIO(DATA * runs))
-    while True:
-        try:
-            _ = parser.nexttoken()
-        except PSEOF:
-            break
-    print(
-        "pdfminer.six Parser (BytesIO): %fms / run"
-        % ((time.time() - start) / runs * 1000),
-    )
 
 
 def bench_playa():
-    from playa.pdfdocument import PDFDocument
-    from playa.pdfpage import PDFPage
-    from playa.psparser import PSFileParser
+    from playa.document import PDFDocument
 
-    runs = 100
-    start = time.time()
-    parser = PSFileParser(BytesIO(DATA * runs))
-    _ = list(parser)
-    print(
-        "PLAYA Parser (BytesIO): %fms / run" % ((time.time() - start) / runs * 1000),
-    )
-    with tempfile.NamedTemporaryFile() as tf:
-        runs = 100
-        with open(tf.name, "wb") as outfh:
-            outfh.write(DATA * runs)
-        with open(tf.name, "rb") as infh:
-            start = time.time()
-            parser = PSFileParser(infh)
-            _ = list(parser)
-            print(
-                "PLAYA Parser (BinaryIO): %fms / run"
-                % ((time.time() - start) / runs * 1000),
-            )
     bench_bytes()
     bench_mmap()
 
@@ -352,7 +314,7 @@ def bench_playa():
     for _ in range(runs):
         with open(TESTDIR / "contrib" / "pagelabels.pdf", "rb") as infh:
             doc = PDFDocument(infh)
-            page = next(PDFPage.create_pages(doc))
+            page = doc.pages[0]
             _ = page.layout
     print(
         "PLAYA Interpreter: %dms / run" % ((time.time() - start) / runs * 1000),
@@ -376,7 +338,7 @@ def bench_pdfminer():
         except PSEOF:
             break
     print(
-        "pdfminer.six Parser (BytesIO): %fms / run"
+        "pdfminer.six Lexer (BytesIO): %fms / run"
         % ((time.time() - start) / runs * 1000),
     )
     with tempfile.NamedTemporaryFile() as tf:
@@ -391,7 +353,7 @@ def bench_pdfminer():
                 except PSEOF:
                     break
             print(
-                "pdfminer.six Parser (BinaryIO): %fms / run"
+                "pdfminer.six Lexer (BinaryIO): %fms / run"
                 % ((time.time() - start) / runs * 1000),
             )
     runs = 20
@@ -418,7 +380,5 @@ if __name__ == "__main__":
         bench_playa()
     if len(sys.argv) > 1 and sys.argv[1] == "bytes":
         bench_bytes()
-    if len(sys.argv) > 1 and sys.argv[1] == "bytesio":
-        bench_bytesio()
     if len(sys.argv) > 1 and sys.argv[1] == "mmap":
         bench_mmap()

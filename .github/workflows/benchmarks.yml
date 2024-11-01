@@ -1,4 +1,4 @@
-name: Test
+name: Benchmark
 on:
   push:
     branches: [ "main" ]
@@ -6,7 +6,7 @@ on:
     branches: [ "main" ]
 
 jobs:
-  test:
+  benchmark:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -16,5 +16,6 @@ jobs:
           python-version: "3.10"
       - name: Install Hatch
         uses: pypa/hatch@install
-      - name: Run tests
-        run: hatch test --cover
+      - name: Run benchmarks
+        run: |
+          hatch run bench:all

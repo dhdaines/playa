@@ -1,6 +1,7 @@
 import io
 import itertools
 import logging
+import mmap
 import re
 import struct
 from collections import deque
@@ -28,10 +29,8 @@ from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 
 from playa import settings
 from playa.arcfour import Arcfour
-from playa.cmapdb import CMap, CMapBase, CMapDB
 from playa.data_structures import NameTree, NumberTree
 from playa.exceptions import (
-    PSEOF,
     PDFEncryptionError,
     PDFException,
     PDFFontError,
@@ -45,19 +44,23 @@ from playa.exceptions import (
     PDFTypeError,
     PSException,
 )
-from playa.pdffont import (
-    PDFCIDFont,
-    PDFFont,
-    PDFTrueTypeFont,
-    PDFType1Font,
-    PDFType3Font,
+from playa.font import PDFCIDFont, PDFFont, PDFTrueTypeFont, PDFType1Font, PDFType3Font
+from playa.page import Page
+from playa.parser import (
+    KEYWORD_OBJ,
+    KEYWORD_TRAILER,
+    KEYWORD_XREF,
+    LIT,
+    ContentStreamParser,
+    PDFParser,
+    PSBaseParserToken,
+    PSLiteral,
+    literal_name,
 )
-from playa.pdfpage import PDFPage
-from playa.pdfparser import KEYWORD_XREF, PDFParser, PDFStreamParser
 from playa.pdftypes import (
+    ContentStream,
     DecipherCallable,
-    PDFObjRef,
-    PDFStream,
+    ObjRef,
     decipher_all,
     dict_value,
     int_value,
@@ -67,7 +70,6 @@ from playa.pdftypes import (
     stream_value,
     uint_value,
 )
-from playa.psparser import KWD, LIT, PSLiteral, literal_name
 from playa.utils import (
     choplist,
     decode_text,
@@ -89,7 +91,6 @@ LITERAL_XREF = LIT("XRef")
 LITERAL_CATALOG = LIT("Catalog")
 LITERAL_PAGE = LIT("Page")
 LITERAL_PAGES = LIT("Pages")
-KEYWORD_OBJ = KWD(b"obj")
 INHERITABLE_PAGE_ATTRS = {"Resources", "MediaBox", "CropBox", "Rotate"}
 
 
@@ -116,14 +117,11 @@ class PDFXRefTable:
         self._load(parser)
 
     def _load(self, parser: PDFParser) -> None:
-        while True:
-            try:
-                (pos, line) = parser.nextline()
-                line = line.strip()
-                if not line:
-                    continue
-            except PSEOF:
-                raise PDFNoValidXRef("Unexpected EOF - file corrupted?")
+        lines = parser.iter_lines()
+        for pos, line in lines:
+            line = line.strip()
+            if not line:
+                continue
             if line.startswith(b"trailer"):
                 parser.seek(pos)
                 break
@@ -137,11 +135,8 @@ class PDFXRefTable:
                 error_msg = f"Invalid line: {parser!r}: line={line!r}"
                 raise PDFNoValidXRef(error_msg)
             for objid in range(start, start + nobjs):
-                try:
-                    (_, line) = parser.nextline()
-                    line = line.strip()
-                except PSEOF:
-                    raise PDFNoValidXRef("Unexpected EOF - file corrupted?")
+                _, line = next(lines)
+                line = line.strip()
                 f = line.split(b" ")
                 if len(f) != 3:
                     error_msg = f"Invalid XRef format: {parser!r}, line={line!r}"
@@ -156,9 +151,16 @@ class PDFXRefTable:
     def _load_trailer(self, parser: PDFParser) -> None:
         try:
             (_, kwd) = parser.nexttoken()
-            assert kwd is KWD(b"trailer"), str(kwd)
-            (_, dic) = parser.nextobject()
-        except PSEOF:
+            if kwd is not KEYWORD_TRAILER:
+                raise PDFSyntaxError(
+                    "Expected %r, got %r"
+                    % (
+                        KEYWORD_TRAILER,
+                        kwd,
+                    )
+                )
+            (_, dic) = next(parser)
+        except StopIteration:
             x = parser.pop(1)
             if not x:
                 raise PDFNoValidXRef("Unexpected EOF - file corrupted")
@@ -190,11 +192,7 @@ class PDFXRefFallback(PDFXRefTable):
 
     def _load(self, parser: PDFParser) -> None:
         parser.seek(0)
-        while 1:
-            try:
-                (pos, line_bytes) = parser.nextline()
-            except PSEOF:
-                break
+        for pos, line_bytes in parser.iter_lines():
             if line_bytes.startswith(b"trailer"):
                 parser.seek(pos)
                 self._load_trailer(parser)
@@ -210,8 +208,8 @@ class PDFXRefFallback(PDFXRefTable):
             self.offsets[objid] = (None, pos, genno)
             # expand ObjStm.
             parser.seek(pos)
-            (_, obj) = parser.nextobject()
-            if isinstance(obj, PDFStream) and obj.get("Type") is LITERAL_OBJSTM:
+            (_, obj) = next(parser)
+            if isinstance(obj, ContentStream) and obj.get("Type") is LITERAL_OBJSTM:
                 stream = stream_value(obj)
                 try:
                     n = stream["N"]
@@ -222,14 +220,9 @@ class PDFXRefFallback(PDFXRefTable):
                 doc = parser.doc()
                 if doc is None:
                     raise RuntimeError("Document no longer exists!")
-                parser1 = PDFStreamParser(stream.get_data(), doc)
-                objs: List[int] = []
-                try:
-                    while 1:
-                        (_, obj) = parser1.nextobject()
-                        objs.append(cast(int, obj))
-                except PSEOF:
-                    pass
+                parser1 = ContentStreamParser(stream.get_data(), doc)
+                objs: List = [obj for _, obj in parser1]
+                # FIXME: This is choplist
                 n = min(n, len(objs) // 2)
                 for index in range(n):
                     objid1 = objs[index * 2]
@@ -255,9 +248,12 @@ class PDFXRefStream:
         (_, objid) = parser.nexttoken()  # ignored
         (_, genno) = parser.nexttoken()  # ignored
         (_, kwd) = parser.nexttoken()
-        (_, stream) = parser.nextobject()
-        if not isinstance(stream, PDFStream) or stream.get("Type") is not LITERAL_XREF:
-            raise PDFNoValidXRef("Invalid PDF stream spec.")
+        (_, stream) = next(parser)
+        if (
+            not isinstance(stream, ContentStream)
+            or stream.get("Type") is not LITERAL_XREF
+        ):
+            raise PDFNoValidXRef(f"Invalid PDF stream spec {stream!r}")
         size = stream["Size"]
         index_array = stream.get("Index", (0, size))
         if len(index_array) % 2 != 0:
@@ -704,79 +700,7 @@ class OutlineItem(NamedTuple):
     # FIXME: Create Destination and Action types
     dest: Union[PSLiteral, bytes, list, None]
     action: Union[dict, None]
-    se: Union[PDFObjRef, None]
-
-
-class PDFResourceManager:
-    """Repository of shared resources.
-
-    ResourceManager facilitates reuse of shared resources
-    such as fonts and images so that large objects are not
-    allocated multiple times.
-    """
-
-    def __init__(self, caching: bool = True) -> None:
-        self.caching = caching
-        self._cached_fonts: Dict[object, PDFFont] = {}
-
-    def get_procset(self, procs: Sequence[object]) -> None:
-        for proc in procs:
-            if proc is LITERAL_PDF or proc is LITERAL_TEXT:
-                pass
-            else:
-                pass
-
-    def get_cmap(self, cmapname: str, strict: bool = False) -> CMapBase:
-        try:
-            return CMapDB.get_cmap(cmapname)
-        except CMapDB.CMapNotFound:
-            if strict:
-                raise
-            return CMap()
-
-    def get_font(self, objid: object, spec: Mapping[str, object]) -> PDFFont:
-        if objid and objid in self._cached_fonts:
-            font = self._cached_fonts[objid]
-        else:
-            log.debug("get_font: create: objid=%r, spec=%r", objid, spec)
-            if settings.STRICT:
-                if spec["Type"] is not LITERAL_FONT:
-                    raise PDFFontError("Type is not /Font")
-            # Create a Font object.
-            if "Subtype" in spec:
-                subtype = literal_name(spec["Subtype"])
-            else:
-                if settings.STRICT:
-                    raise PDFFontError("Font Subtype is not specified.")
-                subtype = "Type1"
-            if subtype in ("Type1", "MMType1"):
-                # Type1 Font
-                font = PDFType1Font(spec)
-            elif subtype == "TrueType":
-                # TrueType Font
-                font = PDFTrueTypeFont(spec)
-            elif subtype == "Type3":
-                # Type3 Font
-                font = PDFType3Font(spec)
-            elif subtype in ("CIDFontType0", "CIDFontType2"):
-                # CID Font
-                font = PDFCIDFont(spec)
-            elif subtype == "Type0":
-                # Type0 Font
-                dfonts = list_value(spec["DescendantFonts"])
-                assert dfonts
-                subspec = dict_value(dfonts[0]).copy()
-                for k in ("Encoding", "ToUnicode"):
-                    if k in spec:
-                        subspec[k] = resolve1(spec[k])
-                font = self.get_font(None, subspec)
-            else:
-                if settings.STRICT:
-                    raise PDFFontError("Invalid Font spec: %r" % spec)
-                font = PDFType1Font(spec)  # FIXME: this is so wrong!
-            if objid and self.caching:
-                self._cached_fonts[objid] = font
-        return font
+    se: Union[ObjRef, None]
 
 
 class PDFDocument:
@@ -800,7 +724,7 @@ class PDFDocument:
     """
 
     _fp: Union[BinaryIO, None] = None
-    _pages: Union[List[PDFPage], None] = None
+    _pages: Union[List[Page], None] = None
 
     def __enter__(self) -> "PDFDocument":
         return self
@@ -823,10 +747,26 @@ class PDFDocument:
         self.decipher: Optional[DecipherCallable] = None
         self._cached_objs: Dict[int, Tuple[object, int]] = {}
         self._parsed_objs: Dict[int, Tuple[List[object], int]] = {}
+        self._cached_fonts: Dict[object, PDFFont] = {}
         if isinstance(fp, io.TextIOBase):
             raise PSException("fp is not a binary file")
-        self.pdf_version = read_header(fp)
-        self.parser = PDFParser(fp, self)
+        # The header is frequently mangled, in which case we will try to read the
+        # file anyway.
+        try:
+            self.pdf_version = read_header(fp)
+        except PDFSyntaxError:
+            log.warning("PDF header not found, will try to read the file anyway")
+            self.pdf_version = "UNKNOWN"
+        try:
+            self.buffer: Union[bytes, mmap.mmap] = mmap.mmap(
+                fp.fileno(), 0, access=mmap.ACCESS_READ
+            )
+        except io.UnsupportedOperation:
+            log.warning("mmap not supported on %r, reading document into memory", fp)
+            self.buffer = fp.read()
+        except ValueError as e:
+            raise PSException from e
+        self.parser = PDFParser(self.buffer, self)
         self.is_printable = self.is_modifiable = self.is_extractable = True
         # Getting the XRef table and trailer is done non-lazily
         # because they contain encryption information among other
@@ -868,8 +808,6 @@ class PDFDocument:
         if self.catalog.get("Type") is not LITERAL_CATALOG:
             if settings.STRICT:
                 raise PDFSyntaxError("Catalog not found!")
-        # NOTE: This does nearly nothing at all
-        self.rsrcmgr = PDFResourceManager(True)
 
     def _initialize_password(self, password: str = "") -> None:
         """Initialize the decryption handler with a given password, if any.
@@ -899,7 +837,20 @@ class PDFDocument:
         assert self.parser is not None
         self.parser.fallback = False  # need to read streams with exact length
 
-    def _getobj_objstm(self, stream: PDFStream, index: int, objid: int) -> object:
+    def __iter__(self) -> Iterator[Tuple[int, object]]:
+        """Iterate over (position, object) tuples, raising StopIteration at EOF."""
+        # FIXME: Should create a new parser
+        self.parser.seek(0)
+        return self.parser
+
+    @property
+    def tokens(self) -> Iterator[Tuple[int, PSBaseParserToken]]:
+        """Iterate over (position, token) tuples, raising StopIteration at EOF."""
+        # FIXME: Should create a new parser
+        self.parser.seek(0)
+        return self.parser.tokens
+
+    def _getobj_objstm(self, stream: ContentStream, index: int, objid: int) -> object:
         if stream.objid in self._parsed_objs:
             (objs, n) = self._parsed_objs[stream.objid]
         else:
@@ -913,7 +864,7 @@ class PDFDocument:
             raise PDFSyntaxError("index too big: %r" % index)
         return obj
 
-    def _get_objects(self, stream: PDFStream) -> Tuple[List[object], int]:
+    def _get_objects(self, stream: ContentStream) -> Tuple[List[object], int]:
         if stream.get("Type") is not LITERAL_OBJSTM:
             if settings.STRICT:
                 raise PDFSyntaxError("Not a stream object: %r" % stream)
@@ -923,14 +874,8 @@ class PDFDocument:
             if settings.STRICT:
                 raise PDFSyntaxError("N is not defined: %r" % stream)
             n = 0
-        parser = PDFStreamParser(stream.get_data(), self)
-        objs: List[object] = []
-        try:
-            while 1:
-                (_, obj) = parser.nextobject()
-                objs.append(obj)
-        except PSEOF:
-            pass
+        parser = ContentStreamParser(stream.get_data(), self)
+        objs: List[object] = [obj for _, obj in parser]
         return (objs, n)
 
     def _getobj_parse(self, pos: int, objid: int) -> object:
@@ -951,7 +896,7 @@ class PDFDocument:
             while True:
                 try:
                     (_, token) = self.parser.nexttoken()
-                except PSEOF:
+                except StopIteration:
                     raise PDFSyntaxError(
                         f"object {objid!r} not found at or after position {pos}"
                     )
@@ -966,7 +911,7 @@ class PDFDocument:
             (_, kwd) = self.parser.nexttoken()
             if kwd != KEYWORD_OBJ:
                 raise PDFSyntaxError("Invalid object spec: offset=%r" % pos)
-        (_, obj) = self.parser.nextobject()
+        (_, obj) = next(self.parser)
         return obj
 
     def __getitem__(self, objid: int) -> object:
@@ -996,16 +941,60 @@ class PDFDocument:
                         if self.decipher:
                             obj = decipher_all(self.decipher, objid, genno, obj)
 
-                    if isinstance(obj, PDFStream):
+                    if isinstance(obj, ContentStream):
                         obj.set_objid(objid, genno)
                     break
-                except (PSEOF, PDFSyntaxError):
+                except (StopIteration, PDFSyntaxError):
                     continue
             if obj is None:
                 raise IndexError(f"Object with ID {objid} not found")
             log.debug("register: objid=%r: %r", objid, obj)
             self._cached_objs[objid] = (obj, genno)
         return obj
+
+    def get_font(self, objid: object, spec: Mapping[str, object]) -> PDFFont:
+        if objid and objid in self._cached_fonts:
+            font = self._cached_fonts[objid]
+        else:
+            log.debug("get_font: create: objid=%r, spec=%r", objid, spec)
+            if settings.STRICT:
+                if spec["Type"] is not LITERAL_FONT:
+                    raise PDFFontError("Type is not /Font")
+            # Create a Font object.
+            if "Subtype" in spec:
+                subtype = literal_name(spec["Subtype"])
+            else:
+                if settings.STRICT:
+                    raise PDFFontError("Font Subtype is not specified.")
+                subtype = "Type1"
+            if subtype in ("Type1", "MMType1"):
+                # Type1 Font
+                font = PDFType1Font(spec)
+            elif subtype == "TrueType":
+                # TrueType Font
+                font = PDFTrueTypeFont(spec)
+            elif subtype == "Type3":
+                # Type3 Font
+                font = PDFType3Font(spec)
+            elif subtype in ("CIDFontType0", "CIDFontType2"):
+                # CID Font
+                font = PDFCIDFont(spec)
+            elif subtype == "Type0":
+                # Type0 Font
+                dfonts = list_value(spec["DescendantFonts"])
+                assert dfonts
+                subspec = dict_value(dfonts[0]).copy()
+                for k in ("Encoding", "ToUnicode"):
+                    if k in spec:
+                        subspec[k] = resolve1(spec[k])
+                font = self.get_font(None, subspec)
+            else:
+                if settings.STRICT:
+                    raise PDFFontError("Invalid Font spec: %r" % spec)
+                font = PDFType1Font(spec)  # FIXME: this is so wrong!
+            if objid:
+                self._cached_fonts[objid] = font
+        return font
 
     @property
     def outlines(self) -> Iterator[OutlineItem]:
@@ -1080,11 +1069,11 @@ class PDFDocument:
         visited = set()
         while stack:
             (obj, parent) = stack.pop()
-            if isinstance(obj, PDFObjRef):
+            if isinstance(obj, ObjRef):
                 # The PDF specification *requires* both the Pages
                 # element of the catalog and the entries in Kids in
                 # the page tree to be indirect references.
-                object_id = obj.objid
+                object_id = int(obj.objid)
             elif isinstance(obj, int):
                 # Should not happen in a valid PDF, but probably does?
                 log.warning("Page tree contains bare integer: %r in %r", obj, parent)
@@ -1118,23 +1107,28 @@ class PDFDocument:
                 log.debug("Page: %r", object_properties)
                 yield object_id, object_properties
 
+    # FIXME: Make an object that can be indexed by int or str
     @property
-    def pages(self) -> List[PDFPage]:
+    def pages(self) -> List[Page]:
         if self._pages is None:
             try:
                 page_labels: Iterator[Optional[str]] = self.page_labels
             except PDFNoPageLabels:
                 page_labels = itertools.repeat(None)
             try:
-                self._pages = [PDFPage(self, objid, properties, label, page_number + 1)
-                               for page_number, ((objid, properties), label) in enumerate(
-                                       zip(self.get_page_objects(), page_labels)
-                               )]
+                self._pages = [
+                    Page(self, objid, properties, label, page_idx)
+                    for page_idx, ((objid, properties), label) in enumerate(
+                        zip(self.get_page_objects(), page_labels)
+                    )
+                ]
             except PDFNoPageTree:
-                self._pages = [PDFPage(self, objid, properties, label, page_number + 1)
-                               for page_number, ((objid, properties), label) in enumerate(
-                                       zip(self.get_pages_from_xrefs(), page_labels)
-                               )]
+                self._pages = [
+                    Page(self, objid, properties, label, page_idx)
+                    for page_idx, ((objid, properties), label) in enumerate(
+                        zip(self.get_pages_from_xrefs(), page_labels)
+                    )
+                ]
         return self._pages
 
     @property
@@ -1184,7 +1178,8 @@ class PDFDocument:
         prev = b""
         # FIXME: This will scan *the whole file* looking for an xref
         # table, it should maybe give up sooner?
-        for line in self.parser.revreadlines():
+        self.parser.seek(self.parser.end)
+        for line in self.parser.reverse_iter_lines():
             line = line.strip()
             log.debug("find_xref: %r", line)
             if line == b"startxref":
@@ -1210,7 +1205,7 @@ class PDFDocument:
         self.parser.reset()
         try:
             (pos, token) = self.parser.nexttoken()
-        except PSEOF:
+        except StopIteration:
             raise PDFNoValidXRef("Unexpected EOF at {start}")
         log.debug("read_xref_from: start=%d, token=%r", start, token)
         if isinstance(token, int):
@@ -1220,7 +1215,7 @@ class PDFDocument:
             xref: PDFXRef = PDFXRefStream(self.parser)
         else:
             if token is KEYWORD_XREF:
-                self.parser.nextline()
+                next(self.parser.iter_lines())
             xref = PDFXRefTable(self.parser)
         xrefs.append(xref)
         trailer = xref.trailer

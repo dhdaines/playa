@@ -6,11 +6,14 @@ from typing import (
     TYPE_CHECKING,
     Any,
     Dict,
+    Generic,
     Iterable,
     List,
     Optional,
     Protocol,
     Tuple,
+    Type,
+    TypeVar,
     Union,
     cast,
 )
@@ -23,19 +26,85 @@ from playa.exceptions import (
     PDFNotImplementedError,
     PDFTypeError,
     PDFValueError,
+    PSTypeError,
 )
 from playa.lzw import lzwdecode
-from playa.psparser import LIT
 from playa.runlength import rldecode
 from playa.utils import apply_png_predictor
 
 if TYPE_CHECKING:
-    from playa.pdfdocument import PDFDocument
+    from playa.document import PDFDocument
 
 logger = logging.getLogger(__name__)
 
-LITERAL_CRYPT = LIT("Crypt")
 
+class PSLiteral:
+    """A class that represents a PostScript literal.
+
+    Postscript literals are used as identifiers, such as
+    variable names, property names and dictionary keys.
+    Literals are case sensitive and denoted by a preceding
+    slash sign (e.g. "/Name")
+
+    Note: Do not create an instance of PSLiteral directly.
+    Always use PSLiteralTable.intern().
+    """
+
+    def __init__(self, name: str) -> None:
+        self.name = name
+
+    def __repr__(self) -> str:
+        return "/%r" % self.name
+
+
+class PSKeyword:
+    """A class that represents a PostScript keyword.
+
+    PostScript keywords are a dozen of predefined words.
+    Commands and directives in PostScript are expressed by keywords.
+    They are also used to denote the content boundaries.
+
+    Note: Do not create an instance of PSKeyword directly.
+    Always use PSKeywordTable.intern().
+    """
+
+    def __init__(self, name: bytes) -> None:
+        self.name = name
+
+    def __repr__(self) -> str:
+        return "/%r" % self.name
+
+
+_SymbolT = TypeVar("_SymbolT", PSLiteral, PSKeyword)
+_NameT = TypeVar("_NameT", str, bytes)
+
+
+class PSSymbolTable(Generic[_SymbolT, _NameT]):
+    """Store globally unique name objects or language keywords."""
+
+    def __init__(self, table_type: Type[_SymbolT], name_type: Type[_NameT]) -> None:
+        self.dict: Dict[_NameT, _SymbolT] = {}
+        self.table_type: Type[_SymbolT] = table_type
+        self.name_type: Type[_NameT] = name_type
+
+    def intern(self, name: _NameT) -> _SymbolT:
+        if not isinstance(name, self.name_type):
+            raise ValueError(f"{self.table_type} can only store {self.name_type}")
+        if name in self.dict:
+            lit = self.dict[name]
+        else:
+            lit = self.table_type(name)  # type: ignore
+        self.dict[name] = lit
+        return lit
+
+
+PSLiteralTable = PSSymbolTable(PSLiteral, str)
+PSKeywordTable = PSSymbolTable(PSKeyword, bytes)
+LIT = PSLiteralTable.intern
+KWD = PSKeywordTable.intern
+
+# Intern a bunch of important literals
+LITERAL_CRYPT = LIT("Crypt")
 # Abbreviation of Filter names in PDF 4.8.6. "Inline Images"
 LITERALS_FLATE_DECODE = (LIT("FlateDecode"), LIT("Fl"))
 LITERALS_LZW_DECODE = (LIT("LZWDecode"), LIT("LZW"))
@@ -46,6 +115,51 @@ LITERALS_CCITTFAX_DECODE = (LIT("CCITTFaxDecode"), LIT("CCF"))
 LITERALS_DCT_DECODE = (LIT("DCTDecode"), LIT("DCT"))
 LITERALS_JBIG2_DECODE = (LIT("JBIG2Decode"),)
 LITERALS_JPX_DECODE = (LIT("JPXDecode"),)
+
+
+def name_str(x: bytes) -> str:
+    """Get the string representation for a name object.
+
+    According to the PDF 1.7 spec (p.18):
+
+    > Ordinarily, the bytes making up the name are never treated as
+    > text to be presented to a human user or to an application
+    > external to a conforming reader. However, occasionally the need
+    > arises to treat a name object as text... In such situations, the
+    > sequence of bytes (after expansion of NUMBER SIGN sequences, if
+    > any) should be interpreted according to UTF-8.
+
+    Accordingly, if they *can* be decoded to UTF-8, then they *will*
+    be, and if not, we will just decode them as ISO-8859-1 since that
+    gives a unique (if possibly nonsensical) value for an 8-bit string.
+    """
+    try:
+        return x.decode("utf-8")
+    except UnicodeDecodeError:
+        return x.decode("iso-8859-1")
+
+
+def literal_name(x: Any) -> str:
+    if not isinstance(x, PSLiteral):
+        if settings.STRICT:
+            raise PSTypeError(f"Literal required: {x!r}")
+        return str(x)
+    else:
+        return x.name
+
+
+def keyword_name(x: Any) -> str:
+    if not isinstance(x, PSKeyword):
+        if settings.STRICT:
+            raise PSTypeError("Keyword required: %r" % x)
+        else:
+            return str(x)
+    else:
+        # PDF keywords are *not* UTF-8 (they aren't ISO-8859-1 either,
+        # but this isn't very important, we just want some
+        # unique representation of 8-bit characters, as above)
+        name = x.name.decode("iso-8859-1")
+    return name
 
 
 class DecipherCallable(Protocol):
@@ -64,7 +178,7 @@ class DecipherCallable(Protocol):
 _DEFAULT = object()
 
 
-class PDFObjRef:
+class ObjRef:
     def __init__(
         self,
         doc: weakref.ReferenceType["PDFDocument"],
@@ -83,7 +197,7 @@ class PDFObjRef:
         self.objid = objid
 
     def __repr__(self) -> str:
-        return "<PDFObjRef:%d>" % (self.objid)
+        return "<ObjRef:%d>" % (self.objid)
 
     def resolve(self, default: object = None) -> Any:
         doc = self.doc()
@@ -101,7 +215,7 @@ def resolve1(x: object, default: object = None) -> Any:
     If this is an array or dictionary, it may still contains
     some indirect objects inside.
     """
-    while isinstance(x, PDFObjRef):
+    while isinstance(x, ObjRef):
         x = x.resolve(default=default)
     return x
 
@@ -112,7 +226,7 @@ def resolve_all(x: object, default: object = None) -> Any:
     Make sure there is no indirect reference within the nested object.
     This procedure might be slow.
     """
-    while isinstance(x, PDFObjRef):
+    while isinstance(x, ObjRef):
         x = x.resolve(default=default)
     if isinstance(x, list):
         x = [resolve_all(v, default=default) for v in x]
@@ -140,7 +254,7 @@ def int_value(x: object) -> int:
     x = resolve1(x)
     if not isinstance(x, int):
         if settings.STRICT:
-            raise PDFTypeError("Integer required: %r" % x)
+            raise PDFTypeError("Integer required: %r" % (x,))
         return 0
     return x
 
@@ -149,7 +263,7 @@ def float_value(x: object) -> float:
     x = resolve1(x)
     if not isinstance(x, float):
         if settings.STRICT:
-            raise PDFTypeError("Float required: %r" % x)
+            raise PDFTypeError("Float required: %r" % (x,))
         return 0.0
     return x
 
@@ -200,12 +314,12 @@ def dict_value(x: object) -> Dict[Any, Any]:
     return x
 
 
-def stream_value(x: object) -> "PDFStream":
+def stream_value(x: object) -> "ContentStream":
     x = resolve1(x)
-    if not isinstance(x, PDFStream):
+    if not isinstance(x, ContentStream):
         if settings.STRICT:
-            raise PDFTypeError("PDFStream required: %r" % x)
-        return PDFStream({}, b"")
+            raise PDFTypeError("ContentStream required: %r" % x)
+        return ContentStream({}, b"")
     return x
 
 
@@ -230,7 +344,7 @@ def decompress_corrupted(data: bytes) -> bytes:
     return result_str
 
 
-class PDFStream:
+class ContentStream:
     def __init__(
         self,
         attrs: Dict[str, Any],
@@ -252,14 +366,14 @@ class PDFStream:
     def __repr__(self) -> str:
         if self.data is None:
             assert self.rawdata is not None
-            return "<PDFStream(%r): raw=%d, %r>" % (
+            return "<ContentStream(%r): raw=%d, %r>" % (
                 self.objid,
                 len(self.rawdata),
                 self.attrs,
             )
         else:
             assert self.data is not None
-            return "<PDFStream(%r): len=%d, %r>" % (
+            return "<ContentStream(%r): len=%d, %r>" % (
                 self.objid,
                 len(self.data),
                 self.attrs,

@@ -27,7 +27,6 @@ from playa.cmapdb import (
 )
 from playa.encodingdb import EncodingDB, name2unicode
 from playa.exceptions import (
-    PSEOF,
     PDFException,
     PDFFontError,
     PDFKeyError,
@@ -35,8 +34,16 @@ from playa.exceptions import (
     PDFValueError,
 )
 from playa.fontmetrics import FONT_METRICS
+from playa.parser import (
+    KWD,
+    LIT,
+    Parser,
+    PSKeyword,
+    PSLiteral,
+    literal_name,
+)
 from playa.pdftypes import (
-    PDFStream,
+    ContentStream,
     dict_value,
     int_value,
     list_value,
@@ -44,14 +51,6 @@ from playa.pdftypes import (
     resolve1,
     resolve_all,
     stream_value,
-)
-from playa.psparser import (
-    KWD,
-    LIT,
-    PSKeyword,
-    PSLiteral,
-    PSStackParser,
-    literal_name,
 )
 from playa.utils import Matrix, Point, Rect, apply_matrix_norm, choplist, nunpack
 
@@ -106,8 +105,8 @@ class FontMetricsDB:
         return FONT_METRICS[fontname]
 
 
-# int here means that we're not extending PSStackParser with additional types.
-class Type1FontHeaderParser(PSStackParser[int]):
+# int here means that we're not extending Parser with additional types.
+class Type1FontHeaderParser(Parser[int]):
     KEYWORD_BEGIN = KWD(b"begin")
     KEYWORD_END = KWD(b"end")
     KEYWORD_DEF = KWD(b"def")
@@ -137,8 +136,8 @@ class Type1FontHeaderParser(PSStackParser[int]):
         """
         while 1:
             try:
-                (cid, name) = self.nextobject()
-            except PSEOF:
+                (cid, name) = next(self)
+            except StopIteration:
                 break
             try:
                 self._cid2unicode[cid] = name2unicode(cast(str, name))
@@ -1070,7 +1069,7 @@ class PDFCIDFont(PDFFont):
             ttf = TrueTypeFont(self.basefont, BytesIO(self.fontfile.get_data()))
         self.unicode_map: Optional[UnicodeMap] = None
         if "ToUnicode" in spec:
-            if isinstance(spec["ToUnicode"], PDFStream):
+            if isinstance(spec["ToUnicode"], ContentStream):
                 strm = stream_value(spec["ToUnicode"])
                 self.unicode_map = FileUnicodeMap()
                 CMapParser(self.unicode_map, strm.get_data()).run()
@@ -1148,8 +1147,8 @@ class PDFCIDFont(PDFFont):
             if strict:
                 raise PDFFontError("Encoding is unspecified")
 
-        if type(cmap_name) is PDFStream:  # type: ignore[comparison-overlap]
-            cmap_name_stream: PDFStream = cast(PDFStream, cmap_name)
+        if type(cmap_name) is ContentStream:  # type: ignore[comparison-overlap]
+            cmap_name_stream: ContentStream = cast(ContentStream, cmap_name)
             if "CMapName" in cmap_name_stream:
                 cmap_name = cmap_name_stream.get("CMapName").name
             elif strict:

@@ -3,7 +3,7 @@ import unittest
 from pathlib import Path
 
 import playa
-from playa.pdfstructtree import PDFStructTree
+from playa.structtree import PDFStructTree
 
 TESTDIR = Path(__file__).parent.parent / "samples"
 
@@ -64,14 +64,14 @@ class TestClass(unittest.TestCase):
             stree = PDFStructTree(pdf)
             sect = next(stree.find_all("Sect"))
             mcids = list(sect.all_mcids())
-            page_numbers = set(page for page, mcid in mcids)
-            assert 1 in page_numbers
-            assert 2 in page_numbers
+            page_indices = set(page for page, mcid in mcids)
+            assert 0 in page_indices
+            assert 1 in page_indices
 
             stree = PDFStructTree(pdf, [pdf.pages[1]])
             sect = next(stree.find_all("Sect"))
             mcids = list(sect.all_mcids())
-            page_numbers = set(page for page, mcid in mcids)
-            assert page_numbers == {2}
+            page_indices = set(page for page, mcid in mcids)
+            assert page_indices == {1}
             for p in sect.find_all("P"):
                 assert set(mcid for page, mcid in p.all_mcids()) == set(p.mcids)
