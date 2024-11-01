@@ -113,45 +113,6 @@ class LTComponent:
         self.height = y1 - y0
         self.bbox = bbox
 
-    def is_empty(self) -> bool:
-        return self.width <= 0 or self.height <= 0
-
-    def is_hoverlap(self, obj: "LTComponent") -> bool:
-        assert isinstance(obj, LTComponent), str(type(obj))
-        return obj.x0 <= self.x1 and self.x0 <= obj.x1
-
-    def hdistance(self, obj: "LTComponent") -> float:
-        assert isinstance(obj, LTComponent), str(type(obj))
-        if self.is_hoverlap(obj):
-            return 0
-        else:
-            return min(abs(self.x0 - obj.x1), abs(self.x1 - obj.x0))
-
-    def hoverlap(self, obj: "LTComponent") -> float:
-        assert isinstance(obj, LTComponent), str(type(obj))
-        if self.is_hoverlap(obj):
-            return min(abs(self.x0 - obj.x1), abs(self.x1 - obj.x0))
-        else:
-            return 0
-
-    def is_voverlap(self, obj: "LTComponent") -> bool:
-        assert isinstance(obj, LTComponent), str(type(obj))
-        return obj.y0 <= self.y1 and self.y0 <= obj.y1
-
-    def vdistance(self, obj: "LTComponent") -> float:
-        assert isinstance(obj, LTComponent), str(type(obj))
-        if self.is_voverlap(obj):
-            return 0
-        else:
-            return min(abs(self.y0 - obj.y1), abs(self.y1 - obj.y0))
-
-    def voverlap(self, obj: "LTComponent") -> float:
-        assert isinstance(obj, LTComponent), str(type(obj))
-        if self.is_voverlap(obj):
-            return min(abs(self.y0 - obj.y1), abs(self.y1 - obj.y0))
-        else:
-            return 0
-
 
 class LTCurve(LTComponent):
     """A generic Bezier curve
