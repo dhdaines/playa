@@ -15,6 +15,10 @@ LITERAL_INLINE_DEVICE_RGB = LIT("RGB")
 LITERAL_INLINE_DEVICE_CMYK = LIT("CMYK")
 
 
+class ColorGray(NamedTuple):
+    k: float
+
+
 class ColorRGB(NamedTuple):
     r: float
     g: float
@@ -29,9 +33,9 @@ class ColorCMYK(NamedTuple):
 
 
 Color = Union[
-    float,  # Greyscale
+    ColorGray,
     ColorRGB,
-    ColorCMYK,  # FIXME: There is probably RGBA too
+    ColorCMYK,
 ]
 
 
@@ -46,12 +50,15 @@ class PDFColorSpace:
                 "%s requires %d components, got %d!"
                 % (self.name, self.ncomponents, len(components))
             )
+        cc = [safe_float(x) or 0.0 for x in components[0 : self.ncomponents]]
+        while len(cc) < self.ncomponents:
+            cc.append(0.0)
         if self.ncomponents == 1:
-            return safe_float(components[0]) or 0.0
+            return ColorGray(*cc)
         elif self.ncomponents == 3:
-            return ColorRGB(*(safe_float(x) or 0.0 for x in components[0:3]))
+            return ColorRGB(*cc)
         elif self.ncomponents == 4:
-            return ColorCMYK(*(safe_float(x) or 0.0 for x in components[0:4]))
+            return ColorCMYK(*cc)
         else:
             raise PDFInterpreterError(
                 "unknown color space %s with %d components"
