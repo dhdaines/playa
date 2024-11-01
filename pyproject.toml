@@ -68,7 +68,7 @@ ban-relative-imports = "all"
 testpaths = [ "tests" ]
 
 [tool.hatch.envs.hatch-test]
-dependencies = [ "pdfminer.six" ]
+extra-dependencies = [ "pdfminer.six" ]
 
 [tool.hatch.envs.bench]
 dependencies = [ "pdfminer.six" ]
