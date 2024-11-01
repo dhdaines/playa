@@ -1,6 +1,8 @@
 import logging
 import re
 import weakref
+from copy import copy
+from dataclasses import dataclass
 from typing import (
     TYPE_CHECKING,
     Dict,
@@ -164,56 +166,18 @@ class Page:
         return f"<Page: Resources={self.resources!r}, MediaBox={self.mediabox!r}>"
 
 
-# FIXME: Make a dataclass or NamedTuple
+@dataclass
 class PDFTextState:
-    matrix: Matrix
-    linematrix: Point
-
-    def __init__(self) -> None:
-        self.font: Optional[PDFFont] = None
-        self.fontsize: float = 0
-        self.charspace: float = 0
-        self.wordspace: float = 0
-        self.scaling: float = 100
-        self.leading: float = 0
-        self.render: int = 0
-        self.rise: float = 0
-        self.reset()
-        # self.matrix is set
-        # self.linematrix is set
-
-    def __repr__(self) -> str:
-        return (
-            "<PDFTextState: font=%r, fontsize=%r, charspace=%r, "
-            "wordspace=%r, scaling=%r, leading=%r, render=%r, rise=%r, "
-            "matrix=%r, linematrix=%r>"
-            % (
-                self.font,
-                self.fontsize,
-                self.charspace,
-                self.wordspace,
-                self.scaling,
-                self.leading,
-                self.render,
-                self.rise,
-                self.matrix,
-                self.linematrix,
-            )
-        )
-
-    def copy(self) -> "PDFTextState":
-        obj = PDFTextState()
-        obj.font = self.font
-        obj.fontsize = self.fontsize
-        obj.charspace = self.charspace
-        obj.wordspace = self.wordspace
-        obj.scaling = self.scaling
-        obj.leading = self.leading
-        obj.render = self.render
-        obj.rise = self.rise
-        obj.matrix = self.matrix
-        obj.linematrix = self.linematrix
-        return obj
+    matrix: Matrix = MATRIX_IDENTITY
+    linematrix: Point = (0, 0)
+    font: Optional[PDFFont] = None
+    fontsize: float = 0
+    charspace: float = 0
+    wordspace: float = 0
+    scaling: float = 100
+    leading: float = 0
+    render: int = 0
+    rise: float = 0
 
     def reset(self) -> None:
         self.matrix = MATRIX_IDENTITY
@@ -351,7 +315,7 @@ class PageInterpreter:
         self.resources = resources
         self.fontmap: Dict[object, PDFFont] = {}
         self.xobjmap = {}
-        self.csmap: Dict[str, PDFColorSpace] = PREDEFINED_COLORSPACE.copy()
+        self.csmap: Dict[str, PDFColorSpace] = copy(PREDEFINED_COLORSPACE)
         if not self.resources:
             return
         doc = page.doc()
@@ -458,7 +422,7 @@ class PageInterpreter:
         return x
 
     def get_current_state(self) -> Tuple[Matrix, PDFTextState, PDFGraphicState]:
-        return (self.ctm, self.textstate.copy(), self.graphicstate.copy())
+        return (self.ctm, copy(self.textstate), copy(self.graphicstate))
 
     def set_current_state(
         self,
@@ -911,7 +875,7 @@ class PageInterpreter:
             self.textstate,
             cast(PDFTextSeq, seq),
             self.ncs,
-            self.graphicstate.copy(),
+            copy(self.graphicstate),
             self.scs,
         )
 

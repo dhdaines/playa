@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 import logging
 from typing import (
     Iterable,
@@ -33,52 +34,19 @@ Color = Union[
 ]
 
 
+@dataclass
 class PDFGraphicState:
-    def __init__(self) -> None:
-        self.linewidth: float = 0
-        self.linecap: Optional[object] = None
-        self.linejoin: Optional[object] = None
-        self.miterlimit: Optional[object] = None
-        self.dash: Optional[Tuple[object, object]] = None
-        self.intent: Optional[object] = None
-        self.flatness: Optional[object] = None
-
-        # stroking color
-        self.scolor: Optional[Color] = None
-
-        # non stroking color
-        self.ncolor: Optional[Color] = None
-
-    def copy(self) -> "PDFGraphicState":
-        obj = PDFGraphicState()
-        obj.linewidth = self.linewidth
-        obj.linecap = self.linecap
-        obj.linejoin = self.linejoin
-        obj.miterlimit = self.miterlimit
-        obj.dash = self.dash
-        obj.intent = self.intent
-        obj.flatness = self.flatness
-        obj.scolor = self.scolor
-        obj.ncolor = self.ncolor
-        return obj
-
-    def __repr__(self) -> str:
-        return (
-            "<PDFGraphicState: linewidth=%r, linecap=%r, linejoin=%r, "
-            " miterlimit=%r, dash=%r, intent=%r, flatness=%r, "
-            " stroking color=%r, non stroking color=%r>"
-            % (
-                self.linewidth,
-                self.linecap,
-                self.linejoin,
-                self.miterlimit,
-                self.dash,
-                self.intent,
-                self.flatness,
-                self.scolor,
-                self.ncolor,
-            )
-        )
+    linewidth: float = 0
+    linecap: Optional[object] = None
+    linejoin: Optional[object] = None
+    miterlimit: Optional[object] = None
+    dash: Optional[Tuple[object, object]] = None
+    intent: Optional[object] = None
+    flatness: Optional[object] = None
+    # stroking color
+    scolor: Optional[Color] = None
+    # non stroking color
+    ncolor: Optional[Color] = None
 
 
 class LTComponent:
