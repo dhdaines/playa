@@ -1,5 +1,5 @@
-from dataclasses import dataclass
 import logging
+from dataclasses import dataclass
 from typing import (
     Iterable,
     Iterator,
@@ -237,7 +237,7 @@ class LTChar(LTComponent):
         stroking_color: Optional[Color] = None,
         non_stroking_color: Optional[Color] = None,
     ) -> None:
-        self._text = text
+        self.text = text
         self.matrix = matrix
         self.fontname = font.fontname
         self.ncs = ncs
@@ -278,10 +278,7 @@ class LTChar(LTComponent):
             self.size = self.height
 
     def __repr__(self) -> str:
-        return f"<{self.__class__.__name__} {bbox2str(self.bbox)} matrix={matrix2str(self.matrix)} font={self.fontname!r} adv={self.adv} text={self.get_text()!r}>"
-
-    def get_text(self) -> str:
-        return self._text
+        return f"<{self.__class__.__name__} {bbox2str(self.bbox)} matrix={matrix2str(self.matrix)} font={self.fontname!r} adv={self.adv} text={self.text!r}>"
 
 
 class LTFigure(LTComponent):
