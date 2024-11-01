@@ -9,7 +9,7 @@ from typing import (
     Union,
 )
 
-from playa.color import PDFColorSpace
+from playa.color import Color, PDFColorSpace
 from playa.exceptions import PDFValueError
 from playa.font import PDFFont
 from playa.pdftypes import ContentStream
@@ -25,13 +25,6 @@ from playa.utils import (
 )
 
 logger = logging.getLogger(__name__)
-
-
-Color = Union[
-    float,  # Greyscale
-    Tuple[float, float, float],  # R, G, B
-    Tuple[float, float, float, float],  # C, M, Y, K
-]
 
 
 @dataclass

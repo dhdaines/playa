@@ -28,7 +28,6 @@ from playa.exceptions import (
 )
 from playa.font import PDFFont
 from playa.layout import (
-    Color,
     LTChar,
     LTComponent,
     LTCurve,
@@ -625,63 +624,49 @@ class PageInterpreter:
 
     def do_G(self, gray: PDFStackT) -> None:
         """Set gray level for stroking operations"""
-        self.graphicstate.scolor = cast(float, gray)
         self.scs = self.csmap["DeviceGray"]
+        self.graphicstate.scolor = self.scs.make_color(gray)
 
     def do_g(self, gray: PDFStackT) -> None:
         """Set gray level for nonstroking operations"""
-        self.graphicstate.ncolor = cast(float, gray)
         self.ncs = self.csmap["DeviceGray"]
+        self.graphicstate.ncolor = self.ncs.make_color(gray)
 
     def do_RG(self, r: PDFStackT, g: PDFStackT, b: PDFStackT) -> None:
         """Set RGB color for stroking operations"""
-        self.graphicstate.scolor = (cast(float, r), cast(float, g), cast(float, b))
         self.scs = self.csmap["DeviceRGB"]
+        self.graphicstate.scolor = self.scs.make_color(r, g, b)
 
     def do_rg(self, r: PDFStackT, g: PDFStackT, b: PDFStackT) -> None:
         """Set RGB color for nonstroking operations"""
-        self.graphicstate.ncolor = (cast(float, r), cast(float, g), cast(float, b))
         self.ncs = self.csmap["DeviceRGB"]
+        self.graphicstate.ncolor = self.ncs.make_color(r, g, b)
 
     def do_K(self, c: PDFStackT, m: PDFStackT, y: PDFStackT, k: PDFStackT) -> None:
         """Set CMYK color for stroking operations"""
-        self.graphicstate.scolor = (
-            cast(float, c),
-            cast(float, m),
-            cast(float, y),
-            cast(float, k),
-        )
         self.scs = self.csmap["DeviceCMYK"]
+        self.graphicstate.scolor = self.scs.make_color(c, m, y, k)
 
     def do_k(self, c: PDFStackT, m: PDFStackT, y: PDFStackT, k: PDFStackT) -> None:
         """Set CMYK color for nonstroking operations"""
-        self.graphicstate.ncolor = (
-            cast(float, c),
-            cast(float, m),
-            cast(float, y),
-            cast(float, k),
-        )
         self.ncs = self.csmap["DeviceCMYK"]
+        self.graphicstate.ncolor = self.ncs.make_color(c, m, y, k)
 
     def do_SCN(self) -> None:
         """Set color for stroking operations."""
-        if self.scs:
-            n = self.scs.ncomponents
-        else:
+        if self.scs is None:
             if settings.STRICT:
                 raise PDFInterpreterError("No colorspace specified!")
-            n = 1
-        self.graphicstate.scolor = cast(Color, self.pop(n))
+            self.scs = self.csmap["DeviceGray"]
+        self.graphicstate.scolor = self.scs.make_color(*self.pop(self.scs.ncomponents))
 
     def do_scn(self) -> None:
         """Set color for nonstroking operations"""
-        if self.ncs:
-            n = self.ncs.ncomponents
-        else:
+        if self.ncs is None:
             if settings.STRICT:
                 raise PDFInterpreterError("No colorspace specified!")
-            n = 1
-        self.graphicstate.ncolor = cast(Color, self.pop(n))
+            self.ncs = self.csmap["DeviceGray"]
+        self.graphicstate.ncolor = self.ncs.make_color(*self.pop(self.ncs.ncomponents))
 
     def do_SC(self) -> None:
         """Set color for stroking operations"""
