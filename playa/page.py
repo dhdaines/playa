@@ -240,9 +240,13 @@ class PDFContentParser(Parser[Union[PSKeyword, ContentStream]]):
 
     def __init__(self, streams: Sequence[object]) -> None:
         self.streamiter = iter(streams)
-        stream = stream_value(next(self.streamiter))
-        log.debug("PDFContentParser starting stream %r", stream)
-        super().__init__(stream.get_data())
+        try:
+            stream = stream_value(next(self.streamiter))
+            log.debug("PDFContentParser starting stream %r", stream)
+            super().__init__(stream.get_data())
+        except StopIteration:
+            log.debug("PDFContentParser has no content, returning nothing")
+            super().__init__(b"")
 
     def nexttoken(self) -> Tuple[int, PSBaseParserToken]:
         while True:
@@ -252,7 +256,7 @@ class PDFContentParser(Parser[Union[PSKeyword, ContentStream]]):
                 # Will also raise StopIteration if there are no more,
                 # which is exactly what we want
                 stream = stream_value(next(self.streamiter))
-                log.debug("PDFContentParser starting stream %r", stream)
+                log.debug("PDFContentParser starting new stream %r", stream)
                 self.reinit(stream.get_data())
 
     def flush(self) -> None:

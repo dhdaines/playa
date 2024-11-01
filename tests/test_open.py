@@ -24,40 +24,36 @@ PASSWORDS = {
 
 @pytest.mark.parametrize("path", ALLPDFS, ids=str)
 def test_open(path: Path) -> None:
-    """Open all the documents"""
-    passwords = PASSWORDS.get(path.name, [""])
-    for password in passwords:
-        with playa.open(TESTDIR / path, password=password) as _pdf:
-            pass
-
-
-def test_layout() -> None:
-    """Compare layout analysis with pdfplumber."""
+    """Open all the documents and compare with pdfplumber"""
     from pdfminer.converter import PDFPageAggregator
     from pdfminer.pdfdocument import PDFDocument
     from pdfminer.pdfinterp import PDFPageInterpreter, PDFResourceManager
     from pdfminer.pdfpage import PDFPage
     from pdfminer.pdfparser import PDFParser
 
-    path = TESTDIR / "2023-06-20-PV.pdf"
-    miner = []
-    with open(path, "rb") as infh:
-        rsrc = PDFResourceManager()
-        agg = PDFPageAggregator(rsrc, pageno=1)
-        interp = PDFPageInterpreter(rsrc, agg)
-        pdf = PDFDocument(PDFParser(infh))
-        for page in PDFPage.create_pages(pdf):
-            interp.process_page(page)
-            layout = agg.result
-            for item in layout:
-                miner.append((type(item).__name__, item.bbox))
+    passwords = PASSWORDS.get(path.name, [""])
+    for password in passwords:
+        miner = []
+        with open(path, "rb") as infh:
+            try:
+                rsrc = PDFResourceManager()
+                agg = PDFPageAggregator(rsrc, pageno=1)
+                interp = PDFPageInterpreter(rsrc, agg)
+                pdf = PDFDocument(PDFParser(infh), password=password)
+                for page in PDFPage.create_pages(pdf):
+                    interp.process_page(page)
+                    layout = agg.result
+                    for item in layout:
+                        miner.append((type(item).__name__, item.bbox))
+            except Exception:
+                continue
 
-    itor = iter(miner)
-    with playa.open(path) as pdf:
-        for page in pdf.pages:
-            for item in page.layout:
-                thingy = (type(item).__name__, item.bbox)
-                assert thingy == next(itor)
+        itor = iter(miner)
+        with playa.open(path, password=password) as pdf:
+            for page in pdf.pages:
+                for item in page.layout:
+                    thingy = (type(item).__name__, item.bbox)
+                    assert thingy == next(itor)
 
 
 def test_inline_data() -> None:
