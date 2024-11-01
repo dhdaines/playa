@@ -32,6 +32,11 @@ def test_read_header():
     assert read_header(BytesIO(b"%PDF-1.7")) == "1.7"
 
 
+def test_tokens():
+    with playa.open(TESTDIR / "simple1.pdf") as doc:
+        assert len(list(doc.tokens)) == 190
+
+
 def test_objects():
     with playa.open(TESTDIR / "simple1.pdf") as doc:
         for obj in doc:

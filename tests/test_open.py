@@ -40,17 +40,18 @@ def test_open(path: Path) -> None:
                 agg = PDFPageAggregator(rsrc, pageno=1)
                 interp = PDFPageInterpreter(rsrc, agg)
                 pdf = PDFDocument(PDFParser(infh), password=password)
-                for page in PDFPage.create_pages(pdf):
-                    interp.process_page(page)
+                for pdfpage in PDFPage.create_pages(pdf):
+                    interp.process_page(pdfpage)
                     layout = agg.result
-                    for item in layout:
-                        miner.append((type(item).__name__, item.bbox))
+                    if layout is not None:
+                        for ltitem in layout:
+                            miner.append((type(ltitem).__name__, ltitem.bbox))
             except Exception:
                 continue
 
         itor = iter(miner)
-        with playa.open(path, password=password) as pdf:
-            for page in pdf.pages:
+        with playa.open(path, password=password) as doc:
+            for page in doc.pages:
                 for item in page.layout:
                     thingy = (type(item).__name__, item.bbox)
                     assert thingy == next(itor)
@@ -90,5 +91,6 @@ def test_weakrefs() -> None:
 
 if __name__ == "__main__":
     import logging
+
     logging.basicConfig(level=logging.DEBUG)
     test_xobjects()
