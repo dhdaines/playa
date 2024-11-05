@@ -21,13 +21,6 @@ from typing import (
 from playa import settings
 from playa.ascii85 import ascii85decode, asciihexdecode
 from playa.ccitt import ccittfaxdecode
-from playa.exceptions import (
-    PDFException,
-    PDFNotImplementedError,
-    PDFTypeError,
-    PDFValueError,
-    PSTypeError,
-)
 from playa.lzw import lzwdecode
 from playa.runlength import rldecode
 from playa.utils import apply_png_predictor
@@ -142,7 +135,7 @@ def name_str(x: bytes) -> str:
 def literal_name(x: Any) -> str:
     if not isinstance(x, PSLiteral):
         if settings.STRICT:
-            raise PSTypeError(f"Literal required: {x!r}")
+            raise TypeError(f"Literal required: {x!r}")
         return str(x)
     else:
         return x.name
@@ -151,7 +144,7 @@ def literal_name(x: Any) -> str:
 def keyword_name(x: Any) -> str:
     if not isinstance(x, PSKeyword):
         if settings.STRICT:
-            raise PSTypeError("Keyword required: %r" % x)
+            raise TypeError("Keyword required: %r" % x)
         else:
             return str(x)
     else:
@@ -191,7 +184,7 @@ class ObjRef:
         """
         if objid == 0:
             if settings.STRICT:
-                raise PDFValueError("PDF object id cannot be 0.")
+                raise ValueError("PDF object id cannot be 0.")
 
         self.doc = doc
         self.objid = objid
@@ -254,7 +247,7 @@ def int_value(x: object) -> int:
     x = resolve1(x)
     if not isinstance(x, int):
         if settings.STRICT:
-            raise PDFTypeError("Integer required: %r" % (x,))
+            raise TypeError("Integer required: %r" % (x,))
         return 0
     return x
 
@@ -263,7 +256,7 @@ def float_value(x: object) -> float:
     x = resolve1(x)
     if not isinstance(x, float):
         if settings.STRICT:
-            raise PDFTypeError("Float required: %r" % (x,))
+            raise TypeError("Float required: %r" % (x,))
         return 0.0
     return x
 
@@ -272,7 +265,7 @@ def num_value(x: object) -> float:
     x = resolve1(x)
     if not isinstance(x, (int, float)):  # == utils.isnumber(x)
         if settings.STRICT:
-            raise PDFTypeError("Int or Float required: %r" % x)
+            raise TypeError("Int or Float required: %r" % x)
         return 0
     return x
 
@@ -290,7 +283,7 @@ def str_value(x: object) -> bytes:
     x = resolve1(x)
     if not isinstance(x, bytes):
         if settings.STRICT:
-            raise PDFTypeError("String required: %r" % x)
+            raise TypeError("String required: %r" % x)
         return b""
     return x
 
@@ -299,7 +292,7 @@ def list_value(x: object) -> Union[List[Any], Tuple[Any, ...]]:
     x = resolve1(x)
     if not isinstance(x, (list, tuple)):
         if settings.STRICT:
-            raise PDFTypeError("List required: %r" % x)
+            raise TypeError("List required: %r" % x)
         return []
     return x
 
@@ -308,8 +301,8 @@ def dict_value(x: object) -> Dict[Any, Any]:
     x = resolve1(x)
     if not isinstance(x, dict):
         if settings.STRICT:
-            logger.error("PDFTypeError : Dict required: %r", x)
-            raise PDFTypeError("Dict required: %r" % x)
+            logger.error("TypeError : Dict required: %r", x)
+            raise TypeError("Dict required: %r" % x)
         return {}
     return x
 
@@ -318,7 +311,7 @@ def stream_value(x: object) -> "ContentStream":
     x = resolve1(x)
     if not isinstance(x, ContentStream):
         if settings.STRICT:
-            raise PDFTypeError("ContentStream required: %r" % x)
+            raise TypeError("ContentStream required: %r" % x)
         return ContentStream({}, b"")
     return x
 
@@ -405,7 +398,7 @@ class ContentStream:
             # Make sure the parameters list is the same as filters.
             params = [params] * len(filters)
         if settings.STRICT and len(params) != len(filters):
-            raise PDFException("Parameters len filter mismatch")
+            raise ValueError("Parameters len filter mismatch")
 
         resolved_filters = [resolve1(f) for f in filters]
         resolved_params = [resolve1(param) for param in params]
@@ -435,7 +428,7 @@ class ContentStream:
                 except zlib.error as e:
                     if settings.STRICT:
                         error_msg = f"Invalid zlib bytes: {e!r}, {data!r}"
-                        raise PDFException(error_msg)
+                        raise ValueError(error_msg)
 
                     try:
                         data = decompress_corrupted(data)
@@ -461,9 +454,9 @@ class ContentStream:
                 pass
             elif f == LITERAL_CRYPT:
                 # not yet..
-                raise PDFNotImplementedError("/Crypt filter is unsupported")
+                raise NotImplementedError("/Crypt filter is unsupported")
             else:
-                raise PDFNotImplementedError("Unsupported filter: %r" % f)
+                raise NotImplementedError("Unsupported filter: %r" % f)
             # apply predictors
             if params and "Predictor" in params:
                 pred = int_value(params["Predictor"])
@@ -485,7 +478,7 @@ class ContentStream:
                     )
                 else:
                     error_msg = "Unsupported predictor: %r" % pred
-                    raise PDFNotImplementedError(error_msg)
+                    raise NotImplementedError(error_msg)
         self.data = data
         self.rawdata = None
 

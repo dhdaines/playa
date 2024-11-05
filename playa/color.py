@@ -39,7 +39,7 @@ Color = Union[
 ]
 
 
-class PDFColorSpace:
+class ColorSpace:
     def __init__(self, name: str, ncomponents: int) -> None:
         self.name = name
         self.ncomponents = ncomponents
@@ -66,10 +66,10 @@ class PDFColorSpace:
             )
 
     def __repr__(self) -> str:
-        return "<PDFColorSpace: %s, ncomponents=%d>" % (self.name, self.ncomponents)
+        return "<ColorSpace: %s, ncomponents=%d>" % (self.name, self.ncomponents)
 
 
-PREDEFINED_COLORSPACE: Dict[str, PDFColorSpace] = collections.OrderedDict()
+PREDEFINED_COLORSPACE: Dict[str, ColorSpace] = collections.OrderedDict()
 
 for name, n in [
     ("DeviceGray", 1),  # default value first
@@ -82,4 +82,4 @@ for name, n in [
     ("Indexed", 1),
     ("Pattern", 1),
 ]:
-    PREDEFINED_COLORSPACE[name] = PDFColorSpace(name, n)
+    PREDEFINED_COLORSPACE[name] = ColorSpace(name, n)

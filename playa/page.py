@@ -19,15 +19,13 @@ from typing import (
 
 from playa import settings
 from playa.casting import safe_float
-from playa.color import PREDEFINED_COLORSPACE, Color, PDFColorSpace
+from playa.color import PREDEFINED_COLORSPACE, Color, ColorSpace
 from playa.exceptions import (
     PDFInterpreterError,
     PDFSyntaxError,
     PDFUnicodeNotDefined,
-    PDFValueError,
-    PSTypeError,
 )
-from playa.font import PDFFont
+from playa.font import Font
 from playa.parser import Parser, PDFStackT, PSBaseParserToken
 from playa.pdftypes import (
     KWD,
@@ -71,7 +69,7 @@ LITERAL_PAGE = LIT("Page")
 LITERAL_PAGES = LIT("Pages")
 LITERAL_FORM = LIT("Form")
 LITERAL_IMAGE = LIT("Image")
-PDFTextSeq = Iterable[Union[int, float, bytes]]
+TextSeq = Iterable[Union[int, float, bytes]]
 
 
 class Page:
@@ -136,7 +134,7 @@ class Page:
                 self.cropbox = parse_rect(
                     resolve1(val) for val in resolve1(self.attrs["CropBox"])
                 )
-            except PDFValueError:
+            except ValueError:
                 log.warning("Invalid CropBox in /Page, defaulting to MediaBox")
 
         self.rotate = (int_value(self.attrs.get("Rotate", 0)) + 360) % 360
@@ -158,10 +156,10 @@ class Page:
 
 
 @dataclass
-class PDFTextState:
+class TextState:
     matrix: Matrix = MATRIX_IDENTITY
     linematrix: Point = (0, 0)
-    font: Optional[PDFFont] = None
+    font: Optional[Font] = None
     fontsize: float = 0
     charspace: float = 0
     wordspace: float = 0
@@ -176,7 +174,7 @@ class PDFTextState:
 
 
 @dataclass
-class PDFGraphicState:
+class GraphicState:
     linewidth: float = 0
     linecap: Optional[object] = None
     linejoin: Optional[object] = None
@@ -209,13 +207,13 @@ class Item(NamedTuple):
     non_stroking_color: Optional[Color] = None
     original_path: Optional[List[PathSegment]] = None
     dashing_style: Optional[Tuple[object, object]] = None
-    ncs: Optional[PDFColorSpace] = None
-    scs: Optional[PDFColorSpace] = None
+    ncs: Optional[ColorSpace] = None
+    scs: Optional[ColorSpace] = None
     stream: Optional[ContentStream] = None
     srcsize: Optional[Tuple[int, int]] = None
     imagemask: Optional[bool] = None
     bits: Optional[int] = None
-    colorspace: Optional[List[PDFColorSpace]] = None
+    colorspace: Optional[List[ColorSpace]] = None
     text: Optional[str] = None
     matrix: Optional[Matrix] = None
     fontname: Optional[str] = None
@@ -238,8 +236,8 @@ def LTCurve(
     non_stroking_color: Optional[Color] = None,
     original_path: Optional[List[PathSegment]] = None,
     dashing_style: Optional[Tuple[object, object]] = None,
-    ncs: Optional[PDFColorSpace] = None,
-    scs: Optional[PDFColorSpace] = None,
+    ncs: Optional[ColorSpace] = None,
+    scs: Optional[ColorSpace] = None,
 ) -> Item:
     """A generic Bezier curve
 
@@ -281,8 +279,8 @@ def LTLine(
     non_stroking_color: Optional[Color] = None,
     original_path: Optional[List[PathSegment]] = None,
     dashing_style: Optional[Tuple[object, object]] = None,
-    ncs: Optional[PDFColorSpace] = None,
-    scs: Optional[PDFColorSpace] = None,
+    ncs: Optional[ColorSpace] = None,
+    scs: Optional[ColorSpace] = None,
 ) -> Item:
     """A single straight line.
 
@@ -320,8 +318,8 @@ def LTRect(
     non_stroking_color: Optional[Color] = None,
     original_path: Optional[List[PathSegment]] = None,
     dashing_style: Optional[Tuple[object, object]] = None,
-    ncs: Optional[PDFColorSpace] = None,
-    scs: Optional[PDFColorSpace] = None,
+    ncs: Optional[ColorSpace] = None,
+    scs: Optional[ColorSpace] = None,
 ) -> Item:
     """A rectangle.
 
@@ -375,71 +373,6 @@ def LTImage(name: str, stream: ContentStream, bbox: Rect) -> Item:
     )
 
 
-def LTChar(
-    *,
-    matrix: Matrix,
-    font: PDFFont,
-    fontsize: float,
-    scaling: float,
-    rise: float,
-    text: str,
-    textwidth: float,
-    textdisp: Union[float, Tuple[Optional[float], float]],
-    ncs: Optional[PDFColorSpace] = None,
-    scs: Optional[PDFColorSpace] = None,
-    stroking_color: Optional[Color] = None,
-    non_stroking_color: Optional[Color] = None,
-) -> Item:
-    """Actual letter in the text as a Unicode string."""
-    # compute the boundary rectangle.
-    adv = textwidth * fontsize * scaling
-    vert = font.vertical
-    if vert:
-        # vertical
-        assert isinstance(textdisp, tuple)
-        (vx, vy) = textdisp
-        if vx is None:
-            vx = fontsize * 0.5
-        else:
-            vx = vx * fontsize * 0.001
-        vy = (1000 - vy) * fontsize * 0.001
-        bbox_lower_left = (-vx, vy + rise + adv)
-        bbox_upper_right = (-vx + fontsize, vy + rise)
-    else:
-        # horizontal
-        descent = font.get_descent() * fontsize
-        bbox_lower_left = (0, descent + rise)
-        bbox_upper_right = (adv, descent + rise + fontsize)
-    (a, b, c, d, e, f) = matrix
-    upright = a * d * scaling > 0 and b * c <= 0
-    (x0, y0) = apply_matrix_pt(matrix, bbox_lower_left)
-    (x1, y1) = apply_matrix_pt(matrix, bbox_upper_right)
-    if x1 < x0:
-        (x0, x1) = (x1, x0)
-    if y1 < y0:
-        (y0, y1) = (y1, y0)
-    if vert:
-        size = x1 - x0
-    else:
-        size = y1 - y0
-    return Item(
-        itype="char",
-        x0=x0,
-        y0=y0,
-        x1=x1,
-        y1=y1,
-        size=size,
-        upright=upright,
-        text=text,
-        matrix=matrix,
-        fontname=font.fontname,
-        ncs=ncs,
-        scs=scs,
-        stroking_color=stroking_color,
-        non_stroking_color=non_stroking_color,
-    )
-
-
 def LTFigure(*, name: str, bbox: Rect, matrix: Matrix) -> Item:
     """Represents an area used by PDF Form objects.
 
@@ -467,7 +400,7 @@ KEYWORD_ID = KWD(b"ID")
 KEYWORD_EI = KWD(b"EI")
 
 
-class PDFContentParser(Parser[Union[PSKeyword, ContentStream]]):
+class ContentParser(Parser[Union[PSKeyword, ContentStream]]):
     """Parse the concatenation of multiple content streams, as
     described in the spec (PDF 1.7, p.86):
 
@@ -484,10 +417,10 @@ class PDFContentParser(Parser[Union[PSKeyword, ContentStream]]):
         self.streamiter = iter(streams)
         try:
             stream = stream_value(next(self.streamiter))
-            log.debug("PDFContentParser starting stream %r", stream)
+            log.debug("ContentParser starting stream %r", stream)
             super().__init__(stream.get_data())
         except StopIteration:
-            log.debug("PDFContentParser has no content, returning nothing")
+            log.debug("ContentParser has no content, returning nothing")
             super().__init__(b"")
 
     def nexttoken(self) -> Tuple[int, PSBaseParserToken]:
@@ -498,7 +431,7 @@ class PDFContentParser(Parser[Union[PSKeyword, ContentStream]]):
                 # Will also raise StopIteration if there are no more,
                 # which is exactly what we want
                 stream = stream_value(next(self.streamiter))
-                log.debug("PDFContentParser starting new stream %r", stream)
+                log.debug("ContentParser starting new stream %r", stream)
                 self.reinit(stream.get_data())
 
     def flush(self) -> None:
@@ -513,7 +446,7 @@ class PDFContentParser(Parser[Union[PSKeyword, ContentStream]]):
                 (_, objs) = self.end_type("inline")
                 if len(objs) % 2 != 0:
                     error_msg = f"Invalid dictionary construct: {objs!r}"
-                    raise PSTypeError(error_msg)
+                    raise TypeError(error_msg)
                 d = {literal_name(k): resolve1(v) for (k, v) in choplist(2, objs)}
                 eos = b"EI"
                 filter = d.get("F")
@@ -548,7 +481,7 @@ class PDFContentParser(Parser[Union[PSKeyword, ContentStream]]):
                 # This was included in the data but we need to "parse" it
                 if eos == b"EI":
                     self.push((pos, KEYWORD_EI))
-            except PSTypeError:
+            except TypeError:
                 if settings.STRICT:
                     raise
         else:
@@ -591,24 +524,24 @@ class PageInterpreter:
     def init_resources(self, page: Page, resources: Dict) -> None:
         """Prepare the fonts and XObjects listed in the Resource attribute."""
         self.resources = resources
-        self.fontmap: Dict[object, PDFFont] = {}
+        self.fontmap: Dict[object, Font] = {}
         self.xobjmap = {}
-        self.csmap: Dict[str, PDFColorSpace] = copy(PREDEFINED_COLORSPACE)
+        self.csmap: Dict[str, ColorSpace] = copy(PREDEFINED_COLORSPACE)
         if not self.resources:
             return
         doc = page.doc()
         if doc is None:
             raise RuntimeError("Document no longer exists!")
 
-        def get_colorspace(spec: object) -> Optional[PDFColorSpace]:
+        def get_colorspace(spec: object) -> Optional[ColorSpace]:
             if isinstance(spec, list):
                 name = literal_name(spec[0])
             else:
                 name = literal_name(spec)
             if name == "ICCBased" and isinstance(spec, list) and len(spec) >= 2:
-                return PDFColorSpace(name, stream_value(spec[1])["N"])
+                return ColorSpace(name, stream_value(spec[1])["N"])
             elif name == "DeviceN" and isinstance(spec, list) and len(spec) >= 2:
-                return PDFColorSpace(name, len(list_value(spec[1])))
+                return ColorSpace(name, len(list_value(spec[1])))
             else:
                 return PREDEFINED_COLORSPACE.get(name)
 
@@ -636,16 +569,16 @@ class PageInterpreter:
     def init_state(self, ctm: Matrix) -> None:
         """Initialize the text and graphic states for rendering a page."""
         # gstack: stack for graphical states.
-        self.gstack: List[Tuple[Matrix, PDFTextState, PDFGraphicState]] = []
+        self.gstack: List[Tuple[Matrix, TextState, GraphicState]] = []
         self.ctm = ctm
-        self.textstate = PDFTextState()
-        self.graphicstate = PDFGraphicState()
+        self.textstate = TextState()
+        self.graphicstate = GraphicState()
         self.curpath: List[PathSegment] = []
         # argstack: stack for command arguments.
         self.argstack: List[PDFStackT] = []
         # set some global states.
-        self.scs: Optional[PDFColorSpace] = None
-        self.ncs: Optional[PDFColorSpace] = None
+        self.scs: Optional[ColorSpace] = None
+        self.ncs: Optional[ColorSpace] = None
         if self.csmap:
             self.scs = self.ncs = next(iter(self.csmap.values()))
 
@@ -656,7 +589,7 @@ class PageInterpreter:
             self.contents,
             self.ctm,
         )
-        parser = PDFContentParser(self.contents)
+        parser = ContentParser(self.contents)
         for _, obj in parser:
             if isinstance(obj, PSKeyword):
                 name = keyword_name(obj)
@@ -699,12 +632,12 @@ class PageInterpreter:
         self.argstack = self.argstack[:-n]
         return x
 
-    def get_current_state(self) -> Tuple[Matrix, PDFTextState, PDFGraphicState]:
+    def get_current_state(self) -> Tuple[Matrix, TextState, GraphicState]:
         return (self.ctm, copy(self.textstate), copy(self.graphicstate))
 
     def set_current_state(
         self,
-        state: Tuple[Matrix, PDFTextState, PDFGraphicState],
+        state: Tuple[Matrix, TextState, GraphicState],
     ) -> None:
         (self.ctm, self.textstate, self.graphicstate) = state
 
@@ -1073,7 +1006,7 @@ class PageInterpreter:
             self.textstate.matrix = (a, b, c, d, e_new, f_new)
 
         elif settings.STRICT:
-            raise PDFValueError(f"Invalid offset ({tx!r}, {ty!r}) for Td")
+            raise ValueError(f"Invalid offset ({tx!r}, {ty!r}) for Td")
 
         self.textstate.linematrix = (0, 0)
 
@@ -1093,7 +1026,7 @@ class PageInterpreter:
             self.textstate.matrix = (a, b, c, d, e_new, f_new)
 
         elif settings.STRICT:
-            raise PDFValueError("Invalid offset ({tx}, {ty}) for TD")
+            raise ValueError("Invalid offset ({tx}, {ty}) for TD")
 
         if ty_ is not None:
             self.textstate.leading = ty_
@@ -1133,7 +1066,7 @@ class PageInterpreter:
                 raise PDFInterpreterError("No font specified!")
             return
         yield from self.render_string(
-            cast(PDFTextSeq, seq),
+            cast(TextSeq, seq),
         )
 
     def do_Tj(self, s: PDFStackT) -> Iterator[Item]:
@@ -1213,6 +1146,7 @@ class PageInterpreter:
     def begin_tag(self, tag: PSLiteral, props: Optional[PDFStackT] = None) -> None:
         """Handle beginning of tag, setting current MCID if any."""
         self.cur_tag = decode_text(tag.name)
+        # FIXME: Many other useful things like ActualText
         if isinstance(props, dict) and "MCID" in props:
             self.cur_mcid = props["MCID"]
         else:
@@ -1369,7 +1303,7 @@ class PageInterpreter:
         *,
         vertical: bool,
         matrix: Matrix,
-        font: PDFFont,
+        font: Font,
         fontsize: float,
         scaling: float,
         rise: float,
@@ -1433,7 +1367,7 @@ class PageInterpreter:
 
     def render_string(
         self,
-        seq: PDFTextSeq,
+        seq: TextSeq,
     ) -> Iterator[Item]:
         assert self.textstate.font is not None
         vert = self.textstate.font.vertical
@@ -1479,6 +1413,6 @@ class PageInterpreter:
                     needcharspace = True
         self.textstate.linematrix = (x, pos) if vert else (pos, y)
 
-    def handle_undefined_char(self, font: PDFFont, cid: int) -> str:
+    def handle_undefined_char(self, font: Font, cid: int) -> str:
         log.debug("undefined: %r, %r", font, cid)
         return "(cid:%d)" % cid

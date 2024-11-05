@@ -11,7 +11,6 @@ from playa.color import (
     LITERAL_INLINE_DEVICE_GRAY,
     LITERAL_INLINE_DEVICE_RGB,
 )
-from playa.exceptions import PDFValueError
 from playa.jbig2 import JBIG2StreamReader, JBIG2StreamWriter
 from playa.pdftypes import (
     LITERALS_DCT_DECODE,
@@ -48,7 +47,7 @@ class BMPWriter:
         elif bits == 24:
             ncols = 0
         else:
-            raise PDFValueError(bits)
+            raise ValueError(f"unsupported bit width {bits!r}")
         self.linesize = align32((self.width * self.bits + 7) // 8)
         self.datasize = self.linesize * self.height
         headersize = 14 + 40 + ncols * 4
@@ -216,7 +215,7 @@ class ImageWriter:
                     "There should never be more than one JBIG2Globals "
                     "associated with a JBIG2 embedded image"
                 )
-                raise PDFValueError(msg)
+                raise ValueError(msg)
             if len(global_streams) == 1:
                 input_stream.write(global_streams[0].get_data().rstrip(b"\n"))
             input_stream.write(image.stream.get_data())

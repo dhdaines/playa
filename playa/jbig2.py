@@ -3,8 +3,6 @@ import os
 from struct import calcsize, pack, unpack
 from typing import BinaryIO, Dict, Iterable, List, Optional, Tuple, Union, cast
 
-from playa.exceptions import PDFValueError
-
 # segment structure base
 SEG_STRUCT = [
     (">L", "number"),
@@ -49,7 +47,7 @@ def masked_value(mask: int, value: int) -> int:
         if bit_set(bit_pos, mask):
             return (value & mask) >> bit_pos
 
-    raise PDFValueError("Invalid mask or value")
+    raise ValueError("Invalid mask or value")
 
 
 def mask_value(mask: int, value: int) -> int:
@@ -57,7 +55,7 @@ def mask_value(mask: int, value: int) -> int:
         if bit_set(bit_pos, mask):
             return (value & (mask >> bit_pos)) << bit_pos
 
-    raise PDFValueError("Invalid mask or value")
+    raise ValueError("Invalid mask or value")
 
 
 def unpack_int(format: str, buffer: bytes) -> int:

@@ -25,9 +25,6 @@ from typing import (
     cast,
 )
 
-from playa.exceptions import PDFException, PDFValueError
-
-
 def get_bytes(data: bytes) -> Iterator[int]:
     yield from data
 
@@ -82,6 +79,18 @@ class BitParser:
             assert self._accept is not None
             self._state = self._accept(v)
 
+
+class CCITTException(Exception):
+    pass
+
+class EOFB(CCITTException):
+    pass
+
+class InvalidData(CCITTException):
+    pass
+
+class ByteSkip(CCITTException):
+    pass
 
 class CCITTG4Parser(BitParser):
     MODE = [None, None]
@@ -332,18 +341,6 @@ class CCITTG4Parser(BitParser):
     BitParser.add(UNCOMPRESSED, "T00000", "00000000011")
     BitParser.add(UNCOMPRESSED, "T10000", "00000000010")
 
-    class CCITTException(PDFException):
-        pass
-
-    class EOFB(CCITTException):
-        pass
-
-    class InvalidData(CCITTException):
-        pass
-
-    class ByteSkip(CCITTException):
-        pass
-
     _color: int
 
     def __init__(self, width: int, bytealign: bool = False) -> None:
@@ -357,10 +354,10 @@ class CCITTG4Parser(BitParser):
             try:
                 for m in (128, 64, 32, 16, 8, 4, 2, 1):
                     self._parse_bit(byte & m)
-            except self.ByteSkip:
+            except ByteSkip:
                 self._accept = self._parse_mode
                 self._state = self.MODE
-            except self.EOFB:
+            except EOFB:
                 break
 
     def _parse_mode(self, mode: object) -> BitParserState:
@@ -379,17 +376,17 @@ class CCITTG4Parser(BitParser):
             self._accept = self._parse_uncompressed
             return self.UNCOMPRESSED
         elif mode == "e":
-            raise self.EOFB
+            raise EOFB
         elif isinstance(mode, int):
             self._do_vertical(mode)
             self._flush_line()
             return self.MODE
         else:
-            raise self.InvalidData(mode)
+            raise InvalidData(mode)
 
     def _parse_horiz1(self, n: Any) -> BitParserState:
         if n is None:
-            raise self.InvalidData
+            raise InvalidData
         self._n1 += n
         if n < 64:
             self._n2 = 0
@@ -402,7 +399,7 @@ class CCITTG4Parser(BitParser):
 
     def _parse_horiz2(self, n: Any) -> BitParserState:
         if n is None:
-            raise self.InvalidData
+            raise InvalidData
         self._n2 += n
         if n < 64:
             self._color = 1 - self._color
@@ -417,7 +414,7 @@ class CCITTG4Parser(BitParser):
 
     def _parse_uncompressed(self, bits: Optional[str]) -> BitParserState:
         if not bits:
-            raise self.InvalidData
+            raise InvalidData
         if bits.startswith("T"):
             self._accept = self._parse_mode
             self._color = int(bits[1])
@@ -466,7 +463,7 @@ class CCITTG4Parser(BitParser):
             self._y += 1
             self._reset_line()
             if self.bytealign:
-                raise self.ByteSkip
+                raise ByteSkip
 
     def _do_vertical(self, dx: int) -> None:
         x1 = self._curpos + 1
@@ -573,7 +570,7 @@ def ccittfaxdecode(data: bytes, params: Dict[str, object]) -> bytes:
         reversed = cast(bool, params.get("BlackIs1"))
         parser = CCITTFaxDecoder(cols, bytealign=bytealign, reversed=reversed)
     else:
-        raise PDFValueError(K)
+        raise ValueError(K)
     parser.feedbytes(data)
     return parser.close()
 

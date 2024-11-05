@@ -32,19 +32,11 @@ from playa.arcfour import Arcfour
 from playa.data_structures import NameTree, NumberTree
 from playa.exceptions import (
     PDFEncryptionError,
-    PDFException,
     PDFFontError,
-    PDFKeyError,
-    PDFNoOutlines,
-    PDFNoPageLabels,
-    PDFNoPageTree,
-    PDFNoValidXRef,
     PDFPasswordIncorrect,
     PDFSyntaxError,
-    PDFTypeError,
-    PSException,
 )
-from playa.font import PDFCIDFont, PDFFont, PDFTrueTypeFont, PDFType1Font, PDFType3Font
+from playa.font import CIDFont, Font, PDFTrueTypeFont, Type1Font, Type3Font
 from playa.page import Page
 from playa.parser import (
     KEYWORD_OBJ,
@@ -128,19 +120,19 @@ class PDFXRefTable:
             f = line.split(b" ")
             if len(f) != 2:
                 error_msg = f"Trailer not found: {parser!r}: line={line!r}"
-                raise PDFNoValidXRef(error_msg)
+                raise IndexError(error_msg)
             try:
                 (start, nobjs) = map(int, f)
             except ValueError:
                 error_msg = f"Invalid line: {parser!r}: line={line!r}"
-                raise PDFNoValidXRef(error_msg)
+                raise ValueError(error_msg)
             for objid in range(start, start + nobjs):
                 _, line = next(lines)
                 line = line.strip()
                 f = line.split(b" ")
                 if len(f) != 3:
                     error_msg = f"Invalid XRef format: {parser!r}, line={line!r}"
-                    raise PDFNoValidXRef(error_msg)
+                    raise ValueError(error_msg)
                 (pos_b, genno_b, use_b) = f
                 if use_b != b"n":
                     continue
@@ -163,7 +155,7 @@ class PDFXRefTable:
         except StopIteration:
             x = parser.pop(1)
             if not x:
-                raise PDFNoValidXRef("Unexpected EOF - file corrupted")
+                raise EOFError("Unexpected EOF - file corrupted")
             (_, dic) = x[0]
         self.trailer.update(dict_value(dic))
         log.debug("trailer=%r", self.trailer)
@@ -253,7 +245,7 @@ class PDFXRefStream:
             not isinstance(stream, ContentStream)
             or stream.get("Type") is not LITERAL_XREF
         ):
-            raise PDFNoValidXRef(f"Invalid PDF stream spec {stream!r}")
+            raise ValueError(f"Invalid PDF stream spec {stream!r}")
         size = stream["Size"]
         index_array = stream.get("Index", (0, size))
         if len(index_array) % 2 != 0:
@@ -293,7 +285,7 @@ class PDFXRefStream:
             else:
                 index += nobjs
         else:
-            raise PDFKeyError(objid)
+            raise KeyError(objid)
         assert self.entlen is not None
         assert self.data is not None
         assert self.fl1 is not None and self.fl2 is not None and self.fl3 is not None
@@ -308,7 +300,7 @@ class PDFXRefStream:
             return (f2, f3, 0)
         else:
             # this is a free object
-            raise PDFKeyError(objid)
+            raise KeyError(objid)
 
 
 PASSWORD_PADDING = (
@@ -747,9 +739,9 @@ class PDFDocument:
         self.decipher: Optional[DecipherCallable] = None
         self._cached_objs: Dict[int, Tuple[object, int]] = {}
         self._parsed_objs: Dict[int, Tuple[List[object], int]] = {}
-        self._cached_fonts: Dict[object, PDFFont] = {}
+        self._cached_fonts: Dict[object, Font] = {}
         if isinstance(fp, io.TextIOBase):
-            raise PSException("fp is not a binary file")
+            raise TypeError("fp is not a binary file")
         # The header is frequently mangled, in which case we will try to read the
         # file anyway.
         try:
@@ -764,8 +756,8 @@ class PDFDocument:
         except io.UnsupportedOperation:
             log.warning("mmap not supported on %r, reading document into memory", fp)
             self.buffer = fp.read()
-        except ValueError as e:
-            raise PSException from e
+        except ValueError:
+            raise
         self.parser = PDFParser(self.buffer, self)
         self.is_printable = self.is_modifiable = self.is_extractable = True
         # Getting the XRef table and trailer is done non-lazily
@@ -776,7 +768,7 @@ class PDFDocument:
         try:
             pos = self.find_xref()
             self.read_xref_from(pos, self.xrefs)
-        except PDFNoValidXRef as e:
+        except Exception as e:
             log.debug("Using fallback XRef parsing: %s", e)
             self.parser.fallback = True
             newxref = PDFXRefFallback(self.parser)
@@ -917,11 +909,11 @@ class PDFDocument:
     def __getitem__(self, objid: int) -> object:
         """Get object from PDF
 
-        :raises PDFException if PDFDocument is not initialized
+        :raises ValueError if PDFDocument is not initialized
         :raises IndexError if objid does not exist in PDF
         """
         if not self.xrefs:
-            raise PDFException("PDFDocument is not initialized")
+            raise ValueError("PDFDocument is not initialized")
         log.debug("getobj: objid=%r", objid)
         if objid in self._cached_objs:
             (obj, genno) = self._cached_objs[objid]
@@ -952,7 +944,7 @@ class PDFDocument:
             self._cached_objs[objid] = (obj, genno)
         return obj
 
-    def get_font(self, objid: object, spec: Mapping[str, object]) -> PDFFont:
+    def get_font(self, objid: object, spec: Mapping[str, object]) -> Font:
         if objid and objid in self._cached_fonts:
             font = self._cached_fonts[objid]
         else:
@@ -969,16 +961,16 @@ class PDFDocument:
                 subtype = "Type1"
             if subtype in ("Type1", "MMType1"):
                 # Type1 Font
-                font = PDFType1Font(spec)
+                font = Type1Font(spec)
             elif subtype == "TrueType":
                 # TrueType Font
                 font = PDFTrueTypeFont(spec)
             elif subtype == "Type3":
                 # Type3 Font
-                font = PDFType3Font(spec)
+                font = Type3Font(spec)
             elif subtype in ("CIDFontType0", "CIDFontType2"):
                 # CID Font
-                font = PDFCIDFont(spec)
+                font = CIDFont(spec)
             elif subtype == "Type0":
                 # Type0 Font
                 dfonts = list_value(spec["DescendantFonts"])
@@ -991,7 +983,7 @@ class PDFDocument:
             else:
                 if settings.STRICT:
                     raise PDFFontError("Invalid Font spec: %r" % spec)
-                font = PDFType1Font(spec)  # FIXME: this is so wrong!
+                font = Type1Font(spec)  # FIXME: this is so wrong!
             if objid:
                 self._cached_fonts[objid] = font
         return font
@@ -999,7 +991,7 @@ class PDFDocument:
     @property
     def outlines(self) -> Iterator[OutlineItem]:
         if "Outlines" not in self.catalog:
-            raise PDFNoOutlines
+            raise KeyError
 
         def search(entry: object, level: int) -> Iterator[OutlineItem]:
             entry = dict_value(entry)
@@ -1024,19 +1016,15 @@ class PDFDocument:
         """Generate page label strings for the PDF document.
 
         If the document includes page labels, generates strings, one per page.
-        If not, raises PDFNoPageLabels.
+        If not, raises an exception (KeyError or ValueError).
 
         The resulting iterator is unbounded, so it is recommended to
         zip it with the iterator over actual pages returned by `get_pages`.
 
         """
-        assert self.catalog is not None
+        assert self.catalog is not None  # really it cannot be None
 
-        try:
-            page_labels = PageLabels(self.catalog["PageLabels"])
-        except (PDFTypeError, KeyError):
-            raise PDFNoPageLabels
-
+        page_labels = PageLabels(self.catalog["PageLabels"])
         return page_labels.labels
 
     PageType = Dict[Any, Dict[Any, Any]]
@@ -1064,7 +1052,7 @@ class PDFDocument:
         Will raise PDFNoPageTree if there is no page tree.
         """
         if "Pages" not in self.catalog:
-            raise PDFNoPageTree("No 'Pages' entry in catalog")
+            raise KeyError("No 'Pages' entry in catalog")
         stack = [(self.catalog["Pages"], self.catalog)]
         visited = set()
         while stack:
@@ -1113,7 +1101,7 @@ class PDFDocument:
         if self._pages is None:
             try:
                 page_labels: Iterator[Optional[str]] = self.page_labels
-            except PDFNoPageLabels:
+            except (KeyError, ValueError):
                 page_labels = itertools.repeat(None)
             try:
                 self._pages = [
@@ -1122,7 +1110,7 @@ class PDFDocument:
                         zip(self.get_page_objects(), page_labels)
                     )
                 ]
-            except PDFNoPageTree:
+            except KeyError:
                 self._pages = [
                     Page(self, objid, properties, label, page_idx)
                     for page_idx, ((objid, properties), label) in enumerate(
@@ -1185,14 +1173,14 @@ class PDFDocument:
             if line == b"startxref":
                 log.debug("xref found: pos=%r", prev)
                 if not prev.isdigit():
-                    raise PDFNoValidXRef(f"Invalid xref position: {prev!r}")
+                    raise ValueError(f"Invalid xref position: {prev!r}")
                 start = int(prev)
                 if not start >= 0:
-                    raise PDFNoValidXRef(f"Invalid negative xref position: {start}")
+                    raise ValueError(f"Invalid negative xref position: {start}")
                 return start
             if line:
                 prev = line
-        raise PDFNoValidXRef("No xref table found at end of file")
+        raise ValueError("No xref table found at end of file")
 
     # read xref table
     def read_xref_from(
@@ -1206,7 +1194,7 @@ class PDFDocument:
         try:
             (pos, token) = self.parser.nexttoken()
         except StopIteration:
-            raise PDFNoValidXRef("Unexpected EOF at {start}")
+            raise ValueError("Unexpected EOF at {start}")
         log.debug("read_xref_from: start=%d, token=%r", start, token)
         if isinstance(token, int):
             # XRefStream: PDF-1.5
@@ -1243,13 +1231,13 @@ class PageLabels(NumberTree):
             # The tree must begin with page index 0
             if start != 0:
                 if settings.STRICT:
-                    raise PDFSyntaxError("PageLabels is missing page index 0")
+                    raise ValueError("PageLabels is missing page index 0")
                 else:
                     # Try to cope, by assuming empty labels for the initial pages
                     start = 0
         except StopIteration:
             if settings.STRICT:
-                raise PDFSyntaxError("PageLabels is empty")
+                raise ValueError("PageLabels is empty")
             start = 0
             label_dict_unchecked = {}
 

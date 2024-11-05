@@ -2,7 +2,6 @@ import logging
 import re
 from typing import Dict, Iterable, Optional, cast
 
-from playa.exceptions import PDFKeyError
 from playa.glyphlist import glyphname2unicode
 from playa.latin_enc import ENCODING
 from playa.parser import PSLiteral
@@ -27,7 +26,7 @@ def name2unicode(name: str) -> str:
     otherwise a KeyError
     """
     if not isinstance(name, str):
-        raise PDFKeyError(
+        raise KeyError(
             'Could not convert unicode name "%s" to character because '
             "it should be of type str but is of type %s" % (name, type(name)),
         )
@@ -62,7 +61,7 @@ def name2unicode(name: str) -> str:
             raise_key_error_for_invalid_unicode(unicode_digit)
             return chr(unicode_digit)
 
-    raise PDFKeyError(
+    raise KeyError(
         'Could not convert unicode name "%s" to character because '
         "it does not match specification" % name,
     )
@@ -75,7 +74,7 @@ def raise_key_error_for_invalid_unicode(unicode_digit: int) -> None:
     :raises KeyError if unicode digit is invalid
     """
     if 55295 < unicode_digit < 57344:
-        raise PDFKeyError(
+        raise KeyError(
             "Unicode digit %d is invalid because "
             "it is in the range D800 through DFFF" % unicode_digit,
         )

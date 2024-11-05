@@ -28,11 +28,8 @@ from playa.cmapdb import (
 )
 from playa.encodingdb import EncodingDB, name2unicode
 from playa.exceptions import (
-    PDFException,
     PDFFontError,
-    PDFKeyError,
     PDFUnicodeNotDefined,
-    PDFValueError,
 )
 from playa.fontmetrics import FONT_METRICS
 from playa.parser import (
@@ -672,7 +669,7 @@ class CFFFont:
                     self.gid2code[gid] = code
                     code += 1
         else:
-            raise PDFValueError("unsupported encoding format: %r" % format)
+            raise ValueError("unsupported encoding format: %r" % format)
         # Charsets
         self.name2gid = {}
         self.gid2name = {}
@@ -705,7 +702,7 @@ class CFFFont:
             # Format 2
             assert False, str(("Unhandled", format))
         else:
-            raise PDFValueError("unsupported charset format: %r" % format)
+            raise ValueError("unsupported charset format: %r" % format)
 
     def getstr(self, sid: int) -> Union[str, bytes]:
         # This returns str for one of the STANDARD_STRINGS but bytes otherwise,
@@ -716,9 +713,6 @@ class CFFFont:
 
 
 class TrueTypeFont:
-    class CMapNotFound(PDFException):
-        pass
-
     def __init__(self, name: str, fp: BinaryIO) -> None:
         self.name = name
         self.fp = fp
@@ -742,8 +736,6 @@ class TrueTypeFont:
             pass
 
     def create_unicode_map(self) -> FileUnicodeMap:
-        if b"cmap" not in self.tables:
-            raise TrueTypeFont.CMapNotFound
         (base_offset, length) = self.tables[b"cmap"]
         fp = self.fp
         fp.seek(base_offset)
@@ -833,7 +825,7 @@ class TrueTypeFont:
             else:
                 assert False, str(("Unhandled", fmttype))
         if not char2gid:
-            raise TrueTypeFont.CMapNotFound
+            raise ValueError("unicode mapping is empty")
         # create unicode map
         unicode_map = FileUnicodeMap()
         for char, gid in char2gid.items():
@@ -849,7 +841,7 @@ LITERAL_TYPE1C = LIT("Type1C")
 FontWidthDict = Union[Dict[int, float], Dict[str, float]]
 
 
-class PDFFont:
+class Font:
     vertical = False
     multibyte = False
 
@@ -888,7 +880,7 @@ class PDFFont:
             self.descent = -self.descent
 
     def __repr__(self) -> str:
-        return "<PDFFont>"
+        return "<Font>"
 
     def decode(self, data: bytes) -> Iterable[int]:
         return data
@@ -937,7 +929,7 @@ class PDFFont:
         raise NotImplementedError
 
 
-class PDFSimpleFont(PDFFont):
+class SimpleFont(Font):
     def __init__(
         self,
         descriptor: Mapping[str, Any],
@@ -962,7 +954,7 @@ class PDFSimpleFont(PDFFont):
             strm = stream_value(spec["ToUnicode"])
             self.unicode_map = FileUnicodeMap()
             CMapParser(self.unicode_map, strm.get_data()).run()
-        PDFFont.__init__(self, descriptor, widths)
+        Font.__init__(self, descriptor, widths)
 
     def to_unichr(self, cid: int) -> str:
         if self.unicode_map:
@@ -976,7 +968,7 @@ class PDFSimpleFont(PDFFont):
             raise PDFUnicodeNotDefined(None, cid)
 
 
-class PDFType1Font(PDFSimpleFont):
+class Type1Font(SimpleFont):
     def __init__(self, spec: Mapping[str, Any]) -> None:
         try:
             self.basefont = literal_name(spec["BaseFont"])
@@ -995,7 +987,7 @@ class PDFType1Font(PDFSimpleFont):
             # lastchar = int_value(spec.get('LastChar', 255))
             width_list = list_value(spec.get("Widths", [0] * 256))
             widths = {i + firstchar: resolve1(w) for (i, w) in enumerate(width_list)}
-        PDFSimpleFont.__init__(self, descriptor, widths, spec)
+        SimpleFont.__init__(self, descriptor, widths, spec)
         if "Encoding" not in spec and "FontFile" in descriptor:
             # try to recover the missing encoding info from the font file.
             self.fontfile = stream_value(descriptor.get("FontFile"))
@@ -1005,15 +997,15 @@ class PDFType1Font(PDFSimpleFont):
             self.cid2unicode = parser.get_encoding()
 
     def __repr__(self) -> str:
-        return "<PDFType1Font: basefont=%r>" % self.basefont
+        return "<Type1Font: basefont=%r>" % self.basefont
 
 
-class PDFTrueTypeFont(PDFType1Font):
+class PDFTrueTypeFont(Type1Font):  # FIXME: WTF???
     def __repr__(self) -> str:
         return "<PDFTrueTypeFont: basefont=%r>" % self.basefont
 
 
-class PDFType3Font(PDFSimpleFont):
+class Type3Font(SimpleFont):
     def __init__(self, spec: Mapping[str, Any]) -> None:
         firstchar = int_value(spec.get("FirstChar", 0))
         # lastchar = int_value(spec.get('LastChar', 0))
@@ -1023,16 +1015,16 @@ class PDFType3Font(PDFSimpleFont):
             descriptor = dict_value(spec["FontDescriptor"])
         else:
             descriptor = {"Ascent": 0, "Descent": 0, "FontBBox": spec["FontBBox"]}
-        PDFSimpleFont.__init__(self, descriptor, widths, spec)
+        SimpleFont.__init__(self, descriptor, widths, spec)
         self.matrix = cast(Matrix, tuple(list_value(spec.get("FontMatrix"))))
         (_, self.descent, _, self.ascent) = self.bbox
         (self.hscale, self.vscale) = apply_matrix_norm(self.matrix, (1, 1))
 
     def __repr__(self) -> str:
-        return "<PDFType3Font>"
+        return "<Type3Font>"
 
 
-class PDFCIDFont(PDFFont):
+class CIDFont(Font):
     default_disp: Union[float, Tuple[Optional[float], float]]
 
     def __init__(
@@ -1085,7 +1077,7 @@ class PDFCIDFont(PDFFont):
             if ttf:
                 try:
                     self.unicode_map = ttf.create_unicode_map()
-                except TrueTypeFont.CMapNotFound:
+                except (KeyError, ValueError):
                     pass
         else:
             try:
@@ -1093,7 +1085,7 @@ class PDFCIDFont(PDFFont):
                     self.cidcoding,
                     self.cmap.is_vertical(),
                 )
-            except CMapDB.CMapNotFound:
+            except KeyError:
                 pass
 
         self.multibyte = True
@@ -1112,7 +1104,7 @@ class PDFCIDFont(PDFFont):
             self.default_disp = 0
             widths = get_widths(list_value(spec.get("W", [])))
             default_width = spec.get("DW", 1000)
-        PDFFont.__init__(self, descriptor, widths, default_width=default_width)
+        Font.__init__(self, descriptor, widths, default_width=default_width)
 
     def get_cmap_from_spec(self, spec: Mapping[str, Any], strict: bool) -> CMapBase:
         """Get cmap from font specification
@@ -1127,7 +1119,7 @@ class PDFCIDFont(PDFFont):
 
         try:
             return CMapDB.get_cmap(cmap_name)
-        except CMapDB.CMapNotFound as e:
+        except KeyError as e:
             if strict:
                 raise PDFFontError(e)
             return CMap()
@@ -1157,7 +1149,7 @@ class PDFCIDFont(PDFFont):
         return IDENTITY_ENCODER.get(cmap_name, cmap_name)
 
     def __repr__(self) -> str:
-        return f"<PDFCIDFont: basefont={self.basefont!r}, cidcoding={self.cidcoding!r}>"
+        return f"<CIDFont: basefont={self.basefont!r}, cidcoding={self.cidcoding!r}>"
 
     def decode(self, data: bytes) -> Iterable[int]:
         return self.cmap.decode(data)
@@ -1169,7 +1161,7 @@ class PDFCIDFont(PDFFont):
     def to_unichr(self, cid: int) -> str:
         try:
             if not self.unicode_map:
-                raise PDFKeyError(cid)
+                raise KeyError(cid)
             return self.unicode_map.get_unichr(cid)
         except KeyError:
             raise PDFUnicodeNotDefined(self.cidcoding, cid)
