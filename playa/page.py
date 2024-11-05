@@ -225,132 +225,6 @@ class Item(NamedTuple):
         return (self.x0, self.y0, self.x1, self.y1)
 
 
-def LTCurve(
-    *,
-    linewidth: float,
-    pts: List[Point],
-    stroke: bool = False,
-    fill: bool = False,
-    evenodd: bool = False,
-    stroking_color: Optional[Color] = None,
-    non_stroking_color: Optional[Color] = None,
-    original_path: Optional[List[PathSegment]] = None,
-    dashing_style: Optional[Tuple[object, object]] = None,
-    ncs: Optional[ColorSpace] = None,
-    scs: Optional[ColorSpace] = None,
-) -> Item:
-    """A generic Bezier curve
-
-    The parameter `original_path` contains the original
-    pathing information from the pdf (e.g. for reconstructing Bezier Curves).
-
-    `dashing_style` contains the Dashing information if any.
-    """
-    bbox = get_bound(pts)
-    return Item(
-        itype="curve",
-        x0=bbox[0],
-        y0=bbox[1],
-        x1=bbox[2],
-        y1=bbox[3],
-        pts=pts,
-        ncs=ncs,
-        scs=scs,
-        linewidth=linewidth,
-        stroke=stroke,
-        fill=fill,
-        evenodd=evenodd,
-        stroking_color=stroking_color,
-        non_stroking_color=non_stroking_color,
-        original_path=original_path,
-        dashing_style=dashing_style,
-    )
-
-
-def LTLine(
-    *,
-    linewidth: float,
-    p0: Point,
-    p1: Point,
-    stroke: bool = False,
-    fill: bool = False,
-    evenodd: bool = False,
-    stroking_color: Optional[Color] = None,
-    non_stroking_color: Optional[Color] = None,
-    original_path: Optional[List[PathSegment]] = None,
-    dashing_style: Optional[Tuple[object, object]] = None,
-    ncs: Optional[ColorSpace] = None,
-    scs: Optional[ColorSpace] = None,
-) -> Item:
-    """A single straight line.
-
-    Could be used for separating text or figures.
-    """
-    bbox = get_bound([p0, p1])
-    return Item(
-        itype="line",
-        x0=bbox[0],
-        y0=bbox[1],
-        x1=bbox[2],
-        y1=bbox[3],
-        pts=[p0, p1],
-        ncs=ncs,
-        scs=scs,
-        linewidth=linewidth,
-        stroke=stroke,
-        fill=fill,
-        evenodd=evenodd,
-        stroking_color=stroking_color,
-        non_stroking_color=non_stroking_color,
-        original_path=original_path,
-        dashing_style=dashing_style,
-    )
-
-
-def LTRect(
-    *,
-    linewidth: float,
-    bbox: Rect,
-    stroke: bool = False,
-    fill: bool = False,
-    evenodd: bool = False,
-    stroking_color: Optional[Color] = None,
-    non_stroking_color: Optional[Color] = None,
-    original_path: Optional[List[PathSegment]] = None,
-    dashing_style: Optional[Tuple[object, object]] = None,
-    ncs: Optional[ColorSpace] = None,
-    scs: Optional[ColorSpace] = None,
-) -> Item:
-    """A rectangle.
-
-    Could be used for framing another pictures or figures.
-    """
-    x0, y0, x1, y1 = bbox
-    if x1 < x0:
-        (x0, x1) = (x1, x0)
-    if y1 < y0:
-        (y0, y1) = (y1, y0)
-    item = Item(
-        itype="rect",
-        x0=x0,
-        y0=y0,
-        x1=x1,
-        y1=y1,
-        pts=[(x0, y0), (x1, y0), (x1, y1), (x0, y1)],
-        ncs=ncs,
-        scs=scs,
-        linewidth=linewidth,
-        stroke=stroke,
-        fill=fill,
-        evenodd=evenodd,
-        stroking_color=stroking_color,
-        non_stroking_color=non_stroking_color,
-        original_path=original_path,
-        dashing_style=dashing_style,
-    )
-    return item
-
-
 def LTImage(name: str, stream: ContentStream, bbox: Rect) -> Item:
     """An image object.
 
@@ -1210,7 +1084,8 @@ class PageInterpreter:
                 cast(Point, p[-2:] if p[0] != "h" else path[0][-2:]) for p in path
             ]
             pts = [apply_matrix_pt(self.ctm, pt) for pt in raw_pts]
-
+            # FIXME: WTF, this seems to repeat the same transformation
+            # as the previous line?
             operators = [str(operation[0]) for operation in path]
             transformed_points = [
                 [
@@ -1229,21 +1104,27 @@ class PageInterpreter:
                 #
                 # Note: 'ml', in conditional above, is a frequent anomaly
                 # that we want to support.
-                line = LTLine(
-                    linewidth=gstate.linewidth,
-                    p0=pts[0],
-                    p1=pts[1],
+                (x0, y0), (x1, y1) = pts
+                if (x0 > x1):
+                    (x1, x0) = (x0, x1)
+                if (y0 > y1):
+                    (y1, y0) = (y0, y1)
+                yield Item(
+                    "line",
+                    x0, y0, x1, y1,
+                    mcid=self.cur_mcid,
+                    tag=self.cur_tag,
+                    original_path=transformed_path,
                     stroke=stroke,
                     fill=fill,
                     evenodd=evenodd,
+                    linewidth=gstate.linewidth,
                     stroking_color=gstate.scolor,
                     non_stroking_color=gstate.ncolor,
-                    original_path=transformed_path,
                     dashing_style=gstate.dash,
                     ncs=ncs,
                     scs=scs,
                 )
-                yield line
 
             elif shape in {"mlllh", "mllll"}:
                 (x0, y0), (x1, y1), (x2, y2), (x3, y3), _ = pts
@@ -1253,50 +1134,62 @@ class PageInterpreter:
                     x0 == x1 and y1 == y2 and x2 == x3 and y3 == y0
                 ) or (y0 == y1 and x1 == x2 and y2 == y3 and x3 == x0)
                 if is_closed_loop and has_square_coordinates:
-                    rect = LTRect(
-                        linewidth=gstate.linewidth,
-                        bbox=(*pts[0], *pts[2]),
+                    if (x0 > x2):
+                        (x2, x0) = (x0, x2)
+                    if (y0 > y2):
+                        (y2, y0) = (y0, y2)
+                    yield Item(
+                        "rect",
+                        x0, y0, x2, y2,
+                        mcid=self.cur_mcid,
+                        tag=self.cur_tag,
+                        original_path=transformed_path,
                         stroke=stroke,
                         fill=fill,
                         evenodd=evenodd,
+                        linewidth=gstate.linewidth,
                         stroking_color=gstate.scolor,
                         non_stroking_color=gstate.ncolor,
-                        original_path=transformed_path,
                         dashing_style=gstate.dash,
                         ncs=ncs,
                         scs=scs,
                     )
-                    yield rect
                 else:
-                    curve = LTCurve(
-                        linewidth=gstate.linewidth,
-                        pts=pts,
+                    bbox = get_bound(pts)
+                    yield Item(
+                        "curve",
+                        *bbox,
+                        mcid=self.cur_mcid,
+                        tag=self.cur_tag,
+                        original_path=transformed_path,
                         stroke=stroke,
                         fill=fill,
                         evenodd=evenodd,
+                        linewidth=gstate.linewidth,
                         stroking_color=gstate.scolor,
                         non_stroking_color=gstate.ncolor,
-                        original_path=transformed_path,
                         dashing_style=gstate.dash,
                         ncs=ncs,
                         scs=scs,
                     )
-                    yield curve
             else:
-                curve = LTCurve(
-                    linewidth=gstate.linewidth,
-                    pts=pts,
+                bbox = get_bound(pts)
+                yield Item(
+                    "curve",
+                    *bbox,
+                    mcid=self.cur_mcid,
+                    tag=self.cur_tag,
+                    original_path=transformed_path,
                     stroke=stroke,
                     fill=fill,
                     evenodd=evenodd,
+                    linewidth=gstate.linewidth,
                     stroking_color=gstate.scolor,
                     non_stroking_color=gstate.ncolor,
-                    original_path=transformed_path,
                     dashing_style=gstate.dash,
                     ncs=ncs,
                     scs=scs,
                 )
-                yield curve
 
     def render_char(
         self,
