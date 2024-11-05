@@ -393,7 +393,7 @@ def LTChar(
     """Actual letter in the text as a Unicode string."""
     # compute the boundary rectangle.
     adv = textwidth * fontsize * scaling
-    vert = font.is_vertical()
+    vert = font.vertical
     if vert:
         # vertical
         assert isinstance(textdisp, tuple)
@@ -1436,7 +1436,7 @@ class PageInterpreter:
         seq: PDFTextSeq,
     ) -> Iterator[Item]:
         assert self.textstate.font is not None
-        vert = self.textstate.font.is_vertical()
+        vert = self.textstate.font.vertical
         assert self.ctm is not None
         matrix = mult_matrix(self.textstate.matrix, self.ctm)
         fontsize = self.textstate.fontsize
@@ -1444,7 +1444,7 @@ class PageInterpreter:
         charspace = self.textstate.charspace * scaling
         wordspace = self.textstate.wordspace * scaling
         rise = self.textstate.rise
-        if self.textstate.font.is_multibyte():
+        if self.textstate.font.multibyte:
             wordspace = 0
         dxscale = 0.001 * fontsize * scaling
         (x, y) = self.textstate.linematrix

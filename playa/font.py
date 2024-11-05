@@ -850,6 +850,9 @@ FontWidthDict = Union[Dict[int, float], Dict[str, float]]
 
 
 class PDFFont:
+    vertical = False
+    multibyte = False
+
     def __init__(
         self,
         descriptor: Mapping[str, Any],
@@ -886,12 +889,6 @@ class PDFFont:
 
     def __repr__(self) -> str:
         return "<PDFFont>"
-
-    def is_vertical(self) -> bool:
-        return False
-
-    def is_multibyte(self) -> bool:
-        return False
 
     def decode(self, data: bytes) -> Iterable[int]:
         return data
@@ -1099,6 +1096,7 @@ class PDFCIDFont(PDFFont):
             except CMapDB.CMapNotFound:
                 pass
 
+        self.multibyte = True
         self.vertical = self.cmap.is_vertical()
         if self.vertical:
             # writing mode: vertical
@@ -1160,12 +1158,6 @@ class PDFCIDFont(PDFFont):
 
     def __repr__(self) -> str:
         return f"<PDFCIDFont: basefont={self.basefont!r}, cidcoding={self.cidcoding!r}>"
-
-    def is_vertical(self) -> bool:
-        return self.vertical
-
-    def is_multibyte(self) -> bool:
-        return True
 
     def decode(self, data: bytes) -> Iterable[int]:
         return self.cmap.decode(data)
