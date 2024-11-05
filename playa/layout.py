@@ -67,7 +67,6 @@ class Item(NamedTuple):
     text: Optional[str] = None
     matrix: Optional[Matrix] = None
     fontname: Optional[str] = None
-    adv: Optional[float] = None
     upright: Optional[bool] = None
     size: Optional[float] = None
 
@@ -286,7 +285,6 @@ def LTChar(
         scs=scs,
         stroking_color=stroking_color,
         non_stroking_color=non_stroking_color,
-        adv=adv,
     )
 
 

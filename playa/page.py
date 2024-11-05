@@ -854,7 +854,6 @@ class PageInterpreter:
                 raise PDFInterpreterError("No font specified!")
             return
         yield from self.render_string(
-            self.textstate,
             cast(PDFTextSeq, seq),
         )
 
@@ -1089,170 +1088,117 @@ class PageInterpreter:
     def render_char(
         self,
         *,
+        vertical: bool,
         matrix: Matrix,
         font: PDFFont,
         fontsize: float,
         scaling: float,
         rise: float,
         cid: int,
-    ) -> Item:
+    ) -> Tuple[Item, float]:
         try:
             text = font.to_unichr(cid)
-            assert isinstance(text, str), str(type(text))
+            assert isinstance(text, str), f"Text {text!r} is not a str"
         except PDFUnicodeNotDefined:
             text = self.handle_undefined_char(font, cid)
         textwidth = font.char_width(cid)
         textdisp = font.char_disp(cid)
-        item = LTChar(
-            matrix=matrix,
-            font=font,
-            fontsize=fontsize,
-            scaling=scaling,
-            rise=rise,
+        adv = textwidth * fontsize * scaling
+        if vertical:
+            # vertical
+            assert isinstance(textdisp, tuple)
+            (vx, vy) = textdisp
+            if vx is None:
+                vx = fontsize * 0.5
+            else:
+                vx = vx * fontsize * 0.001
+            vy = (1000 - vy) * fontsize * 0.001
+            bbox_lower_left = (-vx, vy + rise + adv)
+            bbox_upper_right = (-vx + fontsize, vy + rise)
+        else:
+            # horizontal
+            descent = font.get_descent() * fontsize
+            bbox_lower_left = (0, descent + rise)
+            bbox_upper_right = (adv, descent + rise + fontsize)
+        (a, b, c, d, e, f) = matrix
+        upright = a * d * scaling > 0 and b * c <= 0
+        (x0, y0) = apply_matrix_pt(matrix, bbox_lower_left)
+        (x1, y1) = apply_matrix_pt(matrix, bbox_upper_right)
+        if x1 < x0:
+            (x0, x1) = (x1, x0)
+        if y1 < y0:
+            (y0, y1) = (y1, y0)
+        if vertical:
+            size = x1 - x0
+        else:
+            size = y1 - y0
+        item = Item(
+            itype="char",
+            x0=x0,
+            y0=y0,
+            x1=x1,
+            y1=y1,
+            size=size,
+            upright=upright,
             text=text,
-            textwidth=textwidth,
-            textdisp=textdisp,
+            matrix=matrix,
+            fontname=font.fontname,
             ncs=self.ncs,
             scs=self.scs,
             stroking_color=self.graphicstate.scolor,
             non_stroking_color=self.graphicstate.ncolor,
+            mcid=self.cur_mcid,
+            tag=self.cur_tag,
         )
-        return item
+        return item, adv
 
     def render_string(
         self,
-        textstate: "PDFTextState",
         seq: PDFTextSeq,
     ) -> Iterator[Item]:
+        assert self.textstate.font is not None
+        vert = self.textstate.font.is_vertical()
         assert self.ctm is not None
-        matrix = mult_matrix(textstate.matrix, self.ctm)
-        font = textstate.font
-        fontsize = textstate.fontsize
-        scaling = textstate.scaling * 0.01
-        charspace = textstate.charspace * scaling
-        wordspace = textstate.wordspace * scaling
-        rise = textstate.rise
-        assert font is not None
-        if font.is_multibyte():
+        matrix = mult_matrix(self.textstate.matrix, self.ctm)
+        fontsize = self.textstate.fontsize
+        scaling = self.textstate.scaling * 0.01
+        charspace = self.textstate.charspace * scaling
+        wordspace = self.textstate.wordspace * scaling
+        rise = self.textstate.rise
+        if self.textstate.font.is_multibyte():
             wordspace = 0
         dxscale = 0.001 * fontsize * scaling
-        if font.is_vertical():
-            textstate.linematrix, chars = self.render_string_vertical(
-                seq=seq,
-                matrix=matrix,
-                pos=textstate.linematrix,
-                font=font,
-                fontsize=fontsize,
-                scaling=scaling,
-                charspace=charspace,
-                wordspace=wordspace,
-                rise=rise,
-                dxscale=dxscale,
-            )
-        else:
-            textstate.linematrix, chars = self.render_string_horizontal(
-                seq=seq,
-                matrix=matrix,
-                pos=textstate.linematrix,
-                font=font,
-                fontsize=fontsize,
-                scaling=scaling,
-                charspace=charspace,
-                wordspace=wordspace,
-                rise=rise,
-                dxscale=dxscale,
-            )
-        yield from chars
-
-    def render_string_horizontal(
-        self,
-        *,
-        seq: PDFTextSeq,
-        matrix: Matrix,
-        pos: Point,
-        font: PDFFont,
-        fontsize: float,
-        scaling: float,
-        charspace: float,
-        wordspace: float,
-        rise: float,
-        dxscale: float,
-    ) -> Tuple[Point, List[Item]]:
-        (x, y) = pos
+        (x, y) = self.textstate.linematrix
+        pos = y if vert else x
         needcharspace = False
-        chars = []
         for obj in seq:
             if isinstance(obj, (int, float)):
-                x -= obj * dxscale
+                pos -= obj * dxscale
                 needcharspace = True
             else:
                 if isinstance(obj, str):
                     obj = make_compat_bytes(obj)
                 if not isinstance(obj, bytes):
                     continue
-                for cid in font.decode(obj):
+                for cid in self.textstate.font.decode(obj):
                     if needcharspace:
-                        x += charspace
-                    item = self.render_char(
-                        matrix=translate_matrix(matrix, (x, y)),
-                        font=font,
+                        pos += charspace
+                    lm = (x, pos) if vert else (pos, y)
+                    item, adv = self.render_char(
+                        vertical=vert,
+                        matrix=translate_matrix(matrix, lm),
+                        font=self.textstate.font,
                         fontsize=fontsize,
                         scaling=scaling,
                         rise=rise,
                         cid=cid,
                     )
-                    assert item.adv is not None
-                    x += item.adv
-                    chars.append(item)
+                    pos += adv
+                    yield item
                     if cid == 32 and wordspace:
-                        x += wordspace
+                        pos += wordspace
                     needcharspace = True
-        return ((x, y), chars)
-
-    def render_string_vertical(
-        self,
-        *,
-        seq: PDFTextSeq,
-        matrix: Matrix,
-        pos: Point,
-        font: PDFFont,
-        fontsize: float,
-        scaling: float,
-        charspace: float,
-        wordspace: float,
-        rise: float,
-        dxscale: float,
-    ) -> Tuple[Point, List[Item]]:
-        (x, y) = pos
-        needcharspace = False
-        chars = []
-        for obj in seq:
-            if isinstance(obj, (int, float)):
-                y -= obj * dxscale
-                needcharspace = True
-            else:
-                if isinstance(obj, str):
-                    obj = make_compat_bytes(obj)
-                if not isinstance(obj, bytes):
-                    continue
-                for cid in font.decode(obj):
-                    if needcharspace:
-                        y += charspace
-                    item = self.render_char(
-                        matrix=translate_matrix(matrix, (x, y)),
-                        font=font,
-                        fontsize=fontsize,
-                        scaling=scaling,
-                        rise=rise,
-                        cid=cid,
-                    )
-                    chars.append(item)
-                    assert item.adv is not None
-                    y += item.adv
-                    if cid == 32 and wordspace:
-                        y += wordspace
-                    needcharspace = True
-        return ((x, y), chars)
+        self.textstate.linematrix = (x, pos) if vert else (pos, y)
 
     def handle_undefined_char(self, font: PDFFont, cid: int) -> str:
         log.debug("undefined: %r, %r", font, cid)
