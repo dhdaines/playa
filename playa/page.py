@@ -543,7 +543,7 @@ class PageInterpreter:
     def do_S(self) -> Iterator[Item]:
         """Stroke path"""
         yield from self.paint_path(
-            self.graphicstate, True, False, False, self.curpath, self.ncs, self.scs
+            stroke=True, fill=False, evenodd=False, path=self.curpath
         )
         self.curpath = []
 
@@ -555,7 +555,7 @@ class PageInterpreter:
     def do_f(self) -> Iterator[Item]:
         """Fill path using nonzero winding number rule"""
         yield from self.paint_path(
-            self.graphicstate, False, True, False, self.curpath, self.ncs, self.scs
+            stroke=False, fill=True, evenodd=False, path=self.curpath
         )
         self.curpath = []
 
@@ -565,21 +565,21 @@ class PageInterpreter:
     def do_f_a(self) -> Iterator[Item]:
         """Fill path using even-odd rule"""
         yield from self.paint_path(
-            self.graphicstate, False, True, True, self.curpath, self.ncs, self.scs
+            stroke=False, fill=True, evenodd=True, path=self.curpath
         )
         self.curpath = []
 
     def do_B(self) -> Iterator[Item]:
         """Fill and stroke path using nonzero winding number rule"""
         yield from self.paint_path(
-            self.graphicstate, True, True, False, self.curpath, self.ncs, self.scs
+            stroke=True, fill=True, evenodd=False, path=self.curpath
         )
         self.curpath = []
 
     def do_B_a(self) -> Iterator[Item]:
         """Fill and stroke path using even-odd rule"""
         yield from self.paint_path(
-            self.graphicstate, True, True, True, self.curpath, self.ncs, self.scs
+            stroke=True, fill=True, evenodd=True, path=self.curpath
         )
         self.curpath = []
 
@@ -859,9 +859,6 @@ class PageInterpreter:
         yield from self.render_string(
             self.textstate,
             cast(PDFTextSeq, seq),
-            self.ncs,
-            copy(self.graphicstate),
-            self.scs,
         )
 
     def do_Tj(self, s: PDFStackT) -> Iterator[Item]:
@@ -963,16 +960,17 @@ class PageInterpreter:
 
     def paint_path(
         self,
-        gstate: PDFGraphicState,
+        *,
         stroke: bool,
         fill: bool,
         evenodd: bool,
         path: Sequence[PathSegment],
-        ncs: Optional[PDFColorSpace] = None,
-        scs: Optional[PDFColorSpace] = None,
     ) -> Iterator[Item]:
         """Paint paths described in section 4.4 of the PDF reference manual"""
         shape = "".join(x[0] for x in path)
+        gstate = self.graphicstate
+        ncs = self.ncs
+        scs = self.scs
 
         if shape[:1] != "m":
             # Per PDF Reference Section 4.4.1, "path construction operators may
@@ -988,7 +986,7 @@ class PageInterpreter:
             for m in re.finditer(r"m[^m]+", shape):
                 subpath = path[m.start(0) : m.end(0)]
                 yield from self.paint_path(
-                    gstate, stroke, fill, evenodd, subpath, ncs, scs
+                    stroke=stroke, fill=fill, evenodd=evenodd, path=subpath
                 )
 
         else:
@@ -1093,15 +1091,13 @@ class PageInterpreter:
 
     def render_char(
         self,
+        *,
         matrix: Matrix,
         font: PDFFont,
         fontsize: float,
         scaling: float,
         rise: float,
         cid: int,
-        ncs: PDFColorSpace,
-        graphicstate: PDFGraphicState,
-        scs: Optional[PDFColorSpace] = None,
     ) -> Item:
         try:
             text = font.to_unichr(cid)
@@ -1119,11 +1115,10 @@ class PageInterpreter:
             text=text,
             textwidth=textwidth,
             textdisp=textdisp,
-            ncs=ncs,
-            graphicstate=graphicstate,
-            scs=scs,
-            stroking_color=graphicstate.scolor,
-            non_stroking_color=graphicstate.ncolor,
+            ncs=self.ncs,
+            scs=self.scs,
+            stroking_color=self.graphicstate.scolor,
+            non_stroking_color=self.graphicstate.ncolor,
         )
         return item
 
@@ -1131,9 +1126,6 @@ class PageInterpreter:
         self,
         textstate: "PDFTextState",
         seq: PDFTextSeq,
-        ncs: PDFColorSpace,
-        graphicstate: "PDFGraphicState",
-        scs: Optional[PDFColorSpace] = None,
     ) -> Iterator[Item]:
         assert self.ctm is not None
         matrix = mult_matrix(textstate.matrix, self.ctm)
@@ -1149,40 +1141,35 @@ class PageInterpreter:
         dxscale = 0.001 * fontsize * scaling
         if font.is_vertical():
             textstate.linematrix, chars = self.render_string_vertical(
-                seq,
-                matrix,
-                textstate.linematrix,
-                font,
-                fontsize,
-                scaling,
-                charspace,
-                wordspace,
-                rise,
-                dxscale,
-                ncs,
-                graphicstate,
-                scs,
+                seq=seq,
+                matrix=matrix,
+                pos=textstate.linematrix,
+                font=font,
+                fontsize=fontsize,
+                scaling=scaling,
+                charspace=charspace,
+                wordspace=wordspace,
+                rise=rise,
+                dxscale=dxscale,
             )
         else:
             textstate.linematrix, chars = self.render_string_horizontal(
-                seq,
-                matrix,
-                textstate.linematrix,
-                font,
-                fontsize,
-                scaling,
-                charspace,
-                wordspace,
-                rise,
-                dxscale,
-                ncs,
-                graphicstate,
-                scs,
+                seq=seq,
+                matrix=matrix,
+                pos=textstate.linematrix,
+                font=font,
+                fontsize=fontsize,
+                scaling=scaling,
+                charspace=charspace,
+                wordspace=wordspace,
+                rise=rise,
+                dxscale=dxscale,
             )
         yield from chars
 
     def render_string_horizontal(
         self,
+        *,
         seq: PDFTextSeq,
         matrix: Matrix,
         pos: Point,
@@ -1193,9 +1180,6 @@ class PageInterpreter:
         wordspace: float,
         rise: float,
         dxscale: float,
-        ncs: PDFColorSpace,
-        graphicstate: "PDFGraphicState",
-        scs: Optional[PDFColorSpace] = None,
     ) -> Tuple[Point, List[Item]]:
         (x, y) = pos
         needcharspace = False
@@ -1213,15 +1197,12 @@ class PageInterpreter:
                     if needcharspace:
                         x += charspace
                     item = self.render_char(
-                        translate_matrix(matrix, (x, y)),
-                        font,
-                        fontsize,
-                        scaling,
-                        rise,
-                        cid,
-                        ncs,
-                        graphicstate,
-                        scs,
+                        matrix=translate_matrix(matrix, (x, y)),
+                        font=font,
+                        fontsize=fontsize,
+                        scaling=scaling,
+                        rise=rise,
+                        cid=cid,
                     )
                     assert item.adv is not None
                     x += item.adv
@@ -1233,6 +1214,7 @@ class PageInterpreter:
 
     def render_string_vertical(
         self,
+        *,
         seq: PDFTextSeq,
         matrix: Matrix,
         pos: Point,
@@ -1243,9 +1225,6 @@ class PageInterpreter:
         wordspace: float,
         rise: float,
         dxscale: float,
-        ncs: PDFColorSpace,
-        graphicstate: "PDFGraphicState",
-        scs: Optional[PDFColorSpace] = None,
     ) -> Tuple[Point, List[Item]]:
         (x, y) = pos
         needcharspace = False
@@ -1263,15 +1242,12 @@ class PageInterpreter:
                     if needcharspace:
                         y += charspace
                     item = self.render_char(
-                        translate_matrix(matrix, (x, y)),
-                        font,
-                        fontsize,
-                        scaling,
-                        rise,
-                        cid,
-                        ncs,
-                        graphicstate,
-                        scs,
+                        matrix=translate_matrix(matrix, (x, y)),
+                        font=font,
+                        fontsize=fontsize,
+                        scaling=scaling,
+                        rise=rise,
+                        cid=cid,
                     )
                     chars.append(item)
                     assert item.adv is not None
