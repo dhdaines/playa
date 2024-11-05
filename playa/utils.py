@@ -12,7 +12,7 @@ from typing import (
     Union,
 )
 
-from playa.exceptions import PDFSyntaxError, PDFValueError
+from playa.exceptions import PDFSyntaxError
 
 if TYPE_CHECKING:
     pass
@@ -60,7 +60,7 @@ def apply_png_predictor(
     """
     if bitspercomponent not in [8, 1]:
         msg = "Unsupported `bitspercomponent': %d" % bitspercomponent
-        raise PDFValueError(msg)
+        raise ValueError(msg)
 
     nbytes = colors * columns * bitspercomponent // 8
     bpp = colors * bitspercomponent // 8  # number of bytes per complete pixel
@@ -141,7 +141,7 @@ def apply_png_predictor(
                 raw.append(raw_x)
 
         else:
-            raise PDFValueError("Unsupported predictor value: %d" % filter_type)
+            raise ValueError("Unsupported predictor value: %d" % filter_type)
 
         buf.extend(raw)
         line_above = raw
@@ -167,7 +167,7 @@ def parse_rect(o: Any) -> Rect:
         (x0, y0, x1, y1) = o
         return float(x0), float(y0), float(x1), float(y1)
     except ValueError:
-        raise PDFValueError("Could not parse rectangle")
+        raise ValueError("Could not parse rectangle")
     except TypeError:
         raise PDFSyntaxError("Rectangle contains non-numeric values")
 

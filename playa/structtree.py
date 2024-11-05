@@ -16,7 +16,6 @@ from typing import (
 )
 
 from playa.data_structures import NumberTree
-from playa.exceptions import PDFNoStructTree
 from playa.page import Page
 from playa.parser import KEYWORD_NULL, PSLiteral
 from playa.pdftypes import ObjRef, resolve1
@@ -134,6 +133,9 @@ class PDFStructElement(Findable):
             for k in list(el.keys()):
                 if el[k] is None or el[k] == [] or el[k] == {}:
                     del el[k]
+            if "page_idx" in el:
+                el["page_number"] = el["page_idx"] + 1
+                del el["page_idx"]
             if "children" in el:
                 d.extend(el["children"])
         return r
@@ -149,7 +151,7 @@ class PDFStructTree(Findable):
     structure elements with no content.
 
     If the PDF has no structure, the constructor will raise
-    `PDFNoStructTree`.
+    `KeyError`.
 
     Args:
       doc: Document from which to extract structure tree
@@ -166,7 +168,7 @@ class PDFStructTree(Findable):
         pages: Union[Iterable[Page], None] = None,
     ):
         if "StructTreeRoot" not in doc.catalog:
-            raise PDFNoStructTree("Catalog has no 'StructTreeRoot' entry")
+            raise KeyError("Catalog has no 'StructTreeRoot' entry")
         self.root = resolve1(doc.catalog["StructTreeRoot"])
         self.role_map = resolve1(self.root.get("RoleMap", {}))
         self.class_map = resolve1(self.root.get("ClassMap", {}))

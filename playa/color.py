@@ -1,6 +1,9 @@
 import collections
-from typing import Dict
+from typing import Dict, NamedTuple, Union
 
+from playa import settings
+from playa.casting import safe_float
+from playa.exceptions import PDFInterpreterError
 from playa.parser import LIT
 
 LITERAL_DEVICE_GRAY = LIT("DeviceGray")
@@ -12,16 +15,61 @@ LITERAL_INLINE_DEVICE_RGB = LIT("RGB")
 LITERAL_INLINE_DEVICE_CMYK = LIT("CMYK")
 
 
-class PDFColorSpace:
+class ColorGray(NamedTuple):
+    k: float
+
+
+class ColorRGB(NamedTuple):
+    r: float
+    g: float
+    b: float
+
+
+class ColorCMYK(NamedTuple):
+    c: float
+    m: float
+    y: float
+    k: float
+
+
+Color = Union[
+    ColorGray,
+    ColorRGB,
+    ColorCMYK,
+]
+
+
+class ColorSpace:
     def __init__(self, name: str, ncomponents: int) -> None:
         self.name = name
         self.ncomponents = ncomponents
 
+    def make_color(self, *components) -> Color:
+        if settings.STRICT and len(components) != self.ncomponents:
+            raise PDFInterpreterError(
+                "%s requires %d components, got %d!"
+                % (self.name, self.ncomponents, len(components))
+            )
+        cc = [safe_float(x) or 0.0 for x in components[0 : self.ncomponents]]
+        while len(cc) < self.ncomponents:
+            cc.append(0.0)
+        if self.ncomponents == 1:
+            return ColorGray(*cc)
+        elif self.ncomponents == 3:
+            return ColorRGB(*cc)
+        elif self.ncomponents == 4:
+            return ColorCMYK(*cc)
+        else:
+            raise PDFInterpreterError(
+                "unknown color space %s with %d components"
+                % (self.name, self.ncomponents)
+            )
+
     def __repr__(self) -> str:
-        return "<PDFColorSpace: %s, ncomponents=%d>" % (self.name, self.ncomponents)
+        return "<ColorSpace: %s, ncomponents=%d>" % (self.name, self.ncomponents)
 
 
-PREDEFINED_COLORSPACE: Dict[str, PDFColorSpace] = collections.OrderedDict()
+PREDEFINED_COLORSPACE: Dict[str, ColorSpace] = collections.OrderedDict()
 
 for name, n in [
     ("DeviceGray", 1),  # default value first
@@ -34,4 +82,4 @@ for name, n in [
     ("Indexed", 1),
     ("Pattern", 1),
 ]:
-    PREDEFINED_COLORSPACE[name] = PDFColorSpace(name, n)
+    PREDEFINED_COLORSPACE[name] = ColorSpace(name, n)

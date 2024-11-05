@@ -32,14 +32,14 @@ from typing import (
 )
 
 from playa.encodingdb import name2unicode
-from playa.exceptions import PDFException, PDFTypeError, PSSyntaxError
+from playa.exceptions import PDFSyntaxError
 from playa.parser import KWD, Parser, PSKeyword, PSLiteral, literal_name
 from playa.utils import choplist, nunpack
 
 log = logging.getLogger(__name__)
 
 
-class CMapError(PDFException):
+class CMapError(Exception):
     pass
 
 
@@ -194,7 +194,7 @@ class FileUnicodeMap(UnicodeMap):
         elif isinstance(code, int):
             unichr = chr(code)
         else:
-            raise PDFTypeError(code)
+            raise TypeError(code)
 
         # A0 = non-breaking space, some weird fonts can have a collision on a cid here.
         if unichr == "\u00a0" and self.cid2unichr.get(cid) == " ":
@@ -224,9 +224,6 @@ class CMapDB:
     _cmap_cache: Dict[str, PyCMap] = {}
     _umap_cache: Dict[str, List[PyUnicodeMap]] = {}
 
-    class CMapNotFound(CMapError):
-        pass
-
     @classmethod
     def _load_data(cls, name: str) -> Any:
         name = name.replace("\0", "")
@@ -244,7 +241,7 @@ class CMapDB:
                     return type(str(name), (), pickle.loads(gzfile.read()))
                 finally:
                     gzfile.close()
-        raise CMapDB.CMapNotFound(name)
+        raise KeyError(f"CMap {name!r} not found in CMapDB")
 
     @classmethod
     def get_cmap(cls, name: str) -> CMapBase:
@@ -324,7 +321,7 @@ class CMapParser(Parser[PSKeyword]):
             try:
                 ((_, k), (_, v)) = self.pop(2)
                 self.cmap.set_attr(literal_name(k), v)
-            except PSSyntaxError:
+            except PDFSyntaxError:
                 pass
             return
 
@@ -332,9 +329,9 @@ class CMapParser(Parser[PSKeyword]):
             try:
                 ((_, cmapname),) = self.pop(1)
                 self.cmap.use_cmap(CMapDB.get_cmap(literal_name(cmapname)))
-            except PSSyntaxError:
+            except PDFSyntaxError:
                 pass
-            except CMapDB.CMapNotFound:
+            except KeyError:
                 pass
             return
 

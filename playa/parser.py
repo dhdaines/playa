@@ -19,7 +19,7 @@ from typing import (
 
 from playa import settings
 from playa.casting import safe_int
-from playa.exceptions import PDFSyntaxError, PSException, PSSyntaxError, PSTypeError
+from playa.exceptions import PDFSyntaxError
 from playa.pdftypes import (
     KWD,
     LIT,
@@ -346,7 +346,7 @@ class Parser(Generic[ExtraT]):
     def end_type(self, type: str) -> Tuple[int, List[PSStackType[ExtraT]]]:
         """End a composite object (array, dict, etc)."""
         if self.curtype != type:
-            raise PSTypeError(f"Type mismatch: {self.curtype!r} != {type!r}")
+            raise TypeError(f"Type mismatch: {self.curtype!r} != {type!r}")
         objs = [obj for (_, obj) in self.curstack]
         (pos, self.curtype, self.curstack) = self.context.pop()
         log.debug("end_type: pos=%r, type=%r, objs=%r", pos, type, objs)
@@ -378,7 +378,7 @@ class Parser(Generic[ExtraT]):
                 # end array
                 try:
                     self.push(self.end_type("a"))
-                except PSTypeError:
+                except TypeError:
                     if settings.STRICT:
                         raise
             elif token == KEYWORD_DICT_BEGIN:
@@ -390,14 +390,14 @@ class Parser(Generic[ExtraT]):
                     (pos, objs) = self.end_type("d")
                     if len(objs) % 2 != 0:
                         error_msg = "Invalid dictionary construct: %r" % objs
-                        raise PSSyntaxError(error_msg)
+                        raise PDFSyntaxError(error_msg)
                     d = {
                         literal_name(k): v
                         for (k, v) in choplist(2, objs)
                         if v is not None
                     }
                     self.push((pos, d))
-                except PSTypeError:
+                except TypeError:
                     if settings.STRICT:
                         raise
             elif token == KEYWORD_PROC_BEGIN:
@@ -407,7 +407,7 @@ class Parser(Generic[ExtraT]):
                 # end proc
                 try:
                     self.push(self.end_type("p"))
-                except PSTypeError:
+                except TypeError:
                     if settings.STRICT:
                         raise
             elif isinstance(token, PSKeyword):
@@ -426,7 +426,7 @@ class Parser(Generic[ExtraT]):
                     self.curstack,
                 )
                 self.do_keyword(pos, token)
-                raise PSException
+                raise PDFSyntaxError(f"unknown token {token!r}")
             if self.context:
                 continue
             else:
