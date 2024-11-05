@@ -225,28 +225,6 @@ class Item(NamedTuple):
         return (self.x0, self.y0, self.x1, self.y1)
 
 
-def LTImage(name: str, stream: ContentStream, bbox: Rect) -> Item:
-    """An image object.
-
-    Embedded images can be in JPEG, Bitmap or JBIG2.
-    """
-    colorspace = stream.get_any(("CS", "ColorSpace"))
-    if not isinstance(colorspace, list):
-        colorspace = [colorspace]
-    return Item(
-        x0=bbox[0],
-        y0=bbox[1],
-        x1=bbox[2],
-        y1=bbox[3],
-        itype=name,
-        stream=stream,
-        srcsize=(stream.get_any(("W", "Width")), stream.get_any(("H", "Height"))),
-        imagemask=stream.get_any(("IM", "ImageMask")),
-        bits=stream.get_any(("BPC", "BitsPerComponent"), 1),
-        colorspace=colorspace,
-    )
-
-
 def LTFigure(*, name: str, bbox: Rect, matrix: Matrix) -> Item:
     """Represents an area used by PDF Form objects.
 
@@ -974,10 +952,15 @@ class PageInterpreter:
         """End inline image object"""
         if isinstance(obj, ContentStream) and "W" in obj and "H" in obj:
             iobjid = str(id(obj))
+            # FIXME: This LTFigure is not useful and exists only for
+            # the purpose of calcluating the bbox
             fig = LTFigure(name=iobjid, bbox=(0, 0, 1, 1), matrix=self.ctm)
             assert fig.objs is not None
             fig.objs.append(self.render_image(iobjid, obj, fig))
             yield fig
+        else:
+            # FIXME: Do... something?
+            pass
 
     def do_Do(self, xobjid_arg: PDFStackT) -> Iterator[Item]:
         """Invoke named XObject"""
@@ -1004,11 +987,15 @@ class PageInterpreter:
             else:
                 interpreter = PageInterpreter(self.page, contents=[xobj])
             interpreter.ctm = mult_matrix(matrix, self.ctm)
+            # FIXME: Create a different way of representing form
+            # XObjects (requires a shim in the pdfminer compatibility test)
             fig = LTFigure(name=xobjid, bbox=bbox, matrix=interpreter.ctm)
             assert fig.objs is not None
             fig.objs.extend(interpreter)
             yield fig
         elif subtype is LITERAL_IMAGE and "Width" in xobj and "Height" in xobj:
+            # FIXME: This LTFigure is not useful and exists only for
+            # the purpose of calcluating the bbox
             fig = LTFigure(name=xobjid, bbox=(0, 0, 1, 1), matrix=self.ctm)
             assert fig.objs is not None
             fig.objs.append(self.render_image(xobjid, xobj, fig))
@@ -1035,10 +1022,18 @@ class PageInterpreter:
         self.cur_mcid = None
 
     def render_image(self, name: str, stream: ContentStream, figure: Item) -> Item:
-        return LTImage(
+        colorspace = stream.get_any(("CS", "ColorSpace"))
+        if not isinstance(colorspace, list):
+            colorspace = [colorspace]
+        return Item(
+            "image",
+            *figure.bbox,
             name=name,
             stream=stream,
-            bbox=figure.bbox,
+            srcsize=(stream.get_any(("W", "Width")), stream.get_any(("H", "Height"))),
+            imagemask=stream.get_any(("IM", "ImageMask")),
+            bits=stream.get_any(("BPC", "BitsPerComponent"), 1),
+            colorspace=colorspace,
         )
 
     def paint_path(
