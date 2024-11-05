@@ -853,9 +853,6 @@ class PageInterpreter:
             if settings.STRICT:
                 raise PDFInterpreterError("No font specified!")
             return
-        # FIXME: Are we sure?
-        assert self.ncs is not None
-        assert self.scs is not None
         yield from self.render_string(
             self.textstate,
             cast(PDFTextSeq, seq),
