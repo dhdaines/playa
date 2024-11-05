@@ -1,5 +1,6 @@
 import logging
 import struct
+from functools import cache
 from io import BytesIO
 from typing import (
     Any,
@@ -915,6 +916,7 @@ class PDFFont:
             h = self.ascent - self.descent
         return h * self.vscale
 
+    @cache
     def char_width(self, cid: int) -> float:
         # Because character widths may be mapping either IDs or strings,
         # we try to lookup the character ID first, then its str equivalent.
