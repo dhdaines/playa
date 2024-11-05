@@ -243,7 +243,8 @@ def LTChar(
     """Actual letter in the text as a Unicode string."""
     # compute the boundary rectangle.
     adv = textwidth * fontsize * scaling
-    if font.is_vertical():
+    vert = font.is_vertical()
+    if vert:
         # vertical
         assert isinstance(textdisp, tuple)
         (vx, vy) = textdisp
@@ -267,13 +268,17 @@ def LTChar(
         (x0, x1) = (x1, x0)
     if y1 < y0:
         (y0, y1) = (y1, y0)
+    if vert:
+        size = x1 - x0
+    else:
+        size = y1 - y0
     return Item(
         itype="char",
         x0=x0,
         y0=y0,
         x1=x1,
         y1=y1,
-        size=(x1 - x0) if font.is_vertical() else (y1 - y0),
+        size=size,
         upright=upright,
         text=text,
         matrix=matrix,
