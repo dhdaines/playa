@@ -28,8 +28,8 @@ from playa.exceptions import (
 )
 from playa.font import PDFFont
 from playa.layout import (
+    Item,
     LTChar,
-    LTComponent,
     LTCurve,
     LTFigure,
     LTImage,
@@ -158,7 +158,7 @@ class Page:
             self.contents = []
 
     @property
-    def layout(self) -> Iterator[LTComponent]:
+    def layout(self) -> Iterator[Item]:
         return iter(PageInterpreter(self))
 
     def __repr__(self) -> str:
@@ -370,7 +370,7 @@ class PageInterpreter:
         if self.csmap:
             self.scs = self.ncs = next(iter(self.csmap.values()))
 
-    def __iter__(self) -> Iterator[LTComponent]:
+    def __iter__(self) -> Iterator[Item]:
         log.debug(
             "PageInterpreter: resources=%r, streams=%r, ctm=%r",
             self.resources,
@@ -540,19 +540,19 @@ class PageInterpreter:
         self.curpath.append(("l", x, y + h))
         self.curpath.append(("h",))
 
-    def do_S(self) -> Iterator[LTComponent]:
+    def do_S(self) -> Iterator[Item]:
         """Stroke path"""
         yield from self.paint_path(
             self.graphicstate, True, False, False, self.curpath, self.ncs, self.scs
         )
         self.curpath = []
 
-    def do_s(self) -> Iterator[LTComponent]:
+    def do_s(self) -> Iterator[Item]:
         """Close and stroke path"""
         self.do_h()
         yield from self.do_S()
 
-    def do_f(self) -> Iterator[LTComponent]:
+    def do_f(self) -> Iterator[Item]:
         """Fill path using nonzero winding number rule"""
         yield from self.paint_path(
             self.graphicstate, False, True, False, self.curpath, self.ncs, self.scs
@@ -562,33 +562,33 @@ class PageInterpreter:
     def do_F(self) -> None:
         """Fill path using nonzero winding number rule (obsolete)"""
 
-    def do_f_a(self) -> Iterator[LTComponent]:
+    def do_f_a(self) -> Iterator[Item]:
         """Fill path using even-odd rule"""
         yield from self.paint_path(
             self.graphicstate, False, True, True, self.curpath, self.ncs, self.scs
         )
         self.curpath = []
 
-    def do_B(self) -> Iterator[LTComponent]:
+    def do_B(self) -> Iterator[Item]:
         """Fill and stroke path using nonzero winding number rule"""
         yield from self.paint_path(
             self.graphicstate, True, True, False, self.curpath, self.ncs, self.scs
         )
         self.curpath = []
 
-    def do_B_a(self) -> Iterator[LTComponent]:
+    def do_B_a(self) -> Iterator[Item]:
         """Fill and stroke path using even-odd rule"""
         yield from self.paint_path(
             self.graphicstate, True, True, True, self.curpath, self.ncs, self.scs
         )
         self.curpath = []
 
-    def do_b(self) -> Iterator[LTComponent]:
+    def do_b(self) -> Iterator[Item]:
         """Close, fill, and stroke path using nonzero winding number rule"""
         self.do_h()
         yield from self.do_B()
 
-    def do_b_a(self) -> Iterator[LTComponent]:
+    def do_b_a(self) -> Iterator[Item]:
         """Close, fill, and stroke path using even-odd rule"""
         self.do_h()
         yield from self.do_B_a()
@@ -847,7 +847,7 @@ class PageInterpreter:
         )
         self.textstate.linematrix = (0, 0)
 
-    def do_TJ(self, seq: PDFStackT) -> Iterator[LTComponent]:
+    def do_TJ(self, seq: PDFStackT) -> Iterator[Item]:
         """Show text, allowing individual glyph positioning"""
         if self.textstate.font is None:
             if settings.STRICT:
@@ -864,11 +864,11 @@ class PageInterpreter:
             self.scs,
         )
 
-    def do_Tj(self, s: PDFStackT) -> Iterator[LTComponent]:
+    def do_Tj(self, s: PDFStackT) -> Iterator[Item]:
         """Show text"""
         yield from self.do_TJ([s])
 
-    def do__q(self, s: PDFStackT) -> Iterator[LTComponent]:
+    def do__q(self, s: PDFStackT) -> Iterator[Item]:
         """Move to next line and show text
 
         The ' (single quote) operator.
@@ -876,9 +876,7 @@ class PageInterpreter:
         self.do_T_a()
         yield from self.do_TJ([s])
 
-    def do__w(
-        self, aw: PDFStackT, ac: PDFStackT, s: PDFStackT
-    ) -> Iterator[LTComponent]:
+    def do__w(self, aw: PDFStackT, ac: PDFStackT, s: PDFStackT) -> Iterator[Item]:
         """Set word and character spacing, move to next line, and show text
 
         The " (double quote) operator.
@@ -893,15 +891,16 @@ class PageInterpreter:
     def do_ID(self) -> None:
         """Begin inline image data"""
 
-    def do_EI(self, obj: PDFStackT) -> Iterator[LTComponent]:
+    def do_EI(self, obj: PDFStackT) -> Iterator[Item]:
         """End inline image object"""
         if isinstance(obj, ContentStream) and "W" in obj and "H" in obj:
             iobjid = str(id(obj))
-            fig = LTFigure(iobjid, (0, 0, 1, 1), self.ctm)
-            fig.add(self.render_image(iobjid, obj, fig))
+            fig = LTFigure(name=iobjid, bbox=(0, 0, 1, 1), matrix=self.ctm)
+            assert fig.objs is not None
+            fig.objs.append(self.render_image(iobjid, obj, fig))
             yield fig
 
-    def do_Do(self, xobjid_arg: PDFStackT) -> Iterator[LTComponent]:
+    def do_Do(self, xobjid_arg: PDFStackT) -> Iterator[Item]:
         """Invoke named XObject"""
         xobjid = literal_name(xobjid_arg)
         try:
@@ -926,13 +925,14 @@ class PageInterpreter:
             else:
                 interpreter = PageInterpreter(self.page, contents=[xobj])
             interpreter.ctm = mult_matrix(matrix, self.ctm)
-            fig = LTFigure(xobjid, bbox, interpreter.ctm)
-            for item in interpreter:
-                fig.add(item)
+            fig = LTFigure(name=xobjid, bbox=bbox, matrix=interpreter.ctm)
+            assert fig.objs is not None
+            fig.objs.extend(interpreter)
             yield fig
         elif subtype is LITERAL_IMAGE and "Width" in xobj and "Height" in xobj:
-            fig = LTFigure(xobjid, (0, 0, 1, 1), self.ctm)
-            fig.add(self.render_image(xobjid, xobj, fig))
+            fig = LTFigure(name=xobjid, bbox=(0, 0, 1, 1), matrix=self.ctm)
+            assert fig.objs is not None
+            fig.objs.append(self.render_image(xobjid, xobj, fig))
             yield fig
         else:
             # unsupported xobject type.
@@ -954,13 +954,11 @@ class PageInterpreter:
         self.cur_tag = None
         self.cur_mcid = None
 
-    def render_image(
-        self, name: str, stream: ContentStream, figure: LTFigure
-    ) -> LTImage:
+    def render_image(self, name: str, stream: ContentStream, figure: Item) -> Item:
         return LTImage(
-            name,
-            stream,
-            (figure.x0, figure.y0, figure.x1, figure.y1),
+            name=name,
+            stream=stream,
+            bbox=figure.bbox,
         )
 
     def paint_path(
@@ -972,7 +970,7 @@ class PageInterpreter:
         path: Sequence[PathSegment],
         ncs: Optional[PDFColorSpace] = None,
         scs: Optional[PDFColorSpace] = None,
-    ) -> Iterator[LTComponent]:
+    ) -> Iterator[Item]:
         """Paint paths described in section 4.4 of the PDF reference manual"""
         shape = "".join(x[0] for x in path)
 
@@ -1025,14 +1023,14 @@ class PageInterpreter:
                 # Note: 'ml', in conditional above, is a frequent anomaly
                 # that we want to support.
                 line = LTLine(
-                    gstate.linewidth,
-                    pts[0],
-                    pts[1],
-                    stroke,
-                    fill,
-                    evenodd,
-                    gstate.scolor,
-                    gstate.ncolor,
+                    linewidth=gstate.linewidth,
+                    p0=pts[0],
+                    p1=pts[1],
+                    stroke=stroke,
+                    fill=fill,
+                    evenodd=evenodd,
+                    stroking_color=gstate.scolor,
+                    non_stroking_color=gstate.ncolor,
                     original_path=transformed_path,
                     dashing_style=gstate.dash,
                     ncs=ncs,
@@ -1049,47 +1047,47 @@ class PageInterpreter:
                 ) or (y0 == y1 and x1 == x2 and y2 == y3 and x3 == x0)
                 if is_closed_loop and has_square_coordinates:
                     rect = LTRect(
-                        gstate.linewidth,
-                        (*pts[0], *pts[2]),
-                        stroke,
-                        fill,
-                        evenodd,
-                        gstate.scolor,
-                        gstate.ncolor,
-                        transformed_path,
-                        gstate.dash,
-                        ncs,
-                        scs,
+                        linewidth=gstate.linewidth,
+                        bbox=(*pts[0], *pts[2]),
+                        stroke=stroke,
+                        fill=fill,
+                        evenodd=evenodd,
+                        stroking_color=gstate.scolor,
+                        non_stroking_color=gstate.ncolor,
+                        original_path=transformed_path,
+                        dashing_style=gstate.dash,
+                        ncs=ncs,
+                        scs=scs,
                     )
                     yield rect
                 else:
                     curve = LTCurve(
-                        gstate.linewidth,
-                        pts,
-                        stroke,
-                        fill,
-                        evenodd,
-                        gstate.scolor,
-                        gstate.ncolor,
-                        transformed_path,
-                        gstate.dash,
-                        ncs,
-                        scs,
+                        linewidth=gstate.linewidth,
+                        pts=pts,
+                        stroke=stroke,
+                        fill=fill,
+                        evenodd=evenodd,
+                        stroking_color=gstate.scolor,
+                        non_stroking_color=gstate.ncolor,
+                        original_path=transformed_path,
+                        dashing_style=gstate.dash,
+                        ncs=ncs,
+                        scs=scs,
                     )
                     yield curve
             else:
                 curve = LTCurve(
-                    gstate.linewidth,
-                    pts,
-                    stroke,
-                    fill,
-                    evenodd,
-                    gstate.scolor,
-                    gstate.ncolor,
-                    transformed_path,
-                    gstate.dash,
-                    ncs,
-                    scs,
+                    linewidth=gstate.linewidth,
+                    pts=pts,
+                    stroke=stroke,
+                    fill=fill,
+                    evenodd=evenodd,
+                    stroking_color=gstate.scolor,
+                    non_stroking_color=gstate.ncolor,
+                    original_path=transformed_path,
+                    dashing_style=gstate.dash,
+                    ncs=ncs,
+                    scs=scs,
                 )
                 yield curve
 
@@ -1104,7 +1102,7 @@ class PageInterpreter:
         ncs: PDFColorSpace,
         graphicstate: PDFGraphicState,
         scs: Optional[PDFColorSpace] = None,
-    ) -> LTChar:
+    ) -> Item:
         try:
             text = font.to_unichr(cid)
             assert isinstance(text, str), str(type(text))
@@ -1113,19 +1111,19 @@ class PageInterpreter:
         textwidth = font.char_width(cid)
         textdisp = font.char_disp(cid)
         item = LTChar(
-            matrix,
-            font,
-            fontsize,
-            scaling,
-            rise,
-            text,
-            textwidth,
-            textdisp,
-            ncs,
-            graphicstate,
-            scs,
-            graphicstate.scolor,
-            graphicstate.ncolor,
+            matrix=matrix,
+            font=font,
+            fontsize=fontsize,
+            scaling=scaling,
+            rise=rise,
+            text=text,
+            textwidth=textwidth,
+            textdisp=textdisp,
+            ncs=ncs,
+            graphicstate=graphicstate,
+            scs=scs,
+            stroking_color=graphicstate.scolor,
+            non_stroking_color=graphicstate.ncolor,
         )
         return item
 
@@ -1136,7 +1134,7 @@ class PageInterpreter:
         ncs: PDFColorSpace,
         graphicstate: "PDFGraphicState",
         scs: Optional[PDFColorSpace] = None,
-    ) -> Iterator[LTComponent]:
+    ) -> Iterator[Item]:
         assert self.ctm is not None
         matrix = mult_matrix(textstate.matrix, self.ctm)
         font = textstate.font
@@ -1198,7 +1196,7 @@ class PageInterpreter:
         ncs: PDFColorSpace,
         graphicstate: "PDFGraphicState",
         scs: Optional[PDFColorSpace] = None,
-    ) -> Tuple[Point, List[LTChar]]:
+    ) -> Tuple[Point, List[Item]]:
         (x, y) = pos
         needcharspace = False
         chars = []
@@ -1225,6 +1223,7 @@ class PageInterpreter:
                         graphicstate,
                         scs,
                     )
+                    assert item.adv is not None
                     x += item.adv
                     chars.append(item)
                     if cid == 32 and wordspace:
@@ -1247,7 +1246,7 @@ class PageInterpreter:
         ncs: PDFColorSpace,
         graphicstate: "PDFGraphicState",
         scs: Optional[PDFColorSpace] = None,
-    ) -> Tuple[Point, List[LTChar]]:
+    ) -> Tuple[Point, List[Item]]:
         (x, y) = pos
         needcharspace = False
         chars = []
@@ -1275,6 +1274,7 @@ class PageInterpreter:
                         scs,
                     )
                     chars.append(item)
+                    assert item.adv is not None
                     y += item.adv
                     if cid == 32 and wordspace:
                         y += wordspace

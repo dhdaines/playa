@@ -45,16 +45,18 @@ def test_open(path: Path) -> None:
                     layout = agg.result
                     if layout is not None:
                         for ltitem in layout:
-                            miner.append((type(ltitem).__name__, ltitem.bbox))
+                            itype = type(ltitem).__name__.lower()[2:]
+                            miner.append((itype, ltitem.bbox))
             except Exception:
                 continue
 
-        itor = iter(miner)
+        beach = []
         with playa.open(path, password=password) as doc:
             for page in doc.pages:
                 for item in page.layout:
-                    thingy = (type(item).__name__, item.bbox)
-                    assert thingy == next(itor)
+                    beach.append((item.itype, item.bbox))
+
+        assert beach == miner
 
 
 def test_inline_data() -> None:
