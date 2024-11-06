@@ -45,7 +45,7 @@ from playa.parser import (
     LIT,
     ContentStreamParser,
     PDFParser,
-    PSBaseParserToken,
+    Token,
     PSLiteral,
     literal_name,
 )
@@ -836,7 +836,7 @@ class PDFDocument:
         return self.parser
 
     @property
-    def tokens(self) -> Iterator[Tuple[int, PSBaseParserToken]]:
+    def tokens(self) -> Iterator[Tuple[int, Token]]:
         """Iterate over (position, token) tuples, raising StopIteration at EOF."""
         # FIXME: Should create a new parser
         self.parser.seek(0)

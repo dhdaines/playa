@@ -26,7 +26,7 @@ from playa.exceptions import (
     PDFUnicodeNotDefined,
 )
 from playa.font import Font
-from playa.parser import Parser, PDFObject, PSBaseParserToken
+from playa.parser import Parser, PDFObject, Token
 from playa.pdftypes import (
     KWD,
     LIT,
@@ -275,7 +275,7 @@ class ContentParser(Parser):
             log.debug("ContentParser has no content, returning nothing")
             super().__init__(b"")
 
-    def nexttoken(self) -> Tuple[int, PSBaseParserToken]:
+    def nexttoken(self) -> Tuple[int, Token]:
         while True:
             try:
                 return super().nexttoken()

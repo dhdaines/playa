@@ -74,7 +74,7 @@ ESC_STRING = {
 }
 
 
-PSBaseParserToken = Union[float, bool, PSLiteral, PSKeyword, bytes]
+Token = Union[float, bool, PSLiteral, PSKeyword, bytes]
 LEXER = re.compile(
     rb"""(?:
       (?P<whitespace> \s+)
@@ -115,7 +115,7 @@ class Lexer:
         self.data = data
         self.pos = 0
         self.end = len(data)
-        self._tokens: Deque[Tuple[int, PSBaseParserToken]] = deque()
+        self._tokens: Deque[Tuple[int, Token]] = deque()
 
     def seek(self, pos: int) -> None:
         """Seek to a position and reinitialize parser state."""
@@ -188,11 +188,11 @@ class Lexer:
             return result
         return (-1, b"")
 
-    def __iter__(self) -> Iterator[Tuple[int, PSBaseParserToken]]:
+    def __iter__(self) -> Iterator[Tuple[int, Token]]:
         """Iterate over tokens."""
         return self
 
-    def __next__(self) -> Tuple[int, PSBaseParserToken]:
+    def __next__(self) -> Tuple[int, Token]:
         """Get the next token in iteration, raising StopIteration when
         done."""
         while True:
@@ -236,7 +236,7 @@ class Lexer:
         else:
             return (self._curtokenpos, KWD(self._curtoken))
 
-    def _parse_endstr(self, start: bytes, pos: int) -> Tuple[int, PSBaseParserToken]:
+    def _parse_endstr(self, start: bytes, pos: int) -> Tuple[int, Token]:
         """Parse the remainder of a string."""
         # Handle nonsense CRLF conversion in strings (PDF 1.7, p.15)
         parts = [EOLR.sub(b"\n", start)]
@@ -445,7 +445,7 @@ class Parser:
         return self
 
     @property
-    def tokens(self) -> Iterator[Tuple[int, PSBaseParserToken]]:
+    def tokens(self) -> Iterator[Tuple[int, Token]]:
         """Iterate over (position, token) tuples, raising StopIteration at EOF."""
         return self._lexer
 
@@ -485,7 +485,7 @@ class Parser:
         end-of-stream marker."""
         return self._lexer.get_inline_data(target)
 
-    def nexttoken(self) -> Tuple[int, PSBaseParserToken]:
+    def nexttoken(self) -> Tuple[int, Token]:
         """Get the next token in iteration, raising StopIteration when
         done."""
         return next(self._lexer)
