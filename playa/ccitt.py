@@ -25,6 +25,7 @@ from typing import (
     cast,
 )
 
+
 def get_bytes(data: bytes) -> Iterator[int]:
     yield from data
 
@@ -83,14 +84,18 @@ class BitParser:
 class CCITTException(Exception):
     pass
 
+
 class EOFB(CCITTException):
     pass
+
 
 class InvalidData(CCITTException):
     pass
 
+
 class ByteSkip(CCITTException):
     pass
+
 
 class CCITTG4Parser(BitParser):
     MODE = [None, None]

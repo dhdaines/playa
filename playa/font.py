@@ -103,8 +103,7 @@ class FontMetricsDB:
         return FONT_METRICS[fontname]
 
 
-# int here means that we're not extending Parser with additional types.
-class Type1FontHeaderParser(Parser[int]):
+class Type1FontHeaderParser(Parser):
     KEYWORD_BEGIN = KWD(b"begin")
     KEYWORD_END = KWD(b"end")
     KEYWORD_DEF = KWD(b"def")

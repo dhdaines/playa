@@ -272,7 +272,7 @@ class CMapDB:
         return cls._umap_cache[name][vertical]
 
 
-class CMapParser(Parser[PSKeyword]):
+class CMapParser(Parser):
     def __init__(self, cmap: CMapBase, data: bytes) -> None:
         super().__init__(data)
         self.cmap = cmap

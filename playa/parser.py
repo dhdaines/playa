@@ -8,12 +8,10 @@ from typing import (
     TYPE_CHECKING,
     Deque,
     Dict,
-    Generic,
     Iterator,
     List,
     Optional,
     Tuple,
-    TypeVar,
     Union,
 )
 
@@ -282,19 +280,23 @@ class Lexer:
         return (self._curtokenpos, b"".join(parts))
 
 
-# Stack slots may by occupied by any of:
-#  * the name of a literal
-#  * the PSBaseParserToken types
-#  * list (via KEYWORD_ARRAY)
-#  * dict (via KEYWORD_DICT)
-#  * subclass-specific extensions (e.g. PDFStream, PDFObjRef) via ExtraT
-ExtraT = TypeVar("ExtraT")
-PSStackType = Union[str, float, bool, PSLiteral, bytes, List, Dict, ExtraT]
-PSStackEntry = Tuple[int, PSStackType[ExtraT]]
-PDFStackT = PSStackType[ContentStream]  # FIXME: Not entirely correct here
+PDFObject = Union[
+    str,
+    float,
+    bool,
+    PSLiteral,
+    bytes,
+    List,
+    Dict,
+    ContentStream,
+    ObjRef,
+    PSKeyword,
+    None,
+]
+StackEntry = Tuple[int, PDFObject]
 
 
-class Parser(Generic[ExtraT]):
+class Parser:
     """Basic parser for PDF objects in a bytes-like object."""
 
     def __init__(self, data: Union[bytes, mmap.mmap]) -> None:
@@ -308,28 +310,28 @@ class Parser(Generic[ExtraT]):
 
     def reset(self) -> None:
         """Reset parser state."""
-        self.context: List[Tuple[int, Optional[str], List[PSStackEntry[ExtraT]]]] = []
+        self.context: List[Tuple[int, Optional[str], List[StackEntry]]] = []
         self.curtype: Optional[str] = None
-        self.curstack: List[PSStackEntry[ExtraT]] = []
-        self.results: List[PSStackEntry[ExtraT]] = []
+        self.curstack: List[StackEntry] = []
+        self.results: List[StackEntry] = []
 
-    def push(self, *objs: PSStackEntry[ExtraT]) -> None:
+    def push(self, *objs: StackEntry) -> None:
         """Push some objects onto the stack."""
         self.curstack.extend(objs)
 
-    def pop(self, n: int) -> List[PSStackEntry[ExtraT]]:
+    def pop(self, n: int) -> List[StackEntry]:
         """Pop some objects off the stack."""
         objs = self.curstack[-n:]
         self.curstack[-n:] = []
         return objs
 
-    def popall(self) -> List[PSStackEntry[ExtraT]]:
+    def popall(self) -> List[StackEntry]:
         """Pop all the things off the stack."""
         objs = self.curstack
         self.curstack = []
         return objs
 
-    def add_results(self, *objs: PSStackEntry[ExtraT]) -> None:
+    def add_results(self, *objs: StackEntry) -> None:
         """Move some objects to the output."""
         try:
             log.debug("add_results: %r", objs)
@@ -343,7 +345,7 @@ class Parser(Generic[ExtraT]):
         (self.curtype, self.curstack) = (type, [])
         log.debug("start_type: pos=%r, type=%r", pos, type)
 
-    def end_type(self, type: str) -> Tuple[int, List[PSStackType[ExtraT]]]:
+    def end_type(self, type: str) -> Tuple[int, List[PDFObject]]:
         """End a composite object (array, dict, etc)."""
         if self.curtype != type:
             raise TypeError(f"Type mismatch: {self.curtype!r} != {type!r}")
@@ -360,7 +362,7 @@ class Parser(Generic[ExtraT]):
         """Add objects from stack to output (or, actually, not)."""
         return
 
-    def __next__(self) -> PSStackEntry[ExtraT]:
+    def __next__(self) -> StackEntry:
         """Return the next object, raising StopIteration at EOF.
 
         Arrays and dictionaries are represented as Python lists and
@@ -438,7 +440,7 @@ class Parser(Generic[ExtraT]):
             log.debug("__next__: (unprintable object) at %d", pos)
         return pos, obj
 
-    def __iter__(self) -> Iterator[PSStackEntry[ExtraT]]:
+    def __iter__(self) -> Iterator[StackEntry]:
         """Iterate over (position, object) tuples, raising StopIteration at EOF."""
         return self
 
@@ -489,7 +491,7 @@ class Parser(Generic[ExtraT]):
         return next(self._lexer)
 
 
-class PDFParser(Parser[Union[PSKeyword, ContentStream, ObjRef, None]]):
+class PDFParser(Parser):
     """PDFParser fetches PDF objects from a file stream.
     It holds a weak reference to the document in order to
     resolve indirect references.  If the document is deleted
