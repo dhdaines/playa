@@ -10,6 +10,7 @@ from typing import (
     Dict,
     Iterator,
     List,
+    NamedTuple,
     Optional,
     Tuple,
     Union,
@@ -297,8 +298,13 @@ StackEntry = Tuple[int, PDFObject]
 
 
 class Parser:
-    """Basic parser for PDF objects in a bytes-like object."""
+    """Basic parser for PDF objects in a bytes-like object.
 
+    While the `Lexer` simply returns tokens (FIXME: it actually also
+    parses string objects, which should really be done here), the
+    `Parser` recognizes PDF objects and converts them to Python
+    objects for ease of use.
+    """
     def __init__(self, data: Union[bytes, mmap.mmap]) -> None:
         self.reinit(data)
 
@@ -427,6 +433,7 @@ class Parser:
                     token,
                     self.curstack,
                 )
+                # FIXME: WTF?
                 self.do_keyword(pos, token)
                 raise PDFSyntaxError(f"unknown token {token!r}")
             if self.context:
@@ -453,7 +460,6 @@ class Parser:
     def seek(self, pos: int) -> None:
         """Seek to a position and reset parser state."""
         self._lexer.seek(pos)
-        self.reset()
 
     def tell(self) -> int:
         """Get the current position in the file."""
@@ -491,14 +497,26 @@ class Parser:
         return next(self._lexer)
 
 
-class PDFParser(Parser):
-    """PDFParser fetches PDF objects from a file stream.
-    It holds a weak reference to the document in order to
-    resolve indirect references.  If the document is deleted
-    then this will obviously no longer work.
+class IndirectObject(NamedTuple):
+    objid: int
+    genno: int
+    obj: PDFObject
+
+
+class ObjectParser(Parser):
+    """ObjectParser fetches indirect objects from a data buffer.  It
+    holds a weak reference to the document in order to resolve
+    indirect references.  If the document is deleted then this will
+    obviously no longer work.
+
+    Note that according to PDF 1.7 sec 7.5.3, "The body of a PDF file
+    shall consist of a sequence of indirect objects representing the
+    contents of a document."  Therefore unlike the base `Parser`,
+    `ObjectParser` returns *only* indrect objects and not bare keywords,
+    strings, numbers, etc.
 
     Typical usage:
-      parser = PDFParser(fp, doc)
+      parser = ObjectParser(fp, doc)
       parser.seek(offset)
       for object in parser:
           ...
@@ -517,7 +535,8 @@ class PDFParser(Parser):
 
         elif token is KEYWORD_ENDOBJ:
             # objid genno "obj" ... and the object itself
-            self.add_results(*self.pop(4))
+            (pos, objid), (_, genno), _, (_, obj) = self.pop(4)
+            self.add_results((pos, IndirectObject(objid, genno, obj)))
 
         elif token is KEYWORD_NULL:
             # null object
@@ -536,41 +555,43 @@ class PDFParser(Parser):
             # stream dictionary, which precedes "stream"
             ((_, dic),) = self.pop(1)
             dic = dict_value(dic)
-            objlen = 0
-            if not self.fallback:
-                try:
-                    objlen = int_value(dic["Length"])
-                except KeyError:
-                    if settings.STRICT:
-                        raise PDFSyntaxError("/Length is undefined: %r" % dic)
+            stream_length = 0
+            if "Length" in dic:
+                stream_length = int_value(dic["Length"])
+            else:
+                log.warning("/Length is undefined in stream: %r" % (dic,))
             # back up and read the entire line including 'stream' as
             # the data starts after the trailing newline
             self.seek(pos)
             try:
                 _, line = next(self.iter_lines())  # 'stream\n'
             except StopIteration:
-                if settings.STRICT:
-                    raise PDFSyntaxError("Unexpected EOF")
+                log.warning("Unexpected EOF when reading stream token")
                 return
             pos = self.tell()
-            data = self.read(objlen)
+            data = self.read(stream_length)
+            # 7.3.8.1 There should be an end-of-line marker after the
+            # data and before endstream; this marker shall not be
+            # included in the stream length.
             # FIXME: This is ... not really the right way to do this.
+            endstream = -1
             for linepos, line in self.iter_lines():
-                if b"endstream" in line:
-                    i = line.index(b"endstream")
-                    objlen += i
-                    if self.fallback:
-                        data += line[:i]
+                log.debug("line at %d: %r", linepos, line)
+                endstream = line.find(b"endstream")
+                if endstream != -1:
+                    data += line[:endstream]
                     break
-                objlen += len(line)
-                if self.fallback:
-                    data += line
-            self.seek(pos + objlen)
+                data += line
+            if endstream == -1:
+                log.warning("Unexpected EOF when reading endstream token")
+                return
+            self.seek(linepos + endstream + len(b"endstream"))
             # XXX limit objlen not to exceed object boundary
             log.debug(
-                "ContentStream: pos=%d, objlen=%d, dic=%r, data=%r...",
+                "ContentStream: pos=%d, stream_length=%d, len(data)=%d, dic=%r, data=%r...",
                 pos,
-                objlen,
+                stream_length,
+                len(data),
                 dic,
                 data[:10],
             )
@@ -579,13 +600,12 @@ class PDFParser(Parser):
                 raise RuntimeError("Document no longer exists!")
             stream = ContentStream(dic, bytes(data), doc.decipher)
             self.push((pos, stream))
-
         else:
             # others
             self.push((pos, token))
 
 
-class ContentStreamParser(PDFParser):
+class ContentStreamParser(ObjectParser):
     """StreamParser is used to parse PDF content streams and object
     streams.  These have slightly different rules for how objects are
     described than the top-level PDF file contents.
@@ -616,7 +636,7 @@ class ContentStreamParser(PDFParser):
             if settings.STRICT:
                 # See PDF Spec 3.4.6: Only the object values are stored in the
                 # stream; the obj and endobj keywords are not used.
-                raise PDFSyntaxError("Keyword endobj found in stream")
+                raise PDFSyntaxError(f"Keyword {token!r} found in stream")
             return
 
         # others
