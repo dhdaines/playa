@@ -799,6 +799,10 @@ class PDFDocument:
         if self.catalog.get("Type") is not LITERAL_CATALOG:
             if settings.STRICT:
                 raise PDFSyntaxError("Catalog not found!")
+        if "Version" in self.catalog:
+            log.debug("Using PDF version %r from catalog instead of %r from header",
+                      self.catalog["Version"], self.pdf_version)
+            self.pdf_version = self.catalog["Version"]
 
     def _initialize_password(self, password: str = "") -> None:
         """Initialize the decryption handler with a given password, if any.

@@ -585,6 +585,7 @@ class ObjectParser(Parser):
             if endstream == -1:
                 log.warning("Unexpected EOF when reading endstream token")
                 return
+            # Skip past the "endstream" keyword
             self.seek(linepos + endstream + len(b"endstream"))
             # XXX limit objlen not to exceed object boundary
             log.debug(
