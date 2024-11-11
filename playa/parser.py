@@ -49,6 +49,7 @@ KEYWORD_R = KWD(b"R")
 KEYWORD_NULL = KWD(b"null")
 KEYWORD_ENDOBJ = KWD(b"endobj")
 KEYWORD_STREAM = KWD(b"stream")
+KEYWORD_ENDSTREAM = KWD(b"endstream")
 KEYWORD_XREF = KWD(b"xref")
 KEYWORD_STARTXREF = KWD(b"startxref")
 KEYWORD_OBJ = KWD(b"obj")
@@ -140,13 +141,18 @@ class Lexer:
         r"""Iterate over lines that end either with \r, \n, or \r\n,
         starting at the current position."""
         while self.pos < self.end:
-            linepos = self.pos
-            m = EOLR.search(self.data, self.pos)
-            if m is None:
-                self.pos = self.end
-            else:
-                self.pos = m.end()
-            yield (linepos, self.data[linepos : self.pos])
+            yield self.nextline()
+
+    def nextline(self) -> Tuple[int, bytes]:
+        r"""Get the next line ending either with \r, \n, or \r\n,
+        starting at the current position."""
+        linepos = self.pos
+        m = EOLR.search(self.data, self.pos)
+        if m is None:
+            self.pos = self.end
+        else:
+            self.pos = m.end()
+        return (linepos, self.data[linepos : self.pos])
 
     def reverse_iter_lines(self) -> Iterator[bytes]:
         """Iterate backwards over lines starting at the current position.
@@ -289,7 +295,6 @@ PDFObject = Union[
     bytes,
     List,
     Dict,
-    ContentStream,
     ObjRef,
     PSKeyword,
     None,
@@ -389,15 +394,11 @@ class ObjectParser:
                     try:
                         _pos, _genno = self.stack.pop()
                         _pos, objid = self.stack.pop()
-                        objid = int(objid)  # type: ignore
-                    except TypeError:
-                        raise PDFSyntaxError(
-                            "Expected numeric object id in indirect object reference"
-                        )
                     except ValueError:
                         raise PDFSyntaxError(
                             "Expected generation and object id in indirect object reference"
                         )
+                    objid = int_value(objid)
                     obj = ObjRef(self.doc, objid)
                     self.stack.append((pos, obj))
             else:
@@ -416,11 +417,39 @@ class ObjectParser:
             context.append(last)
         raise PDFSyntaxError(f"Unmatched end token {token!r}")
 
+    # Delegation follows
+    def seek(self, pos: int) -> None:
+        """Seek to a position."""
+        self._lexer.seek(pos)
+
+    def tell(self) -> int:
+        """Get the current position in the file."""
+        return self._lexer.tell()
+
+    def read(self, objlen: int) -> bytes:
+        """Read data from a specified position, moving the current
+        position to the end of this data."""
+        return self._lexer.read(objlen)
+
+    def get_inline_data(self, target: bytes = b"EI") -> Tuple[int, bytes]:
+        """Get the data for an inline image up to the target
+        end-of-stream marker."""
+        return self._lexer.get_inline_data(target)
+
+    def nextline(self) -> Tuple[int, bytes]:
+        """Read (and do not parse) next line from underlying data."""
+        return self._lexer.nextline()
+
+    def nexttoken(self) -> Tuple[int, Token]:
+        """Get the next token in iteration, raising StopIteration when
+        done."""
+        return next(self._lexer)
+
 
 class IndirectObject(NamedTuple):
     objid: int
     genno: int
-    obj: PDFObject
+    obj: Union[PDFObject, ContentStream]
 
 
 class IndirectObjectParser:
@@ -431,83 +460,117 @@ class IndirectObjectParser:
 
     Note that according to PDF 1.7 sec 7.5.3, "The body of a PDF file
     shall consist of a sequence of indirect objects representing the
-    contents of a document."  Therefore unlike the base `Parser`,
+    contents of a document."  Therefore unlike the base `ObjectParser`,
     `IndirectObjectParser` returns *only* indrect objects and not bare
     keywords, strings, numbers, etc.
 
+    However, unlike `ObjectParser`, it will also read and return
+    `ContentStream`s, as these *must* be indirect objects by definition.
+
     Typical usage:
       parser = IndirectObjectParser(fp, doc)
-      parser.seek(offset)
       for object in parser:
           ...
 
     """
 
-    def __init__(self, data: Union[bytes, mmap.mmap], doc: "PDFDocument") -> None:
-        super().__init__(data, doc)
+    def __init__(
+        self,
+        data: Union[bytes, mmap.mmap],
+        doc: Union["PDFDocument", None] = None,
+        strict: bool = False,
+    ) -> None:
+        self._parser = ObjectParser(data, doc)
+        self._objq: Deque[Tuple[int, Union[PDFObject, ContentStream]]] = deque(
+            [], 3
+        )  # objid genno obj (skipping KEYWORD_OBJ)
+        self.doc = None if doc is None else weakref.ref(doc)
+        self.strict = strict
 
-    def do_keyword(
-        self, pos: int, token: PSKeyword
-    ) -> Union[None, Tuple[int, IndirectObject]]:
-        """Handles PDF-related keywords."""
-        if token is KEYWORD_ENDOBJ:
-            # objid genno "obj" ... and the object itself
-            (_, obj) = self.stack.pop()
-            (_, genno) = self.stack.pop()
-            (pos, objid) = self.stack.pop()
-            assert isinstance(objid, int), "Object number {objid!r} is not int"
-            assert isinstance(genno, int), "Generation number {objid!r} is not int"
-            return pos, IndirectObject(objid, genno, obj)
-        elif token is KEYWORD_STREAM:
-            # stream dictionary, which precedes "stream"
-            (_, dic) = self.stack.pop()
-            dic = dict_value(dic)
-            stream_length = 0
-            if "Length" in dic:
-                stream_length = int_value(dic["Length"])
+    def __iter__(self) -> Iterator[Tuple[int, IndirectObject]]:
+        return self
+
+    def __next__(self) -> Tuple[int, IndirectObject]:
+        obj: Union[PDFObject, ContentStream]
+        while True:
+            pos, obj = next(self._parser)
+            if obj is KEYWORD_OBJ:
+                pass
+            elif obj is KEYWORD_ENDOBJ:
+                log.debug("endobj: %r", self._objq)
+                # objid genno "obj" ... and the object itself
+                (_, obj) = self._objq.pop()
+                (_, genno) = self._objq.pop()
+                (pos, objid) = self._objq.pop()
+                objid = int_value(objid)
+                genno = int_value(genno)
+                return pos, IndirectObject(objid, genno, obj)
+            elif obj is KEYWORD_STREAM:
+                log.debug("stream: %r", self._objq)
+                # PDF 1.7 sec 7.3.8.1: A stream shall consist of a
+                # dictionary followed by zero or more bytes bracketed
+                # between the keywords `stream` (followed by newline)
+                # and `endstream`
+                (_, dic) = self._objq.pop()
+                if not isinstance(dic, dict):
+                    # sec 7.3.8.1: the stream dictionary shall be a
+                    # direct object.
+                    raise PDFSyntaxError("Incorrect type for stream dictionary %r", dic)
+                try:
+                    # sec 7.3.8.2: Every stream dictionary shall have
+                    # a Length entry that indicates how many bytes of
+                    # the PDF file are used for the stream’s data
+                    objlen = int_value(dic["Length"])
+                except KeyError:
+                    log.warning("/Length is undefined in stream dictionary %r", dic)
+                    objlen = 0
+                # sec 7.3.8.1: The keyword `stream` that follows the stream
+                # dictionary shall be followed by an end-of-line
+                # marker consisting of either a CARRIAGE RETURN and a
+                # LINE FEED or just a LINE FEED, and not by a CARRIAGE
+                # RETURN alone.
+                self._parser.seek(pos)
+                _, line = self._parser.nextline()
+                assert line.strip() == b"stream"
+                pos = self._parser.tell()
+                # Because PDFs do not follow the spec, we will read
+                # *at least* the specified number of bytes, which
+                # could be zero (particularly if not specified!), up
+                # until the "endstream" tag.  In most cases it is
+                # expected that this extra data will be included in
+                # the stream anyway, but for encrypted streams you
+                # probably don't want that (LOL @ PDF "security")
+                data = self._parser.read(objlen)
+                # sec 7.3.8.1: There should be an end-of-line
+                # marker after the data and before endstream; this
+                # marker shall not be included in the stream length.
+                linepos, line = self._parser.nextline()
+                log.debug("After stream data: %r %r", linepos, line)
+                if self.strict:
+                    log.warning(
+                        "Expected a newline between end of stream and 'endstream', got %r",
+                        line,
+                    )
+                else:
+                    # Reuse that line and read more if necessary
+                    while True:
+                        if b"endstream" in line:
+                            idx = line.index(b"endstream")
+                            objlen += idx
+                            data += line[:idx]
+                            self._parser.seek(pos + objlen)
+                            break
+                        objlen += len(line)
+                        data += line
+                        linepos, line = self._parser.nextline()
+                        log.debug("After stream data: %r %r", linepos, line)
+                doc = None if self.doc is None else self.doc()
+                stream = ContentStream(
+                    dic, bytes(data), None if doc is None else doc.decipher
+                )
+                self._objq.append((pos, stream))
+            elif obj is KEYWORD_ENDSTREAM:
+                if not isinstance(self._objq[-1][1], ContentStream):
+                    log.warning("Got endstream without a stream, ignoring!")
             else:
-                log.warning("/Length is undefined in stream: %r" % (dic,))
-            # back up and read the entire line including 'stream' as
-            # the data starts after the trailing newline
-            self.seek(pos)
-            try:
-                _, line = next(self.iter_lines())  # 'stream\n'
-            except StopIteration:
-                log.warning("Unexpected EOF when reading stream token")
-                return
-            pos = self.tell()
-            data = self.read(stream_length)
-            # 7.3.8.1 There should be an end-of-line marker after the
-            # data and before endstream; this marker shall not be
-            # included in the stream length.
-            # FIXME: This is ... not really the right way to do this.
-            endstream = -1
-            for linepos, line in self.iter_lines():
-                log.debug("line at %d: %r", linepos, line)
-                endstream = line.find(b"endstream")
-                if endstream != -1:
-                    data += line[:endstream]
-                    break
-                data += line
-            if endstream == -1:
-                log.warning("Unexpected EOF when reading endstream token")
-                return
-            # Skip past the "endstream" keyword
-            self.seek(linepos + endstream + len(b"endstream"))
-            # XXX limit objlen not to exceed object boundary
-            log.debug(
-                "ContentStream: pos=%d, stream_length=%d, len(data)=%d, dic=%r, data=%r...",
-                pos,
-                stream_length,
-                len(data),
-                dic,
-                data[:10],
-            )
-            doc = self.doc()
-            if doc is None:
-                raise RuntimeError("Document no longer exists!")
-            stream = ContentStream(dic, bytes(data), doc.decipher)
-            self.push((pos, stream))
-        else:
-            # others
-            self.push((pos, token))
+                self._objq.append((pos, obj))
