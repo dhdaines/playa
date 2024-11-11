@@ -80,6 +80,26 @@ ESC_STRING = {
 }
 
 
+def reverse_iter_lines(buffer: bytes | mmap.mmap) -> Iterator[bytes]:
+    """Iterate backwards over lines starting at the current position.
+
+    This is used to locate the trailers at the end of a file.
+    """
+    pos = endline = len(buffer)
+    while True:
+        nidx = buffer.rfind(b"\n", 0, pos)
+        ridx = buffer.rfind(b"\r", 0, pos)
+        best = max(nidx, ridx)
+        if best == -1:
+            yield buffer[:endline]
+            break
+        yield buffer[best + 1 : endline]
+        endline = best + 1
+        pos = best
+        if pos > 0 and buffer[pos - 1 : pos + 1] == b"\r\n":
+            pos -= 1
+
+
 Token = Union[float, bool, PSLiteral, PSKeyword, bytes]
 LEXER = re.compile(
     rb"""(?:
@@ -117,9 +137,9 @@ SPC = re.compile(rb"\s")
 class Lexer:
     """Lexer for PDF data."""
 
-    def __init__(self, data: Union[bytes, mmap.mmap]) -> None:
+    def __init__(self, data: Union[bytes, mmap.mmap], pos: int = 0) -> None:
         self.data = data
-        self.pos = 0
+        self.pos = pos
         self.end = len(data)
         self._tokens: Deque[Tuple[int, Token]] = deque()
 
@@ -141,12 +161,6 @@ class Lexer:
         self.pos = min(pos + objlen, len(self.data))
         return self.data[pos : self.pos]
 
-    def iter_lines(self) -> Iterator[Tuple[int, bytes]]:
-        r"""Iterate over lines that end either with \r, \n, or \r\n,
-        starting at the current position."""
-        while self.pos < self.end:
-            yield self.nextline()
-
     def nextline(self) -> Tuple[int, bytes]:
         r"""Get the next line ending either with \r, \n, or \r\n,
         starting at the current position."""
@@ -157,25 +171,6 @@ class Lexer:
         else:
             self.pos = m.end()
         return (linepos, self.data[linepos : self.pos])
-
-    def reverse_iter_lines(self) -> Iterator[bytes]:
-        """Iterate backwards over lines starting at the current position.
-
-        This is used to locate the trailers at the end of a file.
-        """
-        endline = self.pos
-        while True:
-            nidx = self.data.rfind(b"\n", 0, self.pos)
-            ridx = self.data.rfind(b"\r", 0, self.pos)
-            best = max(nidx, ridx)
-            if best == -1:
-                yield self.data[:endline]
-                break
-            yield self.data[best + 1 : endline]
-            endline = best + 1
-            self.pos = best
-            if self.pos > 0 and self.data[self.pos - 1 : self.pos + 1] == b"\r\n":
-                self.pos -= 1
 
     def get_inline_data(
         self, target: bytes = b"EI", blocksize: int = -1
@@ -294,7 +289,7 @@ class Lexer:
 class InlineImage(ContentStream):
     """Specific class for inline images so the interpreter can
     recognize them (they are otherwise the same thing as content
-    streams). """
+    streams)."""
 
 
 PDFObject = Union[
@@ -308,6 +303,7 @@ PDFObject = Union[
     ObjRef,
     PSKeyword,
     InlineImage,
+    ContentStream,
     None,
 ]
 StackEntry = Tuple[int, PDFObject]
@@ -327,15 +323,22 @@ class ObjectParser:
     """
 
     def __init__(
-        self, data: Union[bytes, mmap.mmap], doc: Union["PDFDocument", None] = None
+        self,
+        data: Union[bytes, mmap.mmap],
+        doc: Union["PDFDocument", None] = None,
+        pos: int = 0,
     ) -> None:
-        self._lexer = Lexer(data)
+        self._lexer = Lexer(data, pos)
         self.stack: List[StackEntry] = []
         self.doc = None if doc is None else weakref.ref(doc)
 
     def newstream(self, data: Union[bytes, mmap.mmap]) -> None:
         """Continue parsing from a new data stream."""
         self._lexer = Lexer(data)
+
+    def reset(self) -> None:
+        """Clear internal parser state."""
+        del self.stack[:]
 
     def __iter__(self) -> Iterator[StackEntry]:
         """Iterate over (position, object) tuples, raising StopIteration at EOF."""
@@ -427,9 +430,7 @@ class ObjectParser:
                     error_msg = f"Invalid dictionary construct: {objs!r}"
                     raise TypeError(error_msg)
                 dic = {
-                    literal_name(k): v
-                    for (k, v) in choplist(2, objs)
-                    if v is not None
+                    literal_name(k): v for (k, v) in choplist(2, objs) if v is not None
                 }
                 eos = b"EI"
                 filter = dic.get("F")
@@ -461,7 +462,9 @@ class ObjectParser:
                     # There should be an "EI" here
                     (eipos, token) = self.nexttoken()
                     if token is not KEYWORD_EI:
-                        log.warning("Inline image not terminated with EI: got %r", token)
+                        log.warning(
+                            "Inline image not terminated with EI: got %r", token
+                        )
                 if eipos == -1:
                     raise PDFSyntaxError("End of inline stream %r not found" % eos)
                 obj = InlineImage(dic, data)
@@ -518,7 +521,7 @@ class ObjectParser:
 class IndirectObject(NamedTuple):
     objid: int
     genno: int
-    obj: Union[PDFObject, ContentStream]
+    obj: PDFObject
 
 
 class IndirectObjectParser:
@@ -550,9 +553,7 @@ class IndirectObjectParser:
         strict: bool = False,
     ) -> None:
         self._parser = ObjectParser(data, doc)
-        self._objq: Deque[Tuple[int, Union[PDFObject, ContentStream]]] = deque(
-            [], 3
-        )  # objid genno obj (skipping KEYWORD_OBJ)
+        self.trailer: List[Tuple[int, Union[PDFObject, ContentStream]]] = []
         self.doc = None if doc is None else weakref.ref(doc)
         self.strict = strict
 
@@ -566,21 +567,22 @@ class IndirectObjectParser:
             if obj is KEYWORD_OBJ:
                 pass
             elif obj is KEYWORD_ENDOBJ:
-                log.debug("endobj: %r", self._objq)
+                log.debug("endobj: %r", self.trailer)
                 # objid genno "obj" ... and the object itself
-                (_, obj) = self._objq.pop()
-                (_, genno) = self._objq.pop()
-                (pos, objid) = self._objq.pop()
+                (_, obj) = self.trailer.pop()
+                (_, genno) = self.trailer.pop()
+                (pos, objid) = self.trailer.pop()
+                del self.trailer[:]
                 objid = int_value(objid)
                 genno = int_value(genno)
                 return pos, IndirectObject(objid, genno, obj)
             elif obj is KEYWORD_STREAM:
-                log.debug("stream: %r", self._objq)
+                log.debug("stream: %r", self.trailer)
                 # PDF 1.7 sec 7.3.8.1: A stream shall consist of a
                 # dictionary followed by zero or more bytes bracketed
                 # between the keywords `stream` (followed by newline)
                 # and `endstream`
-                (_, dic) = self._objq.pop()
+                (_, dic) = self.trailer.pop()
                 if not isinstance(dic, dict):
                     # sec 7.3.8.1: the stream dictionary shall be a
                     # direct object.
@@ -637,9 +639,18 @@ class IndirectObjectParser:
                 stream = ContentStream(
                     dic, bytes(data), None if doc is None else doc.decipher
                 )
-                self._objq.append((pos, stream))
+                self.trailer.append((pos, stream))
             elif obj is KEYWORD_ENDSTREAM:
-                if not isinstance(self._objq[-1][1], ContentStream):
+                if not isinstance(self.trailer[-1][1], ContentStream):
                     log.warning("Got endstream without a stream, ignoring!")
             else:
-                self._objq.append((pos, obj))
+                self.trailer.append((pos, obj))
+
+    # Delegation follows
+    def seek(self, pos: int) -> None:
+        """Seek to a position."""
+        self._parser.seek(pos)
+
+    def reset(self) -> None:
+        """Clear internal parser state."""
+        self._parser.reset()

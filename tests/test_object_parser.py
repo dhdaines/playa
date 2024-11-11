@@ -9,6 +9,7 @@ from playa.parser import (
     Lexer,
     ObjectParser,
     InlineImage,
+    reverse_iter_lines,
 )
 from playa.pdftypes import (
     KWD,
@@ -158,19 +159,10 @@ EXPECTED2 = [
 ]
 
 
-def test_lines() -> None:
-    """Verify that we replicate the old nextline method."""
-    parser = Lexer(TESTDATA2)
-    output = list(parser.iter_lines())
-    assert output == EXPECTED2
-
-
 def test_revlines() -> None:
     """Verify that we replicate the old revreadlines method."""
     expected = list(reversed([line for pos, line in EXPECTED2]))
-    parser = Lexer(TESTDATA2)
-    parser.seek(parser.end)
-    output = list(parser.reverse_iter_lines())
+    output = list(reverse_iter_lines(TESTDATA2))
     assert output == expected
 
 
