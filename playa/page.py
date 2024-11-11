@@ -22,15 +22,12 @@ from playa.casting import safe_float
 from playa.color import PREDEFINED_COLORSPACE, Color, ColorSpace
 from playa.exceptions import (
     PDFInterpreterError,
-    PDFSyntaxError,
     PDFUnicodeNotDefined,
 )
 from playa.font import Font
 from playa.parser import ObjectParser, PDFObject, Token
 from playa.pdftypes import (
-    KWD,
     LIT,
-    LITERALS_ASCII85_DECODE,
     ContentStream,
     ObjRef,
     PSKeyword,
@@ -50,7 +47,6 @@ from playa.utils import (
     Point,
     Rect,
     apply_matrix_pt,
-    choplist,
     decode_text,
     get_bound,
     make_compat_bytes,

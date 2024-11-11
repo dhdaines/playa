@@ -12,12 +12,10 @@ from typing import (
     Iterator,
     List,
     NamedTuple,
-    Optional,
     Tuple,
     Union,
 )
 
-from playa.casting import safe_int
 from playa.exceptions import PDFSyntaxError
 from playa.pdftypes import (
     KWD,
@@ -27,7 +25,6 @@ from playa.pdftypes import (
     ObjRef,
     PSKeyword,
     PSLiteral,
-    dict_value,
     int_value,
     literal_name,
     name_str,

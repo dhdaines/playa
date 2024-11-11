@@ -33,7 +33,14 @@ from typing import (
 
 from playa.encodingdb import name2unicode
 from playa.exceptions import PDFSyntaxError
-from playa.parser import KWD, ObjectParser, PSKeyword, PSLiteral, literal_name, PDFObject
+from playa.parser import (
+    KWD,
+    ObjectParser,
+    PDFObject,
+    PSKeyword,
+    PSLiteral,
+    literal_name,
+)
 from playa.utils import choplist, nunpack
 
 log = logging.getLogger(__name__)

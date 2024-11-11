@@ -6,17 +6,17 @@ import pytest
 from playa.parser import (
     KEYWORD_DICT_BEGIN,
     KEYWORD_DICT_END,
+    InlineImage,
     Lexer,
     ObjectParser,
-    InlineImage,
     reverse_iter_lines,
 )
 from playa.pdftypes import (
     KWD,
     LIT,
+    ObjRef,
     keyword_name,
     literal_name,
-    ObjRef,
 )
 
 logger = logging.getLogger(__name__)

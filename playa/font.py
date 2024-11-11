@@ -38,9 +38,8 @@ from playa.parser import (
     KWD,
     LIT,
     Lexer,
-    Token,
-    PSKeyword,
     PSLiteral,
+    Token,
     literal_name,
 )
 from playa.pdftypes import (

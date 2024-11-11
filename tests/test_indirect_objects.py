@@ -1,7 +1,8 @@
 from pathlib import Path
 
 import pytest
-from playa.parser import IndirectObjectParser, ContentStream, LIT
+
+from playa.parser import LIT, ContentStream, IndirectObjectParser
 
 TESTDIR = Path(__file__).parent.parent / "samples"
 
