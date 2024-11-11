@@ -174,7 +174,7 @@ _DEFAULT = object()
 class ObjRef:
     def __init__(
         self,
-        doc: weakref.ReferenceType["PDFDocument"],
+        doc: Union[weakref.ReferenceType["PDFDocument"], None],
         objid: int,
     ) -> None:
         """Reference to a PDF object.
@@ -189,10 +189,24 @@ class ObjRef:
         self.doc = doc
         self.objid = objid
 
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, ObjRef):
+            raise NotImplementedError("Unimplemented comparison with non-ObjRef")
+        if self.doc is None and other.doc is None:
+            return self.objid == other.objid
+        elif self.doc is None or other.doc is None:
+            return False
+        else:
+            selfdoc = self.doc()
+            otherdoc = other.doc()
+            return selfdoc is otherdoc and self.objid == other.objid
+
     def __repr__(self) -> str:
         return "<ObjRef:%d>" % (self.objid)
 
     def resolve(self, default: object = None) -> Any:
+        if self.doc is None:
+            return default
         doc = self.doc()
         if doc is None:
             raise RuntimeError("Document no longer exists")
