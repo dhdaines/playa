@@ -344,10 +344,6 @@ class ContentStream:
         self.objid: Optional[int] = None
         self.genno: Optional[int] = None
 
-    def set_objid(self, objid: int, genno: int) -> None:
-        self.objid = objid
-        self.genno = genno
-
     def __repr__(self) -> str:
         if self.data is None:
             assert self.rawdata is not None

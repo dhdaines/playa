@@ -572,6 +572,11 @@ class IndirectObjectParser:
                 del self.trailer[:]
                 objid = int_value(objid)
                 genno = int_value(genno)
+                # ContentStream is *special* and needs these
+                # internally for decryption.
+                if isinstance(obj, ContentStream):
+                    obj.objid = objid
+                    obj.genno = genno
                 return pos, IndirectObject(objid, genno, obj)
             elif obj is KEYWORD_STREAM:
                 log.debug("stream: %r", self.trailer)
