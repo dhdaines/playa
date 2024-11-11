@@ -18,7 +18,6 @@ from typing import (
     cast,
 )
 
-from playa import settings
 from playa.ascii85 import ascii85decode, asciihexdecode
 from playa.ccitt import ccittfaxdecode
 from playa.lzw import lzwdecode
@@ -134,19 +133,14 @@ def name_str(x: bytes) -> str:
 
 def literal_name(x: Any) -> str:
     if not isinstance(x, PSLiteral):
-        if settings.STRICT:
-            raise TypeError(f"Literal required: {x!r}")
-        return str(x)
+        raise TypeError(f"Literal required: {x!r}")
     else:
         return x.name
 
 
 def keyword_name(x: Any) -> str:
     if not isinstance(x, PSKeyword):
-        if settings.STRICT:
-            raise TypeError("Keyword required: %r" % x)
-        else:
-            return str(x)
+        raise TypeError("Keyword required: %r" % x)
     else:
         # PDF keywords are *not* UTF-8 (they aren't ISO-8859-1 either,
         # but this isn't very important, we just want some
@@ -183,8 +177,7 @@ class ObjRef:
         :param objid: The object number.
         """
         if objid == 0:
-            if settings.STRICT:
-                raise ValueError("PDF object id cannot be 0.")
+            raise ValueError("PDF object id cannot be 0.")
 
         self.doc = doc
         self.objid = objid
@@ -260,27 +253,21 @@ def decipher_all(decipher: DecipherCallable, objid: int, genno: int, x: object) 
 def int_value(x: object) -> int:
     x = resolve1(x)
     if not isinstance(x, int):
-        if settings.STRICT:
-            raise TypeError("Integer required: %r" % (x,))
-        return 0
+        raise TypeError("Integer required: %r" % (x,))
     return x
 
 
 def float_value(x: object) -> float:
     x = resolve1(x)
     if not isinstance(x, float):
-        if settings.STRICT:
-            raise TypeError("Float required: %r" % (x,))
-        return 0.0
+        raise TypeError("Float required: %r" % (x,))
     return x
 
 
 def num_value(x: object) -> float:
     x = resolve1(x)
     if not isinstance(x, (int, float)):  # == utils.isnumber(x)
-        if settings.STRICT:
-            raise TypeError("Int or Float required: %r" % x)
-        return 0
+        raise TypeError("Int or Float required: %r" % x)
     return x
 
 
@@ -296,37 +283,28 @@ def uint_value(x: object, n_bits: int) -> int:
 def str_value(x: object) -> bytes:
     x = resolve1(x)
     if not isinstance(x, bytes):
-        if settings.STRICT:
-            raise TypeError("String required: %r" % x)
-        return b""
+        raise TypeError("String required: %r" % x)
     return x
 
 
 def list_value(x: object) -> Union[List[Any], Tuple[Any, ...]]:
     x = resolve1(x)
     if not isinstance(x, (list, tuple)):
-        if settings.STRICT:
-            raise TypeError("List required: %r" % x)
-        return []
+        raise TypeError("List required: %r" % x)
     return x
 
 
 def dict_value(x: object) -> Dict[Any, Any]:
     x = resolve1(x)
     if not isinstance(x, dict):
-        if settings.STRICT:
-            logger.error("TypeError : Dict required: %r", x)
-            raise TypeError("Dict required: %r" % x)
-        return {}
+        raise TypeError("Dict required: %r" % x)
     return x
 
 
 def stream_value(x: object) -> "ContentStream":
     x = resolve1(x)
     if not isinstance(x, ContentStream):
-        if settings.STRICT:
-            raise TypeError("ContentStream required: %r" % x)
-        return ContentStream({}, b"")
+        raise TypeError("ContentStream required: %r" % x)
     return x
 
 
@@ -411,14 +389,14 @@ class ContentStream:
         if not isinstance(params, list):
             # Make sure the parameters list is the same as filters.
             params = [params] * len(filters)
-        if settings.STRICT and len(params) != len(filters):
+        if len(params) != len(filters):
             raise ValueError("Parameters len filter mismatch")
 
         resolved_filters = [resolve1(f) for f in filters]
         resolved_params = [resolve1(param) for param in params]
         return list(zip(resolved_filters, resolved_params))
 
-    def decode(self) -> None:
+    def decode(self, strict: bool = False) -> None:
         assert self.data is None and self.rawdata is not None, str(
             (self.data, self.rawdata),
         )
@@ -440,10 +418,9 @@ class ContentStream:
                     data = zlib.decompress(data)
 
                 except zlib.error as e:
-                    if settings.STRICT:
+                    if strict:
                         error_msg = f"Invalid zlib bytes: {e!r}, {data!r}"
                         raise ValueError(error_msg)
-
                     try:
                         data = decompress_corrupted(data)
                     except zlib.error:
