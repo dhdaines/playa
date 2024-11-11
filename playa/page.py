@@ -26,7 +26,7 @@ from playa.exceptions import (
     PDFUnicodeNotDefined,
 )
 from playa.font import Font
-from playa.parser import Parser, PDFObject, Token
+from playa.parser import ObjectParser, PDFObject, Token
 from playa.pdftypes import (
     KWD,
     LIT,
@@ -247,12 +247,7 @@ def LTFigure(*, name: str, bbox: Rect, matrix: Matrix) -> Item:
     )
 
 
-KEYWORD_BI = KWD(b"BI")
-KEYWORD_ID = KWD(b"ID")
-KEYWORD_EI = KWD(b"EI")
-
-
-class ContentParser(Parser):
+class ContentParser(ObjectParser):
     """Parse the concatenation of multiple content streams, as
     described in the spec (PDF 1.7, p.86):
 
@@ -276,6 +271,11 @@ class ContentParser(Parser):
             super().__init__(b"")
 
     def nexttoken(self) -> Tuple[int, Token]:
+        """Override nexttoken() to continue parsing in subsequent streams.
+
+        TODO: If we want to avoid evil implementation inheritance, we
+        should do this in the lexer instead.
+        """
         while True:
             try:
                 return super().nexttoken()
@@ -284,60 +284,7 @@ class ContentParser(Parser):
                 # which is exactly what we want
                 stream = stream_value(next(self.streamiter))
                 log.debug("ContentParser starting new stream %r", stream)
-                self.reinit(stream.get_data())
-
-    def flush(self) -> None:
-        self.add_results(*self.popall())
-
-    def do_keyword(self, pos: int, token: PSKeyword) -> None:
-        if token is KEYWORD_BI:
-            # inline image within a content stream
-            self.start_type(pos, "inline")
-        elif token is KEYWORD_ID:
-            try:
-                (_, objs) = self.end_type("inline")
-                if len(objs) % 2 != 0:
-                    error_msg = f"Invalid dictionary construct: {objs!r}"
-                    raise TypeError(error_msg)
-                d = {literal_name(k): resolve1(v) for (k, v) in choplist(2, objs)}
-                eos = b"EI"
-                filter = d.get("F")
-                if filter is not None:
-                    if isinstance(filter, PSLiteral):
-                        filter = [filter]
-                    if filter[0] in LITERALS_ASCII85_DECODE:
-                        eos = b"~>"
-                # PDF 1.7 p. 215: Unless the image uses ASCIIHexDecode
-                # or ASCII85Decode as one of its filters, the ID
-                # operator shall be followed by a single white-space
-                # character, and the next character shall be
-                # interpreted as the first byte of image data.
-                if eos == b"EI":
-                    self.seek(pos + len(token.name) + 1)
-                    (pos, data) = self.get_inline_data(target=eos)
-                    # FIXME: it is totally unspecified what to do with
-                    # a newline between the end of the data and "EI",
-                    # since there is no explicit stream length.  (PDF
-                    # 1.7 p. 756: There should be an end-of-line
-                    # marker after the data and before endstream; this
-                    # marker shall not be included in the stream
-                    # length.)
-                    data = data[: -len(eos)]
-                else:
-                    self.seek(pos + len(token.name))
-                    (pos, data) = self.get_inline_data(target=eos)
-                if pos == -1:
-                    raise PDFSyntaxError("End of inline stream %r not found" % eos)
-                obj = ContentStream(d, data)
-                self.push((pos, obj))
-                # This was included in the data but we need to "parse" it
-                if eos == b"EI":
-                    self.push((pos, KEYWORD_EI))
-            except TypeError:
-                if settings.STRICT:
-                    raise
-        else:
-            self.push((pos, token))
+                self.newstream(stream.get_data())
 
 
 class PageInterpreter:
@@ -676,7 +623,7 @@ class PageInterpreter:
             self.scs = self.csmap[literal_name(name)]
         except KeyError:
             if settings.STRICT:
-                raise PDFInterpreterError("Undefined ColorSpace: %r" % name)
+                raise PDFInterpreterError("Undefined ColorSpace: %r" % (name,))
 
     def do_cs(self, name: PDFObject) -> None:
         """Set color space for nonstroking operations"""
@@ -684,7 +631,7 @@ class PageInterpreter:
             self.ncs = self.csmap[literal_name(name)]
         except KeyError:
             if settings.STRICT:
-                raise PDFInterpreterError("Undefined ColorSpace: %r" % name)
+                raise PDFInterpreterError("Undefined ColorSpace: %r" % (name,))
 
     def do_G(self, gray: PDFObject) -> None:
         """Set gray level for stroking operations"""
@@ -826,7 +773,7 @@ class PageInterpreter:
             self.textstate.font = self.fontmap[literal_name(fontid)]
         except KeyError:
             if settings.STRICT:
-                raise PDFInterpreterError("Undefined Font id: %r" % fontid)
+                raise PDFInterpreterError("Undefined Font id: %r" % (fontid,))
             doc = self.page.doc()
             if doc is None:
                 raise RuntimeError("Document no longer exists!")

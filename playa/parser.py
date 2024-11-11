@@ -22,6 +22,7 @@ from playa.exceptions import PDFSyntaxError
 from playa.pdftypes import (
     KWD,
     LIT,
+    LITERALS_ASCII85_DECODE,
     ContentStream,
     ObjRef,
     PSKeyword,
@@ -54,6 +55,9 @@ KEYWORD_XREF = KWD(b"xref")
 KEYWORD_STARTXREF = KWD(b"startxref")
 KEYWORD_OBJ = KWD(b"obj")
 KEYWORD_TRAILER = KWD(b"trailer")
+KEYWORD_BI = KWD(b"BI")
+KEYWORD_ID = KWD(b"ID")
+KEYWORD_EI = KWD(b"EI")
 
 
 EOL = b"\r\n"
@@ -287,6 +291,12 @@ class Lexer:
         return (self._curtokenpos, b"".join(parts))
 
 
+class InlineImage(ContentStream):
+    """Specific class for inline images so the interpreter can
+    recognize them (they are otherwise the same thing as content
+    streams). """
+
+
 PDFObject = Union[
     str,
     float,
@@ -297,6 +307,7 @@ PDFObject = Union[
     Dict,
     ObjRef,
     PSKeyword,
+    InlineImage,
     None,
 ]
 StackEntry = Tuple[int, PDFObject]
@@ -322,6 +333,10 @@ class ObjectParser:
         self.stack: List[StackEntry] = []
         self.doc = None if doc is None else weakref.ref(doc)
 
+    def newstream(self, data: Union[bytes, mmap.mmap]) -> None:
+        """Continue parsing from a new data stream."""
+        self._lexer = Lexer(data)
+
     def __iter__(self) -> Iterator[StackEntry]:
         """Iterate over (position, object) tuples, raising StopIteration at EOF."""
         return self
@@ -333,7 +348,7 @@ class ObjectParser:
         while True:
             if self.stack and top is None:
                 return self.stack.pop()
-            (pos, token) = next(self._lexer)
+            (pos, token) = self.nexttoken()
             if token is KEYWORD_ARRAY_BEGIN:
                 if top is None:
                     top = pos
@@ -401,6 +416,60 @@ class ObjectParser:
                     objid = int_value(objid)
                     obj = ObjRef(self.doc, objid)
                     self.stack.append((pos, obj))
+            elif token is KEYWORD_BI:
+                if top is None:
+                    top = pos
+                self.stack.append((pos, token))
+            elif token is KEYWORD_ID:
+                idpos = pos
+                (pos, objs) = self.pop_to(KEYWORD_BI)
+                if len(objs) % 2 != 0:
+                    error_msg = f"Invalid dictionary construct: {objs!r}"
+                    raise TypeError(error_msg)
+                dic = {
+                    literal_name(k): v
+                    for (k, v) in choplist(2, objs)
+                    if v is not None
+                }
+                eos = b"EI"
+                filter = dic.get("F")
+                if filter is not None:
+                    if not isinstance(filter, list):
+                        filter = [filter]
+                    if filter[0] in LITERALS_ASCII85_DECODE:
+                        eos = b"~>"
+                # PDF 1.7 p. 215: Unless the image uses ASCIIHexDecode
+                # or ASCII85Decode as one of its filters, the ID
+                # operator shall be followed by a single white-space
+                # character, and the next character shall be
+                # interpreted as the first byte of image data.
+                if eos == b"EI":
+                    self.seek(idpos + len(KEYWORD_ID.name) + 1)
+                    (eipos, data) = self.get_inline_data(target=eos)
+                    # FIXME: it is totally unspecified what to do with
+                    # a newline between the end of the data and "EI",
+                    # since there is no explicit stream length.  (PDF
+                    # 1.7 p. 756: There should be an end-of-line
+                    # marker after the data and before endstream; this
+                    # marker shall not be included in the stream
+                    # length.)  We will include it, which might be wrong.
+                    data = data[: -len(eos)]
+                else:
+                    # Note absence of + 1 here
+                    self.seek(idpos + len(KEYWORD_ID.name))
+                    (_, data) = self.get_inline_data(target=eos)
+                    # There should be an "EI" here
+                    (eipos, token) = self.nexttoken()
+                    if token is not KEYWORD_EI:
+                        log.warning("Inline image not terminated with EI: got %r", token)
+                if eipos == -1:
+                    raise PDFSyntaxError("End of inline stream %r not found" % eos)
+                obj = InlineImage(dic, data)
+                log.debug("InlineImage @ %d: %r", pos, obj)
+                if pos == top:
+                    top = None
+                    return pos, obj
+                self.stack.append((pos, obj))
             else:
                 # Literally anything else, including any other keyword
                 # (will be handled by some downstream iterator)

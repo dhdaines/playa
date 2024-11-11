@@ -8,6 +8,7 @@ from playa.parser import (
     KEYWORD_DICT_END,
     Lexer,
     ObjectParser,
+    InlineImage,
 )
 from playa.pdftypes import (
     KWD,
@@ -376,3 +377,29 @@ def test_objects():
         # Note unparsed indirect object reference
         (100, 4), (102, 0), (104, KWD(b"R"))
     ]
+
+
+INLINEDATA1 = b"""
+BI
+/Foo (bar)
+ID
+VARIOUS UTTER NONSENSE
+EI
+BI
+/F /A85
+ID
+<^BVT:K:=9<E)pd;BS_1:/aSV;ag~>
+EI
+"""
+
+
+def test_inline_images():
+    parser = ObjectParser(INLINEDATA1)
+    pos, img = next(parser)
+    assert isinstance(img, InlineImage)
+    assert img.attrs["Foo"] == b"bar"
+    assert img.rawdata == b"VARIOUS UTTER NONSENSE\n"
+    pos, img = next(parser)
+    assert isinstance(img, InlineImage)
+    img.decode()
+    assert img.data == b"VARIOUS UTTER NONSENSE"
