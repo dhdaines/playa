@@ -137,14 +137,17 @@ class Type1FontHeaderParser:
 
         :returns mapping of character identifiers (cid's) to unicode characters
         """
-        for _, obj in self._lexer:
-            if obj is KEYWORD_PUT:
+        for _, tok in self._lexer:
+            # Ignore anything that isn't INT NAME put
+            if tok is KEYWORD_PUT:
                 try:
-                    cid = int_value(self._tokq.popleft())
-                    name = literal_name(self._tokq.popleft())
-                    self._cid2unicode[cid] = name2unicode(cast(str, name))
+                    cid, name = self._tokq
+                    if isinstance(cid, int) and isinstance(name, PSLiteral):
+                        self._cid2unicode[cid] = name2unicode(name.name)
                 except KeyError:
                     log.warning("Unknown CID %d", cid)
+            else:
+                self._tokq.append(tok)
         return self._cid2unicode
 
 

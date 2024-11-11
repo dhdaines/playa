@@ -3,6 +3,7 @@ Inadequately test CMap parsing and such.
 """
 
 from playa.cmapdb import CMapParser, FileUnicodeMap
+from playa.font import Type1FontHeaderParser
 
 STREAMDATA = b"""
 /CIDInit/ProcSet findresource begin
@@ -35,3 +36,23 @@ def test_cmap_parser():
     cp = CMapParser(cmap, STREAMDATA)
     cp.run()
     assert cmap.cid2unichr == {1: 'x', 2: '̌', 3: 'u'}
+
+
+# Basically the sort of stuff we try to find in a Type 1 font
+TYPE1DATA = b"""
+%!PS-AdobeFont-1.0: MyBogusFont 0.1
+/FontName /MyBogusFont def
+/Encoding 256 array 
+0 1 255 {1 index exch /.notdef put} for 
+dup 48 /zero put
+dup 49 /one put
+readonly def
+"""
+
+
+def test_t1header_parser():
+    parser = Type1FontHeaderParser(TYPE1DATA)
+    assert parser.get_encoding() == {
+        48: "0",
+        49: "1",
+    }
