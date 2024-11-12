@@ -732,7 +732,7 @@ class PDFDocument:
     """
 
     _fp: Union[BinaryIO, None] = None
-    _pages: Union[List[Page], None] = None
+    _pages: Union["PageList", None] = None
 
     def __enter__(self) -> "PDFDocument":
         return self
@@ -1062,7 +1062,7 @@ class PDFDocument:
         """Iterate over the flattened page tree in reading order, propagating
         inheritable attributes.  Returns an iterator over (objid, dict) pairs.
 
-        Will raise PDFNoPageTree if there is no page tree.
+        Will raise KeyError if there is no page tree.
         """
         if "Pages" not in self.catalog:
             raise KeyError("No 'Pages' entry in catalog")
@@ -1108,28 +1108,10 @@ class PDFDocument:
                 log.debug("Page: %r", object_properties)
                 yield object_id, object_properties
 
-    # FIXME: Make an object that can be indexed by int or str
     @property
-    def pages(self) -> List[Page]:
+    def pages(self) -> "PageList":
         if self._pages is None:
-            try:
-                page_labels: Iterator[Optional[str]] = self.page_labels
-            except (KeyError, ValueError):
-                page_labels = itertools.repeat(None)
-            try:
-                self._pages = [
-                    Page(self, objid, properties, label, page_idx)
-                    for page_idx, ((objid, properties), label) in enumerate(
-                        zip(self.get_page_objects(), page_labels)
-                    )
-                ]
-            except KeyError:
-                self._pages = [
-                    Page(self, objid, properties, label, page_idx)
-                    for page_idx, ((objid, properties), label) in enumerate(
-                        zip(self.get_pages_from_xrefs(), page_labels)
-                    )
-                ]
+            self._pages = PageList(self)
         return self._pages
 
     @property
@@ -1229,6 +1211,40 @@ class PDFDocument:
             # find previous xref
             pos = int_value(trailer["Prev"])
             self.read_xref_from(pos, xrefs)
+
+
+class PageList:
+    """List of pages indexable by 0-based index or string label."""
+
+    def __init__(self, doc: PDFDocument):
+        try:
+            page_labels: Iterable[Optional[str]] = doc.page_labels
+        except (KeyError, ValueError):
+            page_labels = itertools.repeat(None)
+        self._pages = []
+        self._labels = {}
+        try:
+            itor = doc.get_page_objects()
+        except KeyError:
+            itor = doc.get_pages_from_xrefs()
+        for page_idx, ((objid, properties), label) in enumerate(zip(itor, page_labels)):
+            page = Page(doc, objid, properties, label, page_idx)
+            self._pages.append(page)
+            if label is not None:
+                label_str = str(label)
+                if label_str in self._labels:
+                    log.warning("Duplicate page label %s", label_str)
+                else:
+                    self._labels[str(label)] = page
+
+    def __iter__(self) -> Iterator[Page]:
+        return iter(self._pages)
+
+    def __getitem__(self, key: int | str) -> Page:
+        if isinstance(key, int):
+            return self._pages[key]
+        else:
+            return self._labels[key]
 
 
 class PageLabels(NumberTree):
