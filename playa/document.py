@@ -1233,7 +1233,7 @@ class PageList:
             if label is not None:
                 label_str = str(label)
                 if label_str in self._labels:
-                    log.warning("Duplicate page label %s", label_str)
+                    log.info("Duplicate page label %s at index %d", label_str, page_idx)
                 else:
                     self._labels[str(label)] = page
 
