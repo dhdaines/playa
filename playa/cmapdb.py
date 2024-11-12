@@ -32,7 +32,6 @@ from typing import (
 )
 
 from playa.encodingdb import name2unicode
-from playa.exceptions import PDFSyntaxError
 from playa.parser import (
     KWD,
     ObjectParser,

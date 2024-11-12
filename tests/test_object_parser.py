@@ -365,9 +365,13 @@ def test_objects():
         ),
         (56, [ObjRef(None, 1)]),
         (66, b"foo (bar) baz..."),
-        (85, None), (90, None), (95, None),
+        (85, None),
+        (90, None),
+        (95, None),
         # Note unparsed indirect object reference
-        (100, 4), (102, 0), (104, KWD(b"R"))
+        (100, 4),
+        (102, 0),
+        (104, KWD(b"R")),
     ]
 
 

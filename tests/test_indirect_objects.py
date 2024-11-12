@@ -34,7 +34,7 @@ def test_indirect_objects():
     assert objs[2].objid == 5
     assert isinstance(objs[2].obj, ContentStream)
     stream = objs[2].obj
-    assert stream.rawdata == b'150 250 m\n150 350 l\nS\n'
+    assert stream.rawdata == b"150 250 m\n150 350 l\nS\n"
 
 
 DATA2 = b"""
@@ -58,13 +58,13 @@ def test_streams():
     positions, objs = zip(*list(parser))
     assert isinstance(objs[2].obj, ContentStream)
     stream = objs[2].obj
-    assert stream.rawdata == b'150 250 m\n150 350 l\nS'
+    assert stream.rawdata == b"150 250 m\n150 350 l\nS"
 
     parser = IndirectObjectParser(DATA2)
     positions, objs = zip(*list(parser))
     assert isinstance(objs[0].obj, ContentStream)
     stream = objs[0].obj
-    assert stream.rawdata == b'150 250 m\n150 350 l\nS\nA BUNCH OF EXTRA CRAP!!!\n'
+    assert stream.rawdata == b"150 250 m\n150 350 l\nS\nA BUNCH OF EXTRA CRAP!!!\n"
 
     parser = IndirectObjectParser(DATA2, strict=True)
     with pytest.raises(TypeError) as e:

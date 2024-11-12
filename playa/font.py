@@ -116,7 +116,6 @@ KEYWORD_FOR = KWD(b"for")
 
 
 class Type1FontHeaderParser:
-
     def __init__(self, data: bytes) -> None:
         self._lexer = Lexer(data)
         self._cid2unicode: Dict[int, str] = {}

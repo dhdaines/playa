@@ -853,7 +853,9 @@ class PDFDocument:
         """Iterate over (position, token) tuples."""
         return Lexer(self.buffer)
 
-    def _getobj_objstm(self, stream: ContentStream, index: int, objid: int) -> PDFObject:
+    def _getobj_objstm(
+        self, stream: ContentStream, index: int, objid: int
+    ) -> PDFObject:
         if stream.objid in self._parsed_objs:
             (objs, n) = self._parsed_objs[stream.objid]
         else:

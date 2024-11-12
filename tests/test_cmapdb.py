@@ -35,15 +35,15 @@ def test_cmap_parser():
     cmap = FileUnicodeMap()
     cp = CMapParser(cmap, STREAMDATA)
     cp.run()
-    assert cmap.cid2unichr == {1: 'x', 2: '̌', 3: 'u'}
+    assert cmap.cid2unichr == {1: "x", 2: "̌", 3: "u"}
 
 
 # Basically the sort of stuff we try to find in a Type 1 font
 TYPE1DATA = b"""
 %!PS-AdobeFont-1.0: MyBogusFont 0.1
 /FontName /MyBogusFont def
-/Encoding 256 array 
-0 1 255 {1 index exch /.notdef put} for 
+/Encoding 256 array
+0 1 255 {1 index exch /.notdef put} for
 dup 48 /zero put
 dup 49 /one put
 readonly def

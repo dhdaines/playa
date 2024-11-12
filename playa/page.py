@@ -25,7 +25,7 @@ from playa.exceptions import (
     PDFUnicodeNotDefined,
 )
 from playa.font import Font
-from playa.parser import ObjectParser, PDFObject, Token, InlineImage
+from playa.parser import InlineImage, ObjectParser, PDFObject, Token
 from playa.pdftypes import (
     LIT,
     ContentStream,
