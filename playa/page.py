@@ -25,7 +25,7 @@ from playa.exceptions import (
     PDFUnicodeNotDefined,
 )
 from playa.font import Font
-from playa.parser import ObjectParser, PDFObject, Token
+from playa.parser import ObjectParser, PDFObject, Token, InlineImage
 from playa.pdftypes import (
     LIT,
     ContentStream,
@@ -387,7 +387,11 @@ class PageInterpreter:
         )
         parser = ContentParser(self.contents)
         for _, obj in parser:
-            if isinstance(obj, PSKeyword):
+            # These are handled inside the parser as they don't obey
+            # the normal syntax rules (PDF 1.7 sec 8.9.7)
+            if isinstance(obj, InlineImage):
+                yield from self.do_EI(obj)
+            elif isinstance(obj, PSKeyword):
                 name = keyword_name(obj)
                 method = "do_%s" % name.replace("*", "_a").replace('"', "_w").replace(
                     "'",
@@ -894,7 +898,7 @@ class PageInterpreter:
 
     def do_EI(self, obj: PDFObject) -> Iterator[Item]:
         """End inline image object"""
-        if isinstance(obj, ContentStream) and "W" in obj and "H" in obj:
+        if isinstance(obj, InlineImage):
             iobjid = str(id(obj))
             # FIXME: This LTFigure is not useful and exists only for
             # the purpose of calcluating the bbox

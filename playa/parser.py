@@ -453,7 +453,7 @@ class ObjectParser:
                     # length.)  We will include it, which might be wrong.
                     data = data[: -len(eos)]
                 else:
-                    # Note absence of + 1 here
+                    # Note absence of + 1 here (the "Unless" above)
                     self.seek(idpos + len(KEYWORD_ID.name))
                     (_, data) = self.get_inline_data(target=eos)
                     # There should be an "EI" here
@@ -466,13 +466,15 @@ class ObjectParser:
                     raise PDFSyntaxError("End of inline stream %r not found" % eos)
                 obj = InlineImage(dic, data)
                 log.debug("InlineImage @ %d: %r", pos, obj)
-                if pos == top:
-                    top = None
-                    return pos, obj
-                self.stack.append((pos, obj))
+                # Inline images must occur at the top level, otherwise
+                # something is wrong (probably a corrupt file)
+                assert pos == top, f"Inline image {obj} not at top level of stream"
+                top = None
+                return pos, obj
             else:
                 # Literally anything else, including any other keyword
-                # (will be handled by some downstream iterator)
+                # (will be returned above if top is None, or later if
+                # we are inside some object)
                 self.stack.append((pos, token))
 
     def pop_to(self, token: PSKeyword) -> Tuple[int, List[PDFObject]]:
