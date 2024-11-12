@@ -843,6 +843,8 @@ class PDFDocument:
         self.is_modifiable = handler.is_modifiable
         self.is_extractable = handler.is_extractable
         assert self.parser is not None
+        # Ensure that no extra data leaks into encrypted streams
+        self.parser.strict = True
 
     def __iter__(self) -> Iterator[Tuple[int, object]]:
         """Iterate over (position, `IndirectObject`) tuples."""
