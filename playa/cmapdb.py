@@ -308,6 +308,7 @@ class CMapParser:
 
     def run(self) -> None:
         for pos, obj in self._parser:
+            log.debug("token @ %d: %r", pos, obj)
             if isinstance(obj, PSKeyword):
                 self.do_keyword(pos, obj)
             else:
@@ -321,49 +322,39 @@ class CMapParser:
 
         See Section 5.9.2 - ToUnicode CMaps of the PDF Reference.
         """
+        log.debug("keyword: %r (%r)", token, self.stack)
+
+        # Ignore everything outside begincmap / endcmap
         if token is KEYWORD_BEGINCMAP:
             self._in_cmap = True
             self.popall()
-            return
-
         elif token is KEYWORD_ENDCMAP:
             self._in_cmap = False
-            return
 
         if not self._in_cmap:
             return
 
         if token is KEYWORD_DEF:
             try:
+                # Might fail with IndexError if the file is corrputed
                 v = self.stack.pop()
                 k = self.stack.pop()
                 self.cmap.set_attr(literal_name(k), v)
-            except PDFSyntaxError:
+            except (IndexError, TypeError):
                 pass
-            return
-
-        if token is KEYWORD_USECMAP:
+        elif token is KEYWORD_USECMAP:
             try:
                 cmapname = self.stack.pop()
                 self.cmap.use_cmap(CMapDB.get_cmap(literal_name(cmapname)))
-            except PDFSyntaxError:
+            except (IndexError, TypeError, KeyError):
                 pass
-            except KeyError:
-                pass
-            return
-
-        if token is KEYWORD_BEGINCODESPACERANGE:
+        elif token is KEYWORD_BEGINCODESPACERANGE:
             self.popall()
-            return
-        if token is KEYWORD_ENDCODESPACERANGE:
+        elif token is KEYWORD_ENDCODESPACERANGE:
             self.popall()
-            return
-
-        if token is KEYWORD_BEGINCIDRANGE:
+        elif token is KEYWORD_BEGINCIDRANGE:
             self.popall()
-            return
-
-        if token is KEYWORD_ENDCIDRANGE:
+        elif token is KEYWORD_ENDCIDRANGE:
             for start_byte, end_byte, cid in choplist(3, self.stack):
                 if not isinstance(start_byte, bytes):
                     self._warn_once("The start object of begincidrange is not a byte.")
@@ -397,24 +388,16 @@ class CMapParser:
                     x = start_prefix + struct.pack(">L", start + i)[-vlen:]
                     self.cmap.add_cid2unichr(cid + i, x)
             self.popall()
-            return
-
-        if token is KEYWORD_BEGINCIDCHAR:
+        elif token is KEYWORD_BEGINCIDCHAR:
             self.popall()
-            return
-
-        if token is KEYWORD_ENDCIDCHAR:
+        elif token is KEYWORD_ENDCIDCHAR:
             for cid, code in choplist(2, self.stack):
                 if isinstance(code, bytes) and isinstance(cid, int):
                     self.cmap.add_cid2unichr(cid, code)
             self.popall()
-            return
-
-        if token is KEYWORD_BEGINBFRANGE:
+        elif token is KEYWORD_BEGINBFRANGE:
             self.popall()
-            return
-
-        if token is KEYWORD_ENDBFRANGE:
+        elif token is KEYWORD_ENDBFRANGE:
             for start_byte, end_byte, code in choplist(3, self.stack):
                 if not isinstance(start_byte, bytes):
                     self._warn_once("The start object is not a byte.")
@@ -445,26 +428,20 @@ class CMapParser:
                         x = prefix + struct.pack(">L", base + i)[-vlen:]
                         self.cmap.add_cid2unichr(start + i, x)
             self.popall()
-            return
-
-        if token is KEYWORD_BEGINBFCHAR:
+        elif token is KEYWORD_BEGINBFCHAR:
             self.popall()
-            return
-
-        if token is KEYWORD_ENDBFCHAR:
+        elif token is KEYWORD_ENDBFCHAR:
             for cid, code in choplist(2, self.stack):
                 if isinstance(cid, bytes) and isinstance(code, bytes):
                     self.cmap.add_cid2unichr(nunpack(cid), code)
             self.popall()
-            return
-
-        if token is KEYWORD_BEGINNOTDEFRANGE:
+        elif token is KEYWORD_BEGINNOTDEFRANGE:
             self.popall()
-            return
-
-        if token is KEYWORD_ENDNOTDEFRANGE:
+        elif token is KEYWORD_ENDNOTDEFRANGE:
             self.popall()
-            return
+        else:
+            # It's ... something else (probably bogus)
+            self.stack.append(token)
 
     def _warn_once(self, msg: str) -> None:
         """Warn once for each unique message"""
