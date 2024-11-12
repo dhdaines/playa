@@ -561,15 +561,14 @@ class IndirectObjectParser:
         obj: Union[PDFObject, ContentStream]
         while True:
             pos, obj = next(self._parser)
+            log.debug("pos %r obj %r trailer %r", pos, obj, self.trailer)
             if obj is KEYWORD_OBJ:
                 pass
             elif obj is KEYWORD_ENDOBJ:
-                log.debug("endobj: %r", self.trailer)
-                # objid genno "obj" ... and the object itself
+                # objid genno "obj" (skipped) ... and the object
                 (_, obj) = self.trailer.pop()
                 (_, genno) = self.trailer.pop()
                 (pos, objid) = self.trailer.pop()
-                del self.trailer[:]
                 objid = int_value(objid)
                 genno = int_value(genno)
                 # ContentStream is *special* and needs these
@@ -579,7 +578,6 @@ class IndirectObjectParser:
                     obj.genno = genno
                 return pos, IndirectObject(objid, genno, obj)
             elif obj is KEYWORD_STREAM:
-                log.debug("stream: %r", self.trailer)
                 # PDF 1.7 sec 7.3.8.1: A stream shall consist of a
                 # dictionary followed by zero or more bytes bracketed
                 # between the keywords `stream` (followed by newline)
