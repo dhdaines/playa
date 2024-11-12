@@ -90,6 +90,12 @@ LITERAL_PAGES = LIT("Pages")
 INHERITABLE_PAGE_ATTRS = {"Resources", "MediaBox", "CropBox", "Rotate"}
 
 
+class XRefPos(NamedTuple):
+    streamid: Optional[int]
+    pos: int
+    genno: int
+
+
 class XRef(Protocol):
     """
     Duck-typing for XRef table implementations, which are expected to be read-only.
@@ -99,7 +105,7 @@ class XRef(Protocol):
     def trailer(self) -> Dict[str, Any]: ...
     @property
     def objids(self) -> Iterable[int]: ...
-    def get_pos(self, objid: int) -> Tuple[Optional[int], int, int]: ...
+    def get_pos(self, objid: int) -> XRefPos: ...
 
 
 class XRefTable:
@@ -108,7 +114,7 @@ class XRefTable:
     """
 
     def __init__(self, parser: ObjectParser) -> None:
-        self.offsets: Dict[int, Tuple[Optional[int], int, int]] = {}
+        self.offsets: Dict[int, XRefPos] = {}
         self.trailer: Dict[str, Any] = {}
         self._load(parser)
 
@@ -140,7 +146,7 @@ class XRefTable:
                 (pos_b, genno_b, use_b) = f
                 if use_b != b"n":
                     continue
-                self.offsets[objid] = (None, int(pos_b), int(genno_b))
+                self.offsets[objid] = XRefPos(None, int(pos_b), int(genno_b))
         log.debug("xref objects: %r", self.offsets)
         self._load_trailer(parser)
 
@@ -165,7 +171,7 @@ class XRefTable:
     def objids(self) -> Iterable[int]:
         return self.offsets.keys()
 
-    def get_pos(self, objid: int) -> Tuple[Optional[int], int, int]:
+    def get_pos(self, objid: int) -> XRefPos:
         return self.offsets[objid]
 
 
@@ -179,7 +185,7 @@ class XRefFallback:
     all indirect objects."""
 
     def __init__(self, parser: IndirectObjectParser) -> None:
-        self.offsets: Dict[int, Tuple[Optional[int], int, int]] = {}
+        self.offsets: Dict[int, XRefPos] = {}
         self.trailer: Dict[str, Any] = {}
         self._load(parser)
 
@@ -191,7 +197,7 @@ class XRefFallback:
         parser.reset()
         # Get all the objects
         for pos, obj in parser:
-            self.offsets[obj.objid] = (None, pos, obj.genno)
+            self.offsets[obj.objid] = XRefPos(None, pos, obj.genno)
             # Expand any object streams right away
             if (
                 isinstance(obj.obj, ContentStream)
@@ -213,7 +219,7 @@ class XRefFallback:
                 n = min(n, len(objs) // 2)
                 for index in range(n):
                     objid1 = objs[index * 2]
-                    self.offsets[objid1] = (obj.objid, index, 0)
+                    self.offsets[objid1] = XRefPos(obj.objid, index, 0)
         # Now get the trailer
         for s1, s2 in itertools.pairwise(parser.trailer):
             _, token = s1
@@ -229,7 +235,7 @@ class XRefFallback:
     def objids(self) -> Iterable[int]:
         return self.offsets.keys()
 
-    def get_pos(self, objid: int) -> Tuple[Optional[int], int, int]:
+    def get_pos(self, objid: int) -> XRefPos:
         return self.offsets[objid]
 
 
@@ -286,7 +292,7 @@ class XRefStream:
                 if f1 == 1 or f1 == 2:
                     yield start + i
 
-    def get_pos(self, objid: int) -> Tuple[Optional[int], int, int]:
+    def get_pos(self, objid: int) -> XRefPos:
         index = 0
         for start, nobjs in self.ranges:
             if start <= objid and objid < start + nobjs:
@@ -305,9 +311,9 @@ class XRefStream:
         f2 = nunpack(ent[self.fl1 : self.fl1 + self.fl2])
         f3 = nunpack(ent[self.fl1 + self.fl2 :])
         if f1 == 1:
-            return (None, f2, f3)
+            return XRefPos(None, f2, f3)
         elif f1 == 2:
-            return (f2, f3, 0)
+            return XRefPos(f2, f3, 0)
         else:
             # this is a free object
             raise KeyError(objid)
