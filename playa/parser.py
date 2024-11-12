@@ -597,6 +597,9 @@ class IndirectObjectParser:
                 except KeyError:
                     log.warning("/Length is undefined in stream dictionary %r", dic)
                     objlen = 0
+                except ValueError:
+                    log.warning("/Length reference cannot be resolved %r", dic)
+                    objlen = 0
                 # sec 7.3.8.1: The keyword `stream` that follows the stream
                 # dictionary shall be followed by an end-of-line
                 # marker consisting of either a CARRIAGE RETURN and a
