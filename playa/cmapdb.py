@@ -32,8 +32,14 @@ from typing import (
 )
 
 from playa.encodingdb import name2unicode
-from playa.exceptions import PDFSyntaxError
-from playa.parser import KWD, Parser, PSKeyword, PSLiteral, literal_name
+from playa.parser import (
+    KWD,
+    ObjectParser,
+    PDFObject,
+    PSKeyword,
+    PSLiteral,
+    literal_name,
+)
 from playa.utils import choplist, nunpack
 
 log = logging.getLogger(__name__)
@@ -272,83 +278,83 @@ class CMapDB:
         return cls._umap_cache[name][vertical]
 
 
-class CMapParser(Parser[PSKeyword]):
+KEYWORD_BEGINCMAP = KWD(b"begincmap")
+KEYWORD_ENDCMAP = KWD(b"endcmap")
+KEYWORD_USECMAP = KWD(b"usecmap")
+KEYWORD_DEF = KWD(b"def")
+KEYWORD_BEGINCODESPACERANGE = KWD(b"begincodespacerange")
+KEYWORD_ENDCODESPACERANGE = KWD(b"endcodespacerange")
+KEYWORD_BEGINCIDRANGE = KWD(b"begincidrange")
+KEYWORD_ENDCIDRANGE = KWD(b"endcidrange")
+KEYWORD_BEGINCIDCHAR = KWD(b"begincidchar")
+KEYWORD_ENDCIDCHAR = KWD(b"endcidchar")
+KEYWORD_BEGINBFRANGE = KWD(b"beginbfrange")
+KEYWORD_ENDBFRANGE = KWD(b"endbfrange")
+KEYWORD_BEGINBFCHAR = KWD(b"beginbfchar")
+KEYWORD_ENDBFCHAR = KWD(b"endbfchar")
+KEYWORD_BEGINNOTDEFRANGE = KWD(b"beginnotdefrange")
+KEYWORD_ENDNOTDEFRANGE = KWD(b"endnotdefrange")
+
+
+class CMapParser:
     def __init__(self, cmap: CMapBase, data: bytes) -> None:
-        super().__init__(data)
         self.cmap = cmap
+        self.stack: List[PDFObject] = []
+        self._parser = ObjectParser(data)
         # some ToUnicode maps don't have "begincmap" keyword.
         self._in_cmap = True
         self._warnings: Set[str] = set()
 
     def run(self) -> None:
-        next(self, None)
+        for pos, obj in self._parser:
+            log.debug("token @ %d: %r", pos, obj)
+            if isinstance(obj, PSKeyword):
+                self.do_keyword(pos, obj)
+            else:
+                self.stack.append(obj)
 
-    KEYWORD_BEGINCMAP = KWD(b"begincmap")
-    KEYWORD_ENDCMAP = KWD(b"endcmap")
-    KEYWORD_USECMAP = KWD(b"usecmap")
-    KEYWORD_DEF = KWD(b"def")
-    KEYWORD_BEGINCODESPACERANGE = KWD(b"begincodespacerange")
-    KEYWORD_ENDCODESPACERANGE = KWD(b"endcodespacerange")
-    KEYWORD_BEGINCIDRANGE = KWD(b"begincidrange")
-    KEYWORD_ENDCIDRANGE = KWD(b"endcidrange")
-    KEYWORD_BEGINCIDCHAR = KWD(b"begincidchar")
-    KEYWORD_ENDCIDCHAR = KWD(b"endcidchar")
-    KEYWORD_BEGINBFRANGE = KWD(b"beginbfrange")
-    KEYWORD_ENDBFRANGE = KWD(b"endbfrange")
-    KEYWORD_BEGINBFCHAR = KWD(b"beginbfchar")
-    KEYWORD_ENDBFCHAR = KWD(b"endbfchar")
-    KEYWORD_BEGINNOTDEFRANGE = KWD(b"beginnotdefrange")
-    KEYWORD_ENDNOTDEFRANGE = KWD(b"endnotdefrange")
+    def popall(self) -> None:
+        del self.stack[:]
 
     def do_keyword(self, pos: int, token: PSKeyword) -> None:
         """ToUnicode CMaps
 
         See Section 5.9.2 - ToUnicode CMaps of the PDF Reference.
         """
-        if token is self.KEYWORD_BEGINCMAP:
+        log.debug("keyword: %r (%r)", token, self.stack)
+
+        # Ignore everything outside begincmap / endcmap
+        if token is KEYWORD_BEGINCMAP:
             self._in_cmap = True
             self.popall()
-            return
-
-        elif token is self.KEYWORD_ENDCMAP:
+        elif token is KEYWORD_ENDCMAP:
             self._in_cmap = False
-            return
 
         if not self._in_cmap:
             return
 
-        if token is self.KEYWORD_DEF:
+        if token is KEYWORD_DEF:
             try:
-                ((_, k), (_, v)) = self.pop(2)
+                # Might fail with IndexError if the file is corrputed
+                v = self.stack.pop()
+                k = self.stack.pop()
                 self.cmap.set_attr(literal_name(k), v)
-            except PDFSyntaxError:
+            except (IndexError, TypeError):
                 pass
-            return
-
-        if token is self.KEYWORD_USECMAP:
+        elif token is KEYWORD_USECMAP:
             try:
-                ((_, cmapname),) = self.pop(1)
+                cmapname = self.stack.pop()
                 self.cmap.use_cmap(CMapDB.get_cmap(literal_name(cmapname)))
-            except PDFSyntaxError:
+            except (IndexError, TypeError, KeyError):
                 pass
-            except KeyError:
-                pass
-            return
-
-        if token is self.KEYWORD_BEGINCODESPACERANGE:
+        elif token is KEYWORD_BEGINCODESPACERANGE:
             self.popall()
-            return
-        if token is self.KEYWORD_ENDCODESPACERANGE:
+        elif token is KEYWORD_ENDCODESPACERANGE:
             self.popall()
-            return
-
-        if token is self.KEYWORD_BEGINCIDRANGE:
+        elif token is KEYWORD_BEGINCIDRANGE:
             self.popall()
-            return
-
-        if token is self.KEYWORD_ENDCIDRANGE:
-            objs = [obj for (__, obj) in self.popall()]
-            for start_byte, end_byte, cid in choplist(3, objs):
+        elif token is KEYWORD_ENDCIDRANGE:
+            for start_byte, end_byte, cid in choplist(3, self.stack):
                 if not isinstance(start_byte, bytes):
                     self._warn_once("The start object of begincidrange is not a byte.")
                     continue
@@ -380,26 +386,18 @@ class CMapParser(Parser[PSKeyword]):
                 for i in range(end - start + 1):
                     x = start_prefix + struct.pack(">L", start + i)[-vlen:]
                     self.cmap.add_cid2unichr(cid + i, x)
-            return
-
-        if token is self.KEYWORD_BEGINCIDCHAR:
             self.popall()
-            return
-
-        if token is self.KEYWORD_ENDCIDCHAR:
-            objs = [obj for (__, obj) in self.popall()]
-            for cid, code in choplist(2, objs):
+        elif token is KEYWORD_BEGINCIDCHAR:
+            self.popall()
+        elif token is KEYWORD_ENDCIDCHAR:
+            for cid, code in choplist(2, self.stack):
                 if isinstance(code, bytes) and isinstance(cid, int):
                     self.cmap.add_cid2unichr(cid, code)
-            return
-
-        if token is self.KEYWORD_BEGINBFRANGE:
             self.popall()
-            return
-
-        if token is self.KEYWORD_ENDBFRANGE:
-            objs = [obj for (__, obj) in self.popall()]
-            for start_byte, end_byte, code in choplist(3, objs):
+        elif token is KEYWORD_BEGINBFRANGE:
+            self.popall()
+        elif token is KEYWORD_ENDBFRANGE:
+            for start_byte, end_byte, code in choplist(3, self.stack):
                 if not isinstance(start_byte, bytes):
                     self._warn_once("The start object is not a byte.")
                     continue
@@ -428,28 +426,21 @@ class CMapParser(Parser[PSKeyword]):
                     for i in range(end - start + 1):
                         x = prefix + struct.pack(">L", base + i)[-vlen:]
                         self.cmap.add_cid2unichr(start + i, x)
-            return
-
-        if token is self.KEYWORD_BEGINBFCHAR:
             self.popall()
-            return
-
-        if token is self.KEYWORD_ENDBFCHAR:
-            objs = [obj for (__, obj) in self.popall()]
-            for cid, code in choplist(2, objs):
+        elif token is KEYWORD_BEGINBFCHAR:
+            self.popall()
+        elif token is KEYWORD_ENDBFCHAR:
+            for cid, code in choplist(2, self.stack):
                 if isinstance(cid, bytes) and isinstance(code, bytes):
                     self.cmap.add_cid2unichr(nunpack(cid), code)
-            return
-
-        if token is self.KEYWORD_BEGINNOTDEFRANGE:
             self.popall()
-            return
-
-        if token is self.KEYWORD_ENDNOTDEFRANGE:
+        elif token is KEYWORD_BEGINNOTDEFRANGE:
             self.popall()
-            return
-
-        self.push((pos, token))
+        elif token is KEYWORD_ENDNOTDEFRANGE:
+            self.popall()
+        else:
+            # It's ... something else (probably bogus)
+            self.stack.append(token)
 
     def _warn_once(self, msg: str) -> None:
         """Warn once for each unique message"""

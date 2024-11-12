@@ -1,10 +1,12 @@
 import logging
 import struct
+from collections import deque
 from functools import cache
 from io import BytesIO
 from typing import (
     Any,
     BinaryIO,
+    Deque,
     Dict,
     Iterable,
     Iterator,
@@ -35,9 +37,9 @@ from playa.fontmetrics import FONT_METRICS
 from playa.parser import (
     KWD,
     LIT,
-    Parser,
-    PSKeyword,
+    Lexer,
     PSLiteral,
+    Token,
     literal_name,
 )
 from playa.pdftypes import (
@@ -103,20 +105,21 @@ class FontMetricsDB:
         return FONT_METRICS[fontname]
 
 
-# int here means that we're not extending Parser with additional types.
-class Type1FontHeaderParser(Parser[int]):
-    KEYWORD_BEGIN = KWD(b"begin")
-    KEYWORD_END = KWD(b"end")
-    KEYWORD_DEF = KWD(b"def")
-    KEYWORD_PUT = KWD(b"put")
-    KEYWORD_DICT = KWD(b"dict")
-    KEYWORD_ARRAY = KWD(b"array")
-    KEYWORD_READONLY = KWD(b"readonly")
-    KEYWORD_FOR = KWD(b"for")
+KEYWORD_BEGIN = KWD(b"begin")
+KEYWORD_END = KWD(b"end")
+KEYWORD_DEF = KWD(b"def")
+KEYWORD_PUT = KWD(b"put")
+KEYWORD_DICT = KWD(b"dict")
+KEYWORD_ARRAY = KWD(b"array")
+KEYWORD_READONLY = KWD(b"readonly")
+KEYWORD_FOR = KWD(b"for")
 
+
+class Type1FontHeaderParser:
     def __init__(self, data: bytes) -> None:
-        super().__init__(data)
+        self._lexer = Lexer(data)
         self._cid2unicode: Dict[int, str] = {}
+        self._tokq: Deque[Token] = deque([], 2)
 
     def get_encoding(self) -> Dict[int, str]:
         """Parse the font encoding.
@@ -132,22 +135,18 @@ class Type1FontHeaderParser(Parser[int]):
 
         :returns mapping of character identifiers (cid's) to unicode characters
         """
-        while 1:
-            try:
-                (cid, name) = next(self)
-            except StopIteration:
-                break
-            try:
-                self._cid2unicode[cid] = name2unicode(cast(str, name))
-            except KeyError as e:
-                log.debug(str(e))
+        for _, tok in self._lexer:
+            # Ignore anything that isn't INT NAME put
+            if tok is KEYWORD_PUT:
+                try:
+                    cid, name = self._tokq
+                    if isinstance(cid, int) and isinstance(name, PSLiteral):
+                        self._cid2unicode[cid] = name2unicode(name.name)
+                except KeyError:
+                    log.warning("Unknown CID %d", cid)
+            else:
+                self._tokq.append(tok)
         return self._cid2unicode
-
-    def do_keyword(self, pos: int, token: PSKeyword) -> None:
-        if token is self.KEYWORD_PUT:
-            ((_, key), (_, value)) = self.pop(2)
-            if isinstance(key, int) and isinstance(value, PSLiteral):
-                self.add_results((key, literal_name(value)))
 
 
 NIBBLES = ("0", "1", "2", "3", "4", "5", "6", "7", "8", "9", ".", "e", "e-", None, "-")

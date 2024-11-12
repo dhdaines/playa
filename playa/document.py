@@ -10,6 +10,7 @@ from typing import (
     Any,
     BinaryIO,
     Callable,
+    Deque,
     Dict,
     Iterable,
     Iterator,
@@ -43,11 +44,14 @@ from playa.parser import (
     KEYWORD_TRAILER,
     KEYWORD_XREF,
     LIT,
-    ContentStreamParser,
-    PDFParser,
-    PSBaseParserToken,
+    IndirectObjectParser,
+    Lexer,
+    ObjectParser,
+    PDFObject,
     PSLiteral,
+    Token,
     literal_name,
+    reverse_iter_lines,
 )
 from playa.pdftypes import (
     ContentStream,
@@ -86,7 +90,7 @@ LITERAL_PAGES = LIT("Pages")
 INHERITABLE_PAGE_ATTRS = {"Resources", "MediaBox", "CropBox", "Rotate"}
 
 
-class PDFXRef(Protocol):
+class XRef(Protocol):
     """
     Duck-typing for XRef table implementations, which are expected to be read-only.
     """
@@ -98,19 +102,19 @@ class PDFXRef(Protocol):
     def get_pos(self, objid: int) -> Tuple[Optional[int], int, int]: ...
 
 
-class PDFXRefTable:
+class XRefTable:
     """Simplest (PDF 1.0) implementation of cross-reference table, in
     plain text at the end of the file.
     """
 
-    def __init__(self, parser: PDFParser) -> None:
+    def __init__(self, parser: ObjectParser) -> None:
         self.offsets: Dict[int, Tuple[Optional[int], int, int]] = {}
         self.trailer: Dict[str, Any] = {}
         self._load(parser)
 
-    def _load(self, parser: PDFParser) -> None:
-        lines = parser.iter_lines()
-        for pos, line in lines:
+    def _load(self, parser: ObjectParser) -> None:
+        while True:
+            pos, line = parser.nextline()
             line = line.strip()
             if not line:
                 continue
@@ -127,7 +131,7 @@ class PDFXRefTable:
                 error_msg = f"Invalid line: {parser!r}: line={line!r}"
                 raise ValueError(error_msg)
             for objid in range(start, start + nobjs):
-                _, line = next(lines)
+                _, line = parser.nextline()
                 line = line.strip()
                 f = line.split(b" ")
                 if len(f) != 3:
@@ -140,28 +144,22 @@ class PDFXRefTable:
         log.debug("xref objects: %r", self.offsets)
         self._load_trailer(parser)
 
-    def _load_trailer(self, parser: PDFParser) -> None:
-        try:
-            (_, kwd) = parser.nexttoken()
-            if kwd is not KEYWORD_TRAILER:
-                raise PDFSyntaxError(
-                    "Expected %r, got %r"
-                    % (
-                        KEYWORD_TRAILER,
-                        kwd,
-                    )
+    def _load_trailer(self, parser: ObjectParser) -> None:
+        (_, kwd) = next(parser)
+        if kwd is not KEYWORD_TRAILER:
+            raise PDFSyntaxError(
+                "Expected %r, got %r"
+                % (
+                    KEYWORD_TRAILER,
+                    kwd,
                 )
-            (_, dic) = next(parser)
-        except StopIteration:
-            x = parser.pop(1)
-            if not x:
-                raise EOFError("Unexpected EOF - file corrupted")
-            (_, dic) = x[0]
+            )
+        (_, dic) = next(parser)
         self.trailer.update(dict_value(dic))
         log.debug("trailer=%r", self.trailer)
 
     def __repr__(self) -> str:
-        return "<PDFXRefTable: offsets=%r>" % (self.offsets.keys())
+        return "<XRefTable: offsets=%r>" % (self.offsets.keys())
 
     @property
     def objids(self) -> Iterable[int]:
@@ -171,60 +169,74 @@ class PDFXRefTable:
         return self.offsets[objid]
 
 
-PDFOBJ_CUE = re.compile(r"^(\d+)\s+(\d+)\s+obj\b")
+PDFOBJ_CUE = re.compile(rb"^(\d+)\s+(\d+)\s+obj\b")
 
 
-class PDFXRefFallback(PDFXRefTable):
-    """Fallback implementation of cross-reference table, for broken
-    PDFs I guess?
-    """
+class XRefFallback:
+    """In the case where a file is non-conforming and has no
+    `startxref` marker at its end, we will reconstruct a
+    cross-reference table by simply scanning the entire file to find
+    all indirect objects."""
+
+    def __init__(self, parser: IndirectObjectParser) -> None:
+        self.offsets: Dict[int, Tuple[Optional[int], int, int]] = {}
+        self.trailer: Dict[str, Any] = {}
+        self._load(parser)
 
     def __repr__(self) -> str:
-        return "<PDFXRefFallback: offsets=%r>" % (self.offsets.keys())
+        return "<XRefFallback: offsets=%r>" % (self.offsets.keys())
 
-    def _load(self, parser: PDFParser) -> None:
+    def _load(self, parser: IndirectObjectParser) -> None:
         parser.seek(0)
-        for pos, line_bytes in parser.iter_lines():
-            if line_bytes.startswith(b"trailer"):
-                parser.seek(pos)
-                self._load_trailer(parser)
-                log.debug("trailer: %r", self.trailer)
-                break
-            line = line_bytes.decode("latin-1")  # default pdf encoding
-            m = PDFOBJ_CUE.match(line)
-            if not m:
-                continue
-            (objid_s, genno_s) = m.groups()
-            objid = int(objid_s)
-            genno = int(genno_s)
-            self.offsets[objid] = (None, pos, genno)
-            # expand ObjStm.
-            parser.seek(pos)
-            (_, obj) = next(parser)
-            if isinstance(obj, ContentStream) and obj.get("Type") is LITERAL_OBJSTM:
-                stream = stream_value(obj)
+        parser.reset()
+        # Get all the objects
+        for pos, obj in parser:
+            self.offsets[obj.objid] = (None, pos, obj.genno)
+            # Expand any object streams right away
+            if (
+                isinstance(obj.obj, ContentStream)
+                and obj.obj.get("Type") is LITERAL_OBJSTM
+            ):
+                stream = stream_value(obj.obj)
                 try:
                     n = stream["N"]
                 except KeyError:
                     if settings.STRICT:
                         raise PDFSyntaxError("N is not defined: %r" % stream)
                     n = 0
-                doc = parser.doc()
+                doc = None if parser.doc is None else parser.doc()
                 if doc is None:
                     raise RuntimeError("Document no longer exists!")
-                parser1 = ContentStreamParser(stream.get_data(), doc)
+                parser1 = ObjectParser(stream.get_data(), doc)
                 objs: List = [obj for _, obj in parser1]
                 # FIXME: This is choplist
                 n = min(n, len(objs) // 2)
                 for index in range(n):
                     objid1 = objs[index * 2]
-                    self.offsets[objid1] = (objid, index, 0)
+                    self.offsets[objid1] = (obj.objid, index, 0)
+        # Now get the trailer
+        for s1, s2 in itertools.pairwise(parser.trailer):
+            _, token = s1
+            if token is KEYWORD_TRAILER:
+                _, dic = s2
+                self.trailer.update(dict_value(dic))
+                log.debug("trailer=%r", self.trailer)
+                break
+        else:
+            log.warning("b'trailer' not found in document")
+
+    @property
+    def objids(self) -> Iterable[int]:
+        return self.offsets.keys()
+
+    def get_pos(self, objid: int) -> Tuple[Optional[int], int, int]:
+        return self.offsets[objid]
 
 
-class PDFXRefStream:
+class XRefStream:
     """Cross-reference stream (as of PDF 1.5)"""
 
-    def __init__(self, parser: PDFParser) -> None:
+    def __init__(self, parser: IndirectObjectParser) -> None:
         self.data: Optional[bytes] = None
         self.entlen: Optional[int] = None
         self.fl1: Optional[int] = None
@@ -234,13 +246,11 @@ class PDFXRefStream:
         self._load(parser)
 
     def __repr__(self) -> str:
-        return "<PDFXRefStream: ranges=%r>" % (self.ranges)
+        return "<XRefStream: ranges=%r>" % (self.ranges)
 
-    def _load(self, parser: PDFParser) -> None:
-        (_, objid) = parser.nexttoken()  # ignored
-        (_, genno) = parser.nexttoken()  # ignored
-        (_, kwd) = parser.nexttoken()
-        (_, stream) = next(parser)
+    def _load(self, parser: IndirectObjectParser) -> None:
+        (_, obj) = next(parser)
+        stream = obj.obj
         if (
             not isinstance(stream, ContentStream)
             or stream.get("Type") is not LITERAL_XREF
@@ -732,13 +742,13 @@ class PDFDocument:
         fp: BinaryIO,
         password: str = "",
     ) -> None:
-        self.xrefs: List[PDFXRef] = []
+        self.xrefs: List[XRef] = []
         self.info = []
         self.catalog: Dict[str, Any] = {}
         self.encryption: Optional[Tuple[Any, Any]] = None
         self.decipher: Optional[DecipherCallable] = None
-        self._cached_objs: Dict[int, Tuple[object, int]] = {}
-        self._parsed_objs: Dict[int, Tuple[List[object], int]] = {}
+        self._cached_objs: Dict[int, PDFObject] = {}
+        self._parsed_objs: Dict[int, Tuple[List[PDFObject], int]] = {}
         self._cached_fonts: Dict[object, Font] = {}
         if isinstance(fp, io.TextIOBase):
             raise TypeError("fp is not a binary file")
@@ -758,20 +768,19 @@ class PDFDocument:
             self.buffer = fp.read()
         except ValueError:
             raise
-        self.parser = PDFParser(self.buffer, self)
         self.is_printable = self.is_modifiable = self.is_extractable = True
         # Getting the XRef table and trailer is done non-lazily
         # because they contain encryption information among other
         # things.  As noted above we don't try to look for the first
         # page cross-reference table (for linearized PDFs) after the
         # header, it will instead be loaded with all the rest.
+        self.parser = IndirectObjectParser(self.buffer, self)
         try:
             pos = self.find_xref()
             self.read_xref_from(pos, self.xrefs)
-        except Exception as e:
+        except (ValueError, IndexError) as e:
             log.debug("Using fallback XRef parsing: %s", e)
-            self.parser.fallback = True
-            newxref = PDFXRefFallback(self.parser)
+            newxref = XRefFallback(self.parser)
             self.xrefs.append(newxref)
         # Now find the trailer
         for xref in self.xrefs:
@@ -800,6 +809,13 @@ class PDFDocument:
         if self.catalog.get("Type") is not LITERAL_CATALOG:
             if settings.STRICT:
                 raise PDFSyntaxError("Catalog not found!")
+        if "Version" in self.catalog:
+            log.debug(
+                "Using PDF version %r from catalog instead of %r from header",
+                self.catalog["Version"],
+                self.pdf_version,
+            )
+            self.pdf_version = self.catalog["Version"]
 
     def _initialize_password(self, password: str = "") -> None:
         """Initialize the decryption handler with a given password, if any.
@@ -827,22 +843,21 @@ class PDFDocument:
         self.is_modifiable = handler.is_modifiable
         self.is_extractable = handler.is_extractable
         assert self.parser is not None
-        self.parser.fallback = False  # need to read streams with exact length
+        # Ensure that no extra data leaks into encrypted streams
+        self.parser.strict = True
 
     def __iter__(self) -> Iterator[Tuple[int, object]]:
-        """Iterate over (position, object) tuples, raising StopIteration at EOF."""
-        # FIXME: Should create a new parser
-        self.parser.seek(0)
-        return self.parser
+        """Iterate over (position, `IndirectObject`) tuples."""
+        return IndirectObjectParser(self.buffer, self)
 
     @property
-    def tokens(self) -> Iterator[Tuple[int, PSBaseParserToken]]:
-        """Iterate over (position, token) tuples, raising StopIteration at EOF."""
-        # FIXME: Should create a new parser
-        self.parser.seek(0)
-        return self.parser.tokens
+    def tokens(self) -> Iterator[Tuple[int, Token]]:
+        """Iterate over (position, token) tuples."""
+        return Lexer(self.buffer)
 
-    def _getobj_objstm(self, stream: ContentStream, index: int, objid: int) -> object:
+    def _getobj_objstm(
+        self, stream: ContentStream, index: int, objid: int
+    ) -> PDFObject:
         if stream.objid in self._parsed_objs:
             (objs, n) = self._parsed_objs[stream.objid]
         else:
@@ -856,7 +871,7 @@ class PDFDocument:
             raise PDFSyntaxError("index too big: %r" % index)
         return obj
 
-    def _get_objects(self, stream: ContentStream) -> Tuple[List[object], int]:
+    def _get_objects(self, stream: ContentStream) -> Tuple[List[PDFObject], int]:
         if stream.get("Type") is not LITERAL_OBJSTM:
             if settings.STRICT:
                 raise PDFSyntaxError("Not a stream object: %r" % stream)
@@ -866,47 +881,46 @@ class PDFDocument:
             if settings.STRICT:
                 raise PDFSyntaxError("N is not defined: %r" % stream)
             n = 0
-        parser = ContentStreamParser(stream.get_data(), self)
-        objs: List[object] = [obj for _, obj in parser]
+        parser = ObjectParser(stream.get_data(), self)
+        objs: List[PDFObject] = [obj for _, obj in parser]
         return (objs, n)
 
-    def _getobj_parse(self, pos: int, objid: int) -> object:
+    def _getobj_parse(self, pos: int, objid: int) -> PDFObject:
         assert self.parser is not None
         self.parser.seek(pos)
-        (_, token) = self.parser.nexttoken()
-
-        # Hack around malformed pdf files where the offset in the xref
-        # table doesn't point exactly at the object definition
-        # (probably more frequent than you think).  Parse forward
-        # until we find "obj" and hope it's the right object (FIXME:
-        # could also back up a bit?)
-        # originally copied from https://github.com/jaepil/pdfminer3k/blob/master/
-        # pdfminer/pdfparser.py#L399
-        # to solve https://github.com/pdfminer/pdfminer.six/issues/56
-        if token != objid:
-            q = deque([token], 3)
+        try:
+            _, obj = next(self.parser)
+        except ValueError as e:
+            log.warning(
+                "Indirect object %d not found at position %d: %r", objid, pos, e
+            )
+            # Hack around malformed pdf files where the offset in the
+            # xref table doesn't point exactly at the object
+            # definition (probably more frequent than you think).
+            # Parse forward until we find "obj" and hope it's the
+            # right object (FIXME: could also back up a bit?) Fixes
+            # https://github.com/pdfminer/pdfminer.six/issues/56
+            tokenizer = Lexer(self.buffer, pos)
+            q: Deque[Token] = deque([], 3)
             while True:
                 try:
-                    (_, token) = self.parser.nexttoken()
+                    (pos, token) = next(tokenizer)
                 except StopIteration:
                     raise PDFSyntaxError(
-                        f"object {objid!r} not found at or after position {pos}"
+                        f"Indirect object {objid!r} not found at or after position {pos}"
                     )
-                q.append(token)
+                q.append(pos)
                 if len(q) == 3 and token is KEYWORD_OBJ:
                     break
-            objid1, genno, kwd = q
-            if objid1 != objid:
-                raise PDFSyntaxError(f"objid mismatch: {objid1!r}={objid!r}")
-        else:
-            (_, genno) = self.parser.nexttoken()
-            (_, kwd) = self.parser.nexttoken()
-            if kwd != KEYWORD_OBJ:
-                raise PDFSyntaxError("Invalid object spec: offset=%r" % pos)
-        (_, obj) = next(self.parser)
-        return obj
+            self.parser.seek(int_value(q[0]))
+            (_, obj) = next(self.parser)
+        if obj.objid != objid:
+            raise PDFSyntaxError(f"objid mismatch: {obj.objid!r}={objid!r}")
+        if self.decipher:
+            return decipher_all(self.decipher, obj.objid, obj.genno, obj.obj)
+        return obj.obj
 
-    def __getitem__(self, objid: int) -> object:
+    def __getitem__(self, objid: int) -> Any:
         """Get object from PDF
 
         :raises ValueError if PDFDocument is not initialized
@@ -915,9 +929,7 @@ class PDFDocument:
         if not self.xrefs:
             raise ValueError("PDFDocument is not initialized")
         log.debug("getobj: objid=%r", objid)
-        if objid in self._cached_objs:
-            (obj, genno) = self._cached_objs[objid]
-        else:
+        if objid not in self._cached_objs:
             obj = None
             for xref in self.xrefs:
                 try:
@@ -930,19 +942,14 @@ class PDFDocument:
                         obj = self._getobj_objstm(stream, index, objid)
                     else:
                         obj = self._getobj_parse(index, objid)
-                        if self.decipher:
-                            obj = decipher_all(self.decipher, objid, genno, obj)
-
-                    if isinstance(obj, ContentStream):
-                        obj.set_objid(objid, genno)
                     break
                 except (StopIteration, PDFSyntaxError):
                     continue
             if obj is None:
                 raise IndexError(f"Object with ID {objid} not found")
             log.debug("register: objid=%r: %r", objid, obj)
-            self._cached_objs[objid] = (obj, genno)
-        return obj
+            self._cached_objs[objid] = obj
+        return self._cached_objs[objid]
 
     def get_font(self, objid: object, spec: Mapping[str, object]) -> Font:
         if objid and objid in self._cached_fonts:
@@ -1166,8 +1173,7 @@ class PDFDocument:
         prev = b""
         # FIXME: This will scan *the whole file* looking for an xref
         # table, it should maybe give up sooner?
-        self.parser.seek(self.parser.end)
-        for line in self.parser.reverse_iter_lines():
+        for line in reverse_iter_lines(self.buffer):
             line = line.strip()
             log.debug("find_xref: %r", line)
             if line == b"startxref":
@@ -1186,13 +1192,12 @@ class PDFDocument:
     def read_xref_from(
         self,
         start: int,
-        xrefs: List[PDFXRef],
+        xrefs: List[XRef],
     ) -> None:
         """Reads XRefs from the given location."""
-        self.parser.seek(start)
-        self.parser.reset()
+        parser = ObjectParser(self.buffer, self, start)
         try:
-            (pos, token) = self.parser.nexttoken()
+            (pos, token) = parser.nexttoken()
         except StopIteration:
             raise ValueError("Unexpected EOF at {start}")
         log.debug("read_xref_from: start=%d, token=%r", start, token)
@@ -1200,17 +1205,20 @@ class PDFDocument:
             # XRefStream: PDF-1.5
             self.parser.seek(pos)
             self.parser.reset()
-            xref: PDFXRef = PDFXRefStream(self.parser)
+            xref: XRef = XRefStream(self.parser)
         else:
             if token is KEYWORD_XREF:
-                next(self.parser.iter_lines())
-            xref = PDFXRefTable(self.parser)
+                parser.nextline()
+            xref = XRefTable(parser)
         xrefs.append(xref)
         trailer = xref.trailer
         log.debug("trailer: %r", trailer)
+        # For hybrid-reference files, an additional set of xrefs as a
+        # stream.
         if "XRefStm" in trailer:
             pos = int_value(trailer["XRefStm"])
             self.read_xref_from(pos, xrefs)
+        # Recurse into any previous xref tables or streams
         if "Prev" in trailer:
             # find previous xref
             pos = int_value(trailer["Prev"])

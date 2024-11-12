@@ -12,6 +12,7 @@ import playa.settings
 from playa.data_structures import NameTree
 from playa.document import read_header
 from playa.exceptions import PDFSyntaxError
+from playa.parser import LIT
 from playa.utils import decode_text
 
 TESTDIR = Path(__file__).parent.parent / "samples"
@@ -39,8 +40,10 @@ def test_tokens():
 
 def test_objects():
     with playa.open(TESTDIR / "simple1.pdf") as doc:
-        for obj in doc:
-            print(obj)
+        doc7 = doc[7]
+        assert doc7["Type"] == LIT("Font")
+        doc1 = doc[1]
+        assert doc1["Type"] == LIT("Catalog")
 
 
 def test_page_labels():

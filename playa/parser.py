@@ -6,28 +6,25 @@ from binascii import unhexlify
 from collections import deque
 from typing import (
     TYPE_CHECKING,
+    Any,
     Deque,
     Dict,
-    Generic,
     Iterator,
     List,
-    Optional,
+    NamedTuple,
     Tuple,
-    TypeVar,
     Union,
 )
 
-from playa import settings
-from playa.casting import safe_int
 from playa.exceptions import PDFSyntaxError
 from playa.pdftypes import (
     KWD,
     LIT,
+    LITERALS_ASCII85_DECODE,
     ContentStream,
     ObjRef,
     PSKeyword,
     PSLiteral,
-    dict_value,
     int_value,
     literal_name,
     name_str,
@@ -50,10 +47,14 @@ KEYWORD_R = KWD(b"R")
 KEYWORD_NULL = KWD(b"null")
 KEYWORD_ENDOBJ = KWD(b"endobj")
 KEYWORD_STREAM = KWD(b"stream")
+KEYWORD_ENDSTREAM = KWD(b"endstream")
 KEYWORD_XREF = KWD(b"xref")
 KEYWORD_STARTXREF = KWD(b"startxref")
 KEYWORD_OBJ = KWD(b"obj")
 KEYWORD_TRAILER = KWD(b"trailer")
+KEYWORD_BI = KWD(b"BI")
+KEYWORD_ID = KWD(b"ID")
+KEYWORD_EI = KWD(b"EI")
 
 
 EOL = b"\r\n"
@@ -76,7 +77,27 @@ ESC_STRING = {
 }
 
 
-PSBaseParserToken = Union[float, bool, PSLiteral, PSKeyword, bytes]
+def reverse_iter_lines(buffer: bytes | mmap.mmap) -> Iterator[bytes]:
+    """Iterate backwards over lines starting at the current position.
+
+    This is used to locate the trailers at the end of a file.
+    """
+    pos = endline = len(buffer)
+    while True:
+        nidx = buffer.rfind(b"\n", 0, pos)
+        ridx = buffer.rfind(b"\r", 0, pos)
+        best = max(nidx, ridx)
+        if best == -1:
+            yield buffer[:endline]
+            break
+        yield buffer[best + 1 : endline]
+        endline = best + 1
+        pos = best
+        if pos > 0 and buffer[pos - 1 : pos + 1] == b"\r\n":
+            pos -= 1
+
+
+Token = Union[float, bool, PSLiteral, PSKeyword, bytes]
 LEXER = re.compile(
     rb"""(?:
       (?P<whitespace> \s+)
@@ -113,11 +134,11 @@ SPC = re.compile(rb"\s")
 class Lexer:
     """Lexer for PDF data."""
 
-    def __init__(self, data: Union[bytes, mmap.mmap]) -> None:
+    def __init__(self, data: Union[bytes, mmap.mmap], pos: int = 0) -> None:
         self.data = data
-        self.pos = 0
+        self.pos = pos
         self.end = len(data)
-        self._tokens: Deque[Tuple[int, PSBaseParserToken]] = deque()
+        self._tokens: Deque[Tuple[int, Token]] = deque()
 
     def seek(self, pos: int) -> None:
         """Seek to a position and reinitialize parser state."""
@@ -137,36 +158,16 @@ class Lexer:
         self.pos = min(pos + objlen, len(self.data))
         return self.data[pos : self.pos]
 
-    def iter_lines(self) -> Iterator[Tuple[int, bytes]]:
-        r"""Iterate over lines that end either with \r, \n, or \r\n,
+    def nextline(self) -> Tuple[int, bytes]:
+        r"""Get the next line ending either with \r, \n, or \r\n,
         starting at the current position."""
-        while self.pos < self.end:
-            linepos = self.pos
-            m = EOLR.search(self.data, self.pos)
-            if m is None:
-                self.pos = self.end
-            else:
-                self.pos = m.end()
-            yield (linepos, self.data[linepos : self.pos])
-
-    def reverse_iter_lines(self) -> Iterator[bytes]:
-        """Iterate backwards over lines starting at the current position.
-
-        This is used to locate the trailers at the end of a file.
-        """
-        endline = self.pos
-        while True:
-            nidx = self.data.rfind(b"\n", 0, self.pos)
-            ridx = self.data.rfind(b"\r", 0, self.pos)
-            best = max(nidx, ridx)
-            if best == -1:
-                yield self.data[:endline]
-                break
-            yield self.data[best + 1 : endline]
-            endline = best + 1
-            self.pos = best
-            if self.pos > 0 and self.data[self.pos - 1 : self.pos + 1] == b"\r\n":
-                self.pos -= 1
+        linepos = self.pos
+        m = EOLR.search(self.data, self.pos)
+        if m is None:
+            self.pos = self.end
+        else:
+            self.pos = m.end()
+        return (linepos, self.data[linepos : self.pos])
 
     def get_inline_data(
         self, target: bytes = b"EI", blocksize: int = -1
@@ -190,11 +191,11 @@ class Lexer:
             return result
         return (-1, b"")
 
-    def __iter__(self) -> Iterator[Tuple[int, PSBaseParserToken]]:
+    def __iter__(self) -> Iterator[Tuple[int, Token]]:
         """Iterate over tokens."""
         return self
 
-    def __next__(self) -> Tuple[int, PSBaseParserToken]:
+    def __next__(self) -> Tuple[int, Token]:
         """Get the next token in iteration, raising StopIteration when
         done."""
         while True:
@@ -238,7 +239,7 @@ class Lexer:
         else:
             return (self._curtokenpos, KWD(self._curtoken))
 
-    def _parse_endstr(self, start: bytes, pos: int) -> Tuple[int, PSBaseParserToken]:
+    def _parse_endstr(self, start: bytes, pos: int) -> Tuple[int, Token]:
         """Parse the remainder of a string."""
         # Handle nonsense CRLF conversion in strings (PDF 1.7, p.15)
         parts = [EOLR.sub(b"\n", start)]
@@ -282,196 +283,219 @@ class Lexer:
         return (self._curtokenpos, b"".join(parts))
 
 
-# Stack slots may by occupied by any of:
-#  * the name of a literal
-#  * the PSBaseParserToken types
-#  * list (via KEYWORD_ARRAY)
-#  * dict (via KEYWORD_DICT)
-#  * subclass-specific extensions (e.g. PDFStream, PDFObjRef) via ExtraT
-ExtraT = TypeVar("ExtraT")
-PSStackType = Union[str, float, bool, PSLiteral, bytes, List, Dict, ExtraT]
-PSStackEntry = Tuple[int, PSStackType[ExtraT]]
-PDFStackT = PSStackType[ContentStream]  # FIXME: Not entirely correct here
+class InlineImage(ContentStream):
+    """Specific class for inline images so the interpreter can
+    recognize them (they are otherwise the same thing as content
+    streams)."""
 
 
-class Parser(Generic[ExtraT]):
-    """Basic parser for PDF objects in a bytes-like object."""
+PDFObject = Union[
+    str,
+    float,
+    bool,
+    PSLiteral,
+    bytes,
+    List,
+    Dict,
+    ObjRef,
+    PSKeyword,
+    InlineImage,
+    ContentStream,
+    None,
+]
+StackEntry = Tuple[int, PDFObject]
 
-    def __init__(self, data: Union[bytes, mmap.mmap]) -> None:
-        self.reinit(data)
 
-    def reinit(self, data: Union[bytes, mmap.mmap]) -> None:
-        """Reinitialize with new data (FIXME: Should go away, use a
-        new parser for each stream as it's clearer and safer)"""
+class ObjectParser:
+    """ObjectParser is used to parse PDF object streams (and
+    content streams, which have the same syntax).  Notably these
+    consist of, well, a stream of objects without the surrounding
+    `obj` and `endobj` tokens (which cannot occur in an object
+    stream).
+
+    They can contain indirect object references (so, must be
+    initialized with a `PDFDocument` to resolve these) but for perhaps
+    obvious reasons (how would you parse that) these cannot occur at
+    the top level of the stream, only inside an array or dictionary.
+    """
+
+    def __init__(
+        self,
+        data: Union[bytes, mmap.mmap],
+        doc: Union["PDFDocument", None] = None,
+        pos: int = 0,
+    ) -> None:
+        self._lexer = Lexer(data, pos)
+        self.stack: List[StackEntry] = []
+        self.doc = None if doc is None else weakref.ref(doc)
+
+    def newstream(self, data: Union[bytes, mmap.mmap]) -> None:
+        """Continue parsing from a new data stream."""
         self._lexer = Lexer(data)
-        self.reset()
 
     def reset(self) -> None:
-        """Reset parser state."""
-        self.context: List[Tuple[int, Optional[str], List[PSStackEntry[ExtraT]]]] = []
-        self.curtype: Optional[str] = None
-        self.curstack: List[PSStackEntry[ExtraT]] = []
-        self.results: List[PSStackEntry[ExtraT]] = []
+        """Clear internal parser state."""
+        del self.stack[:]
 
-    def push(self, *objs: PSStackEntry[ExtraT]) -> None:
-        """Push some objects onto the stack."""
-        self.curstack.extend(objs)
+    def __iter__(self) -> Iterator[StackEntry]:
+        """Iterate over (position, object) tuples, raising StopIteration at EOF."""
+        return self
 
-    def pop(self, n: int) -> List[PSStackEntry[ExtraT]]:
-        """Pop some objects off the stack."""
-        objs = self.curstack[-n:]
-        self.curstack[-n:] = []
-        return objs
-
-    def popall(self) -> List[PSStackEntry[ExtraT]]:
-        """Pop all the things off the stack."""
-        objs = self.curstack
-        self.curstack = []
-        return objs
-
-    def add_results(self, *objs: PSStackEntry[ExtraT]) -> None:
-        """Move some objects to the output."""
-        try:
-            log.debug("add_results: %r", objs)
-        except Exception:
-            log.debug("add_results: (unprintable object)")
-        self.results.extend(objs)
-
-    def start_type(self, pos: int, type: str) -> None:
-        """Start a composite object (array, dict, etc)."""
-        self.context.append((pos, self.curtype, self.curstack))
-        (self.curtype, self.curstack) = (type, [])
-        log.debug("start_type: pos=%r, type=%r", pos, type)
-
-    def end_type(self, type: str) -> Tuple[int, List[PSStackType[ExtraT]]]:
-        """End a composite object (array, dict, etc)."""
-        if self.curtype != type:
-            raise TypeError(f"Type mismatch: {self.curtype!r} != {type!r}")
-        objs = [obj for (_, obj) in self.curstack]
-        (pos, self.curtype, self.curstack) = self.context.pop()
-        log.debug("end_type: pos=%r, type=%r, objs=%r", pos, type, objs)
-        return (pos, objs)
-
-    def do_keyword(self, pos: int, token: PSKeyword) -> None:
-        """Handle a PDF keyword."""
-        pass
-
-    def flush(self) -> None:
-        """Add objects from stack to output (or, actually, not)."""
-        return
-
-    def __next__(self) -> PSStackEntry[ExtraT]:
-        """Return the next object, raising StopIteration at EOF.
-
-        Arrays and dictionaries are represented as Python lists and
-        dictionaries.
-        """
-        while not self.results:
+    def __next__(self) -> StackEntry:
+        """Get next PDF object from stream (raises StopIteration at EOF)."""
+        top: Union[int, None] = None
+        obj: Union[Dict[Any, Any], List[PDFObject], PDFObject]
+        while True:
+            if self.stack and top is None:
+                return self.stack.pop()
             (pos, token) = self.nexttoken()
-            if isinstance(token, (int, float, bool, str, bytes, PSLiteral)):
-                # normal token
-                self.push((pos, token))
-            elif token == KEYWORD_ARRAY_BEGIN:
-                # begin array
-                self.start_type(pos, "a")
-            elif token == KEYWORD_ARRAY_END:
-                # end array
+            if token is KEYWORD_ARRAY_BEGIN:
+                if top is None:
+                    top = pos
+                self.stack.append((pos, token))
+            elif token is KEYWORD_ARRAY_END:
                 try:
-                    self.push(self.end_type("a"))
-                except TypeError:
-                    if settings.STRICT:
-                        raise
-            elif token == KEYWORD_DICT_BEGIN:
-                # begin dictionary
-                self.start_type(pos, "d")
-            elif token == KEYWORD_DICT_END:
-                # end dictionary
+                    pos, obj = self.pop_to(KEYWORD_ARRAY_BEGIN)
+                except TypeError as e:
+                    log.warning(f"When constructing array: {e}")
+                if pos == top:
+                    top = None
+                    return pos, obj
+                self.stack.append((pos, obj))
+            elif token is KEYWORD_DICT_BEGIN:
+                if top is None:
+                    top = pos
+                self.stack.append((pos, token))
+            elif token is KEYWORD_DICT_END:
                 try:
-                    (pos, objs) = self.end_type("d")
+                    (pos, objs) = self.pop_to(KEYWORD_DICT_BEGIN)
                     if len(objs) % 2 != 0:
-                        error_msg = "Invalid dictionary construct: %r" % objs
+                        error_msg = (
+                            "Dictionary contains odd number of ojbects: %r" % objs
+                        )
                         raise PDFSyntaxError(error_msg)
-                    d = {
+                    obj = {
                         literal_name(k): v
                         for (k, v) in choplist(2, objs)
                         if v is not None
                     }
-                    self.push((pos, d))
-                except TypeError:
-                    if settings.STRICT:
-                        raise
-            elif token == KEYWORD_PROC_BEGIN:
-                # begin proc
-                self.start_type(pos, "p")
-            elif token == KEYWORD_PROC_END:
-                # end proc
+                except TypeError as e:
+                    log.warning(f"When constructing dict: {e}")
+                if pos == top:
+                    top = None
+                    return pos, obj
+                self.stack.append((pos, obj))
+            elif token is KEYWORD_PROC_BEGIN:
+                if top is None:
+                    top = pos
+                self.stack.append((pos, token))
+            elif token is KEYWORD_PROC_END:
                 try:
-                    self.push(self.end_type("p"))
-                except TypeError:
-                    if settings.STRICT:
-                        raise
-            elif isinstance(token, PSKeyword):
-                log.debug(
-                    "do_keyword: pos=%r, token=%r, stack=%r",
-                    pos,
-                    token,
-                    self.curstack,
-                )
-                self.do_keyword(pos, token)
+                    pos, obj = self.pop_to(KEYWORD_PROC_BEGIN)
+                except TypeError as e:
+                    log.warning(f"When constructing proc: {e}")
+                if pos == top:
+                    top = None
+                    return pos, obj
+                self.stack.append((pos, obj))
+            elif token is KEYWORD_NULL:
+                self.stack.append((pos, None))
+            elif token is KEYWORD_R:
+                # reference to indirect object (only allowed inside another object)
+                if top is None:
+                    log.warning("Ignoring indirect object reference at top level")
+                    self.stack.append((pos, token))
+                else:
+                    try:
+                        _pos, _genno = self.stack.pop()
+                        _pos, objid = self.stack.pop()
+                    except ValueError:
+                        raise PDFSyntaxError(
+                            "Expected generation and object id in indirect object reference"
+                        )
+                    objid = int_value(objid)
+                    obj = ObjRef(self.doc, objid)
+                    self.stack.append((pos, obj))
+            elif token is KEYWORD_BI:
+                if top is None:
+                    top = pos
+                self.stack.append((pos, token))
+            elif token is KEYWORD_ID:
+                idpos = pos
+                (pos, objs) = self.pop_to(KEYWORD_BI)
+                if len(objs) % 2 != 0:
+                    error_msg = f"Invalid dictionary construct: {objs!r}"
+                    raise TypeError(error_msg)
+                dic = {
+                    literal_name(k): v for (k, v) in choplist(2, objs) if v is not None
+                }
+                eos = b"EI"
+                filter = dic.get("F")
+                if filter is not None:
+                    if not isinstance(filter, list):
+                        filter = [filter]
+                    if filter[0] in LITERALS_ASCII85_DECODE:
+                        eos = b"~>"
+                # PDF 1.7 p. 215: Unless the image uses ASCIIHexDecode
+                # or ASCII85Decode as one of its filters, the ID
+                # operator shall be followed by a single white-space
+                # character, and the next character shall be
+                # interpreted as the first byte of image data.
+                if eos == b"EI":
+                    self.seek(idpos + len(KEYWORD_ID.name) + 1)
+                    (eipos, data) = self.get_inline_data(target=eos)
+                    # FIXME: it is totally unspecified what to do with
+                    # a newline between the end of the data and "EI",
+                    # since there is no explicit stream length.  (PDF
+                    # 1.7 p. 756: There should be an end-of-line
+                    # marker after the data and before endstream; this
+                    # marker shall not be included in the stream
+                    # length.)  We will include it, which might be wrong.
+                    data = data[: -len(eos)]
+                else:
+                    # Note absence of + 1 here (the "Unless" above)
+                    self.seek(idpos + len(KEYWORD_ID.name))
+                    (_, data) = self.get_inline_data(target=eos)
+                    # There should be an "EI" here
+                    (eipos, token) = self.nexttoken()
+                    if token is not KEYWORD_EI:
+                        log.warning(
+                            "Inline image not terminated with EI: got %r", token
+                        )
+                if eipos == -1:
+                    raise PDFSyntaxError("End of inline stream %r not found" % eos)
+                obj = InlineImage(dic, data)
+                log.debug("InlineImage @ %d: %r", pos, obj)
+                # Inline images must occur at the top level, otherwise
+                # something is wrong (probably a corrupt file)
+                assert pos == top, f"Inline image {obj} not at top level of stream"
+                top = None
+                return pos, obj
             else:
-                log.error(
-                    "unknown token: pos=%r, token=%r, stack=%r",
-                    pos,
-                    token,
-                    self.curstack,
-                )
-                self.do_keyword(pos, token)
-                raise PDFSyntaxError(f"unknown token {token!r}")
-            if self.context:
-                continue
-            else:
-                self.flush()
-        pos, obj = self.results.pop(0)
-        try:
-            log.debug("__next__: object at %d: %r", pos, obj)
-        except Exception:
-            log.debug("__next__: (unprintable object) at %d", pos)
-        return pos, obj
+                # Literally anything else, including any other keyword
+                # (will be returned above if top is None, or later if
+                # we are inside some object)
+                self.stack.append((pos, token))
 
-    def __iter__(self) -> Iterator[PSStackEntry[ExtraT]]:
-        """Iterate over (position, object) tuples, raising StopIteration at EOF."""
-        return self
-
-    @property
-    def tokens(self) -> Iterator[Tuple[int, PSBaseParserToken]]:
-        """Iterate over (position, token) tuples, raising StopIteration at EOF."""
-        return self._lexer
+    def pop_to(self, token: PSKeyword) -> Tuple[int, List[PDFObject]]:
+        """Pop everything from the stack back to token."""
+        context: List[PDFObject] = []
+        while self.stack:
+            pos, last = self.stack.pop()
+            if last is token:
+                context.reverse()
+                return pos, context
+            context.append(last)
+        raise PDFSyntaxError(f"Unmatched end token {token!r}")
 
     # Delegation follows
     def seek(self, pos: int) -> None:
-        """Seek to a position and reset parser state."""
+        """Seek to a position."""
         self._lexer.seek(pos)
-        self.reset()
 
     def tell(self) -> int:
         """Get the current position in the file."""
         return self._lexer.tell()
-
-    @property
-    def end(self) -> int:
-        """End (or size) of file, for use with seek()."""
-        return self._lexer.end
-
-    def iter_lines(self) -> Iterator[Tuple[int, bytes]]:
-        r"""Iterate over lines that end either with \r, \n, or \r\n."""
-        return self._lexer.iter_lines()
-
-    def reverse_iter_lines(self) -> Iterator[bytes]:
-        """Iterate over lines starting at the end of the file
-
-        This is used to locate the trailers at the end of a file.
-        """
-        return self._lexer.reverse_iter_lines()
 
     def read(self, objlen: int) -> bytes:
         """Read data from a specified position, moving the current
@@ -483,139 +507,155 @@ class Parser(Generic[ExtraT]):
         end-of-stream marker."""
         return self._lexer.get_inline_data(target)
 
-    def nexttoken(self) -> Tuple[int, PSBaseParserToken]:
+    def nextline(self) -> Tuple[int, bytes]:
+        """Read (and do not parse) next line from underlying data."""
+        return self._lexer.nextline()
+
+    def nexttoken(self) -> Tuple[int, Token]:
         """Get the next token in iteration, raising StopIteration when
         done."""
         return next(self._lexer)
 
 
-class PDFParser(Parser[Union[PSKeyword, ContentStream, ObjRef, None]]):
-    """PDFParser fetches PDF objects from a file stream.
-    It holds a weak reference to the document in order to
-    resolve indirect references.  If the document is deleted
-    then this will obviously no longer work.
+class IndirectObject(NamedTuple):
+    objid: int
+    genno: int
+    obj: PDFObject
+
+
+class IndirectObjectParser:
+    """IndirectObjectParser fetches indirect objects from a data
+    stream.  It holds a weak reference to the document in order to
+    resolve indirect references.  If the document is deleted then this
+    will obviously no longer work.
+
+    Note that according to PDF 1.7 sec 7.5.3, "The body of a PDF file
+    shall consist of a sequence of indirect objects representing the
+    contents of a document."  Therefore unlike the base `ObjectParser`,
+    `IndirectObjectParser` returns *only* indrect objects and not bare
+    keywords, strings, numbers, etc.
+
+    However, unlike `ObjectParser`, it will also read and return
+    `ContentStream`s, as these *must* be indirect objects by definition.
 
     Typical usage:
-      parser = PDFParser(fp, doc)
-      parser.seek(offset)
+      parser = IndirectObjectParser(fp, doc)
       for object in parser:
           ...
 
     """
 
-    def __init__(self, data: Union[bytes, mmap.mmap], doc: "PDFDocument") -> None:
-        super().__init__(data)
-        self.doc = weakref.ref(doc)
-        self.fallback = False
+    def __init__(
+        self,
+        data: Union[bytes, mmap.mmap],
+        doc: Union["PDFDocument", None] = None,
+        strict: bool = False,
+    ) -> None:
+        self._parser = ObjectParser(data, doc)
+        self.trailer: List[Tuple[int, Union[PDFObject, ContentStream]]] = []
+        self.doc = None if doc is None else weakref.ref(doc)
+        self.strict = strict
 
-    def do_keyword(self, pos: int, token: PSKeyword) -> None:
-        """Handles PDF-related keywords."""
-        if token in (KEYWORD_XREF, KEYWORD_STARTXREF):
-            self.add_results(*self.pop(1))
+    def __iter__(self) -> Iterator[Tuple[int, IndirectObject]]:
+        return self
 
-        elif token is KEYWORD_ENDOBJ:
-            # objid genno "obj" ... and the object itself
-            self.add_results(*self.pop(4))
-
-        elif token is KEYWORD_NULL:
-            # null object
-            self.push((pos, None))
-
-        elif token is KEYWORD_R:
-            # reference to indirect object
-            if len(self.curstack) >= 2:
-                (_, _object_id), _ = self.pop(2)
-                object_id = safe_int(_object_id)
-                if object_id is not None:
-                    obj = ObjRef(self.doc, object_id)
-                    self.push((pos, obj))
-
-        elif token is KEYWORD_STREAM:
-            # stream dictionary, which precedes "stream"
-            ((_, dic),) = self.pop(1)
-            dic = dict_value(dic)
-            objlen = 0
-            if not self.fallback:
+    def __next__(self) -> Tuple[int, IndirectObject]:
+        obj: Union[PDFObject, ContentStream]
+        while True:
+            pos, obj = next(self._parser)
+            log.debug("pos %r obj %r trailer %r", pos, obj, self.trailer)
+            if obj is KEYWORD_OBJ:
+                pass
+            elif obj is KEYWORD_ENDOBJ:
+                # objid genno "obj" (skipped) ... and the object
+                (_, obj) = self.trailer.pop()
+                (_, genno) = self.trailer.pop()
+                (pos, objid) = self.trailer.pop()
+                objid = int_value(objid)
+                genno = int_value(genno)
+                # ContentStream is *special* and needs these
+                # internally for decryption.
+                if isinstance(obj, ContentStream):
+                    obj.objid = objid
+                    obj.genno = genno
+                return pos, IndirectObject(objid, genno, obj)
+            elif obj is KEYWORD_STREAM:
+                # PDF 1.7 sec 7.3.8.1: A stream shall consist of a
+                # dictionary followed by zero or more bytes bracketed
+                # between the keywords `stream` (followed by newline)
+                # and `endstream`
+                (_, dic) = self.trailer.pop()
+                if not isinstance(dic, dict):
+                    # sec 7.3.8.1: the stream dictionary shall be a
+                    # direct object.
+                    raise PDFSyntaxError("Incorrect type for stream dictionary %r", dic)
                 try:
+                    # sec 7.3.8.2: Every stream dictionary shall have
+                    # a Length entry that indicates how many bytes of
+                    # the PDF file are used for the stream’s data
                     objlen = int_value(dic["Length"])
                 except KeyError:
-                    if settings.STRICT:
-                        raise PDFSyntaxError("/Length is undefined: %r" % dic)
-            # back up and read the entire line including 'stream' as
-            # the data starts after the trailing newline
-            self.seek(pos)
-            try:
-                _, line = next(self.iter_lines())  # 'stream\n'
-            except StopIteration:
-                if settings.STRICT:
-                    raise PDFSyntaxError("Unexpected EOF")
-                return
-            pos = self.tell()
-            data = self.read(objlen)
-            # FIXME: This is ... not really the right way to do this.
-            for linepos, line in self.iter_lines():
-                if b"endstream" in line:
-                    i = line.index(b"endstream")
-                    objlen += i
-                    if self.fallback:
-                        data += line[:i]
-                    break
-                objlen += len(line)
-                if self.fallback:
-                    data += line
-            self.seek(pos + objlen)
-            # XXX limit objlen not to exceed object boundary
-            log.debug(
-                "ContentStream: pos=%d, objlen=%d, dic=%r, data=%r...",
-                pos,
-                objlen,
-                dic,
-                data[:10],
-            )
-            doc = self.doc()
-            if doc is None:
-                raise RuntimeError("Document no longer exists!")
-            stream = ContentStream(dic, bytes(data), doc.decipher)
-            self.push((pos, stream))
-
-        else:
-            # others
-            self.push((pos, token))
-
-
-class ContentStreamParser(PDFParser):
-    """StreamParser is used to parse PDF content streams and object
-    streams.  These have slightly different rules for how objects are
-    described than the top-level PDF file contents.
-    """
-
-    def __init__(self, data: bytes, doc: "PDFDocument") -> None:
-        super().__init__(data, doc)
-
-    def flush(self) -> None:
-        self.add_results(*self.popall())
-
-    def do_keyword(self, pos: int, token: PSKeyword) -> None:
-        if token is KEYWORD_R:
-            # reference to indirect object
-            try:
-                (_, _object_id), _ = self.pop(2)
-            except ValueError:
-                raise PDFSyntaxError(
-                    "Expected generation and object id in indirect object reference"
+                    log.warning("/Length is undefined in stream dictionary %r", dic)
+                    objlen = 0
+                except ValueError:
+                    log.warning("/Length reference cannot be resolved %r", dic)
+                    objlen = 0
+                # sec 7.3.8.1: The keyword `stream` that follows the stream
+                # dictionary shall be followed by an end-of-line
+                # marker consisting of either a CARRIAGE RETURN and a
+                # LINE FEED or just a LINE FEED, and not by a CARRIAGE
+                # RETURN alone.
+                self._parser.seek(pos)
+                _, line = self._parser.nextline()
+                assert line.strip() == b"stream"
+                pos = self._parser.tell()
+                # Because PDFs do not follow the spec, we will read
+                # *at least* the specified number of bytes, which
+                # could be zero (particularly if not specified!), up
+                # until the "endstream" tag.  In most cases it is
+                # expected that this extra data will be included in
+                # the stream anyway, but for encrypted streams you
+                # probably don't want that (LOL @ PDF "security")
+                data = self._parser.read(objlen)
+                # sec 7.3.8.1: There should be an end-of-line
+                # marker after the data and before endstream; this
+                # marker shall not be included in the stream length.
+                linepos, line = self._parser.nextline()
+                log.debug("After stream data: %r %r", linepos, line)
+                if self.strict:
+                    log.warning(
+                        "Expected a newline between end of stream and 'endstream', got %r",
+                        line,
+                    )
+                else:
+                    # Reuse that line and read more if necessary
+                    while True:
+                        if b"endstream" in line:
+                            idx = line.index(b"endstream")
+                            objlen += idx
+                            data += line[:idx]
+                            self._parser.seek(pos + objlen)
+                            break
+                        objlen += len(line)
+                        data += line
+                        linepos, line = self._parser.nextline()
+                        log.debug("After stream data: %r %r", linepos, line)
+                doc = None if self.doc is None else self.doc()
+                stream = ContentStream(
+                    dic, bytes(data), None if doc is None else doc.decipher
                 )
-            object_id = safe_int(_object_id)
-            if object_id is not None:
-                obj = ObjRef(self.doc, object_id)
-                self.push((pos, obj))
-            return
+                self.trailer.append((pos, stream))
+            elif obj is KEYWORD_ENDSTREAM:
+                if not isinstance(self.trailer[-1][1], ContentStream):
+                    log.warning("Got endstream without a stream, ignoring!")
+            else:
+                self.trailer.append((pos, obj))
 
-        elif token in (KEYWORD_OBJ, KEYWORD_ENDOBJ):
-            if settings.STRICT:
-                # See PDF Spec 3.4.6: Only the object values are stored in the
-                # stream; the obj and endobj keywords are not used.
-                raise PDFSyntaxError("Keyword endobj found in stream")
-            return
+    # Delegation follows
+    def seek(self, pos: int) -> None:
+        """Seek to a position."""
+        self._parser.seek(pos)
 
-        # others
-        self.push((pos, token))
+    def reset(self) -> None:
+        """Clear internal parser state."""
+        self._parser.reset()

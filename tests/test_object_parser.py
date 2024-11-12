@@ -6,12 +6,15 @@ import pytest
 from playa.parser import (
     KEYWORD_DICT_BEGIN,
     KEYWORD_DICT_END,
+    InlineImage,
     Lexer,
-    Parser,
+    ObjectParser,
+    reverse_iter_lines,
 )
 from playa.pdftypes import (
     KWD,
     LIT,
+    ObjRef,
     keyword_name,
     literal_name,
 )
@@ -86,10 +89,17 @@ TOKENS1 = [
     (272, KWD(b">>")),
 ]
 OBJS1 = [
+    (5, KWD(b"begin")),
+    (11, KWD(b"end")),
+    (16, KWD(b'"')),
+    (19, KWD(b"@")),
+    (21, KWD(b"#")),
     (23, LIT("a")),
     (25, LIT("BCD")),
     (30, LIT("Some_Name")),
     (41, LIT("foo_")),
+    (48, KWD(b"#")),
+    (49, KWD(b"xbaa")),
     (54, 0),
     (56, 1),
     (59, -2),
@@ -108,10 +118,12 @@ OBJS1 = [
     (194, b" "),
     (199, b"@@ "),
     (211, b"\xab\xcd\x00\x124\x50"),
+    (226, KWD(b"func")),
     (230, LIT("a")),
     (232, LIT("b")),
-    (234, [b"c"]),
-    (246, [1, b"z"]),
+    (234, [b"c", KWD(b"do*")]),
+    (242, KWD(b"def")),
+    (246, [1, b"z", KWD(b"!")]),
     (258, {"foo": b"bar"}),
 ]
 
@@ -125,14 +137,7 @@ def test_lexer_miner():
 
 def test_parser_miner():
     """Parser test case from pdfminer"""
-
-    # FIXME: Still relying on subclassing
-    class MyParser(Parser):
-        def flush(self) -> None:
-            objs = self.popall()
-            self.add_results(*objs)
-
-    objs = list(MyParser(TESTDATA1))
+    objs = list(ObjectParser(TESTDATA1, None))
     logger.info(objs)
     assert objs == OBJS1
 
@@ -154,19 +159,10 @@ EXPECTED2 = [
 ]
 
 
-def test_lines() -> None:
-    """Verify that we replicate the old nextline method."""
-    parser = Lexer(TESTDATA2)
-    output = list(parser.iter_lines())
-    assert output == EXPECTED2
-
-
 def test_revlines() -> None:
     """Verify that we replicate the old revreadlines method."""
     expected = list(reversed([line for pos, line in EXPECTED2]))
-    parser = Lexer(TESTDATA2)
-    parser.seek(parser.end)
-    output = list(parser.reverse_iter_lines())
+    output = list(reverse_iter_lines(TESTDATA2))
     assert output == expected
 
 
@@ -341,3 +337,65 @@ def test_interns():
         _ = KWD("not-a-bytes")
     with pytest.raises(ValueError):
         _ = LIT(b"not-a-str")
+
+
+STREAMDATA = b"""
+/Hello
+<< /Type/Catalog/Outlines 2 0 R /Pages 3 0 R >>
+[ 1 0 R ]
+(foo (bar) baz...)
+null null null
+4 0 R
+"""
+
+
+def test_objects():
+    """Test the basic object stream parser."""
+    parser = ObjectParser(STREAMDATA)
+    objects = list(parser)
+    assert objects == [
+        (1, LIT("Hello")),
+        (
+            8,
+            {
+                "Type": LIT("Catalog"),
+                "Outlines": ObjRef(None, 2),
+                "Pages": ObjRef(None, 3),
+            },
+        ),
+        (56, [ObjRef(None, 1)]),
+        (66, b"foo (bar) baz..."),
+        (85, None),
+        (90, None),
+        (95, None),
+        # Note unparsed indirect object reference
+        (100, 4),
+        (102, 0),
+        (104, KWD(b"R")),
+    ]
+
+
+INLINEDATA1 = b"""
+BI
+/Foo (bar)
+ID
+VARIOUS UTTER NONSENSE
+EI
+BI
+/F /A85
+ID
+<^BVT:K:=9<E)pd;BS_1:/aSV;ag~>
+EI
+"""
+
+
+def test_inline_images():
+    parser = ObjectParser(INLINEDATA1)
+    pos, img = next(parser)
+    assert isinstance(img, InlineImage)
+    assert img.attrs["Foo"] == b"bar"
+    assert img.rawdata == b"VARIOUS UTTER NONSENSE\n"
+    pos, img = next(parser)
+    assert isinstance(img, InlineImage)
+    img.decode()
+    assert img.data == b"VARIOUS UTTER NONSENSE"

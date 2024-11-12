@@ -1,7 +1,6 @@
 import collections
 from typing import Dict, NamedTuple, Union
 
-from playa import settings
 from playa.casting import safe_float
 from playa.exceptions import PDFInterpreterError
 from playa.parser import LIT
@@ -45,7 +44,7 @@ class ColorSpace:
         self.ncomponents = ncomponents
 
     def make_color(self, *components) -> Color:
-        if settings.STRICT and len(components) != self.ncomponents:
+        if len(components) != self.ncomponents:
             raise PDFInterpreterError(
                 "%s requires %d components, got %d!"
                 % (self.name, self.ncomponents, len(components))
