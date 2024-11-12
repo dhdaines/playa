@@ -307,12 +307,15 @@ class PDFStructTree(Findable):
         while d:
             ref = d.popleft()
             # In the case where an MCID is not associated with any
-            # structure, there will be a "null" in the parent tree.
-            if ref == KEYWORD_NULL:
+            # structure, there will be None in the parent tree
+            # (previously it was KWD("null") but we now parse that
+            # properly as None)
+            if ref is KEYWORD_NULL or ref is None:
                 continue
             if repr(ref) in s:
                 continue
             obj = resolve1(ref)
+            assert obj is not None  # This means the XRef tables are borked
             # This is required! It's in the spec!
             if "Type" in obj and decode_text(obj["Type"].name) == "StructTreeRoot":
                 found_root = True
