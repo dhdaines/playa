@@ -1220,7 +1220,7 @@ class PageList:
         try:
             page_labels: Iterable[Optional[str]] = doc.page_labels
         except (KeyError, ValueError):
-            page_labels = itertools.repeat(None)
+            page_labels = itertools.count(1)
         self._pages = []
         self._labels = {}
         try:
@@ -1236,6 +1236,9 @@ class PageList:
                     log.info("Duplicate page label %s at index %d", label_str, page_idx)
                 else:
                     self._labels[str(label)] = page
+
+    def __len__(self) -> int:
+        return len(self._pages)
 
     def __iter__(self) -> Iterator[Page]:
         return iter(self._pages)

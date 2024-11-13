@@ -50,9 +50,15 @@ def test_page_labels():
     with playa.open(TESTDIR / "contrib" / "pagelabels.pdf") as doc:
         labels = [label for _, label in zip(range(10), doc.page_labels)]
         assert labels == ["iii", "iv", "1", "2", "1", "2", "3", "4", "5", "6"]
-    assert doc.pages["iii"] == doc.pages[0]
-    assert doc.pages["iv"] == doc.pages[1]
-    assert doc.pages["2"] == doc.pages[3]
+        assert doc.pages["iii"] is doc.pages[0]
+        assert doc.pages["iv"] is doc.pages[1]
+        assert doc.pages["2"] is doc.pages[3]
+    with playa.open("samples/2023-06-20-PV.pdf") as doc:
+        assert doc.pages["1"] is doc.pages[0]
+        with pytest.raises(KeyError):
+            _ = doc.pages["3"]
+        with pytest.raises(IndexError):
+            _ = doc.pages[2]
 
 
 def test_pages():
