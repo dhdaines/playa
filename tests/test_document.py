@@ -35,7 +35,9 @@ def test_read_header():
 
 def test_tokens():
     with playa.open(TESTDIR / "simple1.pdf") as doc:
-        assert len(list(doc.tokens)) == 190
+        tokens = list(doc.tokens)
+        assert len(tokens) == 190
+        assert LIT("Helvetica") in tokens
 
 
 def test_objects():
@@ -44,6 +46,13 @@ def test_objects():
         assert doc7["Type"] == LIT("Font")
         doc1 = doc[1]
         assert doc1["Type"] == LIT("Catalog")
+        objects = list(doc)
+        assert len(objects) == 7
+        # Note that they don't have to be in order
+        assert objects[0].obj == doc[1]
+        assert objects[2].obj == doc[3]
+        # FIXME: this should also be the case but is not as it gets reparsed:
+        # assert objects[0].obj is doc[1]
 
 
 def test_page_labels():
@@ -65,6 +74,10 @@ def test_pages():
     with playa.open(TESTDIR / "contrib" / "PSC_Station.pdf") as doc:
         page_objects = list(doc.pages)
         assert len(page_objects) == 15
+        objects = list(page_objects[2])
+        assert LIT("Artifact") in objects
+        tokens = list(page_objects[2].tokens)
+        assert b"diversit\xe9 " in tokens
 
 
 def test_names():

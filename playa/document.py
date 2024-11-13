@@ -44,6 +44,7 @@ from playa.parser import (
     KEYWORD_TRAILER,
     KEYWORD_XREF,
     LIT,
+    IndirectObject,
     IndirectObjectParser,
     Lexer,
     ObjectParser,
@@ -852,14 +853,14 @@ class PDFDocument:
         # Ensure that no extra data leaks into encrypted streams
         self.parser.strict = True
 
-    def __iter__(self) -> Iterator[Tuple[int, object]]:
-        """Iterate over (position, `IndirectObject`) tuples."""
-        return IndirectObjectParser(self.buffer, self)
+    def __iter__(self) -> Iterator[IndirectObject]:
+        """Iterate over `IndirectObject`s"""
+        return (obj for pos, obj in IndirectObjectParser(self.buffer, self))
 
     @property
-    def tokens(self) -> Iterator[Tuple[int, Token]]:
-        """Iterate over (position, token) tuples."""
-        return Lexer(self.buffer)
+    def tokens(self) -> Iterator[Token]:
+        """Iterate over tokens."""
+        return (tok for pos, tok in Lexer(self.buffer))
 
     def _getobj_objstm(
         self, stream: ContentStream, index: int, objid: int
@@ -1220,9 +1221,9 @@ class PageList:
         try:
             page_labels: Iterable[Optional[str]] = doc.page_labels
         except (KeyError, ValueError):
-            page_labels = itertools.count(1)
+            page_labels = (str(idx) for idx in itertools.count(1))
         self._pages = []
-        self._labels = {}
+        self._labels: Dict[str, Page] = {}
         try:
             itor = doc.get_page_objects()
         except KeyError:
@@ -1231,11 +1232,10 @@ class PageList:
             page = Page(doc, objid, properties, label, page_idx)
             self._pages.append(page)
             if label is not None:
-                label_str = str(label)
-                if label_str in self._labels:
-                    log.info("Duplicate page label %s at index %d", label_str, page_idx)
+                if label in self._labels:
+                    log.info("Duplicate page label %s at index %d", label, page_idx)
                 else:
-                    self._labels[str(label)] = page
+                    self._labels[label] = page
 
     def __len__(self) -> int:
         return len(self._pages)

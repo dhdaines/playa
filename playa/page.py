@@ -148,6 +148,20 @@ class Page:
     def layout(self) -> Iterator["Item"]:
         return iter(PageInterpreter(self))
 
+    def __iter__(self) -> Iterator[PDFObject]:
+        for pos, obj in ContentParser(self.contents):
+            yield obj
+
+    @property
+    def tokens(self) -> Iterator[Token]:
+        parser = ContentParser(self.contents)
+        while True:
+            try:
+                pos, tok = parser.nexttoken()
+            except StopIteration:
+                return
+            yield tok
+
     def __repr__(self) -> str:
         return f"<Page: Resources={self.resources!r}, MediaBox={self.mediabox!r}>"
 
