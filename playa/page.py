@@ -5,6 +5,7 @@ from copy import copy
 from dataclasses import dataclass
 from typing import (
     TYPE_CHECKING,
+    Callable,
     Dict,
     Iterable,
     Iterator,
@@ -25,7 +26,7 @@ from playa.exceptions import (
     PDFUnicodeNotDefined,
 )
 from playa.font import Font
-from playa.parser import InlineImage, ObjectParser, PDFObject, Token
+from playa.parser import KWD, InlineImage, ObjectParser, PDFObject, Token
 from playa.pdftypes import (
     LIT,
     ContentStream,
@@ -34,7 +35,6 @@ from playa.pdftypes import (
     PSLiteral,
     dict_value,
     int_value,
-    keyword_name,
     list_value,
     literal_name,
     resolve1,
@@ -314,6 +314,17 @@ class PageInterpreter:
         resources: Union[Dict, None] = None,
         contents: Union[List, None] = None,
     ) -> None:
+        self._dispatch: Dict[PSKeyword, Callable] = {}
+        for name, func in vars(self.__class__).items():
+            if name.startswith("do_"):
+                name = re.sub(r"_a", "*", name[3:])
+                if name == "_q":
+                    name = "'"
+                if name == "_w":
+                    name = '"'
+                kwd = KWD(name.encode("iso-8859-1"))
+                nargs = func.__code__.co_argcount - 1
+                self._dispatch[kwd] = (func, nargs)
         self.page = page
         self.contents = page.contents if contents is None else []
         (x0, y0, x1, y1) = page.mediabox
@@ -406,33 +417,26 @@ class PageInterpreter:
             if isinstance(obj, InlineImage):
                 yield from self.do_EI(obj)
             elif isinstance(obj, PSKeyword):
-                name = keyword_name(obj)
-                method = "do_%s" % name.replace("*", "_a").replace('"', "_w").replace(
-                    "'",
-                    "_q",
-                )
-                if hasattr(self, method):
-                    func = getattr(self, method)
-                    nargs = func.__code__.co_argcount - 1
+                if obj in self._dispatch:
+                    func, nargs = self._dispatch.get(obj)
                     if nargs:
                         args = self.pop(nargs)
-                        log.debug("exec: %s %r", name, args)
+                        log.debug("exec: %r %r", obj, args)
                         if len(args) == nargs:
-                            gen = func(*args)
+                            gen = func(self, *args)
                         else:
                             error_msg = (
                                 "Insufficient arguments (%d) for operator: %r"
-                                % (len(args), name)
+                                % (len(args), obj)
                             )
                             raise PDFInterpreterError(error_msg)
                     else:
-                        log.debug("exec: %s", name)
-                        gen = func()
+                        log.debug("exec: %r", obj)
+                        gen = func(self)
                     if gen is not None:
                         yield from gen
-                elif settings.STRICT:
-                    error_msg = "Unknown operator: %r" % name
-                    raise PDFInterpreterError(error_msg)
+                else:
+                    log.warning("Unknown operator: %r", obj)
             else:
                 self.push(obj)
 
