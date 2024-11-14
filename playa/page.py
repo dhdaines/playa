@@ -317,8 +317,12 @@ class PageInterpreter:
         self._dispatch: Dict[PSKeyword, Callable] = {}
         for name, func in vars(self.__class__).items():
             if name.startswith("do_"):
-                name = name[3:].encode("iso-8859-1")
-                kwd = KWD(name)
+                name = re.sub(r"_a", "*", name[3:])
+                if name == "_q":
+                    name = "'"
+                if name == "_w":
+                    name = '"'
+                kwd = KWD(name.encode("iso-8859-1"))
                 nargs = func.__code__.co_argcount - 1
                 self._dispatch[kwd] = (func, nargs)
         self.page = page
@@ -431,9 +435,8 @@ class PageInterpreter:
                         gen = func(self)
                     if gen is not None:
                         yield from gen
-                elif settings.STRICT:
-                    error_msg = "Unknown operator: %r" % obj
-                    raise PDFInterpreterError(error_msg)
+                else:
+                    log.warning("Unknown operator: %r", obj)
             else:
                 self.push(obj)
 
