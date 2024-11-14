@@ -43,12 +43,29 @@ place!  Let's open up a PDF and see what's in it:
 pdf = playa.open("my_awesome_document.pdf")
 raw_byte_stream = pdf.buffer
 a_bunch_of_tokens = list(pdf.tokens)
-a_bunch_of_objects = list(pdf)
-a_particular_indirect_object = pdf[42]
+a_bunch_of_indirect_objects = list(pdf)
 ```
 
 The raw PDF tokens and objects are probably not terribly useful to
-you, but you might find them interesting.
+you, but you might find them interesting.  Note that these are
+"indirect objects" where the actual object is accompanied by an object
+number and generation number:
+
+```python
+for objid, genno, obj in pdf:
+    ...
+# or also
+for obj in pdf:
+    obj.objid, obj.genno, obj.obj
+```
+
+Also, these will only be the top-level objects and not those found
+inside object streams (the streams are themselves indirect objects).
+You can access all objects directly by indexing the PDF document:
+
+```python
+a_particular_object = pdf[42]
+```
 
 It probably has some pages.  How many?  What are their numbers/labels?
 (they could be things like "xviii", 'a", or "42", for instance)
@@ -79,8 +96,8 @@ for element in structure:
 Now perhaps we want to look at a specific page.  Okay!
 ```python
 page = pdf.pages[0]        # they are numbered from 0
-page = pdf.pages["xviii"]  # but you can get them by label
-page = pdf.pages["42"]  # or "logical" page number (also a label)
+page = pdf.pages["xviii"]  # but you can get them by label (a string)
+page = pdf.pages["42"]  # or "logical" page number (also a string)
 a_few_content_streams = list(page.contents)
 raw_bytes = b"".join(stream.buffer for stream in page.contents)
 ```
