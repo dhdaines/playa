@@ -145,7 +145,7 @@ class Page:
             self.contents = []
 
     @property
-    def layout(self) -> Iterator["Item"]:
+    def layout(self) -> Iterator["LayoutItem"]:
         return iter(PageInterpreter(self))
 
     def __iter__(self) -> Iterator[PDFObject]:
@@ -199,7 +199,7 @@ class GraphicState:
     ncolor: Optional[Color] = None
 
 
-class Item(NamedTuple):
+class LayoutItem(NamedTuple):
     itype: str
     x0: float
     y0: float
@@ -208,7 +208,7 @@ class Item(NamedTuple):
     name: Optional[str] = None
     tag: Optional[str] = None
     mcid: Optional[int] = None
-    objs: Optional[List["Item"]] = None
+    objs: Optional[List["LayoutItem"]] = None
     linewidth: Optional[float] = None
     pts: Optional[List[Point]] = None
     stroke: bool = False
@@ -236,7 +236,7 @@ class Item(NamedTuple):
         return (self.x0, self.y0, self.x1, self.y1)
 
 
-def LTFigure(*, name: str, bbox: Rect, matrix: Matrix) -> Item:
+def LTFigure(*, name: str, bbox: Rect, matrix: Matrix) -> LayoutItem:
     """Represents an area used by PDF Form objects.
 
     PDF Forms can be used to present figures or pictures by embedding yet
@@ -246,7 +246,7 @@ def LTFigure(*, name: str, bbox: Rect, matrix: Matrix) -> Item:
     (x, y, w, h) = bbox
     bounds = ((x, y), (x + w, y), (x, y + h), (x + w, y + h))
     bbox = get_bound(apply_matrix_pt(matrix, (p, q)) for (p, q) in bounds)
-    return Item(
+    return LayoutItem(
         itype="figure",
         name=name,
         matrix=matrix,
@@ -403,7 +403,7 @@ class PageInterpreter:
         if self.csmap:
             self.scs = self.ncs = next(iter(self.csmap.values()))
 
-    def __iter__(self) -> Iterator[Item]:
+    def __iter__(self) -> Iterator[LayoutItem]:
         log.debug(
             "PageInterpreter: resources=%r, streams=%r, ctm=%r",
             self.resources,
@@ -570,19 +570,19 @@ class PageInterpreter:
         self.curpath.append(("l", x, y + h))
         self.curpath.append(("h",))
 
-    def do_S(self) -> Iterator[Item]:
+    def do_S(self) -> Iterator[LayoutItem]:
         """Stroke path"""
         yield from self.paint_path(
             stroke=True, fill=False, evenodd=False, path=self.curpath
         )
         self.curpath = []
 
-    def do_s(self) -> Iterator[Item]:
+    def do_s(self) -> Iterator[LayoutItem]:
         """Close and stroke path"""
         self.do_h()
         yield from self.do_S()
 
-    def do_f(self) -> Iterator[Item]:
+    def do_f(self) -> Iterator[LayoutItem]:
         """Fill path using nonzero winding number rule"""
         yield from self.paint_path(
             stroke=False, fill=True, evenodd=False, path=self.curpath
@@ -592,33 +592,33 @@ class PageInterpreter:
     def do_F(self) -> None:
         """Fill path using nonzero winding number rule (obsolete)"""
 
-    def do_f_a(self) -> Iterator[Item]:
+    def do_f_a(self) -> Iterator[LayoutItem]:
         """Fill path using even-odd rule"""
         yield from self.paint_path(
             stroke=False, fill=True, evenodd=True, path=self.curpath
         )
         self.curpath = []
 
-    def do_B(self) -> Iterator[Item]:
+    def do_B(self) -> Iterator[LayoutItem]:
         """Fill and stroke path using nonzero winding number rule"""
         yield from self.paint_path(
             stroke=True, fill=True, evenodd=False, path=self.curpath
         )
         self.curpath = []
 
-    def do_B_a(self) -> Iterator[Item]:
+    def do_B_a(self) -> Iterator[LayoutItem]:
         """Fill and stroke path using even-odd rule"""
         yield from self.paint_path(
             stroke=True, fill=True, evenodd=True, path=self.curpath
         )
         self.curpath = []
 
-    def do_b(self) -> Iterator[Item]:
+    def do_b(self) -> Iterator[LayoutItem]:
         """Close, fill, and stroke path using nonzero winding number rule"""
         self.do_h()
         yield from self.do_B()
 
-    def do_b_a(self) -> Iterator[Item]:
+    def do_b_a(self) -> Iterator[LayoutItem]:
         """Close, fill, and stroke path using even-odd rule"""
         self.do_h()
         yield from self.do_B_a()
@@ -877,7 +877,7 @@ class PageInterpreter:
         )
         self.textstate.linematrix = (0, 0)
 
-    def do_TJ(self, seq: PDFObject) -> Iterator[Item]:
+    def do_TJ(self, seq: PDFObject) -> Iterator[LayoutItem]:
         """Show text, allowing individual glyph positioning"""
         if self.textstate.font is None:
             if settings.STRICT:
@@ -887,11 +887,11 @@ class PageInterpreter:
             cast(TextSeq, seq),
         )
 
-    def do_Tj(self, s: PDFObject) -> Iterator[Item]:
+    def do_Tj(self, s: PDFObject) -> Iterator[LayoutItem]:
         """Show text"""
         yield from self.do_TJ([s])
 
-    def do__q(self, s: PDFObject) -> Iterator[Item]:
+    def do__q(self, s: PDFObject) -> Iterator[LayoutItem]:
         """Move to next line and show text
 
         The ' (single quote) operator.
@@ -899,7 +899,7 @@ class PageInterpreter:
         self.do_T_a()
         yield from self.do_TJ([s])
 
-    def do__w(self, aw: PDFObject, ac: PDFObject, s: PDFObject) -> Iterator[Item]:
+    def do__w(self, aw: PDFObject, ac: PDFObject, s: PDFObject) -> Iterator[LayoutItem]:
         """Set word and character spacing, move to next line, and show text
 
         The " (double quote) operator.
@@ -914,7 +914,7 @@ class PageInterpreter:
     def do_ID(self) -> None:
         """Begin inline image data"""
 
-    def do_EI(self, obj: PDFObject) -> Iterator[Item]:
+    def do_EI(self, obj: PDFObject) -> Iterator[LayoutItem]:
         """End inline image object"""
         if isinstance(obj, InlineImage):
             iobjid = str(id(obj))
@@ -928,7 +928,7 @@ class PageInterpreter:
             # FIXME: Do... something?
             pass
 
-    def do_Do(self, xobjid_arg: PDFObject) -> Iterator[Item]:
+    def do_Do(self, xobjid_arg: PDFObject) -> Iterator[LayoutItem]:
         """Invoke named XObject"""
         xobjid = literal_name(xobjid_arg)
         try:
@@ -987,11 +987,11 @@ class PageInterpreter:
         self.cur_tag = None
         self.cur_mcid = None
 
-    def render_image(self, name: str, stream: ContentStream, figure: Item) -> Item:
+    def render_image(self, name: str, stream: ContentStream, figure: LayoutItem) -> LayoutItem:
         colorspace = stream.get_any(("CS", "ColorSpace"))
         if not isinstance(colorspace, list):
             colorspace = [colorspace]
-        return Item(
+        return LayoutItem(
             "image",
             *figure.bbox,
             name=name,
@@ -1009,7 +1009,7 @@ class PageInterpreter:
         fill: bool,
         evenodd: bool,
         path: Sequence[PathSegment],
-    ) -> Iterator[Item]:
+    ) -> Iterator[LayoutItem]:
         """Paint paths described in section 4.4 of the PDF reference manual"""
         shape = "".join(x[0] for x in path)
         gstate = self.graphicstate
@@ -1070,7 +1070,7 @@ class PageInterpreter:
                     (x1, x0) = (x0, x1)
                 if y0 > y1:
                     (y1, y0) = (y0, y1)
-                yield Item(
+                yield LayoutItem(
                     "line",
                     x0,
                     y0,
@@ -1102,7 +1102,7 @@ class PageInterpreter:
                         (x2, x0) = (x0, x2)
                     if y0 > y2:
                         (y2, y0) = (y0, y2)
-                    yield Item(
+                    yield LayoutItem(
                         "rect",
                         x0,
                         y0,
@@ -1123,7 +1123,7 @@ class PageInterpreter:
                     )
                 else:
                     bbox = get_bound(pts)
-                    yield Item(
+                    yield LayoutItem(
                         "curve",
                         *bbox,
                         mcid=self.cur_mcid,
@@ -1141,7 +1141,7 @@ class PageInterpreter:
                     )
             else:
                 bbox = get_bound(pts)
-                yield Item(
+                yield LayoutItem(
                     "curve",
                     *bbox,
                     mcid=self.cur_mcid,
@@ -1168,7 +1168,7 @@ class PageInterpreter:
         scaling: float,
         rise: float,
         cid: int,
-    ) -> Tuple[Item, float]:
+    ) -> Tuple[LayoutItem, float]:
         try:
             text = font.to_unichr(cid)
             assert isinstance(text, str), f"Text {text!r} is not a str"
@@ -1205,7 +1205,7 @@ class PageInterpreter:
             size = x1 - x0
         else:
             size = y1 - y0
-        item = Item(
+        item = LayoutItem(
             itype="char",
             x0=x0,
             y0=y0,
@@ -1228,7 +1228,7 @@ class PageInterpreter:
     def render_string(
         self,
         seq: TextSeq,
-    ) -> Iterator[Item]:
+    ) -> Iterator[LayoutItem]:
         assert self.textstate.font is not None
         vert = self.textstate.font.vertical
         assert self.ctm is not None

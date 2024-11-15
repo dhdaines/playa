@@ -20,7 +20,7 @@ from playa.pdftypes import (
 )
 
 if TYPE_CHECKING:
-    from playa.page import Item
+    from playa.page import LayoutItem
 
 
 PIL_ERROR_MESSAGE = (
@@ -105,7 +105,7 @@ class ImageWriter:
         if not os.path.exists(self.outdir):
             os.makedirs(self.outdir)
 
-    def export_image(self, image: "Item") -> str:
+    def export_image(self, image: "LayoutItem") -> str:
         """Save an LTImage to disk"""
         assert (
             image.itype == "image"
@@ -149,7 +149,7 @@ class ImageWriter:
 
         return name
 
-    def _save_jpeg(self, image: "Item") -> str:
+    def _save_jpeg(self, image: "LayoutItem") -> str:
         """Save a JPEG encoded image"""
         assert (
             image.itype == "image"
@@ -176,7 +176,7 @@ class ImageWriter:
 
         return name
 
-    def _save_jpeg2000(self, image: "Item") -> str:
+    def _save_jpeg2000(self, image: "LayoutItem") -> str:
         """Save a JPEG 2000 encoded image"""
         assert image.itype == "image" and image.stream is not None
         data = image.stream.get_data()
@@ -197,7 +197,7 @@ class ImageWriter:
             i.save(fp, "JPEG2000")
         return name
 
-    def _save_jbig2(self, image: "Item") -> str:
+    def _save_jbig2(self, image: "LayoutItem") -> str:
         """Save a JBIG2 encoded image"""
         assert image.itype == "image" and image.stream is not None
         name, path = self._create_unique_image_name(image, ".jb2")
@@ -229,7 +229,7 @@ class ImageWriter:
 
     def _save_bmp(
         self,
-        image: "Item",
+        image: "LayoutItem",
         width: int,
         height: int,
         bytes_per_line: int,
@@ -247,7 +247,7 @@ class ImageWriter:
                 i += bytes_per_line
         return name
 
-    def _save_bytes(self, image: "Item") -> str:
+    def _save_bytes(self, image: "LayoutItem") -> str:
         """Save an image without encoding, just bytes"""
         assert (
             image.itype == "image"
@@ -285,7 +285,7 @@ class ImageWriter:
 
         return name
 
-    def _save_raw(self, image: "Item") -> str:
+    def _save_raw(self, image: "LayoutItem") -> str:
         """Save an image with unknown encoding"""
         assert (
             image.itype == "image"
@@ -301,7 +301,7 @@ class ImageWriter:
         return name
 
     @staticmethod
-    def _is_jbig2_iamge(image: "Item") -> bool:
+    def _is_jbig2_iamge(image: "LayoutItem") -> bool:
         assert image.itype == "image" and image.stream is not None
         filters = image.stream.get_filters()
         for filter_name, params in filters:
@@ -309,7 +309,7 @@ class ImageWriter:
                 return True
         return False
 
-    def _create_unique_image_name(self, image: "Item", ext: str) -> Tuple[str, str]:
+    def _create_unique_image_name(self, image: "LayoutItem", ext: str) -> Tuple[str, str]:
         assert image.itype == "image" and image.name is not None
         name = image.name + ext
         path = os.path.join(self.outdir, name)
