@@ -98,52 +98,69 @@ Now perhaps we want to look at a specific page.  Okay!
 page = pdf.pages[0]        # they are numbered from 0
 page = pdf.pages["xviii"]  # but you can get them by label (a string)
 page = pdf.pages["42"]  # or "logical" page number (also a string)
-a_few_content_streams = list(page.contents)
-raw_bytes = b"".join(stream.buffer for stream in page.contents)
+a_few_content_streams = list(page.contents) # FIXME
+raw_bytes = b"".join(stream.buffer for stream in page.contents) # FIXME
 ```
 
-This page probably has text, graphics, etc, etc, in it.  Remember that
-**P**LAYA ain't a **LAY**out **A**nalyzer!  You can either look at the
-stream of tokens or mysterious PDF objects:
+## Accessing content
+
+What are these "contents" of which you speak, which were surely
+created by a Content Creator?  Well, you can look at the stream of
+tokens or mysterious PDF objects:
 
 ```python
 for token in page.tokens:
     ...
-for object in page:
+for object in page:  # PDF objects. NOT graphics/text objects!
     ...
 ```
 
-Or you can access individual text and graphical objects
-(if you wanted to, for instance, do layout analysis).  More on this below!
+But that isn't very useful, so you can also access actual textual and
+graphical objects (if you wanted to, for instance, do layout
+analysis).
 
 ```python
-for item in page.items:
+for item in page.objects:
     ...
 ```
 
 Because it is quite inefficient to expand, calculate, and copy every
 possible piece of information, PLAYA gives you some options here.
-Wherever possible this information is computed lazily.  But you can
-also use `page.layout`, which will flatten everything for you into a
-friendly dictionary representation which, um, looks a lot like what
-`pdfplumber` gives you, except in PDF device coordinate space, meaning
-`(0, 0)` is the bottom-left and not the top-left of the page:
+Wherever possible this information can be computed lazily, but this
+involves some more work on the user's part.
+
+### Dictionary-based API
+
+If, on the other hand, **you** are lazy, then you can just use
+`page.layout`, which will flatten everything for you into a friendly
+dictionary representation (but it is a
+[`TypedDict`](https://typing.readthedocs.io/en/latest/spec/typeddict.html#typeddict))
+which, um, looks a lot like what `pdfplumber` gives you, except in PDF
+device coordinate space, meaning `(0, 0)` is the bottom-left and not
+the top-left of the page:
 
 ```python
 for obj in page.layout:
     print("it is a {obj['object_type']} at ({obj['top']}", {obj['left']}))
     print("    the color is {obj['stroking_color']}")
     print("    the text is {obj['text']}")
+    print("    it is in MCS {obj['mcid']} which is a {obj['tag']}")
 ```
 
-Otherwise, read on!
+This is for instance quite useful for doing "Artificial Intelligence",
+or if you like wasting time and energy for no good reason, but I
+repeat myself.
+
+If you have more specific needs or want better performance, then read on.
+
+### Lazy object API
 
 Fundamentally you may just want to know *what* is *where* on the page,
 and PLAYA has you covered there (note that the bbox is normalized, and
 in PDF device space):
 
 ```python
-for item in page.layout:
+for item in page.objects:
     print(f"{item.object_type} at {item.bbox}")
     print(f"{item.object_type} bottom left is {item.left, item.bottom}")
     print(f"{item.object_type} top right is {item.right, item.top}")
@@ -201,12 +218,14 @@ for seg in path.segments:
    print(f"segment: {seg}")
 ```
 
-Or you can get items which correspond to `LTRect`, `LTLine` and
-`LTCurve` in `pdfminer.six`:
+This API doesn't try to interpret paths for you.  You only get
+`PathSegment`s.  But for convenience you can get them grouped by
+subpaths as created using the `m` or `re` operators:
 
 ```python
-for item in path:
-   print(f"{item.object_type} at {item.bbox}")
+for subpath in path:
+   for seg in subpath.segments:
+       print(f"segment: {seg}")
 ```
 
 Since most PDFs consist primarily of text, obviously you may wish to
@@ -239,7 +258,7 @@ for glyph in item:
     ...
 ```
 
-For the moment PLAYA, following the PDF specification, considers the
+By default PLAYA, following the PDF specification, considers the
 grouping of glyphs into strings irrelevant by default, but if you
 really need to know, you can iterate over these, and *then* over the
 individual glyphs:
