@@ -105,6 +105,7 @@ raw_bytes = b"".join(stream.buffer for stream in page.contents)
 This page probably has text, graphics, etc, etc, in it.  Remember that
 **P**LAYA ain't a **LAY**out **A**nalyzer!  You can either look at the
 stream of tokens or mysterious PDF objects:
+
 ```python
 for token in page.tokens:
     ...
@@ -112,40 +113,151 @@ for object in page:
     ...
 ```
 
-Or you can access individual characters, lines, curves, and rectangles
-(if you wanted to, for instance, do layout analysis):
+Or you can access individual text and graphical objects
+(if you wanted to, for instance, do layout analysis).  More on this below!
+
 ```python
-for item in page.layout:
+for item in page.items:
     ...
 ```
 
-Do we make you spelunk in a dank class hierarchy to know what these
-items are?  No, we do not! They are just NamedTuples with a very
-helpful field *telling* you what they are, as a string.
+Because it is quite inefficient to expand, calculate, and copy every
+possible piece of information, PLAYA gives you some options here.
+Wherever possible this information is computed lazily.  But you can
+also use `page.layout`, which will flatten everything for you into a
+friendly dictionary representation which, um, looks a lot like what
+`pdfplumber` gives you, except in PDF device coordinate space, meaning
+`(0, 0)` is the bottom-left and not the top-left of the page:
 
-In particular you can also extract all these items into a dataframe
-using the library of your choosing (I like [Polars]()) and I dunno do
-some Artifishul Intelligents or something with them:
 ```python
+for obj in page.layout:
+    print("it is a {obj['object_type']} at ({obj['top']}", {obj['left']}))
+    print("    the color is {obj['stroking_color']}")
+    print("    the text is {obj['text']}")
 ```
 
-Or just write them to a CSV file:
+Otherwise, read on!
+
+Fundamentally you may just want to know *what* is *where* on the page,
+and PLAYA has you covered there (note that the bbox is normalized, and
+in PDF device space):
+
 ```python
+for item in page.layout:
+    print(f"{item.object_type} at {item.bbox}")
+    print(f"{item.object_type} bottom left is {item.left, item.bottom}")
+    print(f"{item.object_type} top right is {item.right, item.top}")
 ```
 
-Note again that PLAYA doesn't guarantee that these characters come at
-you in anything other than the order they occur in the file (but it
-does guarantee that).  It does, however, put them in (hopefully) the
-right absolute positions on the page, and keep track of the clipping
-path and the graphics state, so yeah, you *could* "render" them like
-`pdfminer.six` pretended to do.
+Another important piece of information (which `pdfminer.six` does not
+really handle) is the relationship between layout and logical
+structure, done using *marked content sections*:
 
-Certain PDF tools and/or authors are notorious for using "whiteout"
-(set the color to the background color) or "scissors" (the clipping
-path) to hide arbitrary text that maybe *you* don't want to see
-either. PLAYA gives you some rudimentary tools to detect this:
 ```python
+for item in page.layout:
+    print(f"{item.object_type} is in marked content section {item.mcs.mcid}")
+    print(f"    which is tag {item.mcs.tag.name}")
+    print(f"    with attributes {item.mcs.tag.attrs}")
 ```
+
+The `mcid` here is the same one referenced in elements of the
+structure tree as shown above (but remember that `tag` has nothing to
+do with the structure tree element, because Reasons).
+
+You may also wish to know what color an item is, and other aspects of
+what PDF refers to as the *graphics state*, which is accessible
+through `item.gstate`.  This is a mutable object, and since there are
+quite a few parameters in the graphics state, PLAYA does not create a
+copy of it for every item in the layout - you are responsible for
+saving them yourself if you should so desire.  This is not
+particularly onerous, because the parameters themselves are immutable:
+
+```python
+for item in page.layout:
+    print(f"{item.object_type} at {item.bbox} is:")
+    print(f"    {item.gstate.scolor} stroking")
+    print(f"    {item.gstate.ncolor} non-stroking")
+    my_stuff = (item.bbox, item.gstate.scolor, item.gstate.ncolor)
+    other_stuff.append(my_stuff)  # it's safe there
+```
+
+For compatbility with `pdfplumber`, PLAYA, even though it is not a
+layout analyzer, can do some basic interpretation of paths.  Again,
+this is lazy.  If you don't care about them, you just get items with
+`object_type` of `"path"`, which you can ignore.  PLAYA won't even
+compute the bounding box (which isn't all that slow, but still).  If
+you *do* care, then you have some options.  You can look at the actual
+path segments in user space (fast):
+
+```python
+for seg in path.raw_segments:
+   print(f"segment: {seg}")
+```
+
+Or in device space (not so fast):
+
+```python
+for seg in path.segments:
+   print(f"segment: {seg}")
+```
+
+Or you can get items which correspond to `LTRect`, `LTLine` and
+`LTCurve` in `pdfminer.six`:
+
+```python
+for item in path:
+   print(f"{item.object_type} at {item.bbox}")
+```
+
+Since most PDFs consist primarily of text, obviously you may wish to
+know something about the actual text (or the `ActualText`, which you
+can sometimes find in `item.mcs.tag.attrs["ActualText"]`) of layout
+items.  This is more difficult than it looks, as fundamentally PDF
+just positions arbitrarily numbered glyphs on a page, and the vast
+majority of PDFs embed their own fonts, using *subsetting* to include
+only the glyphs actually used.
+
+Whereas `pdfminer.six` would break down text objects into their
+individual glyphs (which might or might not correspond to characters),
+this is not always what you want, and moreover it is computationally
+quite expensive.  It also complicates the use of the `ActualText`
+attribute for text extraction.  So PLAYA, by default, does not do
+this.  If you don't need to know the actual bounding box of a text
+object, then don't access `item.bbox` and it won't be computed.  If
+you don't need to know the position of each glyph but simply want the
+Unicode characters, then just look at `item.chars` (this will use the
+`ActualText` attribute if it exists).
+
+Of course a lot of PDFs, especially ones produced by OCR, won't give
+you anything very meaningful in that case, so you will want to
+actually look at the glyphs.  This becomes a matter of iterating over
+the item, giving you, well, more items, which are the individual
+glyphs:
+
+```python
+for glyph in item:
+    ...
+```
+
+For the moment PLAYA, following the PDF specification, considers the
+grouping of glyphs into strings irrelevant by default, but if you
+really need to know, you can iterate over these, and *then* over the
+individual glyphs:
+
+```python
+for string in item.strings:
+    for glyph in string:
+        ...
+```
+
+PDF has the concept of a *text state* which determines some aspects of
+how text is rendered.  You can obviously access this though
+`glyph.textstate` - note that the text state, like the graphics state,
+is mutable, so you will have to copy it or save individual parameters
+that you might care about.
+
+PLAYA doesn't guarantee that these items come at you in anything other
+than the order they occur in the file (but it does guarantee that).
 
 For everything else, there's pdfplumber, pdfium2, pikepdf, pypdf,
 borb, pydyf, etc, etc, etc.
