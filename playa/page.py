@@ -184,13 +184,18 @@ class TextState:
         self.linematrix = (0, 0)
 
 
+class DashingStyle(NamedTuple):
+    dash: List[int]
+    phase: int
+
+
 @dataclass
 class GraphicState:
     linewidth: float = 0
     linecap: Optional[object] = None
     linejoin: Optional[object] = None
     miterlimit: Optional[object] = None
-    dash: Optional[Tuple[object, object]] = None
+    dash: Optional[DashingStyle] = None
     intent: Optional[object] = None
     flatness: Optional[object] = None
     # stroking color
@@ -498,7 +503,8 @@ class PageInterpreter:
 
     def do_d(self, dash: PDFObject, phase: PDFObject) -> None:
         """Set line dash pattern"""
-        self.graphicstate.dash = (dash, phase)
+        idash = [int_value(x) for x in list_value(dash)]
+        self.graphicstate.dash = DashingStyle(idash, int_value(phase))
 
     def do_ri(self, intent: PDFObject) -> None:
         """Set color rendering intent"""
