@@ -319,7 +319,7 @@ class PageInterpreter:
         resources: Union[Dict, None] = None,
         contents: Union[List, None] = None,
     ) -> None:
-        self._dispatch: Dict[PSKeyword, Callable] = {}
+        self._dispatch: Dict[PSKeyword, Tuple[Callable, int]] = {}
         for name, func in vars(self.__class__).items():
             if name.startswith("do_"):
                 name = re.sub(r"_a", "*", name[3:])
@@ -423,7 +423,7 @@ class PageInterpreter:
                 yield from self.do_EI(obj)
             elif isinstance(obj, PSKeyword):
                 if obj in self._dispatch:
-                    func, nargs = self._dispatch.get(obj)
+                    func, nargs = self._dispatch[obj]
                     if nargs:
                         args = self.pop(nargs)
                         log.debug("exec: %r %r", obj, args)
