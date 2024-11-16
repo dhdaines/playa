@@ -14,6 +14,7 @@ from typing import (
     Optional,
     Sequence,
     Tuple,
+    TypedDict,
     Union,
     cast,
 )
@@ -202,6 +203,84 @@ class GraphicState:
     scolor: Optional[Color] = None
     # non stroking color
     ncolor: Optional[Color] = None
+
+
+class LayoutObject(TypedDict, total=False):
+    """Dictionary-based layout objects.
+
+    These closely match the dictionaries returned by pdfplumber, except
+    that coordinates are expressed in PDF device space with (0, 0) at
+    lower left.
+
+    This API has some limitations, so it is preferable to use
+    LayoutItem instead.
+    """
+    object_type: str
+    adv: float
+    height: float
+    linewidth: float
+    pts: List[Point]
+    size: float
+    srcsize: Tuple[int, int]
+    width: float
+    x0: float
+    x1: float
+    y0: float
+    y1: float
+    bits: int
+    matrix: Matrix
+    upright: bool
+    fontname: str
+    text: str
+    imagemask: bool
+    colorspace: List[ColorSpace]  # for images
+    ncs: ColorSpace  # for text/paths
+    scs: ColorSpace  # for text/paths
+    evenodd: bool
+    stroke: bool
+    fill: bool
+    stroking_color: Color
+    non_stroking_color: Color
+    stream: ContentStream
+    mcid: int
+    tag: str
+    path: List[PathSegment]
+    dash: DashingStyle
+
+
+class MarkedContentTag(NamedTuple):
+    name: str
+    attrs: Dict[str, PDFObject]
+
+
+class MarkedContentSection(NamedTuple):
+    mcid: int
+    tag: MarkedContentTag
+
+
+class ContentObject:
+    object_type: str
+    gstate: GraphicState
+    mcs: MarkedContentSection
+
+    @property
+    def bbox(self) -> Rect:
+        return (0, 0, 0, 0)
+
+
+class TextObject(ContentObject):
+    tstate: TextState
+
+    def __iter__(self):
+        yield from ()
+
+    @property
+    def strings(self) -> Iterator[Iterator[ContentObject]]:
+        yield from ()
+
+    @property
+    def chars(self) -> Iterator[ContentObject]:
+        yield from ()
 
 
 class LayoutItem(NamedTuple):
