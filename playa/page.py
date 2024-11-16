@@ -213,8 +213,9 @@ class LayoutObject(TypedDict, total=False):
     lower left.
 
     This API has some limitations, so it is preferable to use
-    LayoutItem instead.
+    ContentObject instead.
     """
+
     object_type: str
     adv: float
     height: float
@@ -292,7 +293,6 @@ class LayoutItem(NamedTuple):
     name: Optional[str] = None
     tag: Optional[str] = None
     mcid: Optional[int] = None
-    objs: Optional[List["LayoutItem"]] = None
     linewidth: Optional[float] = None
     pts: Optional[List[Point]] = None
     stroke: bool = False
@@ -338,7 +338,6 @@ def LTFigure(*, name: str, bbox: Rect, matrix: Matrix) -> LayoutItem:
         y0=bbox[1],
         x1=bbox[2],
         y1=bbox[3],
-        objs=[],
     )
 
 
@@ -1002,13 +1001,17 @@ class PageInterpreter:
     def do_EI(self, obj: PDFObject) -> Iterator[LayoutItem]:
         """End inline image object"""
         if isinstance(obj, InlineImage):
-            iobjid = str(id(obj))
-            # FIXME: This LTFigure is not useful and exists only for
-            # the purpose of calcluating the bbox
+            # Inline images obviously are not indirect objects, so
+            # have no object ID, so... make something up?
+            iobjid = "inline_image_%d" % id(obj)
+            # Create a figure for the sole purpose of mapping the
+            # image to device space (PDF 1.7 sec 8.3.24: All images
+            # shall be 1 unit wide by 1 unit high in user space,
+            # regardless of the number of samples in the image. To be
+            # painted, an image shall be mapped to a region of the
+            # page by temporarily altering the CTM)
             fig = LTFigure(name=iobjid, bbox=(0, 0, 1, 1), matrix=self.ctm)
-            assert fig.objs is not None
-            fig.objs.append(self.render_image(iobjid, obj, fig))
-            yield fig
+            yield self.render_image(iobjid, obj, fig)
         else:
             # FIXME: Do... something?
             pass
@@ -1019,38 +1022,27 @@ class PageInterpreter:
         try:
             xobj = stream_value(self.xobjmap[xobjid])
         except KeyError:
-            if settings.STRICT:
-                raise PDFInterpreterError("Undefined xobject id: %r" % xobjid)
+            log.debug("Undefined xobject id: %r", xobjid)
             return
         log.debug("Processing xobj: %r", xobj)
         subtype = xobj.get("Subtype")
         if subtype is LITERAL_FORM and "BBox" in xobj:
-            bbox = cast(Rect, list_value(xobj["BBox"]))
             matrix = cast(Matrix, list_value(xobj.get("Matrix", MATRIX_IDENTITY)))
             # According to PDF reference 1.7 section 4.9.1, XObjects in
             # earlier PDFs (prior to v1.2) use the page's Resources entry
             # instead of having their own Resources entry.
             xobjres = xobj.get("Resources")
-            if xobjres:
-                interpreter = PageInterpreter(
-                    self.page, resources=dict_value(xobjres), contents=[xobj]
-                )
-            else:
-                interpreter = PageInterpreter(self.page, contents=[xobj])
+            resources = None if xobjres is None else dict_value(xobjres)
+            interpreter = PageInterpreter(
+                self.page, resources=resources, contents=[xobj]
+            )
             interpreter.ctm = mult_matrix(matrix, self.ctm)
-            # FIXME: Create a different way of representing form
-            # XObjects (requires a shim in the pdfminer compatibility test)
-            fig = LTFigure(name=xobjid, bbox=bbox, matrix=interpreter.ctm)
-            assert fig.objs is not None
-            fig.objs.extend(interpreter)
-            yield fig
+            yield from interpreter
         elif subtype is LITERAL_IMAGE and "Width" in xobj and "Height" in xobj:
             # FIXME: This LTFigure is not useful and exists only for
             # the purpose of calcluating the bbox
             fig = LTFigure(name=xobjid, bbox=(0, 0, 1, 1), matrix=self.ctm)
-            assert fig.objs is not None
-            fig.objs.append(self.render_image(xobjid, xobj, fig))
-            yield fig
+            yield self.render_image(xobjid, xobj, fig)
         else:
             # unsupported xobject type.
             pass
@@ -1072,7 +1064,9 @@ class PageInterpreter:
         self.cur_tag = None
         self.cur_mcid = None
 
-    def render_image(self, name: str, stream: ContentStream, figure: LayoutItem) -> LayoutItem:
+    def render_image(
+        self, name: str, stream: ContentStream, figure: LayoutItem
+    ) -> LayoutItem:
         colorspace = stream.get_any(("CS", "ColorSpace"))
         if not isinstance(colorspace, list):
             colorspace = [colorspace]

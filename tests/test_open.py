@@ -31,6 +31,14 @@ def test_open(path: Path) -> None:
     from pdfminer.pdfpage import PDFPage
     from pdfminer.pdfparser import PDFParser
 
+    def convert_miner(layout):
+        for ltitem in layout:
+            itype = type(ltitem).__name__.lower()[2:]
+            if itype == "figure":
+                yield from convert_miner(ltitem)
+            else:
+                yield ((itype, ltitem.bbox))
+
     passwords = PASSWORDS.get(path.name, [""])
     for password in passwords:
         miner = []
@@ -44,9 +52,7 @@ def test_open(path: Path) -> None:
                     interp.process_page(pdfpage)
                     layout = agg.result
                     if layout is not None:
-                        for ltitem in layout:
-                            itype = type(ltitem).__name__.lower()[2:]
-                            miner.append((itype, ltitem.bbox))
+                        miner.extend(convert_miner(layout))
             except Exception:
                 continue
 
