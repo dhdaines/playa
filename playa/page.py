@@ -36,6 +36,7 @@ from playa.pdftypes import (
     PSLiteral,
     dict_value,
     int_value,
+    num_value,
     list_value,
     literal_name,
     resolve1,
@@ -186,8 +187,8 @@ class TextState:
 
 
 class DashingStyle(NamedTuple):
-    dash: List[int]
-    phase: int
+    dash: List[float]
+    phase: float
 
 
 @dataclass
@@ -196,7 +197,7 @@ class GraphicState:
     linecap: Optional[object] = None
     linejoin: Optional[object] = None
     miterlimit: Optional[object] = None
-    dash: Optional[DashingStyle] = None
+    dash: DashingStyle = DashingStyle([], 0)
     intent: Optional[object] = None
     flatness: Optional[object] = None
     # stroking color
@@ -248,8 +249,8 @@ class LayoutObject(TypedDict, total=False):
     text: str
     imagemask: bool
     name: str
-    mcid: int
-    tag: str
+    mcid: Union[int, None]
+    tag: Union[str, None]
     path: List[Tuple]
     dash: DashingStyle
 
@@ -560,8 +561,8 @@ class PageInterpreter:
 
     def do_d(self, dash: PDFObject, phase: PDFObject) -> None:
         """Set line dash pattern"""
-        idash = [int_value(x) for x in list_value(dash)]
-        self.graphicstate.dash = DashingStyle(idash, int_value(phase))
+        ndash = [num_value(x) for x in list_value(dash)]
+        self.graphicstate.dash = DashingStyle(ndash, num_value(phase))
 
     def do_ri(self, intent: PDFObject) -> None:
         """Set color rendering intent"""
