@@ -772,6 +772,7 @@ class PDFDocument:
             )
         except io.UnsupportedOperation:
             log.warning("mmap not supported on %r, reading document into memory", fp)
+            fp.seek(0, 0)
             self.buffer = fp.read()
         except ValueError:
             raise

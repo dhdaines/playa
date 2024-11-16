@@ -338,7 +338,7 @@ class ObjectParser:
         del self.stack[:]
 
     def __iter__(self) -> Iterator[StackEntry]:
-        """Iterate over (position, object) tuples, raising StopIteration at EOF."""
+        """Iterate over (position, object) tuples."""
         return self
 
     def __next__(self) -> StackEntry:
