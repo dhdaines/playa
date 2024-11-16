@@ -1127,7 +1127,7 @@ class PageInterpreter:
                 #
                 # Note: 'ml', in conditional above, is a frequent anomaly
                 # that we want to support.
-                (x0, y0), (x1, y1) = pts
+                (x0, y0), (x1, y1) = pts[0:2]  # in case there is an 'h'
                 if x0 > x1:
                     (x1, x0) = (x0, x1)
                 if y0 > y1:
