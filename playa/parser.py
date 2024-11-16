@@ -371,7 +371,7 @@ class ObjectParser:
                     (pos, objs) = self.pop_to(KEYWORD_DICT_BEGIN)
                     if len(objs) % 2 != 0:
                         error_msg = (
-                            "Dictionary contains odd number of ojbects: %r" % objs
+                            "Dictionary contains odd number of objects: %r" % objs
                         )
                         raise PDFSyntaxError(error_msg)
                     obj = {

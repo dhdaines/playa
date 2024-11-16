@@ -34,8 +34,8 @@ from typing import (
 from playa.encodingdb import name2unicode
 from playa.parser import (
     KWD,
-    ObjectParser,
-    PDFObject,
+    Lexer,
+    Token,
     PSKeyword,
     PSLiteral,
     literal_name,
@@ -299,8 +299,8 @@ KEYWORD_ENDNOTDEFRANGE = KWD(b"endnotdefrange")
 class CMapParser:
     def __init__(self, cmap: CMapBase, data: bytes) -> None:
         self.cmap = cmap
-        self.stack: List[PDFObject] = []
-        self._parser = ObjectParser(data)
+        self.stack: List[Token] = []
+        self._parser = Lexer(data)
         # some ToUnicode maps don't have "begincmap" keyword.
         self._in_cmap = True
         self._warnings: Set[str] = set()
