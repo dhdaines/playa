@@ -146,7 +146,7 @@ class Page:
             self.contents = []
 
     @property
-    def layout(self) -> Iterator["LayoutItem"]:
+    def layout(self) -> Iterator["LayoutObject"]:
         return iter(PageInterpreter(self))
 
     def __iter__(self) -> Iterator[PDFObject]:
@@ -235,18 +235,18 @@ class LayoutObject(TypedDict, total=False):
     text: str
     imagemask: bool
     colorspace: List[ColorSpace]  # for images
-    ncs: ColorSpace  # for text/paths
-    scs: ColorSpace  # for text/paths
+    ncs: Union[ColorSpace, None]  # for text/paths
+    scs: Union[ColorSpace, None]  # for text/paths
     evenodd: bool
     stroke: bool
     fill: bool
-    stroking_color: Color
-    non_stroking_color: Color
+    stroking_color: Union[Color, None]
+    non_stroking_color: Union[Color, None]
     stream: ContentStream
-    mcid: int
-    tag: str
+    mcid: Union[int, None]
+    tag: Union[str, None]
     path: List[PathSegment]
-    dash: DashingStyle
+    dash: Union[DashingStyle, None]
 
 
 class MarkedContentTag(NamedTuple):
@@ -465,7 +465,7 @@ class PageInterpreter:
         if self.csmap:
             self.scs = self.ncs = next(iter(self.csmap.values()))
 
-    def __iter__(self) -> Iterator[LayoutItem]:
+    def __iter__(self) -> Iterator[LayoutObject]:
         log.debug(
             "PageInterpreter: resources=%r, streams=%r, ctm=%r",
             self.resources,
@@ -633,19 +633,19 @@ class PageInterpreter:
         self.curpath.append(("l", x, y + h))
         self.curpath.append(("h",))
 
-    def do_S(self) -> Iterator[LayoutItem]:
+    def do_S(self) -> Iterator[LayoutObject]:
         """Stroke path"""
         yield from self.paint_path(
             stroke=True, fill=False, evenodd=False, path=self.curpath
         )
         self.curpath = []
 
-    def do_s(self) -> Iterator[LayoutItem]:
+    def do_s(self) -> Iterator[LayoutObject]:
         """Close and stroke path"""
         self.do_h()
         yield from self.do_S()
 
-    def do_f(self) -> Iterator[LayoutItem]:
+    def do_f(self) -> Iterator[LayoutObject]:
         """Fill path using nonzero winding number rule"""
         yield from self.paint_path(
             stroke=False, fill=True, evenodd=False, path=self.curpath
@@ -655,33 +655,33 @@ class PageInterpreter:
     def do_F(self) -> None:
         """Fill path using nonzero winding number rule (obsolete)"""
 
-    def do_f_a(self) -> Iterator[LayoutItem]:
+    def do_f_a(self) -> Iterator[LayoutObject]:
         """Fill path using even-odd rule"""
         yield from self.paint_path(
             stroke=False, fill=True, evenodd=True, path=self.curpath
         )
         self.curpath = []
 
-    def do_B(self) -> Iterator[LayoutItem]:
+    def do_B(self) -> Iterator[LayoutObject]:
         """Fill and stroke path using nonzero winding number rule"""
         yield from self.paint_path(
             stroke=True, fill=True, evenodd=False, path=self.curpath
         )
         self.curpath = []
 
-    def do_B_a(self) -> Iterator[LayoutItem]:
+    def do_B_a(self) -> Iterator[LayoutObject]:
         """Fill and stroke path using even-odd rule"""
         yield from self.paint_path(
             stroke=True, fill=True, evenodd=True, path=self.curpath
         )
         self.curpath = []
 
-    def do_b(self) -> Iterator[LayoutItem]:
+    def do_b(self) -> Iterator[LayoutObject]:
         """Close, fill, and stroke path using nonzero winding number rule"""
         self.do_h()
         yield from self.do_B()
 
-    def do_b_a(self) -> Iterator[LayoutItem]:
+    def do_b_a(self) -> Iterator[LayoutObject]:
         """Close, fill, and stroke path using even-odd rule"""
         self.do_h()
         yield from self.do_B_a()
@@ -940,7 +940,7 @@ class PageInterpreter:
         )
         self.textstate.linematrix = (0, 0)
 
-    def do_TJ(self, seq: PDFObject) -> Iterator[LayoutItem]:
+    def do_TJ(self, seq: PDFObject) -> Iterator[LayoutObject]:
         """Show text, allowing individual glyph positioning"""
         if self.textstate.font is None:
             if settings.STRICT:
@@ -950,11 +950,11 @@ class PageInterpreter:
             cast(TextSeq, seq),
         )
 
-    def do_Tj(self, s: PDFObject) -> Iterator[LayoutItem]:
+    def do_Tj(self, s: PDFObject) -> Iterator[LayoutObject]:
         """Show text"""
         yield from self.do_TJ([s])
 
-    def do__q(self, s: PDFObject) -> Iterator[LayoutItem]:
+    def do__q(self, s: PDFObject) -> Iterator[LayoutObject]:
         """Move to next line and show text
 
         The ' (single quote) operator.
@@ -962,7 +962,7 @@ class PageInterpreter:
         self.do_T_a()
         yield from self.do_TJ([s])
 
-    def do__w(self, aw: PDFObject, ac: PDFObject, s: PDFObject) -> Iterator[LayoutItem]:
+    def do__w(self, aw: PDFObject, ac: PDFObject, s: PDFObject) -> Iterator[LayoutObject]:
         """Set word and character spacing, move to next line, and show text
 
         The " (double quote) operator.
@@ -977,7 +977,7 @@ class PageInterpreter:
     def do_ID(self) -> None:
         """Begin inline image data"""
 
-    def do_EI(self, obj: PDFObject) -> Iterator[LayoutItem]:
+    def do_EI(self, obj: PDFObject) -> Iterator[LayoutObject]:
         """End inline image object"""
         if isinstance(obj, InlineImage):
             # Inline images obviously are not indirect objects, so
@@ -988,7 +988,7 @@ class PageInterpreter:
             # FIXME: Do... something?
             pass
 
-    def do_Do(self, xobjid_arg: PDFObject) -> Iterator[LayoutItem]:
+    def do_Do(self, xobjid_arg: PDFObject) -> Iterator[LayoutObject]:
         """Invoke named XObject"""
         xobjid = literal_name(xobjid_arg)
         try:
@@ -1033,7 +1033,7 @@ class PageInterpreter:
         self.cur_tag = None
         self.cur_mcid = None
 
-    def render_image(self, name: str, stream: ContentStream) -> LayoutItem:
+    def render_image(self, name: str, stream: ContentStream) -> LayoutObject:
         colorspace = stream.get_any(("CS", "ColorSpace"))
         if not isinstance(colorspace, list):
             colorspace = [colorspace]
@@ -1042,11 +1042,10 @@ class PageInterpreter:
         # in the image. To be painted, an image shall be mapped to a
         # region of the page by temporarily altering the CTM.
         bounds = ((0, 0), (1, 0), (0, 1), (1, 1))
-        bbox = get_bound(apply_matrix_pt(self.ctm, (p, q)) for (p, q) in bounds)
-        return LayoutItem(
-            "image",
-            *bbox,
-            name=name,
+        x0, y0, x1, y1 = get_bound(apply_matrix_pt(self.ctm, (p, q)) for (p, q) in bounds)
+        return LayoutObject(
+            object_type="image",
+            x0=x0, y0=y0, x1=x1, y1=y1,
             stream=stream,
             srcsize=(stream.get_any(("W", "Width")), stream.get_any(("H", "Height"))),
             imagemask=stream.get_any(("IM", "ImageMask")),
@@ -1061,7 +1060,7 @@ class PageInterpreter:
         fill: bool,
         evenodd: bool,
         path: Sequence[PathSegment],
-    ) -> Iterator[LayoutItem]:
+    ) -> Iterator[LayoutObject]:
         """Paint paths described in section 4.4 of the PDF reference manual"""
         shape = "".join(x[0] for x in path)
         gstate = self.graphicstate
@@ -1122,22 +1121,22 @@ class PageInterpreter:
                     (x1, x0) = (x0, x1)
                 if y0 > y1:
                     (y1, y0) = (y0, y1)
-                yield LayoutItem(
-                    "line",
-                    x0,
-                    y0,
-                    x1,
-                    y1,
+                yield LayoutObject(
+                    object_type="line",
+                    x0=x0,
+                    y0=y0,
+                    x1=x1,
+                    y1=y1,
                     mcid=self.cur_mcid,
                     tag=self.cur_tag,
-                    original_path=transformed_path,
+                    path=transformed_path,
                     stroke=stroke,
                     fill=fill,
                     evenodd=evenodd,
                     linewidth=gstate.linewidth,
                     stroking_color=gstate.scolor,
                     non_stroking_color=gstate.ncolor,
-                    dashing_style=gstate.dash,
+                    dash=gstate.dash,
                     ncs=ncs,
                     scs=scs,
                 )
@@ -1154,58 +1153,64 @@ class PageInterpreter:
                         (x2, x0) = (x0, x2)
                     if y0 > y2:
                         (y2, y0) = (y0, y2)
-                    yield LayoutItem(
-                        "rect",
-                        x0,
-                        y0,
-                        x2,
-                        y2,
+                    yield LayoutObject(
+                        object_type="rect",
+                        x0=x0,
+                        y0=y0,
+                        x1=x2,
+                        y1=y2,
                         mcid=self.cur_mcid,
                         tag=self.cur_tag,
-                        original_path=transformed_path,
+                        path=transformed_path,
                         stroke=stroke,
                         fill=fill,
                         evenodd=evenodd,
                         linewidth=gstate.linewidth,
                         stroking_color=gstate.scolor,
                         non_stroking_color=gstate.ncolor,
-                        dashing_style=gstate.dash,
+                        dash=gstate.dash,
                         ncs=ncs,
                         scs=scs,
                     )
                 else:
-                    bbox = get_bound(pts)
-                    yield LayoutItem(
-                        "curve",
-                        *bbox,
+                    x0, y0, x1, y1 = get_bound(pts)
+                    yield LayoutObject(
+                        object_type="curve",
+                        x0=x0,
+                        y0=y0,
+                        x1=x1,
+                        y1=y1,
                         mcid=self.cur_mcid,
                         tag=self.cur_tag,
-                        original_path=transformed_path,
+                        path=transformed_path,
                         stroke=stroke,
                         fill=fill,
                         evenodd=evenodd,
                         linewidth=gstate.linewidth,
                         stroking_color=gstate.scolor,
                         non_stroking_color=gstate.ncolor,
-                        dashing_style=gstate.dash,
+                        dash=gstate.dash,
                         ncs=ncs,
                         scs=scs,
                     )
             else:
-                bbox = get_bound(pts)
-                yield LayoutItem(
-                    "curve",
-                    *bbox,
+                x0, y0, x1, y1 = get_bound(pts)
+                yield LayoutObject(
+                    object_type="curve",
+                    x0=x0,
+                    y0=y0,
+                    x1=x1,
+                    y1=y1,
                     mcid=self.cur_mcid,
                     tag=self.cur_tag,
-                    original_path=transformed_path,
+                    path=transformed_path,
                     stroke=stroke,
                     fill=fill,
                     evenodd=evenodd,
                     linewidth=gstate.linewidth,
                     stroking_color=gstate.scolor,
                     non_stroking_color=gstate.ncolor,
-                    dashing_style=gstate.dash,
+                    dash=gstate.dash,
                     ncs=ncs,
                     scs=scs,
                 )
@@ -1220,7 +1225,7 @@ class PageInterpreter:
         scaling: float,
         rise: float,
         cid: int,
-    ) -> Tuple[LayoutItem, float]:
+    ) -> Tuple[LayoutObject, float]:
         try:
             text = font.to_unichr(cid)
             assert isinstance(text, str), f"Text {text!r} is not a str"
@@ -1257,8 +1262,8 @@ class PageInterpreter:
             size = x1 - x0
         else:
             size = y1 - y0
-        item = LayoutItem(
-            itype="char",
+        item = LayoutObject(
+            object_type="char",
             x0=x0,
             y0=y0,
             x1=x1,
@@ -1280,7 +1285,7 @@ class PageInterpreter:
     def render_string(
         self,
         seq: TextSeq,
-    ) -> Iterator[LayoutItem]:
+    ) -> Iterator[LayoutObject]:
         assert self.textstate.font is not None
         vert = self.textstate.font.vertical
         assert self.ctm is not None

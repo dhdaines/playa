@@ -60,7 +60,8 @@ def test_open(path: Path) -> None:
         with playa.open(path, password=password) as doc:
             for page in doc.pages:
                 for item in page.layout:
-                    beach.append((item.itype, item.bbox))
+                    bbox = (item["x0"], item["y0"], item["x1"], item["y1"])
+                    beach.append((item["object_type"], bbox))
 
         assert beach == miner
 
