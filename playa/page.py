@@ -21,7 +21,7 @@ from typing import (
 
 from playa import settings
 from playa.casting import safe_float
-from playa.color import PREDEFINED_COLORSPACE, Color, ColorSpace
+from playa.color import PREDEFINED_COLORSPACE, Color, ColorGray, ColorSpace
 from playa.exceptions import (
     PDFInterpreterError,
     PDFUnicodeNotDefined,
@@ -200,9 +200,13 @@ class GraphicState:
     intent: Optional[object] = None
     flatness: Optional[object] = None
     # stroking color
-    scolor: Optional[Color] = None
+    scolor: Color = ColorGray(1.0)
+    # stroking color space
+    scs: ColorSpace = PREDEFINED_COLORSPACE["DeviceGray"]
     # non stroking color
-    ncolor: Optional[Color] = None
+    ncolor: Color = ColorGray(1.0)
+    # non stroking color space
+    ncs: ColorSpace = PREDEFINED_COLORSPACE["DeviceGray"]
 
 
 class LayoutObject(TypedDict, total=False):
@@ -235,13 +239,13 @@ class LayoutObject(TypedDict, total=False):
     text: str
     imagemask: bool
     colorspace: List[ColorSpace]  # for images
-    ncs: Union[ColorSpace, None]  # for text/paths
-    scs: Union[ColorSpace, None]  # for text/paths
+    ncs: ColorSpace  # for text/paths
+    scs: ColorSpace  # for text/paths
     evenodd: bool
     stroke: bool
     fill: bool
-    stroking_color: Union[Color, None]
-    non_stroking_color: Union[Color, None]
+    stroking_color: Color
+    non_stroking_color: Color
     stream: ContentStream
     mcid: Union[int, None]
     tag: Union[str, None]
@@ -459,11 +463,6 @@ class PageInterpreter:
         self.curpath: List[PathSegment] = []
         # argstack: stack for command arguments.
         self.argstack: List[PDFObject] = []
-        # set some global states.
-        self.scs: Optional[ColorSpace] = None
-        self.ncs: Optional[ColorSpace] = None
-        if self.csmap:
-            self.scs = self.ncs = next(iter(self.csmap.values()))
 
     def __iter__(self) -> Iterator[LayoutObject]:
         log.debug(
@@ -702,7 +701,7 @@ class PageInterpreter:
         Introduced in PDF 1.1
         """
         try:
-            self.scs = self.csmap[literal_name(name)]
+            self.graphicstate.scs = self.csmap[literal_name(name)]
         except KeyError:
             if settings.STRICT:
                 raise PDFInterpreterError("Undefined ColorSpace: %r" % (name,))
@@ -710,56 +709,60 @@ class PageInterpreter:
     def do_cs(self, name: PDFObject) -> None:
         """Set color space for nonstroking operations"""
         try:
-            self.ncs = self.csmap[literal_name(name)]
+            self.graphicstate.ncs = self.csmap[literal_name(name)]
         except KeyError:
             if settings.STRICT:
                 raise PDFInterpreterError("Undefined ColorSpace: %r" % (name,))
 
     def do_G(self, gray: PDFObject) -> None:
         """Set gray level for stroking operations"""
-        self.scs = self.csmap["DeviceGray"]
-        self.graphicstate.scolor = self.scs.make_color(gray)
+        self.graphicstate.scs = self.csmap["DeviceGray"]
+        self.graphicstate.scolor = self.graphicstate.scs.make_color(gray)
 
     def do_g(self, gray: PDFObject) -> None:
         """Set gray level for nonstroking operations"""
-        self.ncs = self.csmap["DeviceGray"]
-        self.graphicstate.ncolor = self.ncs.make_color(gray)
+        self.graphicstate.ncs = self.csmap["DeviceGray"]
+        self.graphicstate.ncolor = self.graphicstate.ncs.make_color(gray)
 
     def do_RG(self, r: PDFObject, g: PDFObject, b: PDFObject) -> None:
         """Set RGB color for stroking operations"""
-        self.scs = self.csmap["DeviceRGB"]
-        self.graphicstate.scolor = self.scs.make_color(r, g, b)
+        self.graphicstate.scs = self.csmap["DeviceRGB"]
+        self.graphicstate.scolor = self.graphicstate.scs.make_color(r, g, b)
 
     def do_rg(self, r: PDFObject, g: PDFObject, b: PDFObject) -> None:
         """Set RGB color for nonstroking operations"""
-        self.ncs = self.csmap["DeviceRGB"]
-        self.graphicstate.ncolor = self.ncs.make_color(r, g, b)
+        self.graphicstate.ncs = self.csmap["DeviceRGB"]
+        self.graphicstate.ncolor = self.graphicstate.ncs.make_color(r, g, b)
 
     def do_K(self, c: PDFObject, m: PDFObject, y: PDFObject, k: PDFObject) -> None:
         """Set CMYK color for stroking operations"""
-        self.scs = self.csmap["DeviceCMYK"]
-        self.graphicstate.scolor = self.scs.make_color(c, m, y, k)
+        self.graphicstate.scs = self.csmap["DeviceCMYK"]
+        self.graphicstate.scolor = self.graphicstate.scs.make_color(c, m, y, k)
 
     def do_k(self, c: PDFObject, m: PDFObject, y: PDFObject, k: PDFObject) -> None:
         """Set CMYK color for nonstroking operations"""
-        self.ncs = self.csmap["DeviceCMYK"]
-        self.graphicstate.ncolor = self.ncs.make_color(c, m, y, k)
+        self.graphicstate.ncs = self.csmap["DeviceCMYK"]
+        self.graphicstate.ncolor = self.graphicstate.ncs.make_color(c, m, y, k)
 
     def do_SCN(self) -> None:
         """Set color for stroking operations."""
-        if self.scs is None:
+        if self.graphicstate.scs is None:
             if settings.STRICT:
                 raise PDFInterpreterError("No colorspace specified!")
-            self.scs = self.csmap["DeviceGray"]
-        self.graphicstate.scolor = self.scs.make_color(*self.pop(self.scs.ncomponents))
+            self.graphicstate.scs = self.csmap["DeviceGray"]
+        self.graphicstate.scolor = self.graphicstate.scs.make_color(
+            *self.pop(self.graphicstate.scs.ncomponents)
+        )
 
     def do_scn(self) -> None:
         """Set color for nonstroking operations"""
-        if self.ncs is None:
+        if self.graphicstate.ncs is None:
             if settings.STRICT:
                 raise PDFInterpreterError("No colorspace specified!")
-            self.ncs = self.csmap["DeviceGray"]
-        self.graphicstate.ncolor = self.ncs.make_color(*self.pop(self.ncs.ncomponents))
+            self.graphicstate.ncs = self.csmap["DeviceGray"]
+        self.graphicstate.ncolor = self.graphicstate.ncs.make_color(
+            *self.pop(self.graphicstate.ncs.ncomponents)
+        )
 
     def do_SC(self) -> None:
         """Set color for stroking operations"""
@@ -1071,8 +1074,8 @@ class PageInterpreter:
         """Paint paths described in section 4.4 of the PDF reference manual"""
         shape = "".join(x[0] for x in path)
         gstate = self.graphicstate
-        ncs = self.ncs
-        scs = self.scs
+        ncs = self.graphicstate.ncs
+        scs = self.graphicstate.scs
 
         if shape[:1] != "m":
             # Per PDF Reference Section 4.4.1, "path construction operators may
@@ -1277,8 +1280,8 @@ class PageInterpreter:
             text=text,
             matrix=matrix,
             fontname=font.fontname,
-            ncs=self.ncs,
-            scs=self.scs,
+            ncs=self.graphicstate.ncs,
+            scs=self.graphicstate.scs,
             stroking_color=self.graphicstate.scolor,
             non_stroking_color=self.graphicstate.ncolor,
             mcid=self.cur_mcid,
