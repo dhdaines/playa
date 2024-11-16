@@ -3,7 +3,7 @@ from typing import Dict, NamedTuple, Union
 
 from playa.casting import safe_float
 from playa.exceptions import PDFInterpreterError
-from playa.parser import LIT
+from playa.parser import LIT, PSLiteral
 
 LITERAL_DEVICE_GRAY = LIT("DeviceGray")
 LITERAL_DEVICE_RGB = LIT("DeviceRGB")
@@ -12,6 +12,10 @@ LITERAL_DEVICE_CMYK = LIT("DeviceCMYK")
 LITERAL_INLINE_DEVICE_GRAY = LIT("G")
 LITERAL_INLINE_DEVICE_RGB = LIT("RGB")
 LITERAL_INLINE_DEVICE_CMYK = LIT("CMYK")
+
+
+class ColorPattern(NamedTuple):
+    p: PSLiteral
 
 
 class ColorGray(NamedTuple):
@@ -35,6 +39,7 @@ Color = Union[
     ColorGray,
     ColorRGB,
     ColorCMYK,
+    ColorPattern,
 ]
 
 
@@ -49,6 +54,9 @@ class ColorSpace:
                 "%s requires %d components, got %d!"
                 % (self.name, self.ncomponents, len(components))
             )
+        # FIXME: Uncolored patterns (PDF 1.7 sec 8.7.3.3) are not supported
+        if isinstance(components[0], PSLiteral):
+            return ColorPattern(components[0])
         cc = [safe_float(x) or 0.0 for x in components[0 : self.ncomponents]]
         while len(cc) < self.ncomponents:
             cc.append(0.0)
