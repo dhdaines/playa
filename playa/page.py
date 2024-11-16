@@ -236,8 +236,6 @@ class LayoutObject(TypedDict, total=False):
     matrix: Matrix
     upright: bool
     fontname: str
-    text: str
-    imagemask: bool
     colorspace: List[ColorSpace]  # for images
     ncs: ColorSpace  # for text/paths
     scs: ColorSpace  # for text/paths
@@ -247,10 +245,13 @@ class LayoutObject(TypedDict, total=False):
     stroking_color: Color
     non_stroking_color: Color
     stream: ContentStream
-    mcid: Union[int, None]
-    tag: Union[str, None]
+    text: str
+    imagemask: bool
+    name: str
+    mcid: int
+    tag: str
     path: List[Tuple]
-    dash: Union[DashingStyle, None]
+    dash: DashingStyle
 
 
 class MarkedContentTag(NamedTuple):
@@ -1059,6 +1060,7 @@ class PageInterpreter:
             width=x1 - x0,
             height=y1 - y0,
             stream=stream,
+            name=name,
             srcsize=(stream.get_any(("W", "Width")), stream.get_any(("H", "Height"))),
             imagemask=stream.get_any(("IM", "ImageMask")),
             bits=stream.get_any(("BPC", "BitsPerComponent"), 1),
@@ -1292,10 +1294,12 @@ class PageInterpreter:
             width=x1 - x0,
             height=y1 - y0,
             size=size,
+            adv=adv,
             upright=upright,
             text=text,
             matrix=matrix,
             fontname=font.fontname,
+            dash=self.graphicstate.dash,
             ncs=self.graphicstate.ncs,
             scs=self.graphicstate.scs,
             stroking_color=self.graphicstate.scolor,
