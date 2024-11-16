@@ -320,27 +320,6 @@ class LayoutItem(NamedTuple):
         return (self.x0, self.y0, self.x1, self.y1)
 
 
-def LTFigure(*, name: str, bbox: Rect, matrix: Matrix) -> LayoutItem:
-    """Represents an area used by PDF Form objects.
-
-    PDF Forms can be used to present figures or pictures by embedding yet
-    another PDF document within a page. Note that LTFigure objects can appear
-    recursively.
-    """
-    (x, y, w, h) = bbox
-    bounds = ((x, y), (x + w, y), (x, y + h), (x + w, y + h))
-    bbox = get_bound(apply_matrix_pt(matrix, (p, q)) for (p, q) in bounds)
-    return LayoutItem(
-        itype="figure",
-        name=name,
-        matrix=matrix,
-        x0=bbox[0],
-        y0=bbox[1],
-        x1=bbox[2],
-        y1=bbox[3],
-    )
-
-
 class ContentParser(ObjectParser):
     """Parse the concatenation of multiple content streams, as
     described in the spec (PDF 1.7, p.86):
@@ -1004,14 +983,7 @@ class PageInterpreter:
             # Inline images obviously are not indirect objects, so
             # have no object ID, so... make something up?
             iobjid = "inline_image_%d" % id(obj)
-            # Create a figure for the sole purpose of mapping the
-            # image to device space (PDF 1.7 sec 8.3.24: All images
-            # shall be 1 unit wide by 1 unit high in user space,
-            # regardless of the number of samples in the image. To be
-            # painted, an image shall be mapped to a region of the
-            # page by temporarily altering the CTM)
-            fig = LTFigure(name=iobjid, bbox=(0, 0, 1, 1), matrix=self.ctm)
-            yield self.render_image(iobjid, obj, fig)
+            yield self.render_image(iobjid, obj)
         else:
             # FIXME: Do... something?
             pass
@@ -1039,10 +1011,7 @@ class PageInterpreter:
             interpreter.ctm = mult_matrix(matrix, self.ctm)
             yield from interpreter
         elif subtype is LITERAL_IMAGE and "Width" in xobj and "Height" in xobj:
-            # FIXME: This LTFigure is not useful and exists only for
-            # the purpose of calcluating the bbox
-            fig = LTFigure(name=xobjid, bbox=(0, 0, 1, 1), matrix=self.ctm)
-            yield self.render_image(xobjid, xobj, fig)
+            yield self.render_image(xobjid, xobj)
         else:
             # unsupported xobject type.
             pass
@@ -1064,15 +1033,19 @@ class PageInterpreter:
         self.cur_tag = None
         self.cur_mcid = None
 
-    def render_image(
-        self, name: str, stream: ContentStream, figure: LayoutItem
-    ) -> LayoutItem:
+    def render_image(self, name: str, stream: ContentStream) -> LayoutItem:
         colorspace = stream.get_any(("CS", "ColorSpace"))
         if not isinstance(colorspace, list):
             colorspace = [colorspace]
+        # PDF 1.7 sec 8.3.24: All images shall be 1 unit wide by 1
+        # unit high in user space, regardless of the number of samples
+        # in the image. To be painted, an image shall be mapped to a
+        # region of the page by temporarily altering the CTM.
+        bounds = ((0, 0), (1, 0), (0, 1), (1, 1))
+        bbox = get_bound(apply_matrix_pt(self.ctm, (p, q)) for (p, q) in bounds)
         return LayoutItem(
             "image",
-            *figure.bbox,
+            *bbox,
             name=name,
             stream=stream,
             srcsize=(stream.get_any(("W", "Width")), stream.get_any(("H", "Height"))),
