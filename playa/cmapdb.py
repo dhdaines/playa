@@ -32,10 +32,11 @@ from typing import (
 )
 
 from playa.encodingdb import name2unicode
+from playa.exceptions import PDFSyntaxError
 from playa.parser import (
     KWD,
-    Lexer,
-    Token,
+    ObjectParser,
+    PDFObject,
     PSKeyword,
     PSLiteral,
     literal_name,
@@ -299,15 +300,22 @@ KEYWORD_ENDNOTDEFRANGE = KWD(b"endnotdefrange")
 class CMapParser:
     def __init__(self, cmap: CMapBase, data: bytes) -> None:
         self.cmap = cmap
-        self.stack: List[Token] = []
-        self._parser = Lexer(data)
+        self.stack: List[PDFObject] = []
+        self._parser = ObjectParser(data)
         # some ToUnicode maps don't have "begincmap" keyword.
         self._in_cmap = True
         self._warnings: Set[str] = set()
 
     def run(self) -> None:
-        for pos, obj in self._parser:
-            log.debug("token @ %d: %r", pos, obj)
+        while True:
+            try:
+                pos, obj = next(self._parser)
+            except PDFSyntaxError as e:  # CMap syntax .. is not PDF syntax
+                log.debug("Ignoring syntax error: %s", e)
+                self._parser.reset()
+                continue
+            except StopIteration:
+                break
             if isinstance(obj, PSKeyword):
                 self.do_keyword(pos, obj)
             else:
