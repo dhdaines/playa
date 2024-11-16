@@ -331,7 +331,7 @@ class PageInterpreter:
                 nargs = func.__code__.co_argcount - 1
                 self._dispatch[kwd] = (func, nargs)
         self.page = page
-        self.contents = page.contents if contents is None else []
+        self.contents = page.contents if contents is None else contents
         (x0, y0, x1, y1) = page.mediabox
         # FIXME: NO, this is bad, pdfplumber has a bug related to it
         # (specifically the translation, the rotation is kind of okay
@@ -344,7 +344,7 @@ class PageInterpreter:
             ctm = (0, 1, -1, 0, y1, -x0)
         else:
             ctm = (1, 0, 0, 1, -x0, -y0)
-        self.init_resources(page, page.resources if resources is None else {})
+        self.init_resources(page, page.resources if resources is None else resources)
         self.init_state(ctm)
 
     def init_resources(self, page: Page, resources: Dict) -> None:
