@@ -245,7 +245,7 @@ class LayoutObject(TypedDict, total=False):
     stream: ContentStream
     mcid: Union[int, None]
     tag: Union[str, None]
-    path: List[PathSegment]
+    path: List[Tuple]
     dash: Union[DashingStyle, None]
 
 
@@ -962,7 +962,9 @@ class PageInterpreter:
         self.do_T_a()
         yield from self.do_TJ([s])
 
-    def do__w(self, aw: PDFObject, ac: PDFObject, s: PDFObject) -> Iterator[LayoutObject]:
+    def do__w(
+        self, aw: PDFObject, ac: PDFObject, s: PDFObject
+    ) -> Iterator[LayoutObject]:
         """Set word and character spacing, move to next line, and show text
 
         The " (double quote) operator.
@@ -1042,10 +1044,15 @@ class PageInterpreter:
         # in the image. To be painted, an image shall be mapped to a
         # region of the page by temporarily altering the CTM.
         bounds = ((0, 0), (1, 0), (0, 1), (1, 1))
-        x0, y0, x1, y1 = get_bound(apply_matrix_pt(self.ctm, (p, q)) for (p, q) in bounds)
+        x0, y0, x1, y1 = get_bound(
+            apply_matrix_pt(self.ctm, (p, q)) for (p, q) in bounds
+        )
         return LayoutObject(
             object_type="image",
-            x0=x0, y0=y0, x1=x1, y1=y1,
+            x0=x0,
+            y0=y0,
+            x1=x1,
+            y1=y1,
             stream=stream,
             srcsize=(stream.get_any(("W", "Width")), stream.get_any(("H", "Height"))),
             imagemask=stream.get_any(("IM", "ImageMask")),
@@ -1106,10 +1113,7 @@ class PageInterpreter:
                 ]
                 for operation in path
             ]
-            transformed_path = [
-                cast(PathSegment, (o, *p))
-                for o, p in zip(operators, transformed_points)
-            ]
+            transformed_path = [(o, *p) for o, p in zip(operators, transformed_points)]
 
             if shape in {"mlh", "ml"}:
                 # single line segment
