@@ -36,9 +36,9 @@ from playa.pdftypes import (
     PSLiteral,
     dict_value,
     int_value,
-    num_value,
     list_value,
     literal_name,
+    num_value,
     resolve1,
     stream_value,
 )

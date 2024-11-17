@@ -950,9 +950,7 @@ class PDFDocument:
                     (strmid, index, genno) = xref.get_pos(objid)
                 except KeyError:
                     continue
-                log.debug(
-                    "getobj: strmid %r index %r genno %r", strmid, index, genno
-                )
+                log.debug("getobj: strmid %r index %r genno %r", strmid, index, genno)
                 try:
                     if strmid is not None:
                         stream = stream_value(self[strmid])
