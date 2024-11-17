@@ -914,7 +914,7 @@ class PDFDocument:
             # object. Fixes
             # https://github.com/pdfminer/pdfminer.six/issues/56
             tokenizer = Lexer(self.buffer, max(0, pos - 16))
-            q: Deque[Token] = deque([], 3)
+            q: Deque[int] = deque([], 3)
             while True:
                 try:
                     (pos, token) = next(tokenizer)
