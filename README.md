@@ -155,6 +155,9 @@ If you have more specific needs or want better performance, then read on.
 
 ### Lazy object API
 
+> [!WARNING] This API is not yet implemented! Consider the following a
+> design document.
+
 Fundamentally you may just want to know *what* is *where* on the page,
 and PLAYA has you covered there (note that the bbox is normalized, and
 in PDF device space):
