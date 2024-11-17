@@ -371,7 +371,7 @@ class ObjectParser:
                     (pos, objs) = self.pop_to(KEYWORD_DICT_BEGIN)
                     if len(objs) % 2 != 0:
                         error_msg = (
-                            "Dictionary contains odd number of ojbects: %r" % objs
+                            "Dictionary contains odd number of objects: %r" % objs
                         )
                         raise PDFSyntaxError(error_msg)
                     obj = {
@@ -563,7 +563,7 @@ class IndirectObjectParser:
         obj: Union[PDFObject, ContentStream]
         while True:
             pos, obj = next(self._parser)
-            log.debug("pos %r obj %r trailer %r", pos, obj, self.trailer)
+            log.debug("pos %r obj %r stack %r", pos, obj, self.trailer)
             if obj is KEYWORD_OBJ:
                 pass
             elif obj is KEYWORD_ENDOBJ:

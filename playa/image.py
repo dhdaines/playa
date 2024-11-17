@@ -309,7 +309,9 @@ class ImageWriter:
                 return True
         return False
 
-    def _create_unique_image_name(self, image: "LayoutItem", ext: str) -> Tuple[str, str]:
+    def _create_unique_image_name(
+        self, image: "LayoutItem", ext: str
+    ) -> Tuple[str, str]:
         assert image.itype == "image" and image.name is not None
         name = image.name + ext
         path = os.path.join(self.outdir, name)

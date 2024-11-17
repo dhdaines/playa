@@ -970,7 +970,7 @@ class SimpleFont(Font):
 class Type1Font(SimpleFont):
     def __init__(self, spec: Mapping[str, Any]) -> None:
         try:
-            self.basefont = literal_name(spec["BaseFont"])
+            self.basefont = literal_name(resolve1(spec["BaseFont"]))
         except KeyError:
             if settings.STRICT:
                 raise PDFFontError("BaseFont is missing")

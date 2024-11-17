@@ -32,6 +32,7 @@ from typing import (
 )
 
 from playa.encodingdb import name2unicode
+from playa.exceptions import PDFSyntaxError
 from playa.parser import (
     KWD,
     ObjectParser,
@@ -306,8 +307,15 @@ class CMapParser:
         self._warnings: Set[str] = set()
 
     def run(self) -> None:
-        for pos, obj in self._parser:
-            log.debug("token @ %d: %r", pos, obj)
+        while True:
+            try:
+                pos, obj = next(self._parser)
+            except PDFSyntaxError as e:  # CMap syntax .. is not PDF syntax
+                log.debug("Ignoring syntax error: %s", e)
+                self._parser.reset()
+                continue
+            except StopIteration:
+                break
             if isinstance(obj, PSKeyword):
                 self.do_keyword(pos, obj)
             else:

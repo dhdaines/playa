@@ -810,7 +810,11 @@ class PDFDocument:
                 self.info.append(dict_value(trailer["Info"]))
             if "Root" in trailer:
                 # Every PDF file must have exactly one /Root dictionary.
-                self.catalog = dict_value(trailer["Root"])
+                try:
+                    self.catalog = dict_value(trailer["Root"])
+                except TypeError:
+                    log.warning("Root is a broken reference (incorrect xref table?)")
+                    self.catalog = {}
                 break
         else:
             raise PDFSyntaxError("No /Root object! - Is this really a PDF?")
@@ -895,21 +899,22 @@ class PDFDocument:
 
     def _getobj_parse(self, pos: int, objid: int) -> PDFObject:
         assert self.parser is not None
+        log.debug("getobj_parse: seeking to %d for objid %d", pos, objid)
         self.parser.seek(pos)
         try:
             _, obj = next(self.parser)
-        except ValueError as e:
+        except (ValueError, IndexError) as e:
             log.warning(
                 "Indirect object %d not found at position %d: %r", objid, pos, e
             )
             # Hack around malformed pdf files where the offset in the
             # xref table doesn't point exactly at the object
             # definition (probably more frequent than you think).
-            # Parse forward until we find "obj" and hope it's the
-            # right object (FIXME: could also back up a bit?) Fixes
+            # Back up a bit, then parse forward until we find the right
+            # object. Fixes
             # https://github.com/pdfminer/pdfminer.six/issues/56
-            tokenizer = Lexer(self.buffer, pos)
-            q: Deque[Token] = deque([], 3)
+            tokenizer = Lexer(self.buffer, max(0, pos - 16))
+            q: Deque[int] = deque([], 3)
             while True:
                 try:
                     (pos, token) = next(tokenizer)
@@ -920,7 +925,8 @@ class PDFDocument:
                 q.append(pos)
                 if len(q) == 3 and token is KEYWORD_OBJ:
                     break
-            self.parser.seek(int_value(q[0]))
+            log.debug("seeking to %r", q[0])
+            self.parser.seek(q[0])
             (_, obj) = next(self.parser)
         if obj.objid != objid:
             raise PDFSyntaxError(f"objid mismatch: {obj.objid!r}={objid!r}")
@@ -936,14 +942,15 @@ class PDFDocument:
         """
         if not self.xrefs:
             raise ValueError("PDFDocument is not initialized")
-        log.debug("getobj: objid=%r", objid)
         if objid not in self._cached_objs:
+            log.debug("getobj: objid=%r", objid)
             obj = None
             for xref in self.xrefs:
                 try:
                     (strmid, index, genno) = xref.get_pos(objid)
                 except KeyError:
                     continue
+                log.debug("getobj: strmid %r index %r genno %r", strmid, index, genno)
                 try:
                     if strmid is not None:
                         stream = stream_value(self[strmid])
@@ -1202,7 +1209,6 @@ class PDFDocument:
             xref = XRefTable(parser)
         xrefs.append(xref)
         trailer = xref.trailer
-        log.debug("trailer: %r", trailer)
         # For hybrid-reference files, an additional set of xrefs as a
         # stream.
         if "XRefStm" in trailer:

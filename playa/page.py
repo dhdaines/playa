@@ -14,13 +14,14 @@ from typing import (
     Optional,
     Sequence,
     Tuple,
+    TypedDict,
     Union,
     cast,
 )
 
 from playa import settings
 from playa.casting import safe_float
-from playa.color import PREDEFINED_COLORSPACE, Color, ColorSpace
+from playa.color import PREDEFINED_COLORSPACE, Color, ColorGray, ColorSpace
 from playa.exceptions import (
     PDFInterpreterError,
     PDFUnicodeNotDefined,
@@ -37,6 +38,7 @@ from playa.pdftypes import (
     int_value,
     list_value,
     literal_name,
+    num_value,
     resolve1,
     stream_value,
 )
@@ -145,7 +147,7 @@ class Page:
             self.contents = []
 
     @property
-    def layout(self) -> Iterator["LayoutItem"]:
+    def layout(self) -> Iterator["LayoutObject"]:
         return iter(PageInterpreter(self))
 
     def __iter__(self) -> Iterator[PDFObject]:
@@ -185,8 +187,8 @@ class TextState:
 
 
 class DashingStyle(NamedTuple):
-    dash: List[int]
-    phase: int
+    dash: List[float]
+    phase: float
 
 
 @dataclass
@@ -195,13 +197,97 @@ class GraphicState:
     linecap: Optional[object] = None
     linejoin: Optional[object] = None
     miterlimit: Optional[object] = None
-    dash: Optional[DashingStyle] = None
+    dash: DashingStyle = DashingStyle([], 0)
     intent: Optional[object] = None
     flatness: Optional[object] = None
     # stroking color
-    scolor: Optional[Color] = None
+    scolor: Color = ColorGray(0)
+    # stroking color space
+    scs: ColorSpace = PREDEFINED_COLORSPACE["DeviceGray"]
     # non stroking color
-    ncolor: Optional[Color] = None
+    ncolor: Color = ColorGray(0)
+    # non stroking color space
+    ncs: ColorSpace = PREDEFINED_COLORSPACE["DeviceGray"]
+
+
+class LayoutObject(TypedDict, total=False):
+    """Dictionary-based layout objects.
+
+    These closely match the dictionaries returned by pdfplumber, except
+    that coordinates are expressed in PDF device space with (0, 0) at
+    lower left.
+
+    This API has some limitations, so it is preferable to use
+    ContentObject instead.
+    """
+
+    object_type: str
+    adv: float
+    height: float
+    linewidth: float
+    pts: List[Point]
+    size: float
+    srcsize: Tuple[int, int]
+    width: float
+    x0: float
+    x1: float
+    y0: float
+    y1: float
+    bits: int
+    matrix: Matrix
+    upright: bool
+    fontname: str
+    colorspace: List[ColorSpace]  # for images
+    ncs: ColorSpace  # for text/paths
+    scs: ColorSpace  # for text/paths
+    evenodd: bool
+    stroke: bool
+    fill: bool
+    stroking_color: Color
+    non_stroking_color: Color
+    stream: ContentStream
+    text: str
+    imagemask: bool
+    name: str
+    mcid: Union[int, None]
+    tag: Union[str, None]
+    path: List[Tuple]
+    dash: DashingStyle
+
+
+class MarkedContentTag(NamedTuple):
+    name: str
+    attrs: Dict[str, PDFObject]
+
+
+class MarkedContentSection(NamedTuple):
+    mcid: int
+    tag: MarkedContentTag
+
+
+class ContentObject:
+    object_type: str
+    gstate: GraphicState
+    mcs: MarkedContentSection
+
+    @property
+    def bbox(self) -> Rect:
+        return (0, 0, 0, 0)
+
+
+class TextObject(ContentObject):
+    tstate: TextState
+
+    def __iter__(self):
+        yield from ()
+
+    @property
+    def strings(self) -> Iterator[Iterator[ContentObject]]:
+        yield from ()
+
+    @property
+    def chars(self) -> Iterator[ContentObject]:
+        yield from ()
 
 
 class LayoutItem(NamedTuple):
@@ -213,7 +299,6 @@ class LayoutItem(NamedTuple):
     name: Optional[str] = None
     tag: Optional[str] = None
     mcid: Optional[int] = None
-    objs: Optional[List["LayoutItem"]] = None
     linewidth: Optional[float] = None
     pts: Optional[List[Point]] = None
     stroke: bool = False
@@ -239,28 +324,6 @@ class LayoutItem(NamedTuple):
     @property
     def bbox(self) -> Rect:
         return (self.x0, self.y0, self.x1, self.y1)
-
-
-def LTFigure(*, name: str, bbox: Rect, matrix: Matrix) -> LayoutItem:
-    """Represents an area used by PDF Form objects.
-
-    PDF Forms can be used to present figures or pictures by embedding yet
-    another PDF document within a page. Note that LTFigure objects can appear
-    recursively.
-    """
-    (x, y, w, h) = bbox
-    bounds = ((x, y), (x + w, y), (x, y + h), (x + w, y + h))
-    bbox = get_bound(apply_matrix_pt(matrix, (p, q)) for (p, q) in bounds)
-    return LayoutItem(
-        itype="figure",
-        name=name,
-        matrix=matrix,
-        x0=bbox[0],
-        y0=bbox[1],
-        x1=bbox[2],
-        y1=bbox[3],
-        objs=[],
-    )
 
 
 class ContentParser(ObjectParser):
@@ -402,13 +465,8 @@ class PageInterpreter:
         self.curpath: List[PathSegment] = []
         # argstack: stack for command arguments.
         self.argstack: List[PDFObject] = []
-        # set some global states.
-        self.scs: Optional[ColorSpace] = None
-        self.ncs: Optional[ColorSpace] = None
-        if self.csmap:
-            self.scs = self.ncs = next(iter(self.csmap.values()))
 
-    def __iter__(self) -> Iterator[LayoutItem]:
+    def __iter__(self) -> Iterator[LayoutObject]:
         log.debug(
             "PageInterpreter: resources=%r, streams=%r, ctm=%r",
             self.resources,
@@ -503,8 +561,8 @@ class PageInterpreter:
 
     def do_d(self, dash: PDFObject, phase: PDFObject) -> None:
         """Set line dash pattern"""
-        idash = [int_value(x) for x in list_value(dash)]
-        self.graphicstate.dash = DashingStyle(idash, int_value(phase))
+        ndash = [num_value(x) for x in list_value(dash)]
+        self.graphicstate.dash = DashingStyle(ndash, num_value(phase))
 
     def do_ri(self, intent: PDFObject) -> None:
         """Set color rendering intent"""
@@ -576,19 +634,19 @@ class PageInterpreter:
         self.curpath.append(("l", x, y + h))
         self.curpath.append(("h",))
 
-    def do_S(self) -> Iterator[LayoutItem]:
+    def do_S(self) -> Iterator[LayoutObject]:
         """Stroke path"""
         yield from self.paint_path(
             stroke=True, fill=False, evenodd=False, path=self.curpath
         )
         self.curpath = []
 
-    def do_s(self) -> Iterator[LayoutItem]:
+    def do_s(self) -> Iterator[LayoutObject]:
         """Close and stroke path"""
         self.do_h()
         yield from self.do_S()
 
-    def do_f(self) -> Iterator[LayoutItem]:
+    def do_f(self) -> Iterator[LayoutObject]:
         """Fill path using nonzero winding number rule"""
         yield from self.paint_path(
             stroke=False, fill=True, evenodd=False, path=self.curpath
@@ -598,33 +656,33 @@ class PageInterpreter:
     def do_F(self) -> None:
         """Fill path using nonzero winding number rule (obsolete)"""
 
-    def do_f_a(self) -> Iterator[LayoutItem]:
+    def do_f_a(self) -> Iterator[LayoutObject]:
         """Fill path using even-odd rule"""
         yield from self.paint_path(
             stroke=False, fill=True, evenodd=True, path=self.curpath
         )
         self.curpath = []
 
-    def do_B(self) -> Iterator[LayoutItem]:
+    def do_B(self) -> Iterator[LayoutObject]:
         """Fill and stroke path using nonzero winding number rule"""
         yield from self.paint_path(
             stroke=True, fill=True, evenodd=False, path=self.curpath
         )
         self.curpath = []
 
-    def do_B_a(self) -> Iterator[LayoutItem]:
+    def do_B_a(self) -> Iterator[LayoutObject]:
         """Fill and stroke path using even-odd rule"""
         yield from self.paint_path(
             stroke=True, fill=True, evenodd=True, path=self.curpath
         )
         self.curpath = []
 
-    def do_b(self) -> Iterator[LayoutItem]:
+    def do_b(self) -> Iterator[LayoutObject]:
         """Close, fill, and stroke path using nonzero winding number rule"""
         self.do_h()
         yield from self.do_B()
 
-    def do_b_a(self) -> Iterator[LayoutItem]:
+    def do_b_a(self) -> Iterator[LayoutObject]:
         """Close, fill, and stroke path using even-odd rule"""
         self.do_h()
         yield from self.do_B_a()
@@ -645,7 +703,7 @@ class PageInterpreter:
         Introduced in PDF 1.1
         """
         try:
-            self.scs = self.csmap[literal_name(name)]
+            self.graphicstate.scs = self.csmap[literal_name(name)]
         except KeyError:
             if settings.STRICT:
                 raise PDFInterpreterError("Undefined ColorSpace: %r" % (name,))
@@ -653,56 +711,60 @@ class PageInterpreter:
     def do_cs(self, name: PDFObject) -> None:
         """Set color space for nonstroking operations"""
         try:
-            self.ncs = self.csmap[literal_name(name)]
+            self.graphicstate.ncs = self.csmap[literal_name(name)]
         except KeyError:
             if settings.STRICT:
                 raise PDFInterpreterError("Undefined ColorSpace: %r" % (name,))
 
     def do_G(self, gray: PDFObject) -> None:
         """Set gray level for stroking operations"""
-        self.scs = self.csmap["DeviceGray"]
-        self.graphicstate.scolor = self.scs.make_color(gray)
+        self.graphicstate.scs = self.csmap["DeviceGray"]
+        self.graphicstate.scolor = self.graphicstate.scs.make_color(gray)
 
     def do_g(self, gray: PDFObject) -> None:
         """Set gray level for nonstroking operations"""
-        self.ncs = self.csmap["DeviceGray"]
-        self.graphicstate.ncolor = self.ncs.make_color(gray)
+        self.graphicstate.ncs = self.csmap["DeviceGray"]
+        self.graphicstate.ncolor = self.graphicstate.ncs.make_color(gray)
 
     def do_RG(self, r: PDFObject, g: PDFObject, b: PDFObject) -> None:
         """Set RGB color for stroking operations"""
-        self.scs = self.csmap["DeviceRGB"]
-        self.graphicstate.scolor = self.scs.make_color(r, g, b)
+        self.graphicstate.scs = self.csmap["DeviceRGB"]
+        self.graphicstate.scolor = self.graphicstate.scs.make_color(r, g, b)
 
     def do_rg(self, r: PDFObject, g: PDFObject, b: PDFObject) -> None:
         """Set RGB color for nonstroking operations"""
-        self.ncs = self.csmap["DeviceRGB"]
-        self.graphicstate.ncolor = self.ncs.make_color(r, g, b)
+        self.graphicstate.ncs = self.csmap["DeviceRGB"]
+        self.graphicstate.ncolor = self.graphicstate.ncs.make_color(r, g, b)
 
     def do_K(self, c: PDFObject, m: PDFObject, y: PDFObject, k: PDFObject) -> None:
         """Set CMYK color for stroking operations"""
-        self.scs = self.csmap["DeviceCMYK"]
-        self.graphicstate.scolor = self.scs.make_color(c, m, y, k)
+        self.graphicstate.scs = self.csmap["DeviceCMYK"]
+        self.graphicstate.scolor = self.graphicstate.scs.make_color(c, m, y, k)
 
     def do_k(self, c: PDFObject, m: PDFObject, y: PDFObject, k: PDFObject) -> None:
         """Set CMYK color for nonstroking operations"""
-        self.ncs = self.csmap["DeviceCMYK"]
-        self.graphicstate.ncolor = self.ncs.make_color(c, m, y, k)
+        self.graphicstate.ncs = self.csmap["DeviceCMYK"]
+        self.graphicstate.ncolor = self.graphicstate.ncs.make_color(c, m, y, k)
 
     def do_SCN(self) -> None:
         """Set color for stroking operations."""
-        if self.scs is None:
+        if self.graphicstate.scs is None:
             if settings.STRICT:
                 raise PDFInterpreterError("No colorspace specified!")
-            self.scs = self.csmap["DeviceGray"]
-        self.graphicstate.scolor = self.scs.make_color(*self.pop(self.scs.ncomponents))
+            self.graphicstate.scs = self.csmap["DeviceGray"]
+        self.graphicstate.scolor = self.graphicstate.scs.make_color(
+            *self.pop(self.graphicstate.scs.ncomponents)
+        )
 
     def do_scn(self) -> None:
         """Set color for nonstroking operations"""
-        if self.ncs is None:
+        if self.graphicstate.ncs is None:
             if settings.STRICT:
                 raise PDFInterpreterError("No colorspace specified!")
-            self.ncs = self.csmap["DeviceGray"]
-        self.graphicstate.ncolor = self.ncs.make_color(*self.pop(self.ncs.ncomponents))
+            self.graphicstate.ncs = self.csmap["DeviceGray"]
+        self.graphicstate.ncolor = self.graphicstate.ncs.make_color(
+            *self.pop(self.graphicstate.ncs.ncomponents)
+        )
 
     def do_SC(self) -> None:
         """Set color for stroking operations"""
@@ -883,7 +945,7 @@ class PageInterpreter:
         )
         self.textstate.linematrix = (0, 0)
 
-    def do_TJ(self, seq: PDFObject) -> Iterator[LayoutItem]:
+    def do_TJ(self, seq: PDFObject) -> Iterator[LayoutObject]:
         """Show text, allowing individual glyph positioning"""
         if self.textstate.font is None:
             if settings.STRICT:
@@ -893,11 +955,11 @@ class PageInterpreter:
             cast(TextSeq, seq),
         )
 
-    def do_Tj(self, s: PDFObject) -> Iterator[LayoutItem]:
+    def do_Tj(self, s: PDFObject) -> Iterator[LayoutObject]:
         """Show text"""
         yield from self.do_TJ([s])
 
-    def do__q(self, s: PDFObject) -> Iterator[LayoutItem]:
+    def do__q(self, s: PDFObject) -> Iterator[LayoutObject]:
         """Move to next line and show text
 
         The ' (single quote) operator.
@@ -905,7 +967,9 @@ class PageInterpreter:
         self.do_T_a()
         yield from self.do_TJ([s])
 
-    def do__w(self, aw: PDFObject, ac: PDFObject, s: PDFObject) -> Iterator[LayoutItem]:
+    def do__w(
+        self, aw: PDFObject, ac: PDFObject, s: PDFObject
+    ) -> Iterator[LayoutObject]:
         """Set word and character spacing, move to next line, and show text
 
         The " (double quote) operator.
@@ -920,58 +984,41 @@ class PageInterpreter:
     def do_ID(self) -> None:
         """Begin inline image data"""
 
-    def do_EI(self, obj: PDFObject) -> Iterator[LayoutItem]:
+    def do_EI(self, obj: PDFObject) -> Iterator[LayoutObject]:
         """End inline image object"""
         if isinstance(obj, InlineImage):
-            iobjid = str(id(obj))
-            # FIXME: This LTFigure is not useful and exists only for
-            # the purpose of calcluating the bbox
-            fig = LTFigure(name=iobjid, bbox=(0, 0, 1, 1), matrix=self.ctm)
-            assert fig.objs is not None
-            fig.objs.append(self.render_image(iobjid, obj, fig))
-            yield fig
+            # Inline images obviously are not indirect objects, so
+            # have no object ID, so... make something up?
+            iobjid = "inline_image_%d" % id(obj)
+            yield self.render_image(iobjid, obj)
         else:
             # FIXME: Do... something?
             pass
 
-    def do_Do(self, xobjid_arg: PDFObject) -> Iterator[LayoutItem]:
+    def do_Do(self, xobjid_arg: PDFObject) -> Iterator[LayoutObject]:
         """Invoke named XObject"""
         xobjid = literal_name(xobjid_arg)
         try:
             xobj = stream_value(self.xobjmap[xobjid])
         except KeyError:
-            if settings.STRICT:
-                raise PDFInterpreterError("Undefined xobject id: %r" % xobjid)
+            log.debug("Undefined xobject id: %r", xobjid)
             return
         log.debug("Processing xobj: %r", xobj)
         subtype = xobj.get("Subtype")
         if subtype is LITERAL_FORM and "BBox" in xobj:
-            bbox = cast(Rect, list_value(xobj["BBox"]))
             matrix = cast(Matrix, list_value(xobj.get("Matrix", MATRIX_IDENTITY)))
             # According to PDF reference 1.7 section 4.9.1, XObjects in
             # earlier PDFs (prior to v1.2) use the page's Resources entry
             # instead of having their own Resources entry.
             xobjres = xobj.get("Resources")
-            if xobjres:
-                interpreter = PageInterpreter(
-                    self.page, resources=dict_value(xobjres), contents=[xobj]
-                )
-            else:
-                interpreter = PageInterpreter(self.page, contents=[xobj])
+            resources = None if xobjres is None else dict_value(xobjres)
+            interpreter = PageInterpreter(
+                self.page, resources=resources, contents=[xobj]
+            )
             interpreter.ctm = mult_matrix(matrix, self.ctm)
-            # FIXME: Create a different way of representing form
-            # XObjects (requires a shim in the pdfminer compatibility test)
-            fig = LTFigure(name=xobjid, bbox=bbox, matrix=interpreter.ctm)
-            assert fig.objs is not None
-            fig.objs.extend(interpreter)
-            yield fig
+            yield from interpreter
         elif subtype is LITERAL_IMAGE and "Width" in xobj and "Height" in xobj:
-            # FIXME: This LTFigure is not useful and exists only for
-            # the purpose of calcluating the bbox
-            fig = LTFigure(name=xobjid, bbox=(0, 0, 1, 1), matrix=self.ctm)
-            assert fig.objs is not None
-            fig.objs.append(self.render_image(xobjid, xobj, fig))
-            yield fig
+            yield self.render_image(xobjid, xobj)
         else:
             # unsupported xobject type.
             pass
@@ -993,15 +1040,28 @@ class PageInterpreter:
         self.cur_tag = None
         self.cur_mcid = None
 
-    def render_image(self, name: str, stream: ContentStream, figure: LayoutItem) -> LayoutItem:
+    def render_image(self, name: str, stream: ContentStream) -> LayoutObject:
         colorspace = stream.get_any(("CS", "ColorSpace"))
         if not isinstance(colorspace, list):
             colorspace = [colorspace]
-        return LayoutItem(
-            "image",
-            *figure.bbox,
-            name=name,
+        # PDF 1.7 sec 8.3.24: All images shall be 1 unit wide by 1
+        # unit high in user space, regardless of the number of samples
+        # in the image. To be painted, an image shall be mapped to a
+        # region of the page by temporarily altering the CTM.
+        bounds = ((0, 0), (1, 0), (0, 1), (1, 1))
+        x0, y0, x1, y1 = get_bound(
+            apply_matrix_pt(self.ctm, (p, q)) for (p, q) in bounds
+        )
+        return LayoutObject(
+            object_type="image",
+            x0=x0,
+            y0=y0,
+            x1=x1,
+            y1=y1,
+            width=x1 - x0,
+            height=y1 - y0,
             stream=stream,
+            name=name,
             srcsize=(stream.get_any(("W", "Width")), stream.get_any(("H", "Height"))),
             imagemask=stream.get_any(("IM", "ImageMask")),
             bits=stream.get_any(("BPC", "BitsPerComponent"), 1),
@@ -1015,12 +1075,12 @@ class PageInterpreter:
         fill: bool,
         evenodd: bool,
         path: Sequence[PathSegment],
-    ) -> Iterator[LayoutItem]:
+    ) -> Iterator[LayoutObject]:
         """Paint paths described in section 4.4 of the PDF reference manual"""
         shape = "".join(x[0] for x in path)
         gstate = self.graphicstate
-        ncs = self.ncs
-        scs = self.scs
+        ncs = self.graphicstate.ncs
+        scs = self.graphicstate.scs
 
         if shape[:1] != "m":
             # Per PDF Reference Section 4.4.1, "path construction operators may
@@ -1061,37 +1121,37 @@ class PageInterpreter:
                 ]
                 for operation in path
             ]
-            transformed_path = [
-                cast(PathSegment, (o, *p))
-                for o, p in zip(operators, transformed_points)
-            ]
+            transformed_path = [(o, *p) for o, p in zip(operators, transformed_points)]
 
             if shape in {"mlh", "ml"}:
                 # single line segment
                 #
                 # Note: 'ml', in conditional above, is a frequent anomaly
                 # that we want to support.
-                (x0, y0), (x1, y1) = pts
+                (x0, y0), (x1, y1) = pts[0:2]  # in case there is an 'h'
                 if x0 > x1:
                     (x1, x0) = (x0, x1)
                 if y0 > y1:
                     (y1, y0) = (y0, y1)
-                yield LayoutItem(
-                    "line",
-                    x0,
-                    y0,
-                    x1,
-                    y1,
+                yield LayoutObject(
+                    object_type="line",
+                    x0=x0,
+                    y0=y0,
+                    x1=x1,
+                    y1=y1,
+                    width=x1 - x0,
+                    height=y1 - y0,
                     mcid=self.cur_mcid,
                     tag=self.cur_tag,
-                    original_path=transformed_path,
+                    path=transformed_path,
+                    pts=pts,
                     stroke=stroke,
                     fill=fill,
                     evenodd=evenodd,
                     linewidth=gstate.linewidth,
                     stroking_color=gstate.scolor,
                     non_stroking_color=gstate.ncolor,
-                    dashing_style=gstate.dash,
+                    dash=gstate.dash,
                     ncs=ncs,
                     scs=scs,
                 )
@@ -1108,58 +1168,73 @@ class PageInterpreter:
                         (x2, x0) = (x0, x2)
                     if y0 > y2:
                         (y2, y0) = (y0, y2)
-                    yield LayoutItem(
-                        "rect",
-                        x0,
-                        y0,
-                        x2,
-                        y2,
+                    yield LayoutObject(
+                        object_type="rect",
+                        x0=x0,
+                        y0=y0,
+                        x1=x2,
+                        y1=y2,
+                        width=x2 - x0,
+                        height=y2 - y0,
                         mcid=self.cur_mcid,
                         tag=self.cur_tag,
-                        original_path=transformed_path,
+                        path=transformed_path,
+                        pts=pts,
                         stroke=stroke,
                         fill=fill,
                         evenodd=evenodd,
                         linewidth=gstate.linewidth,
                         stroking_color=gstate.scolor,
                         non_stroking_color=gstate.ncolor,
-                        dashing_style=gstate.dash,
+                        dash=gstate.dash,
                         ncs=ncs,
                         scs=scs,
                     )
                 else:
-                    bbox = get_bound(pts)
-                    yield LayoutItem(
-                        "curve",
-                        *bbox,
+                    x0, y0, x1, y1 = get_bound(pts)
+                    yield LayoutObject(
+                        object_type="curve",
+                        x0=x0,
+                        y0=y0,
+                        x1=x1,
+                        y1=y1,
+                        width=x1 - x0,
+                        height=y1 - y0,
                         mcid=self.cur_mcid,
                         tag=self.cur_tag,
-                        original_path=transformed_path,
+                        path=transformed_path,
+                        pts=pts,
                         stroke=stroke,
                         fill=fill,
                         evenodd=evenodd,
                         linewidth=gstate.linewidth,
                         stroking_color=gstate.scolor,
                         non_stroking_color=gstate.ncolor,
-                        dashing_style=gstate.dash,
+                        dash=gstate.dash,
                         ncs=ncs,
                         scs=scs,
                     )
             else:
-                bbox = get_bound(pts)
-                yield LayoutItem(
-                    "curve",
-                    *bbox,
+                x0, y0, x1, y1 = get_bound(pts)
+                yield LayoutObject(
+                    object_type="curve",
+                    x0=x0,
+                    y0=y0,
+                    x1=x1,
+                    y1=y1,
+                    width=x1 - x0,
+                    height=y1 - y0,
                     mcid=self.cur_mcid,
                     tag=self.cur_tag,
-                    original_path=transformed_path,
+                    path=transformed_path,
+                    pts=pts,
                     stroke=stroke,
                     fill=fill,
                     evenodd=evenodd,
                     linewidth=gstate.linewidth,
                     stroking_color=gstate.scolor,
                     non_stroking_color=gstate.ncolor,
-                    dashing_style=gstate.dash,
+                    dash=gstate.dash,
                     ncs=ncs,
                     scs=scs,
                 )
@@ -1174,7 +1249,7 @@ class PageInterpreter:
         scaling: float,
         rise: float,
         cid: int,
-    ) -> Tuple[LayoutItem, float]:
+    ) -> Tuple[LayoutObject, float]:
         try:
             text = font.to_unichr(cid)
             assert isinstance(text, str), f"Text {text!r} is not a str"
@@ -1211,19 +1286,23 @@ class PageInterpreter:
             size = x1 - x0
         else:
             size = y1 - y0
-        item = LayoutItem(
-            itype="char",
+        item = LayoutObject(
+            object_type="char",
             x0=x0,
             y0=y0,
             x1=x1,
             y1=y1,
+            width=x1 - x0,
+            height=y1 - y0,
             size=size,
+            adv=adv,
             upright=upright,
             text=text,
             matrix=matrix,
             fontname=font.fontname,
-            ncs=self.ncs,
-            scs=self.scs,
+            dash=self.graphicstate.dash,
+            ncs=self.graphicstate.ncs,
+            scs=self.graphicstate.scs,
             stroking_color=self.graphicstate.scolor,
             non_stroking_color=self.graphicstate.ncolor,
             mcid=self.cur_mcid,
@@ -1234,7 +1313,7 @@ class PageInterpreter:
     def render_string(
         self,
         seq: TextSeq,
-    ) -> Iterator[LayoutItem]:
+    ) -> Iterator[LayoutObject]:
         assert self.textstate.font is not None
         vert = self.textstate.font.vertical
         assert self.ctm is not None
