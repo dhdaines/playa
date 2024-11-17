@@ -563,7 +563,7 @@ class IndirectObjectParser:
         obj: Union[PDFObject, ContentStream]
         while True:
             pos, obj = next(self._parser)
-            log.debug("pos %r obj %r trailer %r", pos, obj, self.trailer)
+            log.debug("pos %r obj %r stack %r", pos, obj, self.trailer)
             if obj is KEYWORD_OBJ:
                 pass
             elif obj is KEYWORD_ENDOBJ:
