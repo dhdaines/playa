@@ -289,8 +289,8 @@ want to actually match these characters to glyphs.  Sorry, I don't
 write the standards.
 
 As mentioned earlier, if you really just want to do text extraction,
-there's always pdfplumber, pypdfium2, pikepdf, pypdf, borb, pydyf, etc,
-etc, etc.
+there's always pdfplumber, pymupdf, pypdfium2, pikepdf, pypdf, borb,
+etc, etc, etc.
 
 ## Acknowledgement
 
