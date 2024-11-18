@@ -109,10 +109,12 @@ class StructElement(Findable):
     def __iter__(self) -> Iterator["StructElement"]:
         return iter(self.children)
 
-    def all_mcids(self) -> Iterator[Tuple[Union[int, None], int]]:
-        """Collect all MCIDs (with their page numbers, if there are
-        multiple pages in the tree) inside a structure element.
+    def all_mcids(self) -> Iterator[Tuple[int, int]]:
+        """Collect all MCIDs (with their page indices) inside a
+        structure element.
         """
+        # MCIDs are meaningless without a page object
+        assert self.page_idx is not None
         # Collect them depth-first to preserve ordering
         for mcid in self.mcids:
             yield self.page_idx, mcid
@@ -261,7 +263,7 @@ class StructTree(Findable):
         assert "Obj" not in obj, "Uncaught OBJR: %s" % obj
         # Get page index if necessary
         page_idx = None
-        if self.page_dict is not None and "Pg" in obj:
+        if "Pg" in obj:
             page_objid = obj["Pg"].objid
             assert page_objid in self.page_dict, "Object on unparsed page: %s" % obj
             page_idx = self.page_dict[page_objid]
@@ -432,12 +434,19 @@ class StructTree(Findable):
             for child in children:
                 obj = resolve1(child)
                 if isinstance(obj, int):
+                    # FIXME: This might fail! (but that indicates a
+                    # programming failure as MCIDs should never occur
+                    # without a page object)
                     element.mcids.append(obj)
                 elif isinstance(obj, dict):
-                    # Skip out-of-page MCIDS and OBJRs
+                    # Skip out-of-page MCIDS and OBJRs (FIXME: do we
+                    # *really* want to do this? Perhaps we should
+                    # store the page indices directly with the MCIDs?)
                     if not self.on_parsed_page(obj):
                         continue
                     if "MCID" in obj:
+                        # FIXME: This might fail, for the same reasons!
+                        assert element.page_idx is not None
                         element.mcids.append(obj["MCID"])
                     elif "Obj" in obj:
                         child = obj["Obj"]
