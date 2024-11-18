@@ -290,42 +290,6 @@ class TextObject(ContentObject):
         yield from ()
 
 
-class LayoutItem(NamedTuple):
-    itype: str
-    x0: float
-    y0: float
-    x1: float
-    y1: float
-    name: Optional[str] = None
-    tag: Optional[str] = None
-    mcid: Optional[int] = None
-    linewidth: Optional[float] = None
-    pts: Optional[List[Point]] = None
-    stroke: bool = False
-    fill: bool = False
-    evenodd: bool = False
-    stroking_color: Optional[Color] = None
-    non_stroking_color: Optional[Color] = None
-    original_path: Optional[List[PathSegment]] = None
-    dashing_style: Optional[Tuple[object, object]] = None
-    ncs: Optional[ColorSpace] = None
-    scs: Optional[ColorSpace] = None
-    stream: Optional[ContentStream] = None
-    srcsize: Optional[Tuple[int, int]] = None
-    imagemask: Optional[bool] = None
-    bits: Optional[int] = None
-    colorspace: Optional[List[ColorSpace]] = None
-    text: Optional[str] = None
-    matrix: Optional[Matrix] = None
-    fontname: Optional[str] = None
-    upright: Optional[bool] = None
-    size: Optional[float] = None
-
-    @property
-    def bbox(self) -> Rect:
-        return (self.x0, self.y0, self.x1, self.y1)
-
-
 class ContentParser(ObjectParser):
     """Parse the concatenation of multiple content streams, as
     described in the spec (PDF 1.7, p.86):
