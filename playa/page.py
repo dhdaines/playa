@@ -299,9 +299,16 @@ class ContentParser(ObjectParser):
                 self.newstream(stream.get_data())
 
 
+class MarkedContentSection(NamedTuple):
+    mcid: Union[int, None]
+    tag: str
+    props: Dict[str, PDFObject]
+
+
 class BaseInterpreter:
     """Core state for the PDF interpreter."""
 
+    mcs: Union[MarkedContentSection, None] = None
     ctm: Matrix
 
     def __init__(
@@ -770,15 +777,67 @@ class BaseInterpreter:
     def do_ID(self) -> None:
         """Begin inline image data"""
 
+    def do_BMC(self, tag: PDFObject) -> None:
+        """Begin marked-content sequence"""
+        self.begin_tag(tag, {})
+
+    def get_property(self, prop: PSLiteral) -> Union[PDFObject, None]:
+        if "Properties" in self.resources:
+            props = dict_value(self.resources["Properties"])
+            return props.get(prop.name)
+        return None
+
+    def do_BDC(self, tag: PDFObject, props: PDFObject) -> None:
+        """Begin marked-content sequence with property list"""
+        # PDF 1.7 sec 14.6.2: If any of the values are indirect
+        # references to objects outside the content stream, the
+        # property list dictionary shall be defined as a named
+        # resource in the Properties subdictionary of the current
+        # resource dictionary (see 7.8.3, “Resource Dictionaries”) and
+        # referenced by name as the properties operand of the DP or
+        # BDC operat
+        if isinstance(props, PSLiteral):
+            props = self.get_property(props)
+        rprops = dict_value(props)
+        self.begin_tag(tag, rprops)
+
+    def do_MP(self, tag: PDFObject) -> None:
+        """Define marked-content point"""
+        self.do_tag(tag)
+
+    def do_DP(self, tag: PDFObject, props: PDFObject) -> None:
+        """Define marked-content point with property list"""
+        # See above
+        if isinstance(props, PSLiteral):
+            props = self.get_property(props)
+        rprops = dict_value(props)
+        self.do_tag(tag, rprops)
+
+    def do_EMC(self) -> None:
+        """End marked-content sequence"""
+        self.mcs = None
+
+    def begin_tag(self, tag: PDFObject, props: Dict[str, PDFObject]) -> None:
+        """Handle beginning of tag, setting current MCID if any."""
+        assert isinstance(tag, PSLiteral)
+        tag = decode_text(tag.name)
+        if "MCID" in props:
+            mcid = int_value(props["MCID"])
+        else:
+            mcid = None
+        self.mcs = MarkedContentSection(
+            mcid=mcid, tag=tag, props=props
+        )
+
+    def do_tag(self, tag: PDFObject, props: Optional[PDFObject] = None) -> None:
+        pass
+
 
 class PageInterpreter(BaseInterpreter):
     """Processor for the content of a PDF page
 
     Reference: PDF Reference, Appendix A, Operator Summary
     """
-
-    cur_mcid: Optional[int] = None
-    cur_tag: Optional[str] = None
 
     def __iter__(self) -> Iterator[LayoutObject]:
         log.debug(
@@ -943,43 +1002,6 @@ class PageInterpreter(BaseInterpreter):
             # unsupported xobject type.
             pass
 
-    def do_MP(self, tag: PDFObject) -> None:
-        """Define marked-content point"""
-        self.do_tag(cast(PSLiteral, tag))
-
-    def do_DP(self, tag: PDFObject, props: PDFObject) -> None:
-        """Define marked-content point with property list"""
-        self.do_tag(cast(PSLiteral, tag), props)
-
-    def do_BMC(self, tag: PDFObject) -> None:
-        """Begin marked-content sequence"""
-        self.begin_tag(cast(PSLiteral, tag))
-
-    def do_BDC(self, tag: PDFObject, props: PDFObject) -> None:
-        """Begin marked-content sequence with property list"""
-        self.begin_tag(cast(PSLiteral, tag), props)
-
-    def do_EMC(self) -> None:
-        """End marked-content sequence"""
-        self.end_tag()
-
-    def begin_tag(self, tag: PSLiteral, props: Optional[PDFObject] = None) -> None:
-        """Handle beginning of tag, setting current MCID if any."""
-        self.cur_tag = decode_text(tag.name)
-        # FIXME: Many other useful things like ActualText
-        if isinstance(props, dict) and "MCID" in props:
-            self.cur_mcid = props["MCID"]
-        else:
-            self.cur_mcid = None
-
-    def do_tag(self, tag: PSLiteral, props: Optional[PDFObject] = None) -> None:
-        pass
-
-    def end_tag(self) -> None:
-        """Handle beginning of tag, clearing current MCID."""
-        self.cur_tag = None
-        self.cur_mcid = None
-
     def render_image(self, name: str, stream: ContentStream) -> LayoutObject:
         colorspace = stream.get_any(("CS", "ColorSpace"))
         if not isinstance(colorspace, list):
@@ -1002,8 +1024,8 @@ class PageInterpreter(BaseInterpreter):
             height=y1 - y0,
             stream=stream,
             name=name,
-            mcid=self.cur_mcid,
-            tag=self.cur_tag,
+            mcid=None if self.mcs is None else self.mcs.mcid,
+            tag=None if self.mcs is None else self.mcs.tag,
             srcsize=(stream.get_any(("W", "Width")), stream.get_any(("H", "Height"))),
             imagemask=stream.get_any(("IM", "ImageMask")),
             bits=stream.get_any(("BPC", "BitsPerComponent"), 1),
@@ -1083,8 +1105,8 @@ class PageInterpreter(BaseInterpreter):
                     y1=y1,
                     width=x1 - x0,
                     height=y1 - y0,
-                    mcid=self.cur_mcid,
-                    tag=self.cur_tag,
+                    mcid=None if self.mcs is None else self.mcs.mcid,
+                    tag=None if self.mcs is None else self.mcs.tag,
                     path=transformed_path,
                     pts=pts,
                     stroke=stroke,
@@ -1118,8 +1140,8 @@ class PageInterpreter(BaseInterpreter):
                         y1=y2,
                         width=x2 - x0,
                         height=y2 - y0,
-                        mcid=self.cur_mcid,
-                        tag=self.cur_tag,
+                        mcid=None if self.mcs is None else self.mcs.mcid,
+                        tag=None if self.mcs is None else self.mcs.tag,
                         path=transformed_path,
                         pts=pts,
                         stroke=stroke,
@@ -1142,8 +1164,8 @@ class PageInterpreter(BaseInterpreter):
                         y1=y1,
                         width=x1 - x0,
                         height=y1 - y0,
-                        mcid=self.cur_mcid,
-                        tag=self.cur_tag,
+                        mcid=None if self.mcs is None else self.mcs.mcid,
+                        tag=None if self.mcs is None else self.mcs.tag,
                         path=transformed_path,
                         pts=pts,
                         stroke=stroke,
@@ -1166,8 +1188,8 @@ class PageInterpreter(BaseInterpreter):
                     y1=y1,
                     width=x1 - x0,
                     height=y1 - y0,
-                    mcid=self.cur_mcid,
-                    tag=self.cur_tag,
+                    mcid=None if self.mcs is None else self.mcs.mcid,
+                    tag=None if self.mcs is None else self.mcs.tag,
                     path=transformed_path,
                     pts=pts,
                     stroke=stroke,
@@ -1247,8 +1269,8 @@ class PageInterpreter(BaseInterpreter):
             scs=self.graphicstate.scs,
             stroking_color=self.graphicstate.scolor,
             non_stroking_color=self.graphicstate.ncolor,
-            mcid=self.cur_mcid,
-            tag=self.cur_tag,
+            mcid=None if self.mcs is None else self.mcs.mcid,
+            tag=None if self.mcs is None else self.mcs.tag,
         )
         return item, adv
 
@@ -1305,16 +1327,6 @@ class PageInterpreter(BaseInterpreter):
         return "(cid:%d)" % cid
 
 
-class MarkedContentTag(NamedTuple):
-    name: str
-    attrs: Dict[str, PDFObject]
-
-
-class MarkedContentSection(NamedTuple):
-    mcid: Union[int, None]
-    tag: MarkedContentTag
-
-
 @dataclass
 class ContentObject:
     object_type: str
@@ -1359,8 +1371,6 @@ class TextObject(ContentObject):
 
 class LazyInterpreter(BaseInterpreter):
     """Interpret the page yielding lazy objects."""
-
-    mcs: Union[MarkedContentSection, None] = None
 
     def __iter__(self) -> Iterator[ContentObject]:
         log.debug(
@@ -1579,40 +1589,3 @@ class LazyInterpreter(BaseInterpreter):
             bits=stream.get_any(("BPC", "BitsPerComponent"), 1),
             colorspace=colorspace,
         )
-
-    def do_MP(self, tag: PDFObject) -> None:
-        """Define marked-content point"""
-        self.do_tag(tag)
-
-    def do_DP(self, tag: PDFObject, props: PDFObject) -> None:
-        """Define marked-content point with property list"""
-        rprops = dict_value(props) or {}
-        self.do_tag(tag, rprops)
-
-    def do_BMC(self, tag: PDFObject) -> None:
-        """Begin marked-content sequence"""
-        self.begin_tag(tag, {})
-
-    def do_BDC(self, tag: PDFObject, props: PDFObject) -> None:
-        """Begin marked-content sequence with property list"""
-        rprops = dict_value(props) or {}
-        self.begin_tag(tag, rprops)
-
-    def do_EMC(self) -> None:
-        """End marked-content sequence"""
-        self.mcs = None
-
-    def begin_tag(self, tag: PDFObject, props: Dict[str, PDFObject]) -> None:
-        """Handle beginning of tag, setting current MCID if any."""
-        assert isinstance(tag, PSLiteral)
-        tag = decode_text(tag.name)
-        if "MCID" in props:
-            mcid = int_value(props["MCID"])
-        else:
-            mcid = None
-        self.mcs = MarkedContentSection(
-            mcid=mcid, tag=MarkedContentTag(tag, {} if props is None else props)
-        )
-
-    def do_tag(self, tag: PDFObject, props: Optional[PDFObject] = None) -> None:
-        pass
