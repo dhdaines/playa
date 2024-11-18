@@ -47,7 +47,6 @@ from playa.utils import (
     Matrix,
     PathSegment,
     Point,
-    Rect,
     apply_matrix_pt,
     decode_text,
     get_bound,
@@ -825,9 +824,7 @@ class BaseInterpreter:
             mcid = int_value(props["MCID"])
         else:
             mcid = None
-        self.mcs = MarkedContentSection(
-            mcid=mcid, tag=tag, props=props
-        )
+        self.mcs = MarkedContentSection(mcid=mcid, tag=tag, props=props)
 
     def do_tag(self, tag: PDFObject, props: Optional[PDFObject] = None) -> None:
         pass
@@ -1329,9 +1326,13 @@ class PageInterpreter(BaseInterpreter):
 
 @dataclass
 class ContentObject:
-    object_type: str
     gstate: GraphicState
     mcs: Union[MarkedContentSection, None]
+
+    @property
+    def object_type(self):
+        name, _, _ = self.__class__.__name__.partition("Object")
+        return name.lower()
 
 
 @dataclass
@@ -1345,7 +1346,7 @@ class ImageObject(ContentObject):
 
 
 @dataclass
-class GraphicsObject(ContentObject):
+class PathObject(ContentObject):
     path: List[PathSegment]
     stroke: bool
     fill: bool
@@ -1409,16 +1410,21 @@ class LazyInterpreter(BaseInterpreter):
             else:
                 self.push(obj)
 
+    def create(self, object_class, **kwargs) -> ContentObject:
+        return object_class(
+            mcs=self.mcs,
+            gstate=self.graphicstate,
+            **kwargs,
+        )
+
     def do_S(self) -> Iterator[ContentObject]:
         """Stroke path"""
-        yield GraphicsObject(
-            object_type="path",
+        yield self.create(
+            PathObject,
             stroke=True,
             fill=False,
             evenodd=False,
             path=self.curpath,
-            mcs=self.mcs,
-            gstate=self.graphicstate,
         )
         self.curpath = []
 
@@ -1429,14 +1435,12 @@ class LazyInterpreter(BaseInterpreter):
 
     def do_f(self) -> Iterator[ContentObject]:
         """Fill path using nonzero winding number rule"""
-        yield GraphicsObject(
-            object_type="path",
+        yield self.create(
+            PathObject,
             stroke=False,
             fill=True,
             evenodd=False,
             path=self.curpath,
-            mcs=self.mcs,
-            gstate=self.graphicstate,
         )
         self.curpath = []
 
@@ -1446,40 +1450,34 @@ class LazyInterpreter(BaseInterpreter):
 
     def do_f_a(self) -> Iterator[ContentObject]:
         """Fill path using even-odd rule"""
-        yield GraphicsObject(
-            object_type="path",
+        yield self.create(
+            PathObject,
             stroke=False,
             fill=True,
             evenodd=True,
             path=self.curpath,
-            mcs=self.mcs,
-            gstate=self.graphicstate,
         )
         self.curpath = []
 
     def do_B(self) -> Iterator[ContentObject]:
         """Fill and stroke path using nonzero winding number rule"""
-        yield GraphicsObject(
-            object_type="path",
+        yield self.create(
+            PathObject,
             stroke=True,
             fill=True,
             evenodd=False,
             path=self.curpath,
-            mcs=self.mcs,
-            gstate=self.graphicstate,
         )
         self.curpath = []
 
     def do_B_a(self) -> Iterator[ContentObject]:
         """Fill and stroke path using even-odd rule"""
-        yield GraphicsObject(
-            object_type="path",
+        yield self.create(
+            PathObject,
             stroke=True,
             fill=True,
             evenodd=True,
             path=self.curpath,
-            mcs=self.mcs,
-            gstate=self.graphicstate,
         )
         self.curpath = []
 
@@ -1497,10 +1495,8 @@ class LazyInterpreter(BaseInterpreter):
         """Show text, allowing individual glyph positioning"""
         if self.textstate.font is None:
             raise PDFInterpreterError("No font specified!")
-        yield TextObject(
-            object_type="text",
-            gstate=self.graphicstate,
-            mcs=self.mcs,
+        yield self.create(
+            TextObject,
             tstate=self.textstate,
         )
 
@@ -1566,7 +1562,7 @@ class LazyInterpreter(BaseInterpreter):
             # unsupported xobject type.
             pass
 
-    def render_image(self, name: str, stream: ContentStream) -> ImageObject:
+    def render_image(self, name: str, stream: ContentStream) -> ContentObject:
         colorspace = stream.get_any(("CS", "ColorSpace"))
         if not isinstance(colorspace, list):
             colorspace = [colorspace]
@@ -1578,12 +1574,10 @@ class LazyInterpreter(BaseInterpreter):
         x0, y0, x1, y1 = get_bound(
             apply_matrix_pt(self.ctm, (p, q)) for (p, q) in bounds
         )
-        return ImageObject(
-            object_type="image",
+        return self.create(
+            ImageObject,
             stream=stream,
             name=name,
-            mcs=self.mcs,
-            gstate=self.graphicstate,
             srcsize=(stream.get_any(("W", "Width")), stream.get_any(("H", "Height"))),
             imagemask=stream.get_any(("IM", "ImageMask")),
             bits=stream.get_any(("BPC", "BitsPerComponent"), 1),
