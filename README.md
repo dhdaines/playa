@@ -141,7 +141,7 @@ the top-left of the page:
 
 ```python
 for dic in page.layout:
-    print("it is a {dic['object_type']} at ({dic['top']}", {dic['left']}))
+    print("it is a {dic['object_type']} at ({dic['x0']}", {dic['y0']}))
     print("    the color is {dic['stroking_color']}")
     print("    the text is {dic['text']}")
     print("    it is in MCS {dic['mcid']} which is a {dic['tag']}")
@@ -195,9 +195,10 @@ particularly onerous, because the parameters themselves are immutable:
 ```python
 for obj in page.objects:
     print(f"{obj.object_type} at {obj.bbox} is:")
-    print(f"    {obj.gstate.scolor} stroking")
-    print(f"    {obj.gstate.ncolor} non-stroking")
-    my_stuff = (obj.bbox, obj.gstate.scolor, obj.gstate.ncolor)
+    print(f"    {obj.gstate.scolor} stroking color")
+    print(f"    {obj.gstate.ncolor} non-stroking color")
+    print(f"    {obj.gstate.dash} dashing style")
+    my_stuff = (obj.dash, obj.gstate.scolor, obj.gstate.ncolor)
     other_stuff.append(my_stuff)  # it's safe there
 ```
 

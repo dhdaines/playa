@@ -27,22 +27,22 @@ if TYPE_CHECKING:
     from playa.document import PDFDocument
 
 
-MatchFunc = Callable[["PDFStructElement"], bool]
+MatchFunc = Callable[["StructElement"], bool]
 
 
 def _find_all(
-    elements: Iterable["PDFStructElement"],
+    elements: Iterable["StructElement"],
     matcher: Union[str, Pattern[str], MatchFunc],
-) -> Iterator["PDFStructElement"]:
+) -> Iterator["StructElement"]:
     """
     Common code for `find_all()` in trees and elements.
     """
 
-    def match_tag(x: "PDFStructElement") -> bool:
+    def match_tag(x: "StructElement") -> bool:
         """Match an element name."""
         return x.type == matcher
 
-    def match_regex(x: "PDFStructElement") -> bool:
+    def match_regex(x: "StructElement") -> bool:
         """Match an element name by regular expression."""
         return matcher.match(x.type)  # type: ignore
 
@@ -64,26 +64,26 @@ class Findable:
     """find() and find_all() methods that can be inherited to avoid
     repeating oneself"""
 
-    children: List["PDFStructElement"]
+    children: List["StructElement"]
 
     def find_all(
         self, matcher: Union[str, Pattern[str], MatchFunc]
-    ) -> Iterator["PDFStructElement"]:
+    ) -> Iterator["StructElement"]:
         """Iterate depth-first over matching elements in subtree.
 
         The `matcher` argument is either an element name, a regular
-        expression, or a function taking a `PDFStructElement` and
+        expression, or a function taking a `StructElement` and
         returning `True` if the element matches.
         """
         return _find_all(self.children, matcher)
 
     def find(
         self, matcher: Union[str, Pattern[str], MatchFunc]
-    ) -> Union["PDFStructElement", None]:
+    ) -> Union["StructElement", None]:
         """Find the first matching element in subtree.
 
         The `matcher` argument is either an element name, a regular
-        expression, or a function taking a `PDFStructElement` and
+        expression, or a function taking a `StructElement` and
         returning `True` if the element matches.
         """
         try:
@@ -93,7 +93,7 @@ class Findable:
 
 
 @dataclass
-class PDFStructElement(Findable):
+class StructElement(Findable):
     type: str
     revision: Union[int, None]
     id: Union[str, None]
@@ -104,9 +104,9 @@ class PDFStructElement(Findable):
     page_idx: Union[int, None]
     attributes: Dict[str, Any] = field(default_factory=dict)
     mcids: List[int] = field(default_factory=list)
-    children: List["PDFStructElement"] = field(default_factory=list)
+    children: List["StructElement"] = field(default_factory=list)
 
-    def __iter__(self) -> Iterator["PDFStructElement"]:
+    def __iter__(self) -> Iterator["StructElement"]:
         return iter(self.children)
 
     def all_mcids(self) -> Iterator[Tuple[Union[int, None], int]]:
@@ -141,7 +141,7 @@ class PDFStructElement(Findable):
         return r
 
 
-class PDFStructTree(Findable):
+class StructTree(Findable):
     """Parse the structure tree of a PDF.
 
     This class creates a representation of the portion of the
@@ -157,7 +157,7 @@ class PDFStructTree(Findable):
       doc: Document from which to extract structure tree
       pages: List of (index, page) pairs - indices will be used to
              identify pages in the tree through the `page_idx`
-             attribute of `PDFStructElement`.
+             attribute of `StructElement`.
     """
 
     page: Union[Page, None]
@@ -172,7 +172,7 @@ class PDFStructTree(Findable):
         self.root = resolve1(doc.catalog["StructTreeRoot"])
         self.role_map = resolve1(self.root.get("RoleMap", {}))
         self.class_map = resolve1(self.root.get("ClassMap", {}))
-        self.children: List[PDFStructElement] = []
+        self.children: List[StructElement] = []
         self.page_dict: Dict[Any, Union[int, None]]
 
         if pages is None:
@@ -255,7 +255,7 @@ class PDFStructTree(Findable):
 
     def _make_element(
         self, obj: Any
-    ) -> Tuple[Union[PDFStructElement, None], List[Any]]:
+    ) -> Tuple[Union[StructElement, None], List[Any]]:
         # We hopefully caught these earlier
         assert "MCID" not in obj, "Uncaught MCR: %s" % obj
         assert "Obj" not in obj, "Uncaught OBJR: %s" % obj
@@ -284,7 +284,7 @@ class PDFStructTree(Findable):
         actual_text = (
             decode_text(resolve1(obj["ActualText"])) if "ActualText" in obj else None
         )
-        element = PDFStructElement(
+        element = StructElement(
             type=obj_tag,
             id=element_id,
             page_idx=page_idx,
@@ -449,5 +449,5 @@ class PDFStructTree(Findable):
                         d.append(child)
         self.children = [seen[repr(ref)][0] for ref in parsed_root]
 
-    def __iter__(self) -> Iterator[PDFStructElement]:
+    def __iter__(self) -> Iterator[StructElement]:
         return iter(self.children)
