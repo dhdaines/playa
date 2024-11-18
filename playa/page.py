@@ -146,13 +146,17 @@ class Page:
         else:
             self.contents = []
 
-    @property
-    def layout(self) -> Iterator["LayoutObject"]:
-        return iter(PageInterpreter(self))
-
     def __iter__(self) -> Iterator[PDFObject]:
         for pos, obj in ContentParser(self.contents):
             yield obj
+
+    @property
+    def objects(self) -> Iterator["ContentObject"]:
+        return iter(LazyInterpreter(self))
+
+    @property
+    def layout(self) -> Iterator["LayoutObject"]:
+        return iter(PageInterpreter(self))
 
     @property
     def tokens(self) -> Iterator[Token]:
@@ -255,41 +259,6 @@ class LayoutObject(TypedDict, total=False):
     dash: DashingStyle
 
 
-class MarkedContentTag(NamedTuple):
-    name: str
-    attrs: Dict[str, PDFObject]
-
-
-class MarkedContentSection(NamedTuple):
-    mcid: int
-    tag: MarkedContentTag
-
-
-class ContentObject:
-    object_type: str
-    gstate: GraphicState
-    mcs: MarkedContentSection
-
-    @property
-    def bbox(self) -> Rect:
-        return (0, 0, 0, 0)
-
-
-class TextObject(ContentObject):
-    tstate: TextState
-
-    def __iter__(self):
-        yield from ()
-
-    @property
-    def strings(self) -> Iterator[Iterator[ContentObject]]:
-        yield from ()
-
-    @property
-    def chars(self) -> Iterator[ContentObject]:
-        yield from ()
-
-
 class ContentParser(ObjectParser):
     """Parse the concatenation of multiple content streams, as
     described in the spec (PDF 1.7, p.86):
@@ -330,15 +299,10 @@ class ContentParser(ObjectParser):
                 self.newstream(stream.get_data())
 
 
-class PageInterpreter:
-    """Processor for the content of a PDF page
-
-    Reference: PDF Reference, Appendix A, Operator Summary
-    """
+class BaseInterpreter:
+    """Core state for the PDF interpreter."""
 
     ctm: Matrix
-    cur_mcid: Optional[int] = None
-    cur_tag: Optional[str] = None
 
     def __init__(
         self,
@@ -430,43 +394,6 @@ class PageInterpreter:
         self.curpath: List[PathSegment] = []
         # argstack: stack for command arguments.
         self.argstack: List[PDFObject] = []
-
-    def __iter__(self) -> Iterator[LayoutObject]:
-        log.debug(
-            "PageInterpreter: resources=%r, streams=%r, ctm=%r",
-            self.resources,
-            self.contents,
-            self.ctm,
-        )
-        parser = ContentParser(self.contents)
-        for _, obj in parser:
-            # These are handled inside the parser as they don't obey
-            # the normal syntax rules (PDF 1.7 sec 8.9.7)
-            if isinstance(obj, InlineImage):
-                yield from self.do_EI(obj)
-            elif isinstance(obj, PSKeyword):
-                if obj in self._dispatch:
-                    method, nargs = self._dispatch[obj]
-                    if nargs:
-                        args = self.pop(nargs)
-                        log.debug("exec: %r %r", obj, args)
-                        if len(args) == nargs:
-                            gen = method(*args)
-                        else:
-                            error_msg = (
-                                "Insufficient arguments (%d) for operator: %r"
-                                % (len(args), obj)
-                            )
-                            raise PDFInterpreterError(error_msg)
-                    else:
-                        log.debug("exec: %r", obj)
-                        gen = method()
-                    if gen is not None:
-                        yield from gen
-                else:
-                    log.warning("Unknown operator: %r", obj)
-            else:
-                self.push(obj)
 
     def push(self, obj: PDFObject) -> None:
         self.argstack.append(obj)
@@ -599,59 +526,6 @@ class PageInterpreter:
         self.curpath.append(("l", x, y + h))
         self.curpath.append(("h",))
 
-    def do_S(self) -> Iterator[LayoutObject]:
-        """Stroke path"""
-        yield from self.paint_path(
-            stroke=True, fill=False, evenodd=False, path=self.curpath
-        )
-        self.curpath = []
-
-    def do_s(self) -> Iterator[LayoutObject]:
-        """Close and stroke path"""
-        self.do_h()
-        yield from self.do_S()
-
-    def do_f(self) -> Iterator[LayoutObject]:
-        """Fill path using nonzero winding number rule"""
-        yield from self.paint_path(
-            stroke=False, fill=True, evenodd=False, path=self.curpath
-        )
-        self.curpath = []
-
-    def do_F(self) -> None:
-        """Fill path using nonzero winding number rule (obsolete)"""
-
-    def do_f_a(self) -> Iterator[LayoutObject]:
-        """Fill path using even-odd rule"""
-        yield from self.paint_path(
-            stroke=False, fill=True, evenodd=True, path=self.curpath
-        )
-        self.curpath = []
-
-    def do_B(self) -> Iterator[LayoutObject]:
-        """Fill and stroke path using nonzero winding number rule"""
-        yield from self.paint_path(
-            stroke=True, fill=True, evenodd=False, path=self.curpath
-        )
-        self.curpath = []
-
-    def do_B_a(self) -> Iterator[LayoutObject]:
-        """Fill and stroke path using even-odd rule"""
-        yield from self.paint_path(
-            stroke=True, fill=True, evenodd=True, path=self.curpath
-        )
-        self.curpath = []
-
-    def do_b(self) -> Iterator[LayoutObject]:
-        """Close, fill, and stroke path using nonzero winding number rule"""
-        self.do_h()
-        yield from self.do_B()
-
-    def do_b_a(self) -> Iterator[LayoutObject]:
-        """Close, fill, and stroke path using even-odd rule"""
-        self.do_h()
-        yield from self.do_B_a()
-
     def do_n(self) -> None:
         """End path without filling or stroking"""
         self.curpath = []
@@ -759,26 +633,6 @@ class PageInterpreter:
 
     def do_EX(self) -> None:
         """End compatibility section"""
-
-    def do_MP(self, tag: PDFObject) -> None:
-        """Define marked-content point"""
-        self.do_tag(cast(PSLiteral, tag))
-
-    def do_DP(self, tag: PDFObject, props: PDFObject) -> None:
-        """Define marked-content point with property list"""
-        self.do_tag(cast(PSLiteral, tag), props)
-
-    def do_BMC(self, tag: PDFObject) -> None:
-        """Begin marked-content sequence"""
-        self.begin_tag(cast(PSLiteral, tag))
-
-    def do_BDC(self, tag: PDFObject, props: PDFObject) -> None:
-        """Begin marked-content sequence with property list"""
-        self.begin_tag(cast(PSLiteral, tag), props)
-
-    def do_EMC(self) -> None:
-        """End marked-content sequence"""
-        self.end_tag()
 
     def do_Tc(self, space: PDFObject) -> None:
         """Set character spacing.
@@ -910,6 +764,113 @@ class PageInterpreter:
         )
         self.textstate.linematrix = (0, 0)
 
+    def do_BI(self) -> None:
+        """Begin inline image object"""
+
+    def do_ID(self) -> None:
+        """Begin inline image data"""
+
+
+class PageInterpreter(BaseInterpreter):
+    """Processor for the content of a PDF page
+
+    Reference: PDF Reference, Appendix A, Operator Summary
+    """
+
+    cur_mcid: Optional[int] = None
+    cur_tag: Optional[str] = None
+
+    def __iter__(self) -> Iterator[LayoutObject]:
+        log.debug(
+            "PageInterpreter: resources=%r, streams=%r, ctm=%r",
+            self.resources,
+            self.contents,
+            self.ctm,
+        )
+        parser = ContentParser(self.contents)
+        for _, obj in parser:
+            # These are handled inside the parser as they don't obey
+            # the normal syntax rules (PDF 1.7 sec 8.9.7)
+            if isinstance(obj, InlineImage):
+                yield from self.do_EI(obj)
+            elif isinstance(obj, PSKeyword):
+                if obj in self._dispatch:
+                    method, nargs = self._dispatch[obj]
+                    if nargs:
+                        args = self.pop(nargs)
+                        log.debug("exec: %r %r", obj, args)
+                        if len(args) == nargs:
+                            gen = method(*args)
+                        else:
+                            error_msg = (
+                                "Insufficient arguments (%d) for operator: %r"
+                                % (len(args), obj)
+                            )
+                            raise PDFInterpreterError(error_msg)
+                    else:
+                        log.debug("exec: %r", obj)
+                        gen = method()
+                    if gen is not None:
+                        yield from gen
+                else:
+                    log.warning("Unknown operator: %r", obj)
+            else:
+                self.push(obj)
+
+    def do_S(self) -> Iterator[LayoutObject]:
+        """Stroke path"""
+        yield from self.paint_path(
+            stroke=True, fill=False, evenodd=False, path=self.curpath
+        )
+        self.curpath = []
+
+    def do_s(self) -> Iterator[LayoutObject]:
+        """Close and stroke path"""
+        self.do_h()
+        yield from self.do_S()
+
+    def do_f(self) -> Iterator[LayoutObject]:
+        """Fill path using nonzero winding number rule"""
+        yield from self.paint_path(
+            stroke=False, fill=True, evenodd=False, path=self.curpath
+        )
+        self.curpath = []
+
+    def do_F(self) -> Iterator[LayoutObject]:
+        """Fill path using nonzero winding number rule (obsolete)"""
+        yield from self.do_f()
+
+    def do_f_a(self) -> Iterator[LayoutObject]:
+        """Fill path using even-odd rule"""
+        yield from self.paint_path(
+            stroke=False, fill=True, evenodd=True, path=self.curpath
+        )
+        self.curpath = []
+
+    def do_B(self) -> Iterator[LayoutObject]:
+        """Fill and stroke path using nonzero winding number rule"""
+        yield from self.paint_path(
+            stroke=True, fill=True, evenodd=False, path=self.curpath
+        )
+        self.curpath = []
+
+    def do_B_a(self) -> Iterator[LayoutObject]:
+        """Fill and stroke path using even-odd rule"""
+        yield from self.paint_path(
+            stroke=True, fill=True, evenodd=True, path=self.curpath
+        )
+        self.curpath = []
+
+    def do_b(self) -> Iterator[LayoutObject]:
+        """Close, fill, and stroke path using nonzero winding number rule"""
+        self.do_h()
+        yield from self.do_B()
+
+    def do_b_a(self) -> Iterator[LayoutObject]:
+        """Close, fill, and stroke path using even-odd rule"""
+        self.do_h()
+        yield from self.do_B_a()
+
     def do_TJ(self, seq: PDFObject) -> Iterator[LayoutObject]:
         """Show text, allowing individual glyph positioning"""
         if self.textstate.font is None:
@@ -942,12 +903,6 @@ class PageInterpreter:
         self.do_Tw(aw)
         self.do_Tc(ac)
         yield from self.do_TJ([s])
-
-    def do_BI(self) -> None:
-        """Begin inline image object"""
-
-    def do_ID(self) -> None:
-        """Begin inline image data"""
 
     def do_EI(self, obj: PDFObject) -> Iterator[LayoutObject]:
         """End inline image object"""
@@ -987,6 +942,26 @@ class PageInterpreter:
         else:
             # unsupported xobject type.
             pass
+
+    def do_MP(self, tag: PDFObject) -> None:
+        """Define marked-content point"""
+        self.do_tag(cast(PSLiteral, tag))
+
+    def do_DP(self, tag: PDFObject, props: PDFObject) -> None:
+        """Define marked-content point with property list"""
+        self.do_tag(cast(PSLiteral, tag), props)
+
+    def do_BMC(self, tag: PDFObject) -> None:
+        """Begin marked-content sequence"""
+        self.begin_tag(cast(PSLiteral, tag))
+
+    def do_BDC(self, tag: PDFObject, props: PDFObject) -> None:
+        """Begin marked-content sequence with property list"""
+        self.begin_tag(cast(PSLiteral, tag), props)
+
+    def do_EMC(self) -> None:
+        """End marked-content sequence"""
+        self.end_tag()
 
     def begin_tag(self, tag: PSLiteral, props: Optional[PDFObject] = None) -> None:
         """Handle beginning of tag, setting current MCID if any."""
@@ -1328,3 +1303,316 @@ class PageInterpreter:
     def handle_undefined_char(self, font: Font, cid: int) -> str:
         log.debug("undefined: %r, %r", font, cid)
         return "(cid:%d)" % cid
+
+
+class MarkedContentTag(NamedTuple):
+    name: str
+    attrs: Dict[str, PDFObject]
+
+
+class MarkedContentSection(NamedTuple):
+    mcid: Union[int, None]
+    tag: MarkedContentTag
+
+
+@dataclass
+class ContentObject:
+    object_type: str
+    gstate: GraphicState
+    mcs: Union[MarkedContentSection, None]
+
+
+@dataclass
+class ImageObject(ContentObject):
+    name: str
+    srcsize: Tuple[int, int]
+    bits: int
+    imagemask: bool
+    stream: ContentStream
+    colorspace: List[ColorSpace]
+
+
+@dataclass
+class GraphicsObject(ContentObject):
+    path: List[PathSegment]
+    stroke: bool
+    fill: bool
+    evenodd: bool
+
+
+@dataclass
+class Glyph(ContentObject):
+    text: str
+
+
+@dataclass
+class TextObject(ContentObject):
+    tstate: TextState
+
+    def __iter__(self) -> Iterator[Glyph]:
+        yield from ()
+
+    @property
+    def strings(self) -> Iterator["TextObject"]:
+        yield from ()
+
+
+class LazyInterpreter(BaseInterpreter):
+    """Interpret the page yielding lazy objects."""
+
+    mcs: Union[MarkedContentSection, None] = None
+
+    def __iter__(self) -> Iterator[ContentObject]:
+        log.debug(
+            "LazyInterpreter: resources=%r, streams=%r, ctm=%r",
+            self.resources,
+            self.contents,
+            self.ctm,
+        )
+        parser = ContentParser(self.contents)
+        for _, obj in parser:
+            # These are handled inside the parser as they don't obey
+            # the normal syntax rules (PDF 1.7 sec 8.9.7)
+            if isinstance(obj, InlineImage):
+                yield from self.do_EI(obj)
+            elif isinstance(obj, PSKeyword):
+                if obj in self._dispatch:
+                    method, nargs = self._dispatch[obj]
+                    if nargs:
+                        args = self.pop(nargs)
+                        log.debug("exec: %r %r", obj, args)
+                        if len(args) == nargs:
+                            gen = method(*args)
+                        else:
+                            error_msg = (
+                                "Insufficient arguments (%d) for operator: %r"
+                                % (len(args), obj)
+                            )
+                            raise PDFInterpreterError(error_msg)
+                    else:
+                        log.debug("exec: %r", obj)
+                        gen = method()
+                    if gen is not None:
+                        yield from gen
+                else:
+                    log.warning("Unknown operator: %r", obj)
+            else:
+                self.push(obj)
+
+    def do_S(self) -> Iterator[ContentObject]:
+        """Stroke path"""
+        yield GraphicsObject(
+            object_type="path",
+            stroke=True,
+            fill=False,
+            evenodd=False,
+            path=self.curpath,
+            mcs=self.mcs,
+            gstate=self.graphicstate,
+        )
+        self.curpath = []
+
+    def do_s(self) -> Iterator[ContentObject]:
+        """Close and stroke path"""
+        self.do_h()
+        yield from self.do_S()
+
+    def do_f(self) -> Iterator[ContentObject]:
+        """Fill path using nonzero winding number rule"""
+        yield GraphicsObject(
+            object_type="path",
+            stroke=False,
+            fill=True,
+            evenodd=False,
+            path=self.curpath,
+            mcs=self.mcs,
+            gstate=self.graphicstate,
+        )
+        self.curpath = []
+
+    def do_F(self) -> Iterator[ContentObject]:
+        """Fill path using nonzero winding number rule (obsolete)"""
+        yield from self.do_f()
+
+    def do_f_a(self) -> Iterator[ContentObject]:
+        """Fill path using even-odd rule"""
+        yield GraphicsObject(
+            object_type="path",
+            stroke=False,
+            fill=True,
+            evenodd=True,
+            path=self.curpath,
+            mcs=self.mcs,
+            gstate=self.graphicstate,
+        )
+        self.curpath = []
+
+    def do_B(self) -> Iterator[ContentObject]:
+        """Fill and stroke path using nonzero winding number rule"""
+        yield GraphicsObject(
+            object_type="path",
+            stroke=True,
+            fill=True,
+            evenodd=False,
+            path=self.curpath,
+            mcs=self.mcs,
+            gstate=self.graphicstate,
+        )
+        self.curpath = []
+
+    def do_B_a(self) -> Iterator[ContentObject]:
+        """Fill and stroke path using even-odd rule"""
+        yield GraphicsObject(
+            object_type="path",
+            stroke=True,
+            fill=True,
+            evenodd=True,
+            path=self.curpath,
+            mcs=self.mcs,
+            gstate=self.graphicstate,
+        )
+        self.curpath = []
+
+    def do_b(self) -> Iterator[ContentObject]:
+        """Close, fill, and stroke path using nonzero winding number rule"""
+        self.do_h()
+        yield from self.do_B()
+
+    def do_b_a(self) -> Iterator[ContentObject]:
+        """Close, fill, and stroke path using even-odd rule"""
+        self.do_h()
+        yield from self.do_B_a()
+
+    def do_TJ(self, seq: PDFObject) -> Iterator[ContentObject]:
+        """Show text, allowing individual glyph positioning"""
+        if self.textstate.font is None:
+            raise PDFInterpreterError("No font specified!")
+        yield TextObject(
+            object_type="text",
+            gstate=self.graphicstate,
+            mcs=self.mcs,
+            tstate=self.textstate,
+        )
+
+    def do_Tj(self, s: PDFObject) -> Iterator[ContentObject]:
+        """Show text"""
+        yield from self.do_TJ([s])
+
+    def do__q(self, s: PDFObject) -> Iterator[ContentObject]:
+        """Move to next line and show text
+
+        The ' (single quote) operator.
+        """
+        self.do_T_a()
+        yield from self.do_TJ([s])
+
+    def do__w(
+        self, aw: PDFObject, ac: PDFObject, s: PDFObject
+    ) -> Iterator[ContentObject]:
+        """Set word and character spacing, move to next line, and show text
+
+        The " (double quote) operator.
+        """
+        self.do_Tw(aw)
+        self.do_Tc(ac)
+        yield from self.do_TJ([s])
+
+    def do_EI(self, obj: PDFObject) -> Iterator[ContentObject]:
+        """End inline image object"""
+        if isinstance(obj, InlineImage):
+            # Inline images obviously are not indirect objects, so
+            # have no object ID, so... make something up?
+            iobjid = "inline_image_%d" % id(obj)
+            yield self.render_image(iobjid, obj)
+        else:
+            # FIXME: Do... something?
+            pass
+
+    def do_Do(self, xobjid_arg: PDFObject) -> Iterator[ContentObject]:
+        """Invoke named XObject"""
+        xobjid = literal_name(xobjid_arg)
+        try:
+            xobj = stream_value(self.xobjmap[xobjid])
+        except KeyError:
+            log.debug("Undefined xobject id: %r", xobjid)
+            return
+        log.debug("Processing xobj: %r", xobj)
+        subtype = xobj.get("Subtype")
+        if subtype is LITERAL_FORM and "BBox" in xobj:
+            matrix = cast(Matrix, list_value(xobj.get("Matrix", MATRIX_IDENTITY)))
+            # According to PDF reference 1.7 section 4.9.1, XObjects in
+            # earlier PDFs (prior to v1.2) use the page's Resources entry
+            # instead of having their own Resources entry.
+            xobjres = xobj.get("Resources")
+            resources = None if xobjres is None else dict_value(xobjres)
+            interpreter = LazyInterpreter(
+                self.page, resources=resources, contents=[xobj]
+            )
+            interpreter.ctm = mult_matrix(matrix, self.ctm)
+            yield from interpreter
+        elif subtype is LITERAL_IMAGE and "Width" in xobj and "Height" in xobj:
+            yield self.render_image(xobjid, xobj)
+        else:
+            # unsupported xobject type.
+            pass
+
+    def render_image(self, name: str, stream: ContentStream) -> ImageObject:
+        colorspace = stream.get_any(("CS", "ColorSpace"))
+        if not isinstance(colorspace, list):
+            colorspace = [colorspace]
+        # PDF 1.7 sec 8.3.24: All images shall be 1 unit wide by 1
+        # unit high in user space, regardless of the number of samples
+        # in the image. To be painted, an image shall be mapped to a
+        # region of the page by temporarily altering the CTM.
+        bounds = ((0, 0), (1, 0), (0, 1), (1, 1))
+        x0, y0, x1, y1 = get_bound(
+            apply_matrix_pt(self.ctm, (p, q)) for (p, q) in bounds
+        )
+        return ImageObject(
+            object_type="image",
+            stream=stream,
+            name=name,
+            mcs=self.mcs,
+            gstate=self.graphicstate,
+            srcsize=(stream.get_any(("W", "Width")), stream.get_any(("H", "Height"))),
+            imagemask=stream.get_any(("IM", "ImageMask")),
+            bits=stream.get_any(("BPC", "BitsPerComponent"), 1),
+            colorspace=colorspace,
+        )
+
+    def do_MP(self, tag: PDFObject) -> None:
+        """Define marked-content point"""
+        self.do_tag(tag)
+
+    def do_DP(self, tag: PDFObject, props: PDFObject) -> None:
+        """Define marked-content point with property list"""
+        rprops = dict_value(props) or {}
+        self.do_tag(tag, rprops)
+
+    def do_BMC(self, tag: PDFObject) -> None:
+        """Begin marked-content sequence"""
+        self.begin_tag(tag, {})
+
+    def do_BDC(self, tag: PDFObject, props: PDFObject) -> None:
+        """Begin marked-content sequence with property list"""
+        rprops = dict_value(props) or {}
+        self.begin_tag(tag, rprops)
+
+    def do_EMC(self) -> None:
+        """End marked-content sequence"""
+        self.mcs = None
+
+    def begin_tag(self, tag: PDFObject, props: Dict[str, PDFObject]) -> None:
+        """Handle beginning of tag, setting current MCID if any."""
+        assert isinstance(tag, PSLiteral)
+        tag = decode_text(tag.name)
+        if "MCID" in props:
+            mcid = int_value(props["MCID"])
+        else:
+            mcid = None
+        self.mcs = MarkedContentSection(
+            mcid=mcid, tag=MarkedContentTag(tag, {} if props is None else props)
+        )
+
+    def do_tag(self, tag: PDFObject, props: Optional[PDFObject] = None) -> None:
+        pass
