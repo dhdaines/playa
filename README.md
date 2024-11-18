@@ -30,9 +30,9 @@ hierarchies, and because layout analysis is best done
 probabilistically/visually.  Also, pdfplumber does its own, much
 nicer, layout analysis.  Also, if you just want to extract text from a
 PDF, there are a lot of better and faster tools and libraries out
-there, see [benchmarks]() for a summary (TL;DR pypdfium2 is probably
-what you want, but pdfplumber does a nice job of converting PDF to
-ASCII art).
+there, see [these benchmarks](https://github.com/py-pdf/benchmarks)
+for a summary (TL;DR pypdfium2 is probably what you want, but
+pdfplumber does a nice job of converting PDF to ASCII art).
 
 ## Usage
 
@@ -243,19 +243,16 @@ actually used.
 Whereas `pdfminer.six` would break down text objects into their
 individual glyphs (which might or might not correspond to characters),
 this is not always what you want, and moreover it is computationally
-quite expensive.  It also complicates the use of the `ActualText`
-attribute for text extraction.  So PLAYA, by default, does not do
-this.  If you don't need to know the actual bounding box of a text
-object, then don't access `obj.bbox` and it won't be computed.  If
-you don't need to know the position of each glyph but simply want the
-Unicode characters, then just look at `obj.chars` (this will use the
-`ActualText` attribute if it exists).
+quite expensive.  So PLAYA, by default, does not do this.  If you
+don't need to know the actual bounding box of a text object, then
+don't access `obj.bbox` and it won't be computed.  If you don't need
+to know the position of each glyph but simply want the Unicode
+characters, then just look at `obj.chars`.
 
-Of course a lot of PDFs, especially ones produced by OCR, won't give
-you anything very meaningful in that case, so you will want to
-actually look at the glyphs.  This becomes a matter of iterating over
-the item, giving you, well, more items, which are the individual
-glyphs:
+Also, a lot of PDFs, especially ones produced by OCR, don't organize
+text objects in any meaningful fashion, so you will want to actually
+look at the glyphs.  This becomes a matter of iterating over the item,
+giving you, well, more items, which are the individual glyphs:
 
 ```python
 for glyph in item:
@@ -279,11 +276,21 @@ how text is rendered.  You can obviously access this though
 is mutable, so you will have to copy it or save individual parameters
 that you might care about.
 
-PLAYA doesn't guarantee that these items come at you in anything other
-than the order they occur in the file (but it does guarantee that).
+PLAYA doesn't guarantee that text objects come at you in anything
+other than the order they occur in the file (but it does guarantee
+that).
 
-For everything else, there's pdfplumber, pdfium2, pikepdf, pypdf,
-borb, pydyf, etc, etc, etc.
+In some cases might want to look at the abovementioned `ActualText`
+attribute to reliably extract text, particularly if the PDF was
+created by certain versions of LibreOffice, but in their infinite
+wisdom, Adobe made `ActualText` a property of *marked content
+sections* and not *text objects*, so you may be out of luck if you
+want to actually match these characters to glyphs.  Sorry, I don't
+write the standards.
+
+As mentioned earlier, if you really just want to do text extraction,
+there's always pdfplumber, pypdfium2, pikepdf, pypdf, borb, pydyf, etc,
+etc, etc.
 
 ## Acknowledgement
 
