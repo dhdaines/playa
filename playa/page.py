@@ -1062,6 +1062,8 @@ class PageInterpreter:
             height=y1 - y0,
             stream=stream,
             name=name,
+            mcid=self.cur_mcid,
+            tag=self.cur_tag,
             srcsize=(stream.get_any(("W", "Width")), stream.get_any(("H", "Height"))),
             imagemask=stream.get_any(("IM", "ImageMask")),
             bits=stream.get_any(("BPC", "BitsPerComponent"), 1),
