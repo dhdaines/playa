@@ -114,15 +114,18 @@ class StructElement(Findable):
         structure element.
         """
         # MCIDs are meaningless without a page object
-        assert self.page_idx is not None
-        # Collect them depth-first to preserve ordering
-        for mcid in self.mcids:
-            yield self.page_idx, mcid
+        if self.mcids:
+            assert self.page_idx is not None
+            # Collect them depth-first to preserve ordering
+            for mcid in self.mcids:
+                yield self.page_idx, mcid
         d = deque(self.children)
         while d:
             el = d.popleft()
-            for mcid in el.mcids:
-                yield el.page_idx, mcid
+            if el.mcids:
+                assert el.page_idx is not None
+                for mcid in el.mcids:
+                    yield el.page_idx, mcid
             d.extendleft(reversed(el.children))
 
     def to_dict(self) -> Dict[str, Any]:
