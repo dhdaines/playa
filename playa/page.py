@@ -347,8 +347,9 @@ class PageInterpreter:
         contents: Union[List, None] = None,
     ) -> None:
         self._dispatch: Dict[PSKeyword, Tuple[Callable, int]] = {}
-        for name, func in vars(self.__class__).items():
+        for name in dir(self):
             if name.startswith("do_"):
+                func = getattr(self, name)
                 name = re.sub(r"_a", "*", name[3:])
                 if name == "_q":
                     name = "'"
@@ -445,12 +446,12 @@ class PageInterpreter:
                 yield from self.do_EI(obj)
             elif isinstance(obj, PSKeyword):
                 if obj in self._dispatch:
-                    func, nargs = self._dispatch[obj]
+                    method, nargs = self._dispatch[obj]
                     if nargs:
                         args = self.pop(nargs)
                         log.debug("exec: %r %r", obj, args)
                         if len(args) == nargs:
-                            gen = func(self, *args)
+                            gen = method(*args)
                         else:
                             error_msg = (
                                 "Insufficient arguments (%d) for operator: %r"
@@ -459,7 +460,7 @@ class PageInterpreter:
                             raise PDFInterpreterError(error_msg)
                     else:
                         log.debug("exec: %r", obj)
-                        gen = func(self)
+                        gen = method()
                     if gen is not None:
                         yield from gen
                 else:
