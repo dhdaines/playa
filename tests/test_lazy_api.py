@@ -25,9 +25,23 @@ def test_content_objects():
         rect = next(obj for obj in page.objects if obj.object_type == "path")
         ibbox = [round(x) for x in rect.bbox]
         assert ibbox == [85, 669, 211, 670]
+        boxes = []
         for obj in page.objects:
             if obj.object_type == "text":
-                print(obj)
+                ibbox = [round(x) for x in obj.bbox]
+                boxes.append(ibbox)
+        assert boxes == [
+            [358, 896, 360, 905],
+            [71, 681, 490, 895],
+            [71, 667, 214, 679],
+            [71, 615, 240, 653],
+            [71, 601, 232, 613],
+            [71, 549, 289, 587],
+            [71, 535, 248, 547],
+            [71, 469, 451, 521],
+            [451, 470, 454, 481],
+            [71, 79, 499, 467],
+        ]
 
 
 if __name__ == "__main__":

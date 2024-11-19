@@ -56,6 +56,7 @@ from playa.utils import (
     MATRIX_IDENTITY,
     Matrix,
     Point,
+    Rect,
     apply_matrix_pt,
     decode_text,
     get_bound,
@@ -1365,7 +1366,7 @@ class ImageObject(ContentObject):
     colorspace: List[ColorSpace]
 
     @property
-    def bbox(self):
+    def bbox(self) -> Rect:
         # PDF 1.7 sec 8.3.24: All images shall be 1 unit wide by 1
         # unit high in user space, regardless of the number of samples
         # in the image. To be painted, an image shall be mapped to a
@@ -1433,7 +1434,7 @@ class PathObject(ContentObject):
         )
 
     @property
-    def bbox(self):
+    def bbox(self) -> Rect:
         """Get bounding box of path in device space as defined by its
         points and control points."""
         # First get the bounding box in user space (fast)
@@ -1447,9 +1448,7 @@ class PathObject(ContentObject):
         return get_bound(((x0, y0), (x1, y1)))
 
 
-TextOperator = Literal[
-    "Tc", "Tw", "Tz", "TL", "Tf", "Tr", "Ts", "Td", "TD", "Tm", "T*", "TJ"
-]
+TextOperator = Literal["Tc", "Tw", "Tz", "TL", "Tf", "Tr", "Ts", "Td", "Tm", "T*", "TJ"]
 TextArgument = Union[float, bytes, Font]
 
 
@@ -1466,28 +1465,170 @@ def make_txt(operator: TextOperator, *args: TextArgument) -> TextItem:
 
 
 @dataclass
-class TextObject(ContentObject):
-    """Text object (contains one or more glyphs)."""
-
-    items: List[TextItem]
-
-    def __iter__(self) -> Iterator["Glyph"]:
-        yield from ()
-
-    @property
-    def strings(self) -> Iterator["TextObject"]:
-        yield from ()
-
-    @property
-    def text(self) -> str:
-        return ""
-
-
-@dataclass
-class Glyph(TextObject):
+class GlyphObject(ContentObject):
     """Individual glyph on the page."""
 
     text: str
+    bbox: Rect
+
+
+@dataclass
+class TextObject(ContentObject):
+    """Text object (contains one or more glyphs)."""
+
+    textstate: TextState
+    items: List[TextItem]
+
+    def render_char(
+        self,
+        *,
+        vertical: bool,
+        matrix: Matrix,
+        font: Font,
+        fontsize: float,
+        scaling: float,
+        rise: float,
+        cid: int,
+    ) -> Tuple[GlyphObject, float]:
+        try:
+            text = font.to_unichr(cid)
+            assert isinstance(text, str), f"Text {text!r} is not a str"
+        except PDFUnicodeNotDefined:
+            text = self.handle_undefined_char(font, cid)
+        textwidth = font.char_width(cid)
+        textdisp = font.char_disp(cid)
+        adv = textwidth * fontsize * scaling
+        if vertical:
+            # vertical
+            assert isinstance(textdisp, tuple)
+            (vx, vy) = textdisp
+            if vx is None:
+                vx = fontsize * 0.5
+            else:
+                vx = vx * fontsize * 0.001
+            vy = (1000 - vy) * fontsize * 0.001
+            bbox_lower_left = (-vx, vy + rise + adv)
+            bbox_upper_right = (-vx + fontsize, vy + rise)
+        else:
+            # horizontal
+            descent = font.get_descent() * fontsize
+            bbox_lower_left = (0, descent + rise)
+            bbox_upper_right = (adv, descent + rise + fontsize)
+        (a, b, c, d, e, f) = matrix
+        (x0, y0) = apply_matrix_pt(matrix, bbox_lower_left)
+        (x1, y1) = apply_matrix_pt(matrix, bbox_upper_right)
+        bbox = get_bound(((x0, y0), (x1, y1)))
+        item = GlyphObject(self.gstate, self.ctm, self.mcs, text, bbox)
+        return item, adv
+
+    def render_string(self, item: TextItem) -> Iterator[GlyphObject]:
+        assert self.textstate.font is not None
+        vert = self.textstate.font.vertical
+        assert self.ctm is not None
+        matrix = mult_matrix(self.textstate.matrix, self.ctm)
+        fontsize = self.textstate.fontsize
+        scaling = self.textstate.scaling * 0.01
+        charspace = self.textstate.charspace * scaling
+        wordspace = self.textstate.wordspace * scaling
+        rise = self.textstate.rise
+        if self.textstate.font.multibyte:
+            wordspace = 0
+        dxscale = 0.001 * fontsize * scaling
+        (x, y) = self.textstate.linematrix
+        pos = y if vert else x
+        needcharspace = False
+        for obj in item.args:
+            if isinstance(obj, (int, float)):
+                pos -= obj * dxscale
+                needcharspace = True
+            else:
+                if isinstance(obj, str):
+                    obj = make_compat_bytes(obj)
+                if not isinstance(obj, bytes):
+                    continue
+                for cid in self.textstate.font.decode(obj):
+                    if needcharspace:
+                        pos += charspace
+                    lm = (x, pos) if vert else (pos, y)
+                    glyph, adv = self.render_char(
+                        vertical=vert,
+                        matrix=translate_matrix(matrix, lm),
+                        font=self.textstate.font,
+                        fontsize=fontsize,
+                        scaling=scaling,
+                        rise=rise,
+                        cid=cid,
+                    )
+                    pos += adv
+                    yield glyph
+                    if cid == 32 and wordspace:
+                        pos += wordspace
+                    needcharspace = True
+        self.textstate.linematrix = (x, pos) if vert else (pos, y)
+
+    def __iter__(self) -> Iterator[GlyphObject]:
+        if hasattr(self, "_glyphs"):
+            yield from self._glyphs
+        self._glyphs = []
+        for item in self.items:
+            if item.operator == "TJ":
+                for glyph in self.render_string(item):
+                    yield glyph
+                    self._glyphs.append(glyph)
+            elif item.operator == "Tc":
+                # FIXME: these casts are not evil like the other ones,
+                # but it would be nice to be able to avoid them.
+                self.textstate.charspace = cast(float, item.args[0])
+            elif item.operator == "Tw":
+                self.textstate.wordspace = cast(float, item.args[0])
+            elif item.operator == "Tz":
+                self.textstate.scaling = cast(float, item.args[0])
+            elif item.operator == "TL":
+                # FIXME: we should not negate it as that is
+                # confusing... but kept here for pdfminer compatibility
+                self.textstate.leading = -cast(float, item.args[0])
+            elif item.operator == "Tf":
+                self.textstate.font = cast(Font, item.args[0])
+                self.textstate.fontsize = cast(float, item.args[1])
+            elif item.operator == "Tr":
+                self.textstate.render = cast(int, item.args[0])
+            elif item.operator == "Ts":
+                self.textstate.rise = cast(float, item.args[0])
+            elif item.operator == "Td":
+                tx = cast(float, item.args[0])
+                ty = cast(float, item.args[1])
+                (a, b, c, d, e, f) = self.textstate.matrix
+                e_new = tx * a + ty * c + e
+                f_new = tx * b + ty * d + f
+                self.textstate.matrix = (a, b, c, d, e_new, f_new)
+                self.textstate.linematrix = (0, 0)
+            elif item.operator == "Tm":
+                a, b, c, d, e, f = (cast(float, x) for x in item.args)
+                self.textstate.matrix = (a, b, c, d, e, f)
+                self.textstate.linematrix = (0, 0)
+            elif item.operator == "T*":
+                # PDF 1.7 table 108: equivalent to 0 -leading Td - but
+                # because we are lazy we don't know the leading until
+                # we get here, so we can't expand it in advance.
+                (a, b, c, d, e, f) = self.textstate.matrix
+                self.textstate.matrix = (
+                    a,
+                    b,
+                    c,
+                    d,
+                    # FIXME: note that leading is pre-negated (it
+                    # shouldn't be, this is confusing)
+                    self.textstate.leading * c + e,
+                    self.textstate.leading * d + f,
+                )
+                self.textstate.linematrix = (0, 0)
+
+    @property
+    def bbox(self) -> Rect:
+        points = itertools.chain.from_iterable(
+            ((x0, y0), (x1, y1)) for x0, y0, x1, y1 in (item.bbox for item in self)
+        )
+        return get_bound(points)
 
 
 class LazyInterpreter(BaseInterpreter):
@@ -1622,7 +1763,9 @@ class LazyInterpreter(BaseInterpreter):
 
     def do_ET(self) -> Iterator[ContentObject]:
         """End a text object"""
-        yield self.create(TextObject, items=self.textobj)
+        # FIXME: Create a new TextState here instead, as textstate has
+        # no meaning and is not preserved outside BT / ET pairs
+        yield self.create(TextObject, textstate=self.textstate, items=self.textobj)
 
     def do_Tc(self, space: PDFObject) -> None:
         """Set character spacing.
@@ -1656,7 +1799,6 @@ class LazyInterpreter(BaseInterpreter):
 
         :param leading: a number expressed in unscaled text space units
         """
-        # TODO: Note that it is not negated here
         self.textobj.append(make_txt("TL", num_value(leading)))
 
     def do_Tf(self, fontid: PDFObject, fontsize: PDFObject) -> None:
@@ -1700,8 +1842,13 @@ class LazyInterpreter(BaseInterpreter):
 
         offset from the start of the current line by (tx , ty). As a side effect, this
         operator sets the leading parameter in the text state.
+
+        (PDF 1.7 Table 108) This operator shall have the same effect as this code:
+            −ty TL
+            tx ty Td
         """
-        self.textobj.append(make_txt("TD", num_value(tx), num_value(ty)))
+        self.textobj.append(make_txt("TL", -num_value(ty)))
+        self.textobj.append(make_txt("Td", num_value(tx), num_value(ty)))
 
     def do_Tm(
         self,
