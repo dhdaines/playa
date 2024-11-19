@@ -1,3 +1,4 @@
+import itertools
 import logging
 import re
 import weakref
@@ -312,16 +313,16 @@ class MarkedContentSection(NamedTuple):
     props: Dict[str, PDFObject]
 
 
-PathOperation = Literal["h", "m", "l", "v", "c", "y"]
+PathOperator = Literal["h", "m", "l", "v", "c", "y"]
 
 
 class PathSegment(NamedTuple):
-    operation: PathOperation
+    operator: PathOperator
     points: Tuple[Point, ...]
 
 
-def make_seg(operation: PathOperation, *points: Point):
-    return PathSegment(operation, points)
+def make_seg(operator: PathOperator, *points: Point):
+    return PathSegment(operator, points)
 
 
 def point_value(x: PDFObject, y: PDFObject) -> Point:
@@ -560,7 +561,7 @@ class BaseInterpreter:
         """Set clipping path using even-odd rule"""
 
     def do_CS(self, name: PDFObject) -> None:
-        """Set color space for stroking operations
+        """Set color space for stroking operators
 
         Introduced in PDF 1.1
         """
@@ -571,7 +572,7 @@ class BaseInterpreter:
                 raise PDFInterpreterError("Undefined ColorSpace: %r" % (name,))
 
     def do_cs(self, name: PDFObject) -> None:
-        """Set color space for nonstroking operations"""
+        """Set color space for nonstroking operators"""
         try:
             self.graphicstate.ncs = self.csmap[literal_name(name)]
         except KeyError:
@@ -579,37 +580,37 @@ class BaseInterpreter:
                 raise PDFInterpreterError("Undefined ColorSpace: %r" % (name,))
 
     def do_G(self, gray: PDFObject) -> None:
-        """Set gray level for stroking operations"""
+        """Set gray level for stroking operators"""
         self.graphicstate.scs = self.csmap["DeviceGray"]
         self.graphicstate.scolor = self.graphicstate.scs.make_color(gray)
 
     def do_g(self, gray: PDFObject) -> None:
-        """Set gray level for nonstroking operations"""
+        """Set gray level for nonstroking operators"""
         self.graphicstate.ncs = self.csmap["DeviceGray"]
         self.graphicstate.ncolor = self.graphicstate.ncs.make_color(gray)
 
     def do_RG(self, r: PDFObject, g: PDFObject, b: PDFObject) -> None:
-        """Set RGB color for stroking operations"""
+        """Set RGB color for stroking operators"""
         self.graphicstate.scs = self.csmap["DeviceRGB"]
         self.graphicstate.scolor = self.graphicstate.scs.make_color(r, g, b)
 
     def do_rg(self, r: PDFObject, g: PDFObject, b: PDFObject) -> None:
-        """Set RGB color for nonstroking operations"""
+        """Set RGB color for nonstroking operators"""
         self.graphicstate.ncs = self.csmap["DeviceRGB"]
         self.graphicstate.ncolor = self.graphicstate.ncs.make_color(r, g, b)
 
     def do_K(self, c: PDFObject, m: PDFObject, y: PDFObject, k: PDFObject) -> None:
-        """Set CMYK color for stroking operations"""
+        """Set CMYK color for stroking operators"""
         self.graphicstate.scs = self.csmap["DeviceCMYK"]
         self.graphicstate.scolor = self.graphicstate.scs.make_color(c, m, y, k)
 
     def do_k(self, c: PDFObject, m: PDFObject, y: PDFObject, k: PDFObject) -> None:
-        """Set CMYK color for nonstroking operations"""
+        """Set CMYK color for nonstroking operators"""
         self.graphicstate.ncs = self.csmap["DeviceCMYK"]
         self.graphicstate.ncolor = self.graphicstate.ncs.make_color(c, m, y, k)
 
     def do_SCN(self) -> None:
-        """Set color for stroking operations."""
+        """Set color for stroking operators."""
         if self.graphicstate.scs is None:
             if settings.STRICT:
                 raise PDFInterpreterError("No colorspace specified!")
@@ -619,7 +620,7 @@ class BaseInterpreter:
         )
 
     def do_scn(self) -> None:
-        """Set color for nonstroking operations"""
+        """Set color for nonstroking operators"""
         if self.graphicstate.ncs is None:
             if settings.STRICT:
                 raise PDFInterpreterError("No colorspace specified!")
@@ -629,11 +630,11 @@ class BaseInterpreter:
         )
 
     def do_SC(self) -> None:
-        """Set color for stroking operations"""
+        """Set color for stroking operators"""
         self.do_SCN()
 
     def do_sc(self) -> None:
-        """Set color for nonstroking operations"""
+        """Set color for nonstroking operators"""
         self.do_scn()
 
     def do_sh(self, name: object) -> None:
@@ -1091,7 +1092,7 @@ class PageInterpreter(BaseInterpreter):
             pts = [apply_matrix_pt(self.ctm, pt) for pt in raw_pts]
             # FIXME: WTF, this seems to repeat the same transformation
             # as the previous line?
-            operators = [str(p.operation) for p in path]
+            operators = [str(p.operator) for p in path]
             transformed_points = [
                 [apply_matrix_pt(self.ctm, point) for point in p.points] for p in path
             ]

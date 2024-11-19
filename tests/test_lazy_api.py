@@ -19,6 +19,11 @@ def test_content_objects():
         mcs_bbox = img.mcs.props["BBox"]
         # Not quite the same, for Reasons!
         assert mcs_bbox == [254.25, 895.5023, 360.09, 972.6]
+        for obj in page.objects:
+            if obj.object_type == "path":
+                assert len(list(obj)) == 1
+        rect = next(obj for obj in page.objects if obj.object_type == "path")
+        print(rect.bbox)
 
 
 if __name__ == "__main__":
