@@ -181,6 +181,10 @@ class Page:
         return f"<Page: Resources={self.resources!r}, MediaBox={self.mediabox!r}>"
 
 
+TextOperator = Literal["Tc", "Tw", "Tz", "TL", "Tf", "Tr", "Ts", "Td", "Tm", "T*", "TJ"]
+TextArgument = Union[float, bytes, Font]
+
+
 @dataclass
 class TextState:
     matrix: Matrix = MATRIX_IDENTITY
@@ -197,6 +201,57 @@ class TextState:
     def reset(self) -> None:
         self.matrix = MATRIX_IDENTITY
         self.linematrix = (0, 0)
+
+    def update(self, operator: TextOperator, *args: TextArgument):
+        """Apply a text state operator"""
+        if operator == "Tc":
+            # FIXME: these casts are not evil like the other ones,
+            # but it would be nice to be able to avoid them.
+            self.charspace = cast(float, args[0])
+        elif operator == "Tw":
+            self.wordspace = cast(float, args[0])
+        elif operator == "Tz":
+            self.scaling = cast(float, args[0])
+        elif operator == "TL":
+            # FIXME: we should not negate it as that is
+            # confusing... but kept here for pdfminer compatibility
+            self.leading = -cast(float, args[0])
+        elif operator == "Tf":
+            self.font = cast(Font, args[0])
+            self.fontsize = cast(float, args[1])
+        elif operator == "Tr":
+            self.render = cast(int, args[0])
+        elif operator == "Ts":
+            self.rise = cast(float, args[0])
+        elif operator == "Td":
+            tx = cast(float, args[0])
+            ty = cast(float, args[1])
+            (a, b, c, d, e, f) = self.matrix
+            e_new = tx * a + ty * c + e
+            f_new = tx * b + ty * d + f
+            self.matrix = (a, b, c, d, e_new, f_new)
+            self.linematrix = (0, 0)
+        elif operator == "Tm":
+            a, b, c, d, e, f = (cast(float, x) for x in args)
+            self.matrix = (a, b, c, d, e, f)
+            self.linematrix = (0, 0)
+        elif operator == "T*":
+            # PDF 1.7 table 108: equivalent to 0 -leading Td - but
+            # because we are lazy we don't know the leading until
+            # we get here, so we can't expand it in advance.
+            (a, b, c, d, e, f) = self.matrix
+            self.matrix = (
+                a,
+                b,
+                c,
+                d,
+                # FIXME: note that leading is pre-negated (it
+                # shouldn't be, this is confusing)
+                self.leading * c + e,
+                self.leading * d + f,
+            )
+            self.linematrix = (0, 0)
+
 
 
 class DashingStyle(NamedTuple):
@@ -1231,7 +1286,9 @@ class PageInterpreter(BaseInterpreter):
             text = font.to_unichr(cid)
             assert isinstance(text, str), f"Text {text!r} is not a str"
         except PDFUnicodeNotDefined:
-            text = self.handle_undefined_char(font, cid)
+            log.debug("undefined char: %r, %r", font, cid)
+            # FIXME: This is not really what we want!
+            text =  "(cid:%d)" % cid
         textwidth = font.char_width(cid)
         textdisp = font.char_disp(cid)
         adv = textwidth * fontsize * scaling
@@ -1335,10 +1392,6 @@ class PageInterpreter(BaseInterpreter):
                     needcharspace = True
         self.textstate.linematrix = (x, pos) if vert else (pos, y)
 
-    def handle_undefined_char(self, font: Font, cid: int) -> str:
-        log.debug("undefined: %r, %r", font, cid)
-        return "(cid:%d)" % cid
-
 
 @dataclass
 class ContentObject:
@@ -1348,10 +1401,20 @@ class ContentObject:
     ctm: Matrix
     mcs: Union[MarkedContentSection, None]
 
+    def __iter__(self) -> Iterator["ContentObject"]:
+        yield from ()
+
     @property
     def object_type(self):
         name, _, _ = self.__class__.__name__.partition("Object")
         return name.lower()
+
+    @property
+    def bbox(self) -> Rect:
+        points = itertools.chain.from_iterable(
+            ((x0, y0), (x1, y1)) for x0, y0, x1, y1 in (item.bbox for item in self)
+        )
+        return get_bound(points)
 
 
 @dataclass
@@ -1448,10 +1511,6 @@ class PathObject(ContentObject):
         return get_bound(((x0, y0), (x1, y1)))
 
 
-TextOperator = Literal["Tc", "Tw", "Tz", "TL", "Tf", "Tr", "Ts", "Td", "Tm", "T*", "TJ"]
-TextArgument = Union[float, bytes, Font]
-
-
 class TextItem(NamedTuple):
     """Semi-parsed item in a text object.  Actual "rendering" is
     deferred, just like with paths."""
@@ -1468,8 +1527,15 @@ def make_txt(operator: TextOperator, *args: TextArgument) -> TextItem:
 class GlyphObject(ContentObject):
     """Individual glyph on the page."""
 
+    cid: int
     text: str
-    bbox: Rect
+    # FIXME: Subject to change here as not the most useful info
+    lower_left: Point
+    upper_right: Point
+
+    @property
+    def bbox(self) -> Rect:
+        return get_bound((self.lower_left, self.upper_right))
 
 
 @dataclass
@@ -1478,6 +1544,8 @@ class TextObject(ContentObject):
 
     textstate: TextState
     items: List[TextItem]
+    _glyphs: Union[List[GlyphObject], None] = None
+    _chars: Union[str, None] = None
 
     def render_char(
         self,
@@ -1494,7 +1562,8 @@ class TextObject(ContentObject):
             text = font.to_unichr(cid)
             assert isinstance(text, str), f"Text {text!r} is not a str"
         except PDFUnicodeNotDefined:
-            text = self.handle_undefined_char(font, cid)
+            log.debug("undefined char: %r, %r", font, cid)
+            text = ""
         textwidth = font.char_width(cid)
         textdisp = font.char_disp(cid)
         adv = textwidth * fontsize * scaling
@@ -1515,10 +1584,9 @@ class TextObject(ContentObject):
             bbox_lower_left = (0, descent + rise)
             bbox_upper_right = (adv, descent + rise + fontsize)
         (a, b, c, d, e, f) = matrix
-        (x0, y0) = apply_matrix_pt(matrix, bbox_lower_left)
-        (x1, y1) = apply_matrix_pt(matrix, bbox_upper_right)
-        bbox = get_bound(((x0, y0), (x1, y1)))
-        item = GlyphObject(self.gstate, self.ctm, self.mcs, text, bbox)
+        item = GlyphObject(self.gstate, self.ctm, self.mcs, cid, text,
+                           apply_matrix_pt(matrix, bbox_lower_left),
+                           apply_matrix_pt(matrix, bbox_upper_right))
         return item, adv
 
     def render_string(self, item: TextItem) -> Iterator[GlyphObject]:
@@ -1542,9 +1610,8 @@ class TextObject(ContentObject):
                 pos -= obj * dxscale
                 needcharspace = True
             else:
-                if isinstance(obj, str):
-                    obj = make_compat_bytes(obj)
                 if not isinstance(obj, bytes):
+                    log.warning("Found non-string %r in text object", obj)
                     continue
                 for cid in self.textstate.font.decode(obj):
                     if needcharspace:
@@ -1566,8 +1633,32 @@ class TextObject(ContentObject):
                     needcharspace = True
         self.textstate.linematrix = (x, pos) if vert else (pos, y)
 
+    @property
+    def chars(self) -> str:
+        """Get the Unicode characters (in stream order) for this object."""
+        if self._chars is not None:
+            return "".join(self._chars)
+        self._chars = []
+        for item in self.items:
+            if item.operator == "TJ":
+                font = self.textstate.font
+                assert font is not None, "No font was selected"
+                for obj in item.args:
+                    if not isinstance(obj, bytes):
+                        continue
+                    for cid in self.textstate.font.decode(obj):
+                        try:
+                            text = font.to_unichr(cid)
+                            assert isinstance(text, str), f"Text {text!r} is not a str"
+                            self._chars.append(text)
+                        except PDFUnicodeNotDefined:
+                            log.debug("undefined char: %r, %r", font, cid)
+            elif item.operator == "Tf":
+                self.textstate.update(item.operator, *item.args)
+        return "".join(self._chars)
+
     def __iter__(self) -> Iterator[GlyphObject]:
-        if hasattr(self, "_glyphs"):
+        if self._glyphs is not None:
             yield from self._glyphs
         self._glyphs = []
         for item in self.items:
@@ -1575,66 +1666,14 @@ class TextObject(ContentObject):
                 for glyph in self.render_string(item):
                     yield glyph
                     self._glyphs.append(glyph)
-            elif item.operator == "Tc":
-                # FIXME: these casts are not evil like the other ones,
-                # but it would be nice to be able to avoid them.
-                self.textstate.charspace = cast(float, item.args[0])
-            elif item.operator == "Tw":
-                self.textstate.wordspace = cast(float, item.args[0])
-            elif item.operator == "Tz":
-                self.textstate.scaling = cast(float, item.args[0])
-            elif item.operator == "TL":
-                # FIXME: we should not negate it as that is
-                # confusing... but kept here for pdfminer compatibility
-                self.textstate.leading = -cast(float, item.args[0])
-            elif item.operator == "Tf":
-                self.textstate.font = cast(Font, item.args[0])
-                self.textstate.fontsize = cast(float, item.args[1])
-            elif item.operator == "Tr":
-                self.textstate.render = cast(int, item.args[0])
-            elif item.operator == "Ts":
-                self.textstate.rise = cast(float, item.args[0])
-            elif item.operator == "Td":
-                tx = cast(float, item.args[0])
-                ty = cast(float, item.args[1])
-                (a, b, c, d, e, f) = self.textstate.matrix
-                e_new = tx * a + ty * c + e
-                f_new = tx * b + ty * d + f
-                self.textstate.matrix = (a, b, c, d, e_new, f_new)
-                self.textstate.linematrix = (0, 0)
-            elif item.operator == "Tm":
-                a, b, c, d, e, f = (cast(float, x) for x in item.args)
-                self.textstate.matrix = (a, b, c, d, e, f)
-                self.textstate.linematrix = (0, 0)
-            elif item.operator == "T*":
-                # PDF 1.7 table 108: equivalent to 0 -leading Td - but
-                # because we are lazy we don't know the leading until
-                # we get here, so we can't expand it in advance.
-                (a, b, c, d, e, f) = self.textstate.matrix
-                self.textstate.matrix = (
-                    a,
-                    b,
-                    c,
-                    d,
-                    # FIXME: note that leading is pre-negated (it
-                    # shouldn't be, this is confusing)
-                    self.textstate.leading * c + e,
-                    self.textstate.leading * d + f,
-                )
-                self.textstate.linematrix = (0, 0)
-
-    @property
-    def bbox(self) -> Rect:
-        points = itertools.chain.from_iterable(
-            ((x0, y0), (x1, y1)) for x0, y0, x1, y1 in (item.bbox for item in self)
-        )
-        return get_bound(points)
+            else:
+                self.textstate.update(item.operator, *item.args)
 
 
 class LazyInterpreter(BaseInterpreter):
     """Interpret the page yielding lazy objects."""
 
-    textobj: List[TextItem]
+    textobj: List[TextItem] = []
 
     def __iter__(self) -> Iterator[ContentObject]:
         log.debug(
@@ -1755,10 +1794,24 @@ class LazyInterpreter(BaseInterpreter):
         self.do_h()
         yield from self.do_B_a()
 
+    # PDF 1.7 sec 9.3.1: The text state operators may appear outside
+    # text objects, and the values they set are retained across text
+    # objects in a single content stream. Like other graphics state
+    # parameters, these parameters shall be initialized to their
+    # default values at the beginning of each page.
+    #
+    # Concretely, this means that we simply have to execute anything
+    # in self.textobj when we see BT.
+    #
+    # FIXME: It appears that we're supposed to reset it between content
+    # streams?! That seems very bogus, pdfminer does not do it.
     def do_BT(self) -> None:
-        """Begin text object.  All operators will be collected and
-        processed lazily after ET (in case you don't care about text
-        for some reason)."""
+        """Update text state and begin text object.
+
+        All operators until ET will be normalized, but executed lazily.
+        """
+        for item in self.textobj:
+            self.textstate.update(item.operator, *item.args)
         self.textobj = []
 
     def do_ET(self) -> Iterator[ContentObject]:
@@ -1950,7 +2003,8 @@ class LazyInterpreter(BaseInterpreter):
         colorspace = stream.get_any(("CS", "ColorSpace"))
         if not isinstance(colorspace, list):
             colorspace = [colorspace]
-        colorspace = [get_colorspace(resolve1(spec)) for spec in colorspace]
+        colorspace = [get_colorspace(resolve1(spec)) for spec in colorspace
+                      if spec is not None]
         return self.create(
             ImageObject,
             stream=stream,

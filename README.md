@@ -257,15 +257,8 @@ for glyph in item:
 ```
 
 By default PLAYA, following the PDF specification, considers the
-grouping of glyphs into strings irrelevant by default, but if you
-really need to know, you can iterate over these, and *then* over the
-individual glyphs:
-
-```python
-for string in obj.strings:
-    for glyph in string:
-        ...
-```
+grouping of glyphs into strings irrelevant by default.  We *might*
+consider separating the strings in the future.
 
 PDF has the concept of a *text state* which determines some aspects of
 how text is rendered.  You can obviously access this though
