@@ -21,7 +21,13 @@ from typing import (
 
 from playa import settings
 from playa.casting import safe_float
-from playa.color import PREDEFINED_COLORSPACE, Color, ColorGray, ColorSpace
+from playa.color import (
+    PREDEFINED_COLORSPACE,
+    Color,
+    ColorGray,
+    ColorSpace,
+    get_colorspace,
+)
 from playa.exceptions import (
     PDFInterpreterError,
     PDFUnicodeNotDefined,
@@ -356,18 +362,6 @@ class BaseInterpreter:
         doc = page.doc()
         if doc is None:
             raise RuntimeError("Document no longer exists!")
-
-        def get_colorspace(spec: object) -> Optional[ColorSpace]:
-            if isinstance(spec, list):
-                name = literal_name(spec[0])
-            else:
-                name = literal_name(spec)
-            if name == "ICCBased" and isinstance(spec, list) and len(spec) >= 2:
-                return ColorSpace(name, stream_value(spec[1])["N"])
-            elif name == "DeviceN" and isinstance(spec, list) and len(spec) >= 2:
-                return ColorSpace(name, len(list_value(spec[1])))
-            else:
-                return PREDEFINED_COLORSPACE.get(name)
 
         for k, v in dict_value(self.resources).items():
             log.debug("Resource: %r: %r", k, v)
@@ -1566,6 +1560,7 @@ class LazyInterpreter(BaseInterpreter):
         colorspace = stream.get_any(("CS", "ColorSpace"))
         if not isinstance(colorspace, list):
             colorspace = [colorspace]
+        colorspace = [get_colorspace(resolve1(spec)) for spec in colorspace]
         # PDF 1.7 sec 8.3.24: All images shall be 1 unit wide by 1
         # unit high in user space, regardless of the number of samples
         # in the image. To be painted, an image shall be mapped to a

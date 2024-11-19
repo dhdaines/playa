@@ -3,7 +3,8 @@ from typing import Dict, NamedTuple, Union
 
 from playa.casting import safe_float
 from playa.exceptions import PDFInterpreterError
-from playa.parser import LIT, PSLiteral
+from playa.parser import LIT, PDFObject, PSLiteral
+from playa.pdftypes import list_value, literal_name, stream_value
 
 LITERAL_DEVICE_GRAY = LIT("DeviceGray")
 LITERAL_DEVICE_RGB = LIT("DeviceRGB")
@@ -90,3 +91,16 @@ for name, n in [
     ("Pattern", 1),
 ]:
     PREDEFINED_COLORSPACE[name] = ColorSpace(name, n)
+
+
+def get_colorspace(spec: PDFObject) -> Union[ColorSpace, None]:
+    if isinstance(spec, list):
+        name = literal_name(spec[0])
+    else:
+        name = literal_name(spec)
+    if name == "ICCBased" and isinstance(spec, list) and len(spec) >= 2:
+        return ColorSpace(name, stream_value(spec[1])["N"])
+    elif name == "DeviceN" and isinstance(spec, list) and len(spec) >= 2:
+        return ColorSpace(name, len(list_value(spec[1])))
+    else:
+        return PREDEFINED_COLORSPACE.get(name)
