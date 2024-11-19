@@ -10,6 +10,7 @@ from typing import (
     Iterable,
     Iterator,
     List,
+    Literal,
     NamedTuple,
     Optional,
     Sequence,
@@ -33,6 +34,8 @@ from playa.exceptions import (
     PDFUnicodeNotDefined,
 )
 from playa.font import Font
+
+# FIXME: PDFObject needs to go in pdftypes somehow
 from playa.parser import KWD, InlineImage, ObjectParser, PDFObject, Token
 from playa.pdftypes import (
     LIT,
@@ -51,7 +54,6 @@ from playa.pdftypes import (
 from playa.utils import (
     MATRIX_IDENTITY,
     Matrix,
-    PathSegment,
     Point,
     apply_matrix_pt,
     decode_text,
@@ -310,6 +312,22 @@ class MarkedContentSection(NamedTuple):
     props: Dict[str, PDFObject]
 
 
+PathOperation = Literal["h", "m", "l", "v", "c", "y"]
+
+
+class PathSegment(NamedTuple):
+    operation: PathOperation
+    points: Tuple[Point, ...]
+
+
+def make_seg(operation: PathOperation, *points: Point):
+    return PathSegment(operation, points)
+
+
+def point_value(x: PDFObject, y: PDFObject) -> Point:
+    return (num_value(x), num_value(y))
+
+
 class BaseInterpreter:
     """Core state for the PDF interpreter."""
 
@@ -470,11 +488,11 @@ class BaseInterpreter:
 
     def do_m(self, x: PDFObject, y: PDFObject) -> None:
         """Begin new subpath"""
-        self.curpath.append(("m", cast(float, x), cast(float, y)))
+        self.curpath.append(make_seg("m", point_value(x, y)))
 
     def do_l(self, x: PDFObject, y: PDFObject) -> None:
         """Append straight line segment to path"""
-        self.curpath.append(("l", cast(float, x), cast(float, y)))
+        self.curpath.append(make_seg("l", point_value(x, y)))
 
     def do_c(
         self,
@@ -487,44 +505,49 @@ class BaseInterpreter:
     ) -> None:
         """Append curved segment to path (three control points)"""
         self.curpath.append(
-            (
+            make_seg(
                 "c",
-                cast(float, x1),
-                cast(float, y1),
-                cast(float, x2),
-                cast(float, y2),
-                cast(float, x3),
-                cast(float, y3),
+                point_value(x1, y1),
+                point_value(x2, y2),
+                point_value(x3, y3),
             ),
         )
 
     def do_v(self, x2: PDFObject, y2: PDFObject, x3: PDFObject, y3: PDFObject) -> None:
         """Append curved segment to path (initial point replicated)"""
         self.curpath.append(
-            ("v", cast(float, x2), cast(float, y2), cast(float, x3), cast(float, y3)),
+            make_seg(
+                "v",
+                point_value(x2, y2),
+                point_value(x3, y3),
+            )
         )
 
     def do_y(self, x1: PDFObject, y1: PDFObject, x3: PDFObject, y3: PDFObject) -> None:
         """Append curved segment to path (final point replicated)"""
         self.curpath.append(
-            ("y", cast(float, x1), cast(float, y1), cast(float, x3), cast(float, y3)),
+            make_seg(
+                "y",
+                point_value(x1, y1),
+                point_value(x3, y3),
+            )
         )
 
     def do_h(self) -> None:
         """Close subpath"""
-        self.curpath.append(("h",))
+        self.curpath.append(make_seg("h"))
 
     def do_re(self, x: PDFObject, y: PDFObject, w: PDFObject, h: PDFObject) -> None:
         """Append rectangle to path"""
-        x = cast(float, x)
-        y = cast(float, y)
-        w = cast(float, w)
-        h = cast(float, h)
-        self.curpath.append(("m", x, y))
-        self.curpath.append(("l", x + w, y))
-        self.curpath.append(("l", x + w, y + h))
-        self.curpath.append(("l", x, y + h))
-        self.curpath.append(("h",))
+        x = num_value(x)
+        y = num_value(y)
+        w = num_value(w)
+        h = num_value(h)
+        self.curpath.append(make_seg("m", point_value(x, y)))
+        self.curpath.append(make_seg("l", point_value(x + w, y)))
+        self.curpath.append(make_seg("l", point_value(x + w, y + h)))
+        self.curpath.append(make_seg("l", point_value(x, y + h)))
+        self.curpath.append(make_seg("h"))
 
     def do_n(self) -> None:
         """End path without filling or stroking"""
@@ -1063,18 +1086,14 @@ class PageInterpreter(BaseInterpreter):
             # their point-position in their final two arguments. (Any preceding
             # arguments represent control points on Bézier curves.)
             raw_pts = [
-                cast(Point, p[-2:] if p[0] != "h" else path[0][-2:]) for p in path
+                path[0].points[-1] if p[0] == "h" else p.points[-1] for p in path
             ]
             pts = [apply_matrix_pt(self.ctm, pt) for pt in raw_pts]
             # FIXME: WTF, this seems to repeat the same transformation
             # as the previous line?
-            operators = [str(operation[0]) for operation in path]
+            operators = [str(p.operation) for p in path]
             transformed_points = [
-                [
-                    apply_matrix_pt(self.ctm, (float(operand1), float(operand2)))
-                    for operand1, operand2 in zip(operation[1::2], operation[2::2])
-                ]
-                for operation in path
+                [apply_matrix_pt(self.ctm, point) for point in p.points] for p in path
             ]
             transformed_path = [(o, *p) for o, p in zip(operators, transformed_points)]
 
@@ -1346,9 +1365,7 @@ class ImageObject(ContentObject):
         # in the image. To be painted, an image shall be mapped to a
         # region of the page by temporarily altering the CTM.
         bounds = ((0, 0), (1, 0), (0, 1), (1, 1))
-        return get_bound(
-            apply_matrix_pt(self.ctm, (p, q)) for (p, q) in bounds
-        )
+        return get_bound(apply_matrix_pt(self.ctm, (p, q)) for (p, q) in bounds)
 
 
 @dataclass
@@ -1552,6 +1569,7 @@ class LazyInterpreter(BaseInterpreter):
         log.debug("Processing xobj: %r", xobj)
         subtype = xobj.get("Subtype")
         if subtype is LITERAL_FORM and "BBox" in xobj:
+            # FIXME: emit a ContentObject for the XObject so we know it exists?
             matrix = cast(Matrix, list_value(xobj.get("Matrix", MATRIX_IDENTITY)))
             # According to PDF reference 1.7 section 4.9.1, XObjects in
             # earlier PDFs (prior to v1.2) use the page's Resources entry
@@ -1562,6 +1580,7 @@ class LazyInterpreter(BaseInterpreter):
                 self.page, resources=resources, contents=[xobj]
             )
             interpreter.ctm = mult_matrix(matrix, self.ctm)
+            # FIXME: Track xobjid in sub-interpreter?
             yield from interpreter
         elif subtype is LITERAL_IMAGE and "Width" in xobj and "Height" in xobj:
             yield self.render_image(xobjid, xobj)
