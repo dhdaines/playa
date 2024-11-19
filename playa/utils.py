@@ -151,12 +151,7 @@ def apply_png_predictor(
 Point = Tuple[float, float]
 Rect = Tuple[float, float, float, float]
 Matrix = Tuple[float, float, float, float, float, float]
-PathSegment = Union[
-    Tuple[str],  # Literal['h']
-    Tuple[str, float, float],  # Literal['m', 'l']
-    Tuple[str, float, float, float, float],  # Literal['v', 'y']
-    Tuple[str, float, float, float, float, float, float],
-]  # Literal['c']
+
 
 #  Matrix operations
 MATRIX_IDENTITY: Matrix = (1, 0, 0, 1, 0, 0)

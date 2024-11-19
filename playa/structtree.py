@@ -258,9 +258,7 @@ class StructTree(Findable):
                     attr[k] = obj[k]
         return attr
 
-    def _make_element(
-        self, obj: Any
-    ) -> Tuple[Union[StructElement, None], List[Any]]:
+    def _make_element(self, obj: Any) -> Tuple[Union[StructElement, None], List[Any]]:
         # We hopefully caught these earlier
         assert "MCID" not in obj, "Uncaught MCR: %s" % obj
         assert "Obj" not in obj, "Uncaught OBJR: %s" % obj

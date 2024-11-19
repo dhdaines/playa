@@ -315,7 +315,7 @@ def bench_playa():
         with open(TESTDIR / "contrib" / "pagelabels.pdf", "rb") as infh:
             doc = PDFDocument(infh)
             page = doc.pages[0]
-            _ = page.layout
+            _ = list(page.layout)
     print(
         "PLAYA Interpreter: %dms / run" % ((time.time() - start) / runs * 1000),
     )
