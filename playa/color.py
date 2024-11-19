@@ -44,10 +44,9 @@ Color = Union[
 ]
 
 
-class ColorSpace:
-    def __init__(self, name: str, ncomponents: int) -> None:
-        self.name = name
-        self.ncomponents = ncomponents
+class ColorSpace(NamedTuple):
+    name: str
+    ncomponents: int
 
     def make_color(self, *components) -> Color:
         if len(components) != self.ncomponents:
@@ -72,9 +71,6 @@ class ColorSpace:
                 "unknown color space %s with %d components"
                 % (self.name, self.ncomponents)
             )
-
-    def __repr__(self) -> str:
-        return "<ColorSpace: %s, ncomponents=%d>" % (self.name, self.ncomponents)
 
 
 PREDEFINED_COLORSPACE: Dict[str, ColorSpace] = collections.OrderedDict()
