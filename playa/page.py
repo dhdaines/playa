@@ -649,8 +649,9 @@ class BaseInterpreter:
         """
         self.textstate.reset()
 
-    def do_ET(self) -> None:
+    def do_ET(self) -> Union[None, Iterator]:
         """End a text object"""
+        return None
 
     def do_BX(self) -> None:
         """Begin compatibility section"""
@@ -1425,7 +1426,8 @@ class PathObject(ContentObject):
         """Get path segments in device space."""
         return (
             PathSegment(
-                p.operator, tuple(apply_matrix_pt(self.ctm, point) for point in p.points)
+                p.operator,
+                tuple(apply_matrix_pt(self.ctm, point) for point in p.points),
             )
             for p in self.raw_segments
         )
@@ -1445,25 +1447,53 @@ class PathObject(ContentObject):
         return get_bound(((x0, y0), (x1, y1)))
 
 
-@dataclass
-class Glyph(ContentObject):
-    text: str
+TextOperator = Literal[
+    "Tc", "Tw", "Tz", "TL", "Tf", "Tr", "Ts", "Td", "TD", "Tm", "T*", "TJ"
+]
+TextArgument = Union[float, bytes, Font]
+
+
+class TextItem(NamedTuple):
+    """Semi-parsed item in a text object.  Actual "rendering" is
+    deferred, just like with paths."""
+
+    operator: TextOperator
+    args: Tuple[TextArgument, ...]
+
+
+def make_txt(operator: TextOperator, *args: TextArgument) -> TextItem:
+    return TextItem(operator, args)
 
 
 @dataclass
 class TextObject(ContentObject):
-    tstate: TextState
+    """Text object (contains one or more glyphs)."""
 
-    def __iter__(self) -> Iterator[Glyph]:
+    items: List[TextItem]
+
+    def __iter__(self) -> Iterator["Glyph"]:
         yield from ()
 
     @property
     def strings(self) -> Iterator["TextObject"]:
         yield from ()
 
+    @property
+    def text(self) -> str:
+        return ""
+
+
+@dataclass
+class Glyph(TextObject):
+    """Individual glyph on the page."""
+
+    text: str
+
 
 class LazyInterpreter(BaseInterpreter):
     """Interpret the page yielding lazy objects."""
+
+    textobj: List[TextItem]
 
     def __iter__(self) -> Iterator[ContentObject]:
         log.debug(
@@ -1584,37 +1614,149 @@ class LazyInterpreter(BaseInterpreter):
         self.do_h()
         yield from self.do_B_a()
 
-    def do_TJ(self, seq: PDFObject) -> Iterator[ContentObject]:
-        """Show text, allowing individual glyph positioning"""
-        if self.textstate.font is None:
-            raise PDFInterpreterError("No font specified!")
-        yield self.create(
-            TextObject,
-            tstate=self.textstate,
+    def do_BT(self) -> None:
+        """Begin text object.  All operators will be collected and
+        processed lazily after ET (in case you don't care about text
+        for some reason)."""
+        self.textobj = []
+
+    def do_ET(self) -> Iterator[ContentObject]:
+        """End a text object"""
+        yield self.create(TextObject, items=self.textobj)
+
+    def do_Tc(self, space: PDFObject) -> None:
+        """Set character spacing.
+
+        Character spacing is used by the Tj, TJ, and ' operators.
+
+        :param space: a number expressed in unscaled text space units.
+        """
+        self.textobj.append(make_txt("Tc", num_value(space)))
+
+    def do_Tw(self, space: PDFObject) -> None:
+        """Set the word spacing.
+
+        Word spacing is used by the Tj, TJ, and ' operators.
+
+        :param space: a number expressed in unscaled text space units
+        """
+        self.textobj.append(make_txt("Tw", num_value(space)))
+
+    def do_Tz(self, scale: PDFObject) -> None:
+        """Set the horizontal scaling.
+
+        :param scale: is a number specifying the percentage of the normal width
+        """
+        self.textobj.append(make_txt("Tz", num_value(scale)))
+
+    def do_TL(self, leading: PDFObject) -> None:
+        """Set the text leading.
+
+        Text leading is used only by the T*, ', and " operators.
+
+        :param leading: a number expressed in unscaled text space units
+        """
+        # TODO: Note that it is not negated here
+        self.textobj.append(make_txt("TL", num_value(leading)))
+
+    def do_Tf(self, fontid: PDFObject, fontsize: PDFObject) -> None:
+        """Set the text font
+
+        :param fontid: the name of a font resource in the Font subdictionary
+            of the current resource dictionary
+        :param fontsize: size is a number representing a scale factor.
+        """
+        try:
+            font = self.fontmap[literal_name(fontid)]
+        except KeyError:
+            log.warning("Undefined Font id: %r", fontid)
+            doc = self.page.doc()
+            if doc is None:
+                raise RuntimeError("Document no longer exists!")
+            # FIXME: as in document.py, "this is so wrong!"
+            font = doc.get_font(None, {})
+        self.textobj.append(make_txt("Tf", font, num_value(fontsize)))
+
+    def do_Tr(self, render: PDFObject) -> None:
+        """Set the text rendering mode"""
+        self.textobj.append(make_txt("Tr", int_value(render)))
+
+    def do_Ts(self, rise: PDFObject) -> None:
+        """Set the text rise
+
+        :param rise: a number expressed in unscaled text space units
+        """
+        self.textobj.append(make_txt("Ts", num_value(rise)))
+
+    def do_Td(self, tx: PDFObject, ty: PDFObject) -> None:
+        """Move to the start of the next line
+
+        Offset from the start of the current line by (tx , ty).
+        """
+        self.textobj.append(make_txt("Td", num_value(tx), num_value(ty)))
+
+    def do_TD(self, tx: PDFObject, ty: PDFObject) -> None:
+        """Move to the start of the next line.
+
+        offset from the start of the current line by (tx , ty). As a side effect, this
+        operator sets the leading parameter in the text state.
+        """
+        self.textobj.append(make_txt("TD", num_value(tx), num_value(ty)))
+
+    def do_Tm(
+        self,
+        a: PDFObject,
+        b: PDFObject,
+        c: PDFObject,
+        d: PDFObject,
+        e: PDFObject,
+        f: PDFObject,
+    ) -> None:
+        """Set text matrix and text line matrix"""
+        self.textobj.append(
+            make_txt(
+                "Tm",
+                num_value(a),
+                num_value(b),
+                num_value(c),
+                num_value(d),
+                num_value(e),
+                num_value(f),
+            )
         )
 
-    def do_Tj(self, s: PDFObject) -> Iterator[ContentObject]:
-        """Show text"""
-        yield from self.do_TJ([s])
+    def do_T_a(self) -> None:
+        """Move to start of next text line"""
+        self.textobj.append(make_txt("T*"))
 
-    def do__q(self, s: PDFObject) -> Iterator[ContentObject]:
+    def do_TJ(self, strings: PDFObject) -> None:
+        """Show one or more text strings, allowing individual glyph
+        positioning"""
+        args = list_value(strings)
+        if not all(isinstance(s, (int, float, bytes)) for s in args):
+            raise TypeError("TJ takes only strings and numbers, not %r" % args)
+        self.textobj.append(make_txt("TJ", *args))
+
+    def do_Tj(self, s: PDFObject) -> None:
+        """Show a text string"""
+        self.do_TJ([s])
+
+    def do__q(self, s: PDFObject) -> None:
         """Move to next line and show text
 
         The ' (single quote) operator.
         """
         self.do_T_a()
-        yield from self.do_TJ([s])
+        self.do_TJ([s])
 
-    def do__w(
-        self, aw: PDFObject, ac: PDFObject, s: PDFObject
-    ) -> Iterator[ContentObject]:
+    def do__w(self, aw: PDFObject, ac: PDFObject, s: PDFObject) -> None:
         """Set word and character spacing, move to next line, and show text
 
         The " (double quote) operator.
         """
         self.do_Tw(aw)
         self.do_Tc(ac)
-        yield from self.do_TJ([s])
+        self.do_TJ([s])
 
     def do_EI(self, obj: PDFObject) -> Iterator[ContentObject]:
         """End inline image object"""

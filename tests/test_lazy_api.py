@@ -23,7 +23,11 @@ def test_content_objects():
             if obj.object_type == "path":
                 assert len(list(obj)) == 1
         rect = next(obj for obj in page.objects if obj.object_type == "path")
-        print(rect.bbox)
+        ibbox = [round(x) for x in rect.bbox]
+        assert ibbox == [85, 669, 211, 670]
+        for obj in page.objects:
+            if obj.object_type == "text":
+                print(obj)
 
 
 if __name__ == "__main__":
