@@ -1340,6 +1340,8 @@ class PageInterpreter(BaseInterpreter):
 
 @dataclass
 class ContentObject:
+    """Any sort of content object."""
+
     gstate: GraphicState
     ctm: Matrix
     mcs: Union[MarkedContentSection, None]
@@ -1352,6 +1354,8 @@ class ContentObject:
 
 @dataclass
 class ImageObject(ContentObject):
+    """An image (either inline or XObject)."""
+
     name: str
     srcsize: Tuple[int, int]
     bits: int
@@ -1371,10 +1375,74 @@ class ImageObject(ContentObject):
 
 @dataclass
 class PathObject(ContentObject):
-    path: List[PathSegment]
+    """A path object."""
+
+    raw_segments: List[PathSegment]
     stroke: bool
     fill: bool
     evenodd: bool
+
+    def __len__(self):
+        """Number of subpaths."""
+        return min(1, sum(1 for seg in self.raw_segments if seg.operator == "m"))
+
+    def __iter__(self):
+        """Iterate over subpaths.
+
+        Note: subpaths inherit the values of `fill` and `evenodd` from
+        the parent path, but these values are no longer meaningful
+        since the winding rules must be applied to the composite path
+        as a whole (this is not a bug, just don't rely on them to know
+        which regions are filled or not).
+        """
+        # FIXME: Is there an itertool or a more_itertool for this?
+        segs = []
+        for seg in self.raw_segments:
+            if seg.operator == "m" and segs:
+                yield PathObject(
+                    self.gstate,
+                    self.ctm,
+                    self.mcs,
+                    segs,
+                    self.stroke,
+                    self.fill,
+                    self.evenodd,
+                )
+            segs.append(seg)
+        if segs:
+            yield PathObject(
+                self.gstate,
+                self.ctm,
+                self.mcs,
+                segs,
+                self.stroke,
+                self.fill,
+                self.evenodd,
+            )
+
+    @property
+    def segments(self) -> Iterator[PathSegment]:
+        """Get path segments in device space."""
+        return (
+            PathSegment(
+                p.operator, [apply_matrix_pt(self.ctm, point) for point in p.points]
+            )
+            for p in self.raw_segments
+        )
+
+    @property
+    def bbox(self):
+        """Get bounding box of path in device space as defined by its
+        points and control points."""
+        # First get the bounding box in user space (fast)
+        x0, y0, x1, y1 = get_bound(
+            itertools.chain.from_iterable(seg.points for seg in self.raw_segments)
+        )
+        # Now transform it
+        x0, y0 = apply_matrix_pt(self.ctm, (x0, y0))
+        x1, y1 = apply_matrix_pt(self.ctm, (x1, y1))
+        # And get the new bounds (also normalizes)
+        return get_bound(((x0, y0), (x1, y1)))
 
 
 @dataclass
@@ -1449,7 +1517,7 @@ class LazyInterpreter(BaseInterpreter):
             stroke=True,
             fill=False,
             evenodd=False,
-            path=self.curpath,
+            raw_segments=self.curpath,
         )
         self.curpath = []
 
@@ -1465,7 +1533,7 @@ class LazyInterpreter(BaseInterpreter):
             stroke=False,
             fill=True,
             evenodd=False,
-            path=self.curpath,
+            raw_segments=self.curpath,
         )
         self.curpath = []
 
@@ -1480,7 +1548,7 @@ class LazyInterpreter(BaseInterpreter):
             stroke=False,
             fill=True,
             evenodd=True,
-            path=self.curpath,
+            raw_segments=self.curpath,
         )
         self.curpath = []
 
@@ -1491,7 +1559,7 @@ class LazyInterpreter(BaseInterpreter):
             stroke=True,
             fill=True,
             evenodd=False,
-            path=self.curpath,
+            raw_segments=self.curpath,
         )
         self.curpath = []
 
@@ -1502,7 +1570,7 @@ class LazyInterpreter(BaseInterpreter):
             stroke=True,
             fill=True,
             evenodd=True,
-            path=self.curpath,
+            raw_segments=self.curpath,
         )
         self.curpath = []
 
