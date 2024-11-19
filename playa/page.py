@@ -1321,6 +1321,7 @@ class PageInterpreter(BaseInterpreter):
 @dataclass
 class ContentObject:
     gstate: GraphicState
+    ctm: Matrix
     mcs: Union[MarkedContentSection, None]
 
     @property
@@ -1337,6 +1338,17 @@ class ImageObject(ContentObject):
     imagemask: bool
     stream: ContentStream
     colorspace: List[ColorSpace]
+
+    @property
+    def bbox(self):
+        # PDF 1.7 sec 8.3.24: All images shall be 1 unit wide by 1
+        # unit high in user space, regardless of the number of samples
+        # in the image. To be painted, an image shall be mapped to a
+        # region of the page by temporarily altering the CTM.
+        bounds = ((0, 0), (1, 0), (0, 1), (1, 1))
+        return get_bound(
+            apply_matrix_pt(self.ctm, (p, q)) for (p, q) in bounds
+        )
 
 
 @dataclass
@@ -1406,6 +1418,7 @@ class LazyInterpreter(BaseInterpreter):
 
     def create(self, object_class, **kwargs) -> ContentObject:
         return object_class(
+            ctm=self.ctm,
             mcs=self.mcs,
             gstate=self.graphicstate,
             **kwargs,
@@ -1561,14 +1574,6 @@ class LazyInterpreter(BaseInterpreter):
         if not isinstance(colorspace, list):
             colorspace = [colorspace]
         colorspace = [get_colorspace(resolve1(spec)) for spec in colorspace]
-        # PDF 1.7 sec 8.3.24: All images shall be 1 unit wide by 1
-        # unit high in user space, regardless of the number of samples
-        # in the image. To be painted, an image shall be mapped to a
-        # region of the page by temporarily altering the CTM.
-        bounds = ((0, 0), (1, 0), (0, 1), (1, 1))
-        x0, y0, x1, y1 = get_bound(
-            apply_matrix_pt(self.ctm, (p, q)) for (p, q) in bounds
-        )
         return self.create(
             ImageObject,
             stream=stream,
