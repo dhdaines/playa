@@ -1425,7 +1425,7 @@ class PathObject(ContentObject):
         """Get path segments in device space."""
         return (
             PathSegment(
-                p.operator, [apply_matrix_pt(self.ctm, point) for point in p.points]
+                p.operator, tuple(apply_matrix_pt(self.ctm, point) for point in p.points)
             )
             for p in self.raw_segments
         )
