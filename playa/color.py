@@ -1,10 +1,9 @@
 import collections
-from typing import Dict, NamedTuple, Union
+from typing import Dict, List, NamedTuple, Union
 
-from playa.casting import safe_float
 from playa.exceptions import PDFInterpreterError
 from playa.parser import LIT, PDFObject, PSLiteral
-from playa.pdftypes import list_value, literal_name, stream_value
+from playa.pdftypes import float_value, list_value, literal_name, stream_value
 
 LITERAL_DEVICE_GRAY = LIT("DeviceGray")
 LITERAL_DEVICE_RGB = LIT("DeviceRGB")
@@ -57,7 +56,12 @@ class ColorSpace(NamedTuple):
         # FIXME: Uncolored patterns (PDF 1.7 sec 8.7.3.3) are not supported
         if isinstance(components[0], PSLiteral):
             return ColorPattern(components[0])
-        cc = [safe_float(x) or 0.0 for x in components[0 : self.ncomponents]]
+        cc: List[float] = []
+        for x in components[0 : self.ncomponents]:
+            try:
+                cc.append(float_value(x))
+            except TypeError:
+                cc.append(0.0)
         while len(cc) < self.ncomponents:
             cc.append(0.0)
         if self.ncomponents == 1:

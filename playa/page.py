@@ -25,7 +25,6 @@ from typing import (
     cast,
 )
 
-from playa.casting import safe_float
 from playa.color import (
     PREDEFINED_COLORSPACE,
     Color,
@@ -801,14 +800,14 @@ class BaseInterpreter:
 
         Offset from the start of the current line by (tx , ty).
         """
-        tx_ = safe_float(tx)
-        ty_ = safe_float(ty)
-        if tx_ is not None and ty_ is not None:
+        try:
+            tx = num_value(tx)
+            ty = num_value(ty)
             (a, b, c, d, e, f) = self.textstate.matrix
-            e_new = tx_ * a + ty_ * c + e
-            f_new = tx_ * b + ty_ * d + f
+            e_new = tx * a + ty * c + e
+            f_new = tx * b + ty * d + f
             self.textstate.matrix = (a, b, c, d, e_new, f_new)
-        else:
+        except TypeError:
             log.warning("Invalid offset (%r, %r) for Td", tx, ty)
         self.textstate.linematrix = (0, 0)
 
@@ -818,18 +817,17 @@ class BaseInterpreter:
         offset from the start of the current line by (tx , ty). As a side effect, this
         operator sets the leading parameter in the text state.
         """
-        tx_ = safe_float(tx)
-        ty_ = safe_float(ty)
-
-        if tx_ is not None and ty_ is not None:
+        try:
+            tx = num_value(tx)
+            ty = num_value(ty)
             (a, b, c, d, e, f) = self.textstate.matrix
-            e_new = tx_ * a + ty_ * c + e
-            f_new = tx_ * b + ty_ * d + f
+            e_new = tx * a + ty * c + e
+            f_new = tx * b + ty * d + f
             self.textstate.matrix = (a, b, c, d, e_new, f_new)
-        else:
+            if ty is not None:
+                self.textstate.leading = ty
+        except TypeError:
             log.warning("Invalid offset (%r, %r) for TD", tx, ty)
-        if ty_ is not None:
-            self.textstate.leading = ty_
         self.textstate.linematrix = (0, 0)
 
     def do_Tm(
