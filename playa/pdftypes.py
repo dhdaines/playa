@@ -25,7 +25,7 @@ from playa.runlength import rldecode
 from playa.utils import apply_png_predictor
 
 if TYPE_CHECKING:
-    from playa.document import PDFDocument
+    from playa.document import Document
 
 logger = logging.getLogger(__name__)
 
@@ -168,7 +168,7 @@ _DEFAULT = object()
 class ObjRef:
     def __init__(
         self,
-        doc: Union[weakref.ReferenceType["PDFDocument"], None],
+        doc: Union[weakref.ReferenceType["Document"], None],
         objid: int,
     ) -> None:
         """Reference to a PDF object.

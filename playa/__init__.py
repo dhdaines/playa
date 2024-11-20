@@ -1,23 +1,30 @@
 """
-PLAYA is a LAYout Analyzer.
+PLAYA ain't a LAYout Analyzer... but it can help you get stuff
+out of PDFs.
 
 Basic usage:
 
-    pdf = playa.open(path)
+    with playa.open(path) as pdf:
+        for page in pdf.pages:
+            print(f"page {page.label}:")
+            for obj in page.objects:
+                print(f"    {obj.object_type} at {obj.bbox}")
+                if obj.object_type == "text":
+                    print(f"        chars: {obj.chars}")
 """
 
 import builtins
 from os import PathLike
 from typing import Union
 
-from playa.document import PDFDocument
+from playa.document import Document
 
-__version__ = "0.0.1"
+__version__ = "0.1"
 
 
-def open(path: Union[PathLike, str], password: str = "") -> PDFDocument:
+def open(path: Union[PathLike, str], password: str = "") -> Document:
     """Open a PDF document from a path on the filesystem."""
     fp = builtins.open(path, "rb")
-    pdf = PDFDocument(fp, password)
+    pdf = Document(fp, password)
     pdf._fp = fp
     return pdf

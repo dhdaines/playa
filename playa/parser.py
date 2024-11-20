@@ -33,7 +33,7 @@ from playa.utils import choplist
 
 log = logging.getLogger(__name__)
 if TYPE_CHECKING:
-    from playa.document import PDFDocument
+    from playa.document import Document
 
 # Intern a bunch of important keywords
 KEYWORD_PROC_BEGIN = KWD(b"{")
@@ -314,7 +314,7 @@ class ObjectParser:
     stream).
 
     They can contain indirect object references (so, must be
-    initialized with a `PDFDocument` to resolve these) but for perhaps
+    initialized with a `Document` to resolve these) but for perhaps
     obvious reasons (how would you parse that) these cannot occur at
     the top level of the stream, only inside an array or dictionary.
     """
@@ -322,7 +322,7 @@ class ObjectParser:
     def __init__(
         self,
         data: Union[bytes, mmap.mmap],
-        doc: Union["PDFDocument", None] = None,
+        doc: Union["Document", None] = None,
         pos: int = 0,
     ) -> None:
         self._lexer = Lexer(data, pos)
@@ -548,7 +548,7 @@ class IndirectObjectParser:
     def __init__(
         self,
         data: Union[bytes, mmap.mmap],
-        doc: Union["PDFDocument", None] = None,
+        doc: Union["Document", None] = None,
         strict: bool = False,
     ) -> None:
         self._parser = ObjectParser(data, doc)

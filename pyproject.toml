@@ -87,3 +87,4 @@ dependencies = [
 ]
 [tool.hatch.envs.docs.scripts]
 build = "mkdocs build"
+serve = "mkdocs serve"

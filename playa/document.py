@@ -1,3 +1,7 @@
+"""
+Basic classes for PDF document parsing.
+"""
+
 import io
 import itertools
 import logging
@@ -712,22 +716,23 @@ class OutlineItem(NamedTuple):
     se: Union[ObjRef, None]
 
 
-class PDFDocument:
+class Document:
     """Representation of a PDF document on disk.
 
     Since PDF documents can be very large and complex, merely creating
-    a `PDFDocument` does very little aside from opening the file and
+    a `Document` does very little aside from opening the file and
     verifying that the password is correct and it is, in fact, a PDF.
-    This may, however, involve a certain amount of random file access
-    since the cross-reference table and trailer must be read in order
-    to determine this (we do not treat linearized PDFs specially for
-    the moment).
+    This may, however, involve a certain amount of file access since
+    the cross-reference table and trailer must be read in order to
+    determine this (we do not treat linearized PDFs specially for the
+    moment).
 
     Some metadata, such as the structure tree and page tree, will be
     loaded lazily and cached.  We do not handle modification of PDFs.
 
     Args:
-      fp: File-like object in binary mode.  Must support random access.
+      fp: File-like object in binary mode.  Will be read using
+          `mmap` if possible, otherwise will be read into memory.
       password: Password for decryption, if needed.
 
     """
@@ -735,7 +740,7 @@ class PDFDocument:
     _fp: Union[BinaryIO, None] = None
     _pages: Union["PageList", None] = None
 
-    def __enter__(self) -> "PDFDocument":
+    def __enter__(self) -> "Document":
         return self
 
     def __exit__(self, exc_type, exc_value, traceback) -> None:
@@ -784,8 +789,8 @@ class PDFDocument:
         # header, it will instead be loaded with all the rest.
         self.parser = IndirectObjectParser(self.buffer, self)
         try:
-            pos = self.find_xref()
-            self.read_xref_from(pos, self.xrefs)
+            pos = self._find_xref()
+            self._read_xref_from(pos, self.xrefs)
         except (ValueError, IndexError) as e:
             log.debug("Using fallback XRef parsing: %s", e)
             newxref = XRefFallback(self.parser)
@@ -935,13 +940,14 @@ class PDFDocument:
         return obj.obj
 
     def __getitem__(self, objid: int) -> Any:
-        """Get object from PDF
+        """Get an indirect object from the PDF.
 
-        :raises ValueError if PDFDocument is not initialized
-        :raises IndexError if objid does not exist in PDF
+        Raises:
+          ValueError: if Document is not initialized
+          IndexError: if objid does not exist in PDF
         """
         if not self.xrefs:
-            raise ValueError("PDFDocument is not initialized")
+            raise ValueError("Document is not initialized")
         if objid not in self._cached_objs:
             log.debug("getobj: objid=%r", objid)
             obj = None
@@ -1012,6 +1018,9 @@ class PDFDocument:
 
     @property
     def outlines(self) -> Iterator[OutlineItem]:
+        """
+        Iterate over the PDF document outline.
+        """
         if "Outlines" not in self.catalog:
             raise KeyError
 
@@ -1043,6 +1052,9 @@ class PDFDocument:
         The resulting iterator is unbounded, so it is recommended to
         zip it with the iterator over actual pages returned by `get_pages`.
 
+        Raises:
+          KeyError: No page labels are present in the catalog
+          ValueError: The page label tree is invalid
         """
         assert self.catalog is not None  # really it cannot be None
 
@@ -1051,12 +1063,13 @@ class PDFDocument:
 
     PageType = Dict[Any, Dict[Any, Any]]
 
-    def get_pages_from_xrefs(self) -> Iterator[Tuple[int, PageType]]:
+    def _get_pages_from_xrefs(self) -> Iterator[Tuple[int, PageType]]:
         """Find pages from the cross-reference tables if the page tree
         is missing (note that this only happens in invalid PDFs, but
         it happens.)
 
-        Returns an iterator over (objid, dict) pairs.
+        Returns:
+          an iterator over (objid, dict) pairs.
         """
         for xref in self.xrefs:
             for object_id in xref.objids:
@@ -1067,11 +1080,12 @@ class PDFDocument:
                 except IndexError:
                     pass
 
-    def get_page_objects(self) -> Iterator[Tuple[int, PageType]]:
+    def _get_page_objects(self) -> Iterator[Tuple[int, PageType]]:
         """Iterate over the flattened page tree in reading order, propagating
         inheritable attributes.  Returns an iterator over (objid, dict) pairs.
 
-        Will raise KeyError if there is no page tree.
+        Raises:
+          KeyError: if there is no page tree.
         """
         if "Pages" not in self.catalog:
             raise KeyError("No 'Pages' entry in catalog")
@@ -1125,16 +1139,17 @@ class PDFDocument:
 
     @property
     def names(self) -> Dict[str, Any]:
-        """PDF name dictionary (PDF 1.7 sec 7.7.4). Raises KeyError if
-        nonexistent.
+        """PDF name dictionary (PDF 1.7 sec 7.7.4).
+
+        Raises:
+          KeyError: if nonexistent.
         """
         return dict_value(self.catalog["Names"])
 
     @property
     def dests(self) -> Iterable[Tuple[str, list]]:
         """Iterable of named destinations as (name, destination) tuples
-        (PDF 1.7 sec 12.3.2). Raises KeyError if no destination
-        tree exists.
+        (PDF 1.7 sec 12.3.2).
 
         Note that we assume the names of destinations are either "name
         objects" (that's PDF for UTF-8) or "text strings", since the
@@ -1145,7 +1160,8 @@ class PDFDocument:
 
         therefore, you get them as `str`.
 
-        FIXME: create a Destination type, don't just return list
+        Raises:
+          KeyError: if no destination tree exists
         """
         try:
             # PDF-1.2 or later
@@ -1163,8 +1179,7 @@ class PDFDocument:
             else:
                 yield name, dest
 
-    # find_xref
-    def find_xref(self) -> int:
+    def _find_xref(self) -> int:
         """Internal function used to locate the first XRef."""
         # search the last xref table by scanning the file backwards.
         prev = b""
@@ -1186,7 +1201,7 @@ class PDFDocument:
         raise ValueError("No xref table found at end of file")
 
     # read xref table
-    def read_xref_from(
+    def _read_xref_from(
         self,
         start: int,
         xrefs: List[XRef],
@@ -1213,18 +1228,18 @@ class PDFDocument:
         # stream.
         if "XRefStm" in trailer:
             pos = int_value(trailer["XRefStm"])
-            self.read_xref_from(pos, xrefs)
+            self._read_xref_from(pos, xrefs)
         # Recurse into any previous xref tables or streams
         if "Prev" in trailer:
             # find previous xref
             pos = int_value(trailer["Prev"])
-            self.read_xref_from(pos, xrefs)
+            self._read_xref_from(pos, xrefs)
 
 
 class PageList:
     """List of pages indexable by 0-based index or string label."""
 
-    def __init__(self, doc: PDFDocument):
+    def __init__(self, doc: Document):
         try:
             page_labels: Iterable[Optional[str]] = doc.page_labels
         except (KeyError, ValueError):
@@ -1232,9 +1247,9 @@ class PageList:
         self._pages = []
         self._labels: Dict[str, Page] = {}
         try:
-            itor = doc.get_page_objects()
+            itor = doc._get_page_objects()
         except KeyError:
-            itor = doc.get_pages_from_xrefs()
+            itor = doc._get_pages_from_xrefs()
         for page_idx, ((objid, properties), label) in enumerate(zip(itor, page_labels)):
             page = Page(doc, objid, properties, label, page_idx)
             self._pages.append(page)

@@ -20,3 +20,5 @@ plugins:
 nav:
   - Home: index.md
   - Reference: reference.md
+watch:
+- playa

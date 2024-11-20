@@ -1,3 +1,6 @@
+"""
+Classes for looking at pages and their contents.
+"""
 import itertools
 import logging
 import re
@@ -67,7 +70,7 @@ from playa.utils import (
 )
 
 if TYPE_CHECKING:
-    from playa.document import PDFDocument
+    from playa.document import Document
 
 log = logging.getLogger(__name__)
 
@@ -82,12 +85,14 @@ TextSeq = Iterable[Union[int, float, bytes]]
 class Page:
     """An object that holds the information about a page.
 
-    A Page object is merely a convenience class that has a set
-    of keys and values, which describe the properties of a page
-    and point to its contents.
+    Args:
+      doc: a Document object.
+      pageid: the integer PDF object ID associated with the page in the page tree.
+      attrs: a dictionary of page attributes.
+      label: page label string.
+      page_idx: 0-based index of the page in the document.
 
-    Attributes
-    ----------
+    Attributes:
       pageid: the integer object ID associated with the page in the page tree
       attrs: a dictionary of page attributes.
       contents: a list of ContentStream objects that represents the page content.
@@ -102,20 +107,12 @@ class Page:
 
     def __init__(
         self,
-        doc: "PDFDocument",
+        doc: "Document",
         pageid: int,
         attrs: Dict,
         label: Optional[str],
         page_idx: int = 0,
     ) -> None:
-        """Initialize a page object.
-
-        doc: a PDFDocument object.
-        pageid: the integer PDF object ID associated with the page in the page tree.
-        attrs: a dictionary of page attributes.
-        label: page label string.
-        page_idx: 0-based index of the page in the document.
-        """
         self.doc = weakref.ref(doc)
         self.pageid = pageid
         self.attrs = attrs
@@ -156,19 +153,23 @@ class Page:
             self.contents = []
 
     def __iter__(self) -> Iterator[PDFObject]:
+        """Iterator over PDF objects in the content streams."""
         for pos, obj in ContentParser(self.contents):
             yield obj
 
     @property
     def objects(self) -> Iterator["ContentObject"]:
+        """Iterator over lazy layout objects."""
         return iter(LazyInterpreter(self))
 
     @property
     def layout(self) -> Iterator["LayoutObject"]:
+        """Iterator over eager layout object dictionaries."""
         return iter(PageInterpreter(self))
 
     @property
     def tokens(self) -> Iterator[Token]:
+        """Iterator over tokens in the content streams."""
         parser = ContentParser(self.contents)
         while True:
             try:
@@ -187,6 +188,7 @@ TextArgument = Union[float, bytes, Font]
 
 @dataclass
 class TextState:
+    """PDF Text State (PDF 1.7 section 9.3.1)"""
     matrix: Matrix = MATRIX_IDENTITY
     linematrix: Point = (0, 0)
     font: Optional[Font] = None
@@ -199,6 +201,7 @@ class TextState:
     rise: float = 0
 
     def reset(self) -> None:
+        """Reset the text state"""
         self.matrix = MATRIX_IDENTITY
         self.linematrix = (0, 0)
 
@@ -253,19 +256,28 @@ class TextState:
             self.linematrix = (0, 0)
 
 
+class DashPattern(NamedTuple):
+    """
+    Line dash pattern in PDF graphics state (PDF 1.7 section 8.4.3.6).
 
-class DashingStyle(NamedTuple):
+    Attributes:
+      dash: lengths of dashes and gaps in user space units
+      phase: starting position in the dash pattern
+    """
     dash: List[float]
     phase: float
 
 
 @dataclass
 class GraphicState:
+    """
+    PDF Graphics state (PDF 1.7 section 8.4)
+    """
     linewidth: float = 0
     linecap: Optional[object] = None
     linejoin: Optional[object] = None
     miterlimit: Optional[object] = None
-    dash: DashingStyle = DashingStyle([], 0)
+    dash: DashPattern = DashPattern([], 0)
     intent: Optional[object] = None
     flatness: Optional[object] = None
     # stroking color
@@ -320,7 +332,7 @@ class LayoutObject(TypedDict, total=False):
     mcid: Union[int, None]
     tag: Union[str, None]
     path: List[Tuple]
-    dash: DashingStyle
+    dash: DashPattern
 
 
 class ContentParser(ObjectParser):
@@ -364,6 +376,9 @@ class ContentParser(ObjectParser):
 
 
 class MarkedContentSection(NamedTuple):
+    """
+    Marked content section in a PDF page.
+    """
     mcid: Union[int, None]
     tag: str
     props: Dict[str, PDFObject]
@@ -373,6 +388,9 @@ PathOperator = Literal["h", "m", "l", "v", "c", "y"]
 
 
 class PathSegment(NamedTuple):
+    """
+    Segment in a PDF graphics path.
+    """
     operator: PathOperator
     points: Tuple[Point, ...]
 
@@ -529,7 +547,7 @@ class BaseInterpreter:
     def do_d(self, dash: PDFObject, phase: PDFObject) -> None:
         """Set line dash pattern"""
         ndash = [num_value(x) for x in list_value(dash)]
-        self.graphicstate.dash = DashingStyle(ndash, num_value(phase))
+        self.graphicstate.dash = DashPattern(ndash, num_value(phase))
 
     def do_ri(self, intent: PDFObject) -> None:
         """Set color rendering intent"""
@@ -1545,9 +1563,9 @@ class TextObject(ContentObject):
     textstate: TextState
     items: List[TextItem]
     _glyphs: Union[List[GlyphObject], None] = None
-    _chars: Union[str, None] = None
+    _chars: Union[List[str], None] = None
 
-    def render_char(
+    def _render_char(
         self,
         *,
         vertical: bool,
@@ -1589,7 +1607,7 @@ class TextObject(ContentObject):
                            apply_matrix_pt(matrix, bbox_upper_right))
         return item, adv
 
-    def render_string(self, item: TextItem) -> Iterator[GlyphObject]:
+    def _render_string(self, item: TextItem) -> Iterator[GlyphObject]:
         assert self.textstate.font is not None
         vert = self.textstate.font.vertical
         assert self.ctm is not None
@@ -1617,7 +1635,7 @@ class TextObject(ContentObject):
                     if needcharspace:
                         pos += charspace
                     lm = (x, pos) if vert else (pos, y)
-                    glyph, adv = self.render_char(
+                    glyph, adv = self._render_char(
                         vertical=vert,
                         matrix=translate_matrix(matrix, lm),
                         font=self.textstate.font,
@@ -1646,7 +1664,7 @@ class TextObject(ContentObject):
                 for obj in item.args:
                     if not isinstance(obj, bytes):
                         continue
-                    for cid in self.textstate.font.decode(obj):
+                    for cid in font.decode(obj):
                         try:
                             text = font.to_unichr(cid)
                             assert isinstance(text, str), f"Text {text!r} is not a str"
@@ -1658,12 +1676,13 @@ class TextObject(ContentObject):
         return "".join(self._chars)
 
     def __iter__(self) -> Iterator[GlyphObject]:
+        """Generate glyphs for this text object"""
         if self._glyphs is not None:
             yield from self._glyphs
         self._glyphs = []
         for item in self.items:
             if item.operator == "TJ":
-                for glyph in self.render_string(item):
+                for glyph in self._render_string(item):
                     yield glyph
                     self._glyphs.append(glyph)
             else:

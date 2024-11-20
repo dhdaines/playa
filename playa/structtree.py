@@ -1,3 +1,6 @@
+"""
+PDF logical structure trees.
+"""
 import logging
 import re
 from collections import deque
@@ -24,7 +27,7 @@ from playa.utils import decode_text
 logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
-    from playa.document import PDFDocument
+    from playa.document import Document
 
 
 MatchFunc = Callable[["StructElement"], bool]
@@ -128,23 +131,6 @@ class StructElement(Findable):
                     yield el.page_idx, mcid
             d.extendleft(reversed(el.children))
 
-    def to_dict(self) -> Dict[str, Any]:
-        """Return a compacted dict representation."""
-        r = asdict(self)
-        # Prune empty values (does not matter in which order)
-        d = deque([r])
-        while d:
-            el = d.popleft()
-            for k in list(el.keys()):
-                if el[k] is None or el[k] == [] or el[k] == {}:
-                    del el[k]
-            if "page_idx" in el:
-                el["page_number"] = el["page_idx"] + 1
-                del el["page_idx"]
-            if "children" in el:
-                d.extend(el["children"])
-        return r
-
 
 class StructTree(Findable):
     """Parse the structure tree of a PDF.
@@ -155,8 +141,8 @@ class StructTree(Findable):
     from the behaviour of other PDF libraries which will also include
     structure elements with no content.
 
-    If the PDF has no structure, the constructor will raise
-    `KeyError`.
+    Raises:
+      KeyError: If the PDF has no structure tree.
 
     Args:
       doc: Document from which to extract structure tree
@@ -169,7 +155,7 @@ class StructTree(Findable):
 
     def __init__(
         self,
-        doc: "PDFDocument",
+        doc: "Document",
         pages: Union[Iterable[Page], None] = None,
     ):
         if "StructTreeRoot" not in doc.catalog:
