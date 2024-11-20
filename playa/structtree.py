@@ -1,10 +1,11 @@
 """
 PDF logical structure trees.
 """
+
 import logging
 import re
 from collections import deque
-from dataclasses import asdict, dataclass, field
+from dataclasses import dataclass, field
 from typing import (
     TYPE_CHECKING,
     Any,

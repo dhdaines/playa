@@ -1,6 +1,7 @@
 """
 Classes for looking at pages and their contents.
 """
+
 import itertools
 import logging
 import re
@@ -189,6 +190,7 @@ TextArgument = Union[float, bytes, Font]
 @dataclass
 class TextState:
     """PDF Text State (PDF 1.7 section 9.3.1)"""
+
     matrix: Matrix = MATRIX_IDENTITY
     linematrix: Point = (0, 0)
     font: Optional[Font] = None
@@ -264,6 +266,7 @@ class DashPattern(NamedTuple):
       dash: lengths of dashes and gaps in user space units
       phase: starting position in the dash pattern
     """
+
     dash: List[float]
     phase: float
 
@@ -273,6 +276,7 @@ class GraphicState:
     """
     PDF Graphics state (PDF 1.7 section 8.4)
     """
+
     linewidth: float = 0
     linecap: Optional[object] = None
     linejoin: Optional[object] = None
@@ -379,6 +383,7 @@ class MarkedContentSection(NamedTuple):
     """
     Marked content section in a PDF page.
     """
+
     mcid: Union[int, None]
     tag: str
     props: Dict[str, PDFObject]
@@ -391,6 +396,7 @@ class PathSegment(NamedTuple):
     """
     Segment in a PDF graphics path.
     """
+
     operator: PathOperator
     points: Tuple[Point, ...]
 
@@ -1306,7 +1312,7 @@ class PageInterpreter(BaseInterpreter):
         except PDFUnicodeNotDefined:
             log.debug("undefined char: %r, %r", font, cid)
             # FIXME: This is not really what we want!
-            text =  "(cid:%d)" % cid
+            text = "(cid:%d)" % cid
         textwidth = font.char_width(cid)
         textdisp = font.char_disp(cid)
         adv = textwidth * fontsize * scaling
@@ -1602,9 +1608,15 @@ class TextObject(ContentObject):
             bbox_lower_left = (0, descent + rise)
             bbox_upper_right = (adv, descent + rise + fontsize)
         (a, b, c, d, e, f) = matrix
-        item = GlyphObject(self.gstate, self.ctm, self.mcs, cid, text,
-                           apply_matrix_pt(matrix, bbox_lower_left),
-                           apply_matrix_pt(matrix, bbox_upper_right))
+        item = GlyphObject(
+            self.gstate,
+            self.ctm,
+            self.mcs,
+            cid,
+            text,
+            apply_matrix_pt(matrix, bbox_lower_left),
+            apply_matrix_pt(matrix, bbox_upper_right),
+        )
         return item, adv
 
     def _render_string(self, item: TextItem) -> Iterator[GlyphObject]:
@@ -2022,8 +2034,9 @@ class LazyInterpreter(BaseInterpreter):
         colorspace = stream.get_any(("CS", "ColorSpace"))
         if not isinstance(colorspace, list):
             colorspace = [colorspace]
-        colorspace = [get_colorspace(resolve1(spec)) for spec in colorspace
-                      if spec is not None]
+        colorspace = [
+            get_colorspace(resolve1(spec)) for spec in colorspace if spec is not None
+        ]
         return self.create(
             ImageObject,
             stream=stream,
