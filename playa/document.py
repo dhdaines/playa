@@ -223,13 +223,16 @@ class XRefFallback:
                     objid1 = objs[index * 2]
                     self.offsets[objid1] = XRefPos(obj.objid, index, 0)
         # Now get the trailer
-        for s1, s2 in itertools.pairwise(parser.trailer):
+        itor = iter(parser.trailer)
+        s1 = next(itor)
+        for s2 in itor:
             _, token = s1
             if token is KEYWORD_TRAILER:
                 _, dic = s2
                 self.trailer.update(dict_value(dic))
                 log.debug("trailer=%r", self.trailer)
                 break
+            s1 = s2
         else:
             log.warning("b'trailer' not found in document")
 
@@ -1258,7 +1261,7 @@ class PageList:
     def __iter__(self) -> Iterator[Page]:
         return iter(self._pages)
 
-    def __getitem__(self, key: int | str) -> Page:
+    def __getitem__(self, key: Union[int, str]) -> Page:
         if isinstance(key, int):
             return self._pages[key]
         else:
