@@ -19,7 +19,7 @@ from typing import Union
 
 from playa.document import Document
 
-__version__ = "0.1"
+__version__ = "0.1.1"
 
 
 def open(path: Union[PathLike, str], password: str = "") -> Document:
