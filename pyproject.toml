@@ -33,7 +33,6 @@ classifiers = [
     "Topic :: Text Processing",
 ]
 dependencies = [
-    "charset-normalizer >= 2.0.0",
     "cryptography >= 36.0.0",
 ]
 
