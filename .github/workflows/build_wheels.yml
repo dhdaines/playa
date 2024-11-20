@@ -8,35 +8,18 @@ on:
 
 jobs:
   build_sdist:
-    name: Build source distribution
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Build sdist
-        run: pipx run build --sdist
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: cibw-sdist
-          path: dist/*.tar.gz
-
-  upload_pypi:
-    needs:
-      - build_sdist
+    name: Build and upload source distribution
     runs-on: ubuntu-latest
     permissions:
       id-token: write
     # Comment this line for testing
     # if: github.event_name == 'release' && github.event.action == 'published'
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/checkout@v4
         with:
-          pattern: cibw-*
-          path: dist
-          merge-multiple: true
+          fetch-depth: 0
+      - name: Build sdist
+        run: pipx run build --sdist
       - uses: pypa/gh-action-pypi-publish@release/v1
         # Uncomment these lines for testing
         with:
