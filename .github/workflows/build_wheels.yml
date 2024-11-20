@@ -18,9 +18,12 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Build sdist
-        run: pipx run build --sdist
-      - uses: pypa/gh-action-pypi-publish@release/v1
+      - name: Install Hatch
+        uses: pypa/hatch@install
+      - name: Build
+        run: hatch build
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
         # Uncomment these lines for testing
         # with:
         #   repository-url: https://test.pypi.org/legacy/
