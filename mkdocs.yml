@@ -1,0 +1,22 @@
+site_name: PLAYA
+site_description: PLAYA ain't a LAYout Analyzer
+site_author: David Huggins-Daines
+site_url: https://dhdaines.github.io/playa
+repo_url: https://github.com/dhdainesplaya
+edit_uri: blob/master/docs
+copyright: "Copyright &copy; David Huggins-Daines 2024-present"
+
+theme:
+  name: material
+plugins:
+  - include-markdown
+  - mkdocstrings:
+      default_handler: python
+      handlers:
+        python:
+          paths: [playa]
+          options:
+            show_root_heading: true
+nav:
+  - Home: index.md
+  - Reference: reference.md
