@@ -162,8 +162,9 @@ in PDF device space):
 ```python
 for obj in page.objects:
     print(f"{obj.object_type} at {obj.bbox}")
-    print(f"{obj.object_type} bottom left is {obj.left, obj.bottom}")
-    print(f"{obj.object_type} top right is {obj.right, obj.top}")
+    left, bottom, right, top = obj.bbox
+    print(f"  bottom left is {left, bottom}")
+    print(f"  top right is {right, top}")
 ```
 
 Another important piece of information (which `pdfminer.six` does not
@@ -174,12 +175,17 @@ structure, done using *marked content sections*:
 for obj in page.layout:
     print(f"{obj.object_type} is in marked content section {obj.mcs.mcid}")
     print(f"    which is tag {obj.mcs.tag.name}")
-    print(f"    with attributes {obj.mcs.tag.attrs}")
+    print(f"    with properties {obj.mcs.tag.props}")
 ```
 
 The `mcid` here is the same one referenced in elements of the
 structure tree as shown above (but remember that `tag` has nothing to
-do with the structure tree element, because Reasons).
+do with the structure tree element, because Reasons).  A marked
+content section does not necessarily have a `mcid` or `props`, but it
+will *always* have a `tag`.
+
+PDF also has the concept of "marked content points" which are not
+currently supported by PLAYA.
 
 You may also wish to know what color an object is, and other aspects of
 what PDF refers to as the *graphics state*, which is accessible
@@ -253,7 +259,7 @@ giving you, well, more items, which are the individual glyphs:
 
 ```python
 for glyph in item:
-    ...
+    print("Glyph has CID {glyph.cid} and Unicode {glyph.text}")
 ```
 
 By default PLAYA, following the PDF specification, considers the
@@ -285,5 +291,6 @@ etc, etc, etc.
 ## Acknowledgement
 
 This repository obviously includes code from `pdfminer.six`.  Original
-license text is included in [LICENSE](/LICENSE.pdfminer).  The license
-itself has not changed!
+license text is included in
+[LICENSE](https://github.com/dhdaines/playa/blob/main/LICENSE).  The
+license itself has not changed!

@@ -78,3 +78,10 @@ all = [
     "python tests/benchmark_parser.py",
     "python tests/benchmark_convert.py",
 ]
+
+[tool.hatch.envs.docs]
+dependencies = [
+    "mkdocs-material",
+    "mkdocstrings[python]",
+    "mkdocs-include-markdown-plugin"
+]
