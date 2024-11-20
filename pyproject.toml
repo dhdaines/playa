@@ -85,3 +85,5 @@ dependencies = [
     "mkdocstrings[python]",
     "mkdocs-include-markdown-plugin"
 ]
+[tool.hatch.envs.docs.scripts]
+build = "mkdocs build"
