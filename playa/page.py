@@ -25,7 +25,6 @@ from typing import (
     cast,
 )
 
-from playa import settings
 from playa.casting import safe_float
 from playa.color import (
     PREDEFINED_COLORSPACE,
@@ -648,16 +647,14 @@ class BaseInterpreter:
         try:
             self.graphicstate.scs = self.csmap[literal_name(name)]
         except KeyError:
-            if settings.STRICT:
-                raise PDFInterpreterError("Undefined ColorSpace: %r" % (name,))
+            log.warning("Undefined ColorSpace: %r", name)
 
     def do_cs(self, name: PDFObject) -> None:
         """Set color space for nonstroking operators"""
         try:
             self.graphicstate.ncs = self.csmap[literal_name(name)]
         except KeyError:
-            if settings.STRICT:
-                raise PDFInterpreterError("Undefined ColorSpace: %r" % (name,))
+            log.warning("Undefined ColorSpace: %r", name)
 
     def do_G(self, gray: PDFObject) -> None:
         """Set gray level for stroking operators"""
@@ -692,8 +689,7 @@ class BaseInterpreter:
     def do_SCN(self) -> None:
         """Set color for stroking operators."""
         if self.graphicstate.scs is None:
-            if settings.STRICT:
-                raise PDFInterpreterError("No colorspace specified!")
+            log.warning("No colorspace specified, using default DeviceGray")
             self.graphicstate.scs = self.csmap["DeviceGray"]
         self.graphicstate.scolor = self.graphicstate.scs.make_color(
             *self.pop(self.graphicstate.scs.ncomponents)
@@ -702,8 +698,7 @@ class BaseInterpreter:
     def do_scn(self) -> None:
         """Set color for nonstroking operators"""
         if self.graphicstate.ncs is None:
-            if settings.STRICT:
-                raise PDFInterpreterError("No colorspace specified!")
+            log.warning("No colorspace specified, using default DeviceGray")
             self.graphicstate.ncs = self.csmap["DeviceGray"]
         self.graphicstate.ncolor = self.graphicstate.ncs.make_color(
             *self.pop(self.graphicstate.ncs.ncomponents)
@@ -783,8 +778,7 @@ class BaseInterpreter:
         try:
             self.textstate.font = self.fontmap[literal_name(fontid)]
         except KeyError:
-            if settings.STRICT:
-                raise PDFInterpreterError("Undefined Font id: %r" % (fontid,))
+            log.warning("Undefined Font id: %r", fontid)
             doc = self.page.doc()
             if doc is None:
                 raise RuntimeError("Document no longer exists!")
@@ -814,10 +808,8 @@ class BaseInterpreter:
             e_new = tx_ * a + ty_ * c + e
             f_new = tx_ * b + ty_ * d + f
             self.textstate.matrix = (a, b, c, d, e_new, f_new)
-
-        elif settings.STRICT:
-            raise ValueError(f"Invalid offset ({tx!r}, {ty!r}) for Td")
-
+        else:
+            log.warning("Invalid offset (%r, %r) for Td", tx, ty)
         self.textstate.linematrix = (0, 0)
 
     def do_TD(self, tx: PDFObject, ty: PDFObject) -> None:
@@ -834,13 +826,10 @@ class BaseInterpreter:
             e_new = tx_ * a + ty_ * c + e
             f_new = tx_ * b + ty_ * d + f
             self.textstate.matrix = (a, b, c, d, e_new, f_new)
-
-        elif settings.STRICT:
-            raise ValueError("Invalid offset ({tx}, {ty}) for TD")
-
+        else:
+            log.warning("Invalid offset (%r, %r) for TD", tx, ty)
         if ty_ is not None:
             self.textstate.leading = ty_
-
         self.textstate.linematrix = (0, 0)
 
     def do_Tm(
@@ -1029,8 +1018,7 @@ class PageInterpreter(BaseInterpreter):
     def do_TJ(self, seq: PDFObject) -> Iterator[LayoutObject]:
         """Show text, allowing individual glyph positioning"""
         if self.textstate.font is None:
-            if settings.STRICT:
-                raise PDFInterpreterError("No font specified!")
+            log.warning("No font specified in text state!")
             return
         yield from self.render_string(
             cast(TextSeq, seq),

@@ -18,7 +18,6 @@ from typing import (
     cast,
 )
 
-from playa import settings
 from playa.cmapdb import (
     CMap,
     CMapBase,
@@ -30,7 +29,6 @@ from playa.cmapdb import (
 )
 from playa.encodingdb import EncodingDB, name2unicode
 from playa.exceptions import (
-    PDFFontError,
     PDFUnicodeNotDefined,
 )
 from playa.fontmetrics import FONT_METRICS
@@ -972,8 +970,7 @@ class Type1Font(SimpleFont):
         try:
             self.basefont = literal_name(resolve1(spec["BaseFont"]))
         except KeyError:
-            if settings.STRICT:
-                raise PDFFontError("BaseFont is missing")
+            log.warning("Font spec is missing BaseFont: %r", spec)
             self.basefont = "unknown"
 
         widths: FontWidthDict
@@ -1029,13 +1026,11 @@ class CIDFont(Font):
     def __init__(
         self,
         spec: Mapping[str, Any],
-        strict: bool = settings.STRICT,
     ) -> None:
         try:
             self.basefont = literal_name(spec["BaseFont"])
         except KeyError:
-            if strict:
-                raise PDFFontError("BaseFont is missing")
+            log.warning("Font spec is missing BaseFont: %r", spec)
             self.basefont = "unknown"
         self.cidsysteminfo = dict_value(spec.get("CIDSystemInfo", {}))
         cid_registry = resolve1(self.cidsysteminfo.get("Registry", b"unknown")).decode(
@@ -1045,13 +1040,12 @@ class CIDFont(Font):
             "latin1",
         )
         self.cidcoding = f"{cid_registry.strip()}-{cid_ordering.strip()}"
-        self.cmap: CMapBase = self.get_cmap_from_spec(spec, strict)
+        self.cmap: CMapBase = self.get_cmap_from_spec(spec)
 
         try:
             descriptor = dict_value(spec["FontDescriptor"])
         except KeyError:
-            if strict:
-                raise PDFFontError("FontDescriptor is missing")
+            log.warning("Font spec is missing FontDescriptor: %r", spec)
             descriptor = {}
         ttf = None
         if "FontFile2" in descriptor:
@@ -1105,7 +1099,7 @@ class CIDFont(Font):
             default_width = spec.get("DW", 1000)
         Font.__init__(self, descriptor, widths, default_width=default_width)
 
-    def get_cmap_from_spec(self, spec: Mapping[str, Any], strict: bool) -> CMapBase:
+    def get_cmap_from_spec(self, spec: Mapping[str, Any]) -> CMapBase:
         """Get cmap from font specification
 
         For certain PDFs, Encoding Type isn't mentioned as an attribute of
@@ -1114,17 +1108,16 @@ class CIDFont(Font):
         The horizontal/vertical modes are mentioned with different name
         such as 'DLIdent-H/V','OneByteIdentityH/V','Identity-H/V'.
         """
-        cmap_name = self._get_cmap_name(spec, strict)
+        cmap_name = self._get_cmap_name(spec)
 
         try:
             return CMapDB.get_cmap(cmap_name)
         except KeyError as e:
-            if strict:
-                raise PDFFontError(e)
+            log.warning("Failed to get cmap %s: %s", cmap_name, e)
             return CMap()
 
     @staticmethod
-    def _get_cmap_name(spec: Mapping[str, Any], strict: bool) -> str:
+    def _get_cmap_name(spec: Mapping[str, Any]) -> str:
         """Get cmap name from font specification"""
         cmap_name = "unknown"  # default value
 
@@ -1135,15 +1128,14 @@ class CIDFont(Font):
             else:
                 cmap_name = literal_name(spec_encoding["CMapName"])
         except KeyError:
-            if strict:
-                raise PDFFontError("Encoding is unspecified")
+            log.warning("Font spec is missing Encoding: %r", spec)
 
         if type(cmap_name) is ContentStream:  # type: ignore[comparison-overlap]
             cmap_name_stream: ContentStream = cast(ContentStream, cmap_name)
             if "CMapName" in cmap_name_stream:
                 cmap_name = cmap_name_stream.get("CMapName").name
-            elif strict:
-                raise PDFFontError("CMapName unspecified for encoding")
+            else:
+                log.warning("No CMap found for encoding %s", spec_encoding)
 
         return IDENTITY_ENCODER.get(cmap_name, cmap_name)
 

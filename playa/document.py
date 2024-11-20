@@ -32,12 +32,10 @@ from typing import (
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 
-from playa import settings
 from playa.arcfour import Arcfour
 from playa.data_structures import NameTree, NumberTree
 from playa.exceptions import (
     PDFEncryptionError,
-    PDFFontError,
     PDFPasswordIncorrect,
     PDFSyntaxError,
 )
@@ -212,8 +210,7 @@ class XRefFallback:
                 try:
                     n = stream["N"]
                 except KeyError:
-                    if settings.STRICT:
-                        raise PDFSyntaxError("N is not defined: %r" % stream)
+                    log.warning("N is not defined in object stream: %r", stream)
                     n = 0
                 doc = None if parser.doc is None else parser.doc()
                 if doc is None:
@@ -824,8 +821,7 @@ class Document:
         else:
             raise PDFSyntaxError("No /Root object! - Is this really a PDF?")
         if self.catalog.get("Type") is not LITERAL_CATALOG:
-            if settings.STRICT:
-                raise PDFSyntaxError("Catalog not found!")
+            log.warning("Catalog not found!")
         if "Version" in self.catalog:
             log.debug(
                 "Using PDF version %r from catalog instead of %r from header",
@@ -890,13 +886,11 @@ class Document:
 
     def _get_objects(self, stream: ContentStream) -> Tuple[List[PDFObject], int]:
         if stream.get("Type") is not LITERAL_OBJSTM:
-            if settings.STRICT:
-                raise PDFSyntaxError("Not a stream object: %r" % stream)
+            log.warning("Content stream Type is not /ObjStm: %r" % stream)
         try:
             n = cast(int, stream["N"])
         except KeyError:
-            if settings.STRICT:
-                raise PDFSyntaxError("N is not defined: %r" % stream)
+            log.warning("N is not defined in content stream: %r" % stream)
             n = 0
         parser = ObjectParser(stream.get_data(), self)
         objs: List[PDFObject] = [obj for _, obj in parser]
@@ -977,15 +971,13 @@ class Document:
             font = self._cached_fonts[objid]
         else:
             log.debug("get_font: create: objid=%r, spec=%r", objid, spec)
-            if settings.STRICT:
-                if spec["Type"] is not LITERAL_FONT:
-                    raise PDFFontError("Type is not /Font")
+            if spec["Type"] is not LITERAL_FONT:
+                log.warning("Font specification Type is not /Font: %r", spec)
             # Create a Font object.
             if "Subtype" in spec:
                 subtype = literal_name(spec["Subtype"])
             else:
-                if settings.STRICT:
-                    raise PDFFontError("Font Subtype is not specified.")
+                log.warning("Font specification Subtype is not specified: %r", spec)
                 subtype = "Type1"
             if subtype in ("Type1", "MMType1"):
                 # Type1 Font
@@ -1009,8 +1001,7 @@ class Document:
                         subspec[k] = resolve1(spec[k])
                 font = self.get_font(None, subspec)
             else:
-                if settings.STRICT:
-                    raise PDFFontError("Invalid Font spec: %r" % spec)
+                log.warning("Invalid Font spec: %r" % spec)
                 font = Type1Font(spec)  # FIXME: this is so wrong!
             if objid:
                 self._cached_fonts[objid] = font
@@ -1047,14 +1038,15 @@ class Document:
         """Generate page label strings for the PDF document.
 
         If the document includes page labels, generates strings, one per page.
-        If not, raises an exception (KeyError or ValueError).
+        If not, raise KeyError.
 
-        The resulting iterator is unbounded, so it is recommended to
-        zip it with the iterator over actual pages returned by `get_pages`.
+        The resulting iterator is unbounded (because the page label
+        tree does not actually include all the pages), so it is
+        recommended to use `pages` instead.
 
         Raises:
           KeyError: No page labels are present in the catalog
-          ValueError: The page label tree is invalid
+
         """
         assert self.catalog is not None  # really it cannot be None
 
@@ -1121,7 +1113,8 @@ class Document:
 
             # Recurse, depth-first
             object_type = object_properties.get("Type")
-            if object_type is None and not settings.STRICT:  # See #64
+            if object_type is None:
+                log.warning("Page has no Type, trying type: %r", object_properties)
                 object_type = object_properties.get("type")
             if object_type is LITERAL_PAGES and "Kids" in object_properties:
                 log.debug("Pages: Kids=%r", object_properties["Kids"])
@@ -1285,14 +1278,11 @@ class PageLabels(NumberTree):
             start, label_dict_unchecked = next(itor)
             # The tree must begin with page index 0
             if start != 0:
-                if settings.STRICT:
-                    raise ValueError("PageLabels is missing page index 0")
-                else:
-                    # Try to cope, by assuming empty labels for the initial pages
-                    start = 0
+                log.warning("PageLabels tree is missing page index 0")
+                # Try to cope, by assuming empty labels for the initial pages
+                start = 0
         except StopIteration:
-            if settings.STRICT:
-                raise ValueError("PageLabels is empty")
+            log.warning("PageLabels tree is empty")
             start = 0
             label_dict_unchecked = {}
 

@@ -8,7 +8,6 @@ from pathlib import Path
 import pytest
 
 import playa
-import playa.settings
 from playa.data_structures import NameTree
 from playa.document import read_header
 from playa.exceptions import PDFSyntaxError

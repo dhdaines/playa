@@ -304,7 +304,7 @@ def bench_mmap():
 
 
 def bench_playa():
-    from playa.document import PDFDocument
+    from playa.document import Document
 
     bench_bytes()
     bench_mmap()
@@ -313,7 +313,7 @@ def bench_playa():
     start = time.time()
     for _ in range(runs):
         with open(TESTDIR / "contrib" / "pagelabels.pdf", "rb") as infh:
-            doc = PDFDocument(infh)
+            doc = Document(infh)
             page = doc.pages[0]
             _ = list(page.layout)
     print(
