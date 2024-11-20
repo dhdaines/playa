@@ -38,7 +38,7 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/dhdaines/playa"
+Homepage = "https://dhdaines.github.io/playa"
 
 [tool.hatch.version]
 path = "playa/__init__.py"
