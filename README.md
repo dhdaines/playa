@@ -4,7 +4,7 @@
 
 This is not an experimental fork of
 [pdfminer.six](https://github.com/pdfminer/pdfminer.six).  Well, it's
-kind of an experimental fork of pdfminer.six.  The idea is to extract
+kind of an experimental fork of pdfminer.six.  The idea was to extract
 just the part of pdfminer.six that gets used by
 [pdfplumber](https://github.com/jsvine/pdfplumber), namely the
 low-level PDF access, optimize it for speed, see if it can be
@@ -33,6 +33,15 @@ PDF, there are a lot of better and faster tools and libraries out
 there, see [these benchmarks](https://github.com/py-pdf/benchmarks)
 for a summary (TL;DR pypdfium2 is probably what you want, but
 pdfplumber does a nice job of converting PDF to ASCII art).
+
+## Installation
+
+Installing it should be really simple as long as you have Python 3.8
+or newer:
+
+    pipx install playa-pdf
+
+Yes it's not just "playa".  Sorry about that.
 
 ## Usage
 
