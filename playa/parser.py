@@ -77,7 +77,7 @@ ESC_STRING = {
 }
 
 
-def reverse_iter_lines(buffer: bytes | mmap.mmap) -> Iterator[bytes]:
+def reverse_iter_lines(buffer: Union[bytes, mmap.mmap]) -> Iterator[bytes]:
     """Iterate backwards over lines starting at the current position.
 
     This is used to locate the trailers at the end of a file.
