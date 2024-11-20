@@ -56,6 +56,9 @@ testpaths = [ "tests" ]
 [tool.hatch.envs.hatch-test]
 extra-dependencies = [ "pdfminer.six" ]
 
+[tool.hatch.envs.default]
+dependencies = [ "pytest", "mypy", "pdfminer.six" ]
+
 [tool.hatch.envs.bench]
 dependencies = [ "pdfminer.six" ]
 

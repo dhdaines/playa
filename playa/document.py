@@ -40,7 +40,7 @@ from playa.exceptions import (
     PDFSyntaxError,
 )
 from playa.font import CIDFont, Font, PDFTrueTypeFont, Type1Font, Type3Font
-from playa.page import Page
+from playa.page import Page, LayoutObject as PageLayoutObject
 from playa.parser import (
     KEYWORD_OBJ,
     KEYWORD_TRAILER,
@@ -716,6 +716,13 @@ class OutlineItem(NamedTuple):
     se: Union[ObjRef, None]
 
 
+class LayoutObject(PageLayoutObject):
+    """Layout object at the document level."""
+
+    page_index: int
+    page_label: Union[str, None]
+
+
 class Document:
     """Representation of a PDF document on disk.
 
@@ -863,13 +870,23 @@ class Document:
         self.parser.strict = True
 
     def __iter__(self) -> Iterator[IndirectObject]:
-        """Iterate over `IndirectObject`s"""
+        """Iterate over `IndirectObject`"""
         return (obj for pos, obj in IndirectObjectParser(self.buffer, self))
 
     @property
     def tokens(self) -> Iterator[Token]:
         """Iterate over tokens."""
         return (tok for pos, tok in Lexer(self.buffer))
+
+    @property
+    def layout(self) -> Iterator[LayoutObject]:
+        """Iterate over `LayoutObject` for all pages."""
+        for idx, page in enumerate(self.pages):
+            for dic in page.layout:
+                dic = cast(LayoutObject, dic)  # ugh
+                dic["page_index"] = idx
+                dic["page_label"] = page.label
+                yield dic
 
     def _getobj_objstm(
         self, stream: ContentStream, index: int, objid: int

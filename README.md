@@ -1,15 +1,6 @@
-# **P**LAYA ain't a **LAY**out **A**nalyzer 🏖️
+# **P**LAYA-PDF is a **LA**z*Y** **A**nalyzer for **PDF** 🏖️
 
 ## About
-
-This is not an experimental fork of
-[pdfminer.six](https://github.com/pdfminer/pdfminer.six).  Well, it's
-kind of an experimental fork of pdfminer.six.  The idea was to extract
-just the part of pdfminer.six that gets used by
-[pdfplumber](https://github.com/jsvine/pdfplumber), namely the
-low-level PDF access, optimize it for speed, see if it can be
-reimplemented using other libraries such as pypdf or pikepdf,
-benchmark it against those libraries, and improve its API.
 
 There are already too many PDF libraries, unfortunately none of which
 does everything that everybody wants it to do, and we probably don't
@@ -21,18 +12,17 @@ would be specifically one of these things and nothing else:
    streams, cross-reference table, XObjects, and other low-level PDF
    metadata.
 2. Obtaining the absolute position and attributes of every character,
-   line, path, and image in every page of a PDF document.
+   line, path, and image in every page of a PDF.
    
-Notably this does *not* include the largely undocumented heuristic
-"layout analysis" done by pdfminer.six, because it is quite difficult
-to understand due to a Java-damaged API based on deeply nested class
-hierarchies, and because layout analysis is best done
-probabilistically/visually.  Also, pdfplumber does its own, much
-nicer, layout analysis.  Also, if you just want to extract text from a
-PDF, there are a lot of better and faster tools and libraries out
-there, see [these benchmarks](https://github.com/py-pdf/benchmarks)
-for a summary (TL;DR pypdfium2 is probably what you want, but
-pdfplumber does a nice job of converting PDF to ASCII art).
+If you just want to extract text from a PDF, there are a lot of better
+and faster tools and libraries out there, see [these
+benchmarks](https://github.com/py-pdf/benchmarks) for a summary (TL;DR
+pypdfium2 is probably what you want, but pdfplumber does a nice job of
+converting PDF to ASCII art).
+
+The purpose of PLAYA is to provide an efficent, pure-Python and
+Pythonic (for its author's definition of the term), lazy interface to
+the internals of PDF files.
 
 ## Installation
 
@@ -158,7 +148,22 @@ for dic in page.layout:
 
 This is for instance quite useful for doing "Artificial Intelligence",
 or if you like wasting time and energy for no good reason, but I
-repeat myself.
+repeat myself.  For instance, you can write `page.layout` to a CSV file:
+
+```python
+writer = DictWriter(outfh, fieldnames=playa.fieldnames)
+writer.writeheader()
+for dic in pdf.layout:
+    writer.writerow(dic)
+```
+
+you can also create a Pandas DataFrame:
+
+```python
+df = pandas.DataFrame.from_records(pdf.layout)
+```
+
+FIXME: support Polars as well
 
 If you have more specific needs or want better performance, then read on.
 
@@ -272,7 +277,7 @@ for glyph in item:
 ```
 
 By default PLAYA, following the PDF specification, considers the
-grouping of glyphs into strings irrelevant by default.  We *might*
+grouping of glyphs into strings irrelevant by default.  I *might*
 consider separating the strings in the future.
 
 PDF has the concept of a *text state* which determines some aspects of

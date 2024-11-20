@@ -17,9 +17,11 @@ import builtins
 from os import PathLike
 from typing import Union
 
-from playa.document import Document
+from playa.document import Document, LayoutObject
 
-__version__ = "0.1.2"
+__version__ = "0.2"
+
+fieldnames = list(LayoutObject.__annotations__.keys())
 
 
 def open(path: Union[PathLike, str], password: str = "") -> Document:

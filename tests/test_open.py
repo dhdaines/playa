@@ -2,6 +2,8 @@
 Test basic opening and navigation of PDF documents.
 """
 
+from csv import DictWriter
+from io import StringIO
 from pathlib import Path
 
 import pytest
@@ -96,6 +98,17 @@ def test_weakrefs() -> None:
     del doc
     with pytest.raises(RuntimeError):
         _ = ref.resolve()
+
+
+def test_write_csv() -> None:
+    """Verify that we can easily write to a CSV file."""
+    with playa.open(TESTDIR / "simple1.pdf") as doc:
+        out = StringIO()
+        writer = DictWriter(out, fieldnames=playa.fieldnames)
+        writer.writeheader()
+        for dic in doc.layout:
+            writer.writerow(dic)
+        assert out.getvalue()
 
 
 if __name__ == "__main__":
