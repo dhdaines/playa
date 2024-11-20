@@ -3,7 +3,7 @@ from typing import Dict, List, NamedTuple, Union
 
 from playa.exceptions import PDFInterpreterError
 from playa.parser import LIT, PDFObject, PSLiteral
-from playa.pdftypes import float_value, list_value, literal_name, stream_value
+from playa.pdftypes import num_value, list_value, literal_name, stream_value
 
 LITERAL_DEVICE_GRAY = LIT("DeviceGray")
 LITERAL_DEVICE_RGB = LIT("DeviceRGB")
@@ -59,7 +59,7 @@ class ColorSpace(NamedTuple):
         cc: List[float] = []
         for x in components[0 : self.ncomponents]:
             try:
-                cc.append(float_value(x))
+                cc.append(num_value(x))
             except TypeError:
                 cc.append(0.0)
         while len(cc) < self.ncomponents:
