@@ -1,5 +1,5 @@
 [build-system]
-requires = ["hatchling", "hatch-vcs"]
+requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
@@ -10,7 +10,6 @@ readme = "README.md"
 license = "MIT"
 requires-python = ">=3.8"
 authors = [
-    { name = "Yusuke Shinyama + Philippe Guglielmetti", email = "pdfminer@goulu.net" },
     { name = "David Huggins-Daines", email = "dhd@ecolingui.ca" },
 ]
 keywords = [
@@ -47,19 +46,8 @@ path = "playa/__init__.py"
 [tool.hatch.build.targets.wheel]
 packages = ["playa"]
 
-[tool.ruff]
-namespace-packages = ["playa"]
-# Restore sane defaults instead of hatch madness
-line-length = 88
-
-[tool.ruff.lint]
-# Restore sane defaults instead of hatch madness
-select = ["E4", "E7", "E9", "F"]
-extend-select = [
-    "W",  # pycodestyle warnings
-    "I",  # isort
-    "TID"  # flake8 tidy imports
-]
+[tool.hatch.envs.hatch-static-analysis]
+config-path = "none"  # Disable hatch's unreasonable ruff defaults
 
 [tool.ruff.lint.flake8-tidy-imports]
 ban-relative-imports = "all"

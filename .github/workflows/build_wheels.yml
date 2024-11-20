@@ -1,4 +1,4 @@
-name: Build
+name: Release
 
 on:
   workflow_dispatch:
@@ -13,7 +13,7 @@ jobs:
     permissions:
       id-token: write
     # Comment this line for testing
-    # if: github.event_name == 'release' && github.event.action == 'published'
+    if: github.event_name == 'release' && github.event.action == 'published'
     steps:
       - uses: actions/checkout@v4
         with:
@@ -22,5 +22,5 @@ jobs:
         run: pipx run build --sdist
       - uses: pypa/gh-action-pypi-publish@release/v1
         # Uncomment these lines for testing
-        with:
-          repository-url: https://test.pypi.org/legacy/
+        # with:
+        #   repository-url: https://test.pypi.org/legacy/
