@@ -251,7 +251,7 @@ for subpath in path:
 
 Since most PDFs consist primarily of text, obviously you may wish to
 know something about the actual text (or the `ActualText`, which you
-can sometimes find in `obj.mcs.tag.attrs["ActualText"]`).  This is
+can sometimes find in `obj.mcs.tag.props["ActualText"]`).  This is
 more difficult than it looks, as fundamentally PDF just positions
 arbitrarily numbered glyphs on a page, and the vast majority of PDFs
 embed their own fonts, using *subsetting* to include only the glyphs
