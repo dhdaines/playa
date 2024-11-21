@@ -267,6 +267,12 @@ class DashPattern(NamedTuple):
     dash: List[float]
     phase: float
 
+    def __str__(self):
+        if len(self.dash) == 0:
+            return ""
+        else:
+            return f"{self.dash} {self.phase}"
+
 
 @dataclass
 class GraphicState:
