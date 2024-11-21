@@ -1,4 +1,4 @@
-# **P**LAYA-PDF is a **LA**z*Y** **A**nalyzer for **PDF** 🏖️
+# **P**LAYA-PDF is a **LA**z**Y** **A**nalyzer for **PDF** 🏖️
 
 ## About
 
