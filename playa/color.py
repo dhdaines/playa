@@ -1,4 +1,3 @@
-import collections
 from typing import Dict, List, NamedTuple, Union, Tuple
 
 from playa.exceptions import PDFInterpreterError
@@ -14,7 +13,9 @@ LITERAL_INLINE_DEVICE_RGB = LIT("RGB")
 LITERAL_INLINE_DEVICE_CMYK = LIT("CMYK")
 
 
-Color = Tuple[Union[int, float, PSLiteral], ...]
+ColorValue = Union[int, float, PSLiteral]
+Color = Union[ColorValue, Tuple[ColorValue, ...]]
+PREDEFINED_COLORSPACE: Dict[str, "ColorSpace"] = {}
 
 
 class ColorSpace(NamedTuple):
@@ -40,11 +41,16 @@ class ColorSpace(NamedTuple):
             cc.append(0)
         return tuple(cc)
 
+    def __str__(self):
+        # FIXME: do patterns too
+        if self.name in PREDEFINED_COLORSPACE:
+            return self.name
+        else:
+            return f"{self.name}({self.ncomponents})"
 
-PREDEFINED_COLORSPACE: Dict[str, ColorSpace] = collections.OrderedDict()
 
 for name, n in [
-    ("DeviceGray", 1),  # default value first
+    ("DeviceGray", 1),
     ("CalRGB", 3),
     ("CalGray", 1),
     ("Lab", 3),

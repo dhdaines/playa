@@ -282,11 +282,11 @@ class GraphicState:
     intent: Optional[object] = None
     flatness: Optional[object] = None
     # stroking color
-    scolor: Color = (0,)
+    scolor: Color = 0
     # stroking color space
     scs: ColorSpace = PREDEFINED_COLORSPACE["DeviceGray"]
     # non stroking color
-    ncolor: Color = (0,)
+    ncolor: Color = 0
     # non stroking color space
     ncs: ColorSpace = PREDEFINED_COLORSPACE["DeviceGray"]
 
