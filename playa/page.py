@@ -1091,7 +1091,9 @@ class PageInterpreter(BaseInterpreter):
         # key ColorSpace. In this case, the colour space array or name
         # shall always be defined directly as a PDF object.
         colorspace = stream.get_any(("CS", "ColorSpace"))
-        colorspace = None if colorspace is None else get_colorspace(resolve1(colorspace))
+        colorspace = (
+            None if colorspace is None else get_colorspace(resolve1(colorspace))
+        )
         # PDF 1.7 sec 8.3.24: All images shall be 1 unit wide by 1
         # unit high in user space, regardless of the number of samples
         # in the image. To be painted, an image shall be mapped to a
@@ -1443,7 +1445,7 @@ class ImageObject(ContentObject):
     bits: int
     imagemask: bool
     stream: ContentStream
-    colorspace: List[ColorSpace]
+    colorspace: Union[ColorSpace, None]
 
     @property
     def bbox(self) -> Rect:
@@ -2025,7 +2027,9 @@ class LazyInterpreter(BaseInterpreter):
 
     def render_image(self, name: str, stream: ContentStream) -> ContentObject:
         colorspace = stream.get_any(("CS", "ColorSpace"))
-        colorspace = None if colorspace is None else get_colorspace(resolve1(colorspace))
+        colorspace = (
+            None if colorspace is None else get_colorspace(resolve1(colorspace))
+        )
         return self.create(
             ImageObject,
             stream=stream,
