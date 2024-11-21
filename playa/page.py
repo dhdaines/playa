@@ -2025,11 +2025,7 @@ class LazyInterpreter(BaseInterpreter):
 
     def render_image(self, name: str, stream: ContentStream) -> ContentObject:
         colorspace = stream.get_any(("CS", "ColorSpace"))
-        if not isinstance(colorspace, list):
-            colorspace = [colorspace]
-        colorspace = [
-            get_colorspace(resolve1(spec)) for spec in colorspace if spec is not None
-        ]
+        colorspace = None if colorspace is None else get_colorspace(resolve1(colorspace))
         return self.create(
             ImageObject,
             stream=stream,

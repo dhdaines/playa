@@ -27,7 +27,7 @@ def test_content_objects():
     with playa.open(TESTDIR / "2023-06-20-PV.pdf") as pdf:
         page = pdf.pages[0]
         img = next(obj for obj in page.objects if obj.object_type == "image")
-        assert tuple(img.colorspace[0]) == ("ICCBased", 3)
+        assert tuple(img.colorspace) == ("ICCBased", 3)
         ibbox = [round(x) for x in img.bbox]
         assert ibbox == [254, 899, 358, 973]
         mcs_bbox = img.mcs.props["BBox"]
