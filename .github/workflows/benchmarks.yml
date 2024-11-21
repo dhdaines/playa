@@ -18,4 +18,4 @@ jobs:
         uses: pypa/hatch@install
       - name: Run benchmarks
         run: |
-          hatch run bench:all
+          hatch run bench
