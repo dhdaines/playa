@@ -319,7 +319,7 @@ class LayoutObject(TypedDict, total=False):
     matrix: Matrix
     upright: bool
     fontname: str
-    colorspace: List[ColorSpace]  # for images
+    colorspace: Union[ColorSpace, None]  # for images (can be none unlike graphics)
     ncs: ColorSpace  # for text/paths
     scs: ColorSpace  # for text/paths
     evenodd: bool
@@ -1085,9 +1085,13 @@ class PageInterpreter(BaseInterpreter):
             pass
 
     def render_image(self, name: str, stream: ContentStream) -> LayoutObject:
+        # PDF 1.7 sec 8.6.3: Outside a content stream, certain
+        # objects, such as image XObjects, shall specify a colour
+        # space as an explicit parameter, often associated with the
+        # key ColorSpace. In this case, the colour space array or name
+        # shall always be defined directly as a PDF object.
         colorspace = stream.get_any(("CS", "ColorSpace"))
-        if not isinstance(colorspace, list):
-            colorspace = [colorspace]
+        colorspace = None if colorspace is None else get_colorspace(resolve1(colorspace))
         # PDF 1.7 sec 8.3.24: All images shall be 1 unit wide by 1
         # unit high in user space, regardless of the number of samples
         # in the image. To be painted, an image shall be mapped to a
@@ -1111,6 +1115,9 @@ class PageInterpreter(BaseInterpreter):
             srcsize=(stream.get_any(("W", "Width")), stream.get_any(("H", "Height"))),
             imagemask=stream.get_any(("IM", "ImageMask")),
             bits=stream.get_any(("BPC", "BitsPerComponent"), 1),
+            # PDF 1.7 Tabe 89: Required for images, except those that
+            # use the JPXDecode filter; not allowed forbidden for
+            # image masks.
             colorspace=colorspace,
         )
 
