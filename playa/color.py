@@ -77,7 +77,9 @@ def get_colorspace(spec: PDFObject) -> Union[ColorSpace, None]:
         elif name == "Pattern" and len(spec) == 2:
             # Uncoloured tiling patterns (PDF 1.7 sec 8.7.3.3)
             if spec[1] is LITERAL_PATTERN:
-                raise ValueError("Underlying colour space cannot be /Pattern: %r" % (spec,))
+                raise ValueError(
+                    "Underlying colour space cannot be /Pattern: %r" % (spec,)
+                )
             underlying = get_colorspace(spec[1])
             if underlying is None:
                 raise ValueError("Unrecognized underlying colour space: %r", (spec,))

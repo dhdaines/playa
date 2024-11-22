@@ -12,7 +12,13 @@ import playa
 def make_argparse() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("pdfs", nargs="+", type=Path)
-    parser.add_argument("-o", "--outfile", help="File to write output CSV (or - for standard output)", type=argparse.FileType("wt"), default="-")
+    parser.add_argument(
+        "-o",
+        "--outfile",
+        help="File to write output CSV (or - for standard output)",
+        type=argparse.FileType("wt"),
+        default="-",
+    )
     return parser
 
 
@@ -27,5 +33,5 @@ def main() -> None:
                 writer.writerow(dic)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
