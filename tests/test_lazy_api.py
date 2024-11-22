@@ -7,6 +7,8 @@ from pathlib import Path
 import pytest
 
 import playa
+from playa.parser import LIT
+from playa.color import PREDEFINED_COLORSPACE
 
 TESTDIR = Path(__file__).parent.parent / "samples"
 ALLPDFS = TESTDIR.glob("**/*.pdf")
@@ -27,7 +29,8 @@ def test_content_objects():
     with playa.open(TESTDIR / "2023-06-20-PV.pdf") as pdf:
         page = pdf.pages[0]
         img = next(obj for obj in page.objects if obj.object_type == "image")
-        assert tuple(img.colorspace) == ("ICCBased", 3)
+        assert img.colorspace.name == "ICCBased"
+        assert img.colorspace.ncomponents == 3
         ibbox = [round(x) for x in img.bbox]
         assert ibbox == [254, 899, 358, 973]
         mcs_bbox = img.mcs.props["BBox"]
@@ -70,6 +73,23 @@ def test_open_lazy(path: Path) -> None:
             for page in doc.pages:
                 for obj in page.objects:
                     beach.append((obj.object_type, obj.bbox))
+
+
+def test_uncoloured_tiling() -> None:
+    """Verify that we handle uncoloured tiling patterns correctly."""
+    with playa.open(TESTDIR / "uncoloured-tiling-pattern.pdf") as pdf:
+        paths = pdf.pages[0].paths
+        path = next(paths)
+        assert path.gstate.ncs == PREDEFINED_COLORSPACE["DeviceRGB"]
+        assert path.gstate.ncolor == (1.0, 1.0, 0.0)
+        path = next(paths)
+        assert path.gstate.ncolor == (0.77, 0.2, 0.0, LIT("P1"))
+        path = next(paths)
+        assert path.gstate.ncolor == (0.2, 0.8, 0.4, LIT("P1"))
+        path = next(paths)
+        assert path.gstate.ncolor == (0.3, 0.7, 1.0, LIT("P1"))
+        path = next(paths)
+        assert path.gstate.ncolor == (0.5, 0.2, 1.0, LIT("P1"))
 
 
 if __name__ == "__main__":

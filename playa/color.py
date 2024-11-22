@@ -7,6 +7,7 @@ from playa.pdftypes import num_value, list_value, literal_name, stream_value
 LITERAL_DEVICE_GRAY = LIT("DeviceGray")
 LITERAL_DEVICE_RGB = LIT("DeviceRGB")
 LITERAL_DEVICE_CMYK = LIT("DeviceCMYK")
+LITERAL_PATTERN = LIT("Pattern")
 # Abbreviations for inline images
 LITERAL_INLINE_DEVICE_GRAY = LIT("G")
 LITERAL_INLINE_DEVICE_RGB = LIT("RGB")
@@ -14,13 +15,14 @@ LITERAL_INLINE_DEVICE_CMYK = LIT("CMYK")
 
 
 ColorValue = Union[int, float, PSLiteral]
-Color = Union[ColorValue, Tuple[ColorValue, ...]]
+Color = Tuple[ColorValue, ...]
 PREDEFINED_COLORSPACE: Dict[str, "ColorSpace"] = {}
 
 
 class ColorSpace(NamedTuple):
     name: str
     ncomponents: int
+    spec: PDFObject = None
 
     def make_color(self, *components) -> Color:
         if len(components) != self.ncomponents:
@@ -28,15 +30,15 @@ class ColorSpace(NamedTuple):
                 "%s requires %d components, got %d!"
                 % (self.name, self.ncomponents, len(components))
             )
-        # FIXME: Uncolored patterns (PDF 1.7 sec 8.7.3.3) are not supported
-        if isinstance(components[0], PSLiteral):
-            return tuple(components)
-        cc: List[float] = []
+        cc: List[ColorValue] = []
         for x in components[0 : self.ncomponents]:
-            try:
-                cc.append(num_value(x))
-            except TypeError:
-                cc.append(0)
+            if isinstance(x, PSLiteral):
+                cc.append(x)
+            else:
+                try:
+                    cc.append(num_value(x))
+                except TypeError:
+                    cc.append(0)
         while len(cc) < self.ncomponents:
             cc.append(0)
         return tuple(cc)
@@ -66,11 +68,27 @@ for name, n in [
 def get_colorspace(spec: PDFObject) -> Union[ColorSpace, None]:
     if isinstance(spec, list):
         name = literal_name(spec[0])
+        if name == "ICCBased" and len(spec) >= 2:
+            return ColorSpace(name, stream_value(spec[1])["N"], spec)
+        elif name == "DeviceN" and len(spec) >= 2:
+            # DeviceN colour spaces (PDF 1.7 sec 8.6.6.5)
+
+            return ColorSpace(name, len(list_value(spec[1])), spec)
+        elif name == "Pattern" and len(spec) == 2:
+            # Uncoloured tiling patterns (PDF 1.7 sec 8.7.3.3)
+            if spec[1] is LITERAL_PATTERN:
+                raise ValueError("Underlying colour space cannot be /Pattern: %r" % (spec,))
+            underlying = get_colorspace(spec[1])
+            if underlying is None:
+                raise ValueError("Unrecognized underlying colour space: %r", (spec,))
+            # Not super important what we call it but we need to know it
+            # has N+1 "components" (the last one being the pattern)
+            return ColorSpace(name, underlying.ncomponents + 1, spec)
+        else:
+            cs = PREDEFINED_COLORSPACE.get(name)
+            if cs is None:
+                return None
+            return ColorSpace(cs.name, cs.ncomponents, spec)
     else:
         name = literal_name(spec)
-    if name == "ICCBased" and isinstance(spec, list) and len(spec) >= 2:
-        return ColorSpace(name, stream_value(spec[1])["N"])
-    elif name == "DeviceN" and isinstance(spec, list) and len(spec) >= 2:
-        return ColorSpace(name, len(list_value(spec[1])))
-    else:
         return PREDEFINED_COLORSPACE.get(name)

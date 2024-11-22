@@ -1,0 +1,136 @@
+%PDF-1.7
+% Example of uncolored tiling pattern from PDF 1.7 section 8.7.3.3
+1 0 obj
+<<
+ /Type /Catalog
+ /Pages 3 0 R
+>>
+endobj
+3 0 obj
+<<
+ /Type /Pages
+ /Kids [ 5 0 R ]
+ /Count 1
+>>
+endobj
+5 0 obj
+<< /Type /Page
+/Parent 2 0 R
+/Resources 10 0 R
+/Contents 30 0 R
+/CropBox [ 0 0 225 225 ]
+>>
+endobj% Page object
+10 0 obj
+<< /ColorSpace << /Cs12 12 0 R >>
+/Pattern << /P1 15 0 R >>
+>>
+endobj% Resource dictionary for page
+12 0 obj
+[ /Pattern /DeviceRGB ]
+endobj%Colour space
+15 0 obj
+<< /Type /Pattern
+/PatternType 1
+/PaintType 2
+/TilingType 2
+/BBox [ 0 0 100 100 ]
+/XStep 100
+/YStep 100
+/Resources 16 0 R
+/Matrix [ 0.4 0.0 0.0 0.4 0.0 0.0 ]
+/Length 127
+>>% Pattern definition
+stream
+BT
+% Tiling pattern
+% Uncoloured
+/F1 1 Tf
+64 0 0 64 7.1771 2.4414 Tm
+0 Tc
+0 Tw% Begin text object
+% Set text font and size
+% Set text matrix
+% Set character spacing
+% Set word spacing
+( \001 ) Tj% Show spade glyph
+0.7478 -0.007 TD
+( \002 ) Tj% Move text position
+% Show heart glyph
+-0.7323 0.7813 TD
+( \003 ) Tj% Move text position
+% Show diamond glyph
+0.6913 0.007 TD
+( \004 ) Tj% Move text position
+% Show club glyph
+% End text object
+ET
+endstream
+endobj
+16 0 obj
+<< /Font << /F1 20 0 R >>
+>>
+endobj% Resource dictionary for pattern
+20 0 obj
+<< /Type /Font
+/Subtype /Type1
+/Encoding 21 0 R
+/BaseFont /ZapfDingbats
+>>
+endobj% Font for pattern
+21 0 obj
+<< /Type /Encoding
+/Differences [ 1 /a109 /a110 /a111 /a112 ]
+>>
+endobj% Font encoding
+30 0 obj
+<< /Length 1038 >>
+stream
+0.0 G
+1.0 1.0 0.0 rg
+25 175 175 -150 re
+f% Contents of page
+% Set stroking colour to black
+% Set nonstroking colour to yellow
+% Construct rectangular path
+% Fill path
+/Cs12 cs
+0.77 0.20 0.00 /P1 scn
+99.92 49.92 m
+99.92 77.52 77.52 99.92 49.92 99.92 c
+22.32 99.92 -0.08 77.52 -0.08 49.92 c
+-0.08 22.32 22.32 -0.08 49.92 -0.08 c
+77.52 -0.08 99.92 22.32 99.92 49.92 c% Set pattern colour space
+% Set nonstroking colour and pattern
+% Start new path
+% Construct lower-left circle
+B% Fill and stroke path
+0.2 0.8 0.4 /P1 scn
+224.96 49.92 m
+224.96 77.52 202.56 99.92 174.96 99.92 c
+147.36 99.92 124.96 77.52 124.96 49.92 c
+124.96 22.32 147.36 -0.08 174.96 -0.08 c
+202.56 -0.08 224.96 22.32 224.96 49.92 c
+B% Change nonstroking colour
+% Start new path
+% Construct lower-right circle
+0.3 0.7 1.0 /P1 scn
+87.56 201.70 m
+63.66 187.90 55.46 157.30 69.26 133.40 c
+83.06 109.50 113.66 101.30 137.56 115.10 c
+161.46 128.90 169.66 159.50 155.86 183.40 c
+142.06 207.30 111.46 215.50 87.56 201.70 c
+B
+0.5 0.2 1.0 /P1 scn
+50 50 m
+175 50 l
+112.5 158.253 l
+b
+endstream
+endobj
+trailer 
+<<
+ /Size 8
+ /Root 1 0 R
+>>
+%%EOF
