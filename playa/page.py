@@ -161,6 +161,21 @@ class Page:
         return iter(LazyInterpreter(self))
 
     @property
+    def paths(self) -> Iterator["PathObject"]:
+        """Iterator over lazy path objects."""
+        return (obj for obj in LazyInterpreter(self) if isinstance(obj, PathObject))
+
+    @property
+    def images(self) -> Iterator["ImageObject"]:
+        """Iterator over lazy image objects."""
+        return (obj for obj in LazyInterpreter(self) if isinstance(obj, ImageObject))
+
+    @property
+    def texts(self) -> Iterator["TextObject"]:
+        """Iterator over lazy text objects."""
+        return (obj for obj in LazyInterpreter(self) if isinstance(obj, TextObject))
+
+    @property
     def layout(self) -> Iterator["LayoutObject"]:
         """Iterator over eager layout object dictionaries."""
         return iter(PageInterpreter(self))
