@@ -38,6 +38,9 @@ dependencies = [
 [project.urls]
 Homepage = "https://dhdaines.github.io/playa"
 
+[project.scripts]
+playa = "playa.cli:main"
+
 [tool.hatch.version]
 path = "playa/__init__.py"
 
