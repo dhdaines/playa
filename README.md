@@ -200,7 +200,7 @@ If you have more specific needs or want better performance, then read on.
 
 Fundamentally you may just want to know *what* is *where* on the page,
 and PLAYA has you covered there (note that the bbox is normalized, and
-in PDF device space):
+in the aforementioned interpretation of "device space"):
 
 ```python
 for obj in page.objects:
@@ -261,7 +261,7 @@ for seg in path.raw_segments:
    print(f"segment: {seg}")
 ```
 
-Or in device space (not so fast):
+Or in PLAYA's "device space" (not so fast):
 
 ```python
 for seg in path.segments:
