@@ -33,6 +33,28 @@ or newer:
 
 Yes it's not just "playa".  Sorry about that.
 
+## An important note about coordinate spaces
+
+Wait, what is this "absolute position" of which you speak, and which
+PLAYA gives you?  It's important to understand that there is no
+definition of "device space" in the PDF standard, and I quote (PDF 1.7
+sec 8.3.2.2):
+
+> A particular device’s coordinate system is called its device
+space. The origin of the device space on different devices can fall in
+different places on the output page; on displays, the origin can vary
+depending on the window system. Because the paper or other output
+medium moves through different printers and imagesetters in different
+directions, the axes of their device spaces may be oriented
+differently.
+
+PLAYA considers this to mean:
+
+- Units are default user space units (1/72 of an inch)
+- `(0, 0)` is the bottom-left corner of the page (as defined by its
+  `MediaBox`) after rotation is applied
+- The axes are oriented according to the page rotation
+
 ## Usage
 
 Do you want to get stuff out of a PDF?  You have come to the right
@@ -134,9 +156,8 @@ If, on the other hand, **you** are lazy, then you can just use
 `page.layout`, which will flatten everything for you into a friendly
 dictionary representation (but it is a
 [`TypedDict`](https://typing.readthedocs.io/en/latest/spec/typeddict.html#typeddict))
-which, um, looks a lot like what `pdfplumber` gives you, except in PDF
-device coordinate space, meaning `(0, 0)` is the bottom-left and not
-the top-left of the page:
+which, um, looks a lot like what `pdfplumber` gives you, except in the
+coordinate space defined previously.
 
 ```python
 for dic in page.layout:

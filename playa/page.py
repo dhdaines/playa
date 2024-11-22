@@ -455,16 +455,28 @@ class BaseInterpreter:
         self.page = page
         self.contents = page.contents if contents is None else contents
         (x0, y0, x1, y1) = page.mediabox
-        # FIXME: NO, this is bad, pdfplumber has a bug related to it
-        # (specifically the translation, the rotation is kind of okay
-        # it seems)
+        # NOTE: PLAYA, like pdfminer.six, defines its device space as
+        # being the extent of MediaBox for any given page, after
+        # Rotation is applied.  pdfplumber has different ideas though:
+        # (https://github.com/jsvine/pdfplumber/issues/1181).
+        #
+        # PDF 1.7 section 8.4.1: Initial value: a matrix that
+        # transforms default user coordinates to device coordinates
         if page.rotate == 90:
+            # x' = y - y0
+            # y' = x1 - x
             ctm = (0, -1, 1, 0, -y0, x1)
         elif page.rotate == 180:
+            # x' = x1 - x
+            # y' = y1 - y
             ctm = (-1, 0, 0, -1, x1, y1)
         elif page.rotate == 270:
+            # x' = y1 - y
+            # y' = x - x0
             ctm = (0, 1, -1, 0, y1, -x0)
         else:
+            # x' = x - x0
+            # y' = y - y0
             ctm = (1, 0, 0, 1, -x0, -y0)
         self.init_resources(page, page.resources if resources is None else resources)
         self.init_state(ctm)
