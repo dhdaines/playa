@@ -325,37 +325,35 @@ class LayoutObject(TypedDict, total=False):
     """
 
     object_type: str
-    adv: float
-    height: float
-    linewidth: float
-    pts: List[Point]
+    mcid: Union[int, None]
+    tag: Union[str, None]
+    text: str
+    fontname: str
     size: float
-    srcsize: Tuple[int, int]
-    width: float
-    x0: float
-    x1: float
-    y0: float
-    y1: float
-    bits: int
+    adv: float
     matrix: Matrix
     upright: bool
-    fontname: str
-    colorspace: Union[ColorSpace, None]  # for images (can be none unlike graphics)
-    ncs: ColorSpace  # for text/paths
+    x0: float
+    y0: float
+    x1: float
+    y1: float
     scs: ColorSpace  # for text/paths
+    stroking_color: Color
+    ncs: ColorSpace  # for text/paths
+    non_stroking_color: Color
+    path: List[Tuple]
+    dash: DashPattern
     evenodd: bool
     stroke: bool
     fill: bool
-    stroking_color: Color
-    non_stroking_color: Color
-    stream: ContentStream
-    text: str
-    imagemask: bool
+    linewidth: float
+    pts: List[Point]
     name: str
-    mcid: Union[int, None]
-    tag: Union[str, None]
-    path: List[Tuple]
-    dash: DashPattern
+    stream: ContentStream
+    imagemask: bool
+    colorspace: Union[ColorSpace, None]  # for images (can be none unlike graphics)
+    srcsize: Tuple[int, int]
+    bits: int
 
 
 class ContentParser(ObjectParser):
@@ -1141,9 +1139,6 @@ class PageInterpreter(BaseInterpreter):
             y0=y0,
             x1=x1,
             y1=y1,
-            width=x1 - x0,
-            height=y1 - y0,
-            stream=stream,
             name=name,
             mcid=None if self.mcs is None else self.mcs.mcid,
             tag=None if self.mcs is None else self.mcs.tag,
@@ -1223,8 +1218,6 @@ class PageInterpreter(BaseInterpreter):
                     y0=y0,
                     x1=x1,
                     y1=y1,
-                    width=x1 - x0,
-                    height=y1 - y0,
                     mcid=None if self.mcs is None else self.mcs.mcid,
                     tag=None if self.mcs is None else self.mcs.tag,
                     path=transformed_path,
@@ -1258,8 +1251,6 @@ class PageInterpreter(BaseInterpreter):
                         y0=y0,
                         x1=x2,
                         y1=y2,
-                        width=x2 - x0,
-                        height=y2 - y0,
                         mcid=None if self.mcs is None else self.mcs.mcid,
                         tag=None if self.mcs is None else self.mcs.tag,
                         path=transformed_path,
@@ -1282,8 +1273,6 @@ class PageInterpreter(BaseInterpreter):
                         y0=y0,
                         x1=x1,
                         y1=y1,
-                        width=x1 - x0,
-                        height=y1 - y0,
                         mcid=None if self.mcs is None else self.mcs.mcid,
                         tag=None if self.mcs is None else self.mcs.tag,
                         path=transformed_path,
@@ -1306,8 +1295,6 @@ class PageInterpreter(BaseInterpreter):
                     y0=y0,
                     x1=x1,
                     y1=y1,
-                    width=x1 - x0,
-                    height=y1 - y0,
                     mcid=None if self.mcs is None else self.mcs.mcid,
                     tag=None if self.mcs is None else self.mcs.tag,
                     path=transformed_path,
@@ -1378,8 +1365,6 @@ class PageInterpreter(BaseInterpreter):
             y0=y0,
             x1=x1,
             y1=y1,
-            width=x1 - x0,
-            height=y1 - y0,
             size=size,
             adv=adv,
             upright=upright,
