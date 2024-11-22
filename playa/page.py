@@ -64,6 +64,7 @@ from playa.utils import (
     make_compat_bytes,
     mult_matrix,
     parse_rect,
+    normalize_rect,
     translate_matrix,
 )
 
@@ -121,8 +122,8 @@ class Page:
             self.attrs.get("Resources", dict()),
         )
         if "MediaBox" in self.attrs:
-            self.mediabox = parse_rect(
-                resolve1(val) for val in resolve1(self.attrs["MediaBox"])
+            self.mediabox = normalize_rect(
+                parse_rect(resolve1(val) for val in resolve1(self.attrs["MediaBox"]))
             )
         else:
             log.warning(
@@ -133,8 +134,8 @@ class Page:
         self.cropbox = self.mediabox
         if "CropBox" in self.attrs:
             try:
-                self.cropbox = parse_rect(
-                    resolve1(val) for val in resolve1(self.attrs["CropBox"])
+                self.cropbox = normalize_rect(
+                    parse_rect(resolve1(val) for val in resolve1(self.attrs["CropBox"]))
                 )
             except ValueError:
                 log.warning("Invalid CropBox in /Page, defaulting to MediaBox")

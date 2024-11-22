@@ -167,6 +167,15 @@ def parse_rect(o: Any) -> Rect:
         raise PDFSyntaxError("Rectangle contains non-numeric values")
 
 
+def normalize_rect(r: Rect) -> Rect:
+    (x0, y0, x1, y1) = r
+    if x1 < x0:
+        x1, x0 = x1, x0
+    if y1 < y0:
+        y1, y0 = y0, y1
+    return x0, y0, x1, y1
+
+
 def mult_matrix(m1: Matrix, m0: Matrix) -> Matrix:
     (a1, b1, c1, d1, e1, f1) = m1
     (a0, b0, c0, d0, e0, f0) = m0
