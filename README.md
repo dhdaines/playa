@@ -50,10 +50,18 @@ differently.
 
 PLAYA considers this to mean:
 
-- Units are default user space units (1/72 of an inch)
-- `(0, 0)` is the bottom-left corner of the page (as defined by its
-  `MediaBox`) after rotation is applied
-- The axes are oriented according to the page rotation
+- Units are default user space units (1/72 of an inch).
+- `(0, 0)` is the bottom-left corner of the page, whose size is
+  defined by its `MediaBox` after rotation is applied.
+- Coordinates increase from the bottom-left corner of the page.
+
+Concretely this means that if you have a weird PDF created by a weird
+PDF tool that thinks `MediaBox` is the same thing as `CropBox` (which
+it isn't, even though it may seem so at first glance) and creates a
+`MediaBox` with an origin that isn't `(0, 0)`, you won't get quite the
+same output coordinates as you would with another library that
+considers device space to just be default user space (presumably after
+rotation).
 
 ## Usage
 
