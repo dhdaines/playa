@@ -937,10 +937,10 @@ class BaseInterpreter:
         """Begin marked-content sequence"""
         self.begin_tag(tag, {})
 
-    def get_property(self, prop: PSLiteral) -> Union[PDFObject, None]:
+    def get_property(self, prop: PSLiteral) -> Union[Dict, None]:
         if "Properties" in self.resources:
             props = dict_value(self.resources["Properties"])
-            return props.get(prop.name)
+            return dict_value(props.get(prop.name))
         return None
 
     def do_BDC(self, tag: PDFObject, props: PDFObject) -> None:
@@ -952,10 +952,18 @@ class BaseInterpreter:
         # resource dictionary (see 7.8.3, “Resource Dictionaries”) and
         # referenced by name as the properties operand of the DP or
         # BDC operat
+
+        if not isinstance(tag, PSLiteral):
+            log.warning("Tag %r is not a name object, ignoring", tag)
+            return
         if isinstance(props, PSLiteral):
-            props = self.get_property(props)
-        rprops = dict_value(props)
-        self.begin_tag(tag, rprops)
+            propdict = self.get_property(props)
+            if propdict is None:
+                log.warning("Missing property list in tag %r: %r", tag, props)
+                propdict = {}
+        else:
+            propdict = dict_value(props)
+        self.begin_tag(tag, propdict)
 
     def do_MP(self, tag: PDFObject) -> None:
         """Define marked-content point"""
