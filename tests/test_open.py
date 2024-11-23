@@ -59,7 +59,7 @@ def test_open(path: Path) -> None:
                 continue
 
         beach = []
-        with playa.open(path, password=password) as doc:
+        with playa.open(path, password=password, space="page") as doc:
             for page in doc.pages:
                 for item in page.layout:
                     bbox = (item["x0"], item["y0"], item["x1"], item["y1"])

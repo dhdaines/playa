@@ -18,15 +18,18 @@ from os import PathLike
 from typing import Union
 
 from playa.document import Document, LayoutObject
+from playa.page import DeviceSpace
 
 __version__ = "0.2"
 
 fieldnames = list(LayoutObject.__annotations__.keys())
 
 
-def open(path: Union[PathLike, str], password: str = "") -> Document:
+def open(
+    path: Union[PathLike, str], password: str = "", space: DeviceSpace = "screen"
+) -> Document:
     """Open a PDF document from a path on the filesystem."""
     fp = builtins.open(path, "rb")
-    pdf = Document(fp, password)
+    pdf = Document(fp, password=password, space=space)
     pdf._fp = fp
     return pdf

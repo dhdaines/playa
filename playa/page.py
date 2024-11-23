@@ -79,6 +79,7 @@ LITERAL_PAGES = LIT("Pages")
 LITERAL_FORM = LIT("Form")
 LITERAL_IMAGE = LIT("Image")
 TextSeq = Iterable[Union[int, float, bytes]]
+DeviceSpace = Literal["page", "screen"]
 
 
 class Page:
@@ -90,6 +91,7 @@ class Page:
       attrs: a dictionary of page attributes.
       label: page label string.
       page_idx: 0-based index of the page in the document.
+      space: the device space to use for interpreting content ("screen" or "page")
 
     Attributes:
       pageid: the integer object ID associated with the page in the page tree
@@ -111,12 +113,14 @@ class Page:
         attrs: Dict,
         label: Optional[str],
         page_idx: int = 0,
+        space: DeviceSpace = "screen",
     ) -> None:
         self.doc = weakref.ref(doc)
         self.pageid = pageid
         self.attrs = attrs
         self.label = label
         self.page_idx = page_idx
+        self.space = space
         self.lastmod = resolve1(self.attrs.get("LastModified"))
         self.resources: Dict[object, object] = resolve1(
             self.attrs.get("Resources", dict()),
@@ -150,6 +154,18 @@ class Page:
                 self.contents = [self.contents]
         else:
             self.contents = []
+
+    @property
+    def width(self) -> float:
+        """Width of the page in default user space units."""
+        x0, _, x1, _ = self.mediabox
+        return x1 - x0
+
+    @property
+    def height(self) -> float:
+        """Width of the page in default user space units."""
+        _, y0, _, y1 = self.mediabox
+        return y1 - y0
 
     def __iter__(self) -> Iterator[PDFObject]:
         """Iterator over PDF objects in the content streams."""
@@ -453,29 +469,36 @@ class BaseInterpreter:
         self.page = page
         self.contents = page.contents if contents is None else contents
         (x0, y0, x1, y1) = page.mediabox
-        # NOTE: PLAYA, like pdfminer.six, defines its device space as
-        # being the extent of MediaBox for any given page, after
-        # Rotation is applied.  pdfplumber has different ideas though:
-        # (https://github.com/jsvine/pdfplumber/issues/1181).
-        #
+        width = x1 - x0
+        height = y1 - y0
         # PDF 1.7 section 8.4.1: Initial value: a matrix that
-        # transforms default user coordinates to device coordinates
-        if page.rotate == 90:
-            # x' = y - y0
-            # y' = x1 - x
-            ctm = (0, -1, 1, 0, -y0, x1)
-        elif page.rotate == 180:
-            # x' = x1 - x
-            # y' = y1 - y
-            ctm = (-1, 0, 0, -1, x1, y1)
-        elif page.rotate == 270:
-            # x' = y1 - y
-            # y' = x - x0
-            ctm = (0, 1, -1, 0, y1, -x0)
+        # transforms default user coordinates to device coordinates.
+        #
+        # "screen" device space: origin is top left of MediaBox
+        if page.space == "screen":
+            ctm = (1., 0., 0., -1., -x0, height)
+        # "page" device space: origin is bottom left of MediaBox
+        elif page.space == "page":
+            ctm = (1., 0., 0., 1., -x0, -y0)
         else:
-            # x' = x - x0
-            # y' = y - y0
-            ctm = (1, 0, 0, 1, -x0, -y0)
+            log.warning("Unknown device space: %r", page.space)
+            ctm = MATRIX_IDENTITY
+            width = height = 0
+        # If rotation is requested, apply rotation to the initial ctm
+        if page.rotate == 90:
+            # x' = y
+            # y' = width - x
+            ctm = mult_matrix((0, -1, 1, 0, 0, width), ctm)
+        elif page.rotate == 180:
+            # x' = width - x
+            # y' = height - y
+            ctm = mult_matrix((-1, 0, 0, -1, width, height), ctm)
+        elif page.rotate == 270:
+            # x' = height - y
+            # y' = x
+            ctm = mult_matrix((0, 1, -1, 0, height, 0), ctm)
+        elif page.rotate != 0:
+            log.warning("Invalid /Rotate: %r", page.rotate)
         self.init_resources(page, page.resources if resources is None else resources)
         self.init_state(ctm)
 

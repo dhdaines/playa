@@ -26,7 +26,7 @@ PASSWORDS = {
 
 def test_content_objects():
     """Ensure that we can produce all the basic content objects."""
-    with playa.open(TESTDIR / "2023-06-20-PV.pdf") as pdf:
+    with playa.open(TESTDIR / "2023-06-20-PV.pdf", space="page") as pdf:
         page = pdf.pages[0]
         img = next(obj for obj in page.objects if obj.object_type == "image")
         assert img.colorspace.name == "ICCBased"

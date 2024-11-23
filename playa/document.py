@@ -40,7 +40,7 @@ from playa.exceptions import (
     PDFSyntaxError,
 )
 from playa.font import CIDFont, Font, PDFTrueTypeFont, Type1Font, Type3Font
-from playa.page import Page, LayoutObject as PageLayoutObject
+from playa.page import Page, LayoutObject as PageLayoutObject, DeviceSpace
 from playa.parser import (
     KEYWORD_OBJ,
     KEYWORD_TRAILER,
@@ -741,6 +741,8 @@ class Document:
       fp: File-like object in binary mode.  Will be read using
           `mmap` if possible, otherwise will be read into memory.
       password: Password for decryption, if needed.
+      space: the device space to use for interpreting content ("screen"
+             or "page")
 
     """
 
@@ -760,8 +762,10 @@ class Document:
         self,
         fp: BinaryIO,
         password: str = "",
+        space: DeviceSpace = "screen",
     ) -> None:
         self.xrefs: List[XRef] = []
+        self.space = space
         self.info = []
         self.catalog: Dict[str, Any] = {}
         self.encryption: Optional[Tuple[Any, Any]] = None
@@ -1264,7 +1268,7 @@ class PageList:
         except KeyError:
             itor = doc._get_pages_from_xrefs()
         for page_idx, ((objid, properties), label) in enumerate(zip(itor, page_labels)):
-            page = Page(doc, objid, properties, label, page_idx)
+            page = Page(doc, objid, properties, label, page_idx, doc.space)
             self._pages.append(page)
             if label is not None:
                 if label in self._labels:

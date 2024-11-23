@@ -33,36 +33,6 @@ or newer:
 
 Yes it's not just "playa".  Sorry about that.
 
-## An important note about coordinate spaces
-
-Wait, what is this "absolute position" of which you speak, and which
-PLAYA gives you?  It's important to understand that there is no
-definition of "device space" in the PDF standard, and I quote (PDF 1.7
-sec 8.3.2.2):
-
-> A particular device’s coordinate system is called its device
-space. The origin of the device space on different devices can fall in
-different places on the output page; on displays, the origin can vary
-depending on the window system. Because the paper or other output
-medium moves through different printers and imagesetters in different
-directions, the axes of their device spaces may be oriented
-differently.
-
-PLAYA considers this to mean:
-
-- Units are default user space units (1/72 of an inch).
-- `(0, 0)` is the bottom-left corner of the page, whose size is
-  defined by its `MediaBox` after rotation is applied.
-- Coordinates increase from the bottom-left corner of the page.
-
-Concretely this means that if you have a weird PDF created by a weird
-PDF tool that thinks `MediaBox` is the same thing as `CropBox` (which
-it isn't, even though it may seem so at first glance) and creates a
-`MediaBox` with an origin that isn't `(0, 0)`, you won't get quite the
-same output coordinates as you would with another library that
-considers device space to just be default user space (presumably after
-rotation).
-
 ## Usage
 
 Do you want to get stuff out of a PDF?  You have come to the right
@@ -196,6 +166,37 @@ FIXME: support Polars as well
 
 If you have more specific needs or want better performance, then read on.
 
+### An important note about coordinate spaces
+
+Wait, what is this "absolute position" of which you speak, and which
+PLAYA gives you?  It's important to understand that there is no
+definition of "device space" in the PDF standard, and I quote (PDF 1.7
+sec 8.3.2.2):
+
+> A particular device’s coordinate system is called its device
+space. The origin of the device space on different devices can fall in
+different places on the output page; on displays, the origin can vary
+depending on the window system. Because the paper or other output
+medium moves through different printers and imagesetters in different
+directions, the axes of their device spaces may be oriented
+differently.
+
+You may immediately think of CSS when you hear the phrase "absolute
+position" and this is exactly what PLAYA gives you as its default
+device space, specifically:
+
+- Units are default user space units (1/72 of an inch).
+- `(0, 0)` is the top-left corner of the page, as defined by its
+  `MediaBox` after rotation is applied.
+- Coordinates increase from the top-left corner of the page towards
+  the bottom-left corner.
+
+However, for compatibility with `pdfminer.six`, you can also pass
+`space="page"` to `playa.open`.  In this case, `(0, 0)` is the
+bottom-left corner of the page as defined by the `MediaBox`, after
+rotation, and coordinates increase from the bottom-left corner of the
+page towards the top-right, as they do in PDF user space.
+
 ### Lazy object API
 
 Fundamentally you may just want to know *what* is *where* on the page,
@@ -205,9 +206,9 @@ in the aforementioned interpretation of "device space"):
 ```python
 for obj in page.objects:
     print(f"{obj.object_type} at {obj.bbox}")
-    left, bottom, right, top = obj.bbox
-    print(f"  bottom left is {left, bottom}")
-    print(f"  top right is {right, top}")
+    left, top, right, bottom = obj.bbox
+    print(f"  top left is {left, top}")
+    print(f"  bottom right is {right, botom}")
 ```
 
 Another important piece of information (which `pdfminer.six` does not
