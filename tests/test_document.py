@@ -110,3 +110,12 @@ def test_outlines():
             "11.1 - Réso - Adop du règlement 1330-1",
             "15 - Résolution - Levée de la séance",
         ]
+
+
+def test_xobjects() -> None:
+    with playa.open(TESTDIR / "pdf.js" / "basicapi.pdf") as doc:
+        page = doc.pages[0]
+        xobj = next(page.xobjects)
+        assert xobj.subtype == "Form"
+        assert len(list(xobj.layout)) == 2
+        assert len(list(xobj.objects)) == 5

@@ -82,10 +82,82 @@ TextSeq = Iterable[Union[int, float, bytes]]
 DeviceSpace = Literal["page", "screen"]
 
 
-class XObject(NamedTuple):
-    """XObject in a page's resource dictionary"""
-    name: str
+@dataclass
+class PageContentStream:
+    page: weakref.ReferenceType
     stream: ContentStream
+
+    def __contains__(self, name: object) -> bool:
+        return name in self.stream
+
+    def __getitem__(self, name: str) -> PDFObject:
+        return self.stream[name]
+
+    @property
+    def buffer(self) -> bytes:
+        return self.stream.buffer
+
+    def __iter__(self) -> Iterator[PDFObject]:
+        """Iterator over PDF objects in the content streams."""
+        for pos, obj in ContentParser([self.stream]):
+            yield obj
+
+    @property
+    def tokens(self) -> Iterator[Token]:
+        """Iterator over tokens in the content streams."""
+        parser = ContentParser([self.stream])
+        while True:
+            try:
+                pos, tok = parser.nexttoken()
+            except StopIteration:
+                return
+            yield tok
+
+    @property
+    def layout(self) -> Iterator["LayoutObject"]:
+        """Iterator over eager layout object dictionaries."""
+        page = self.page()
+        if page is None:
+            raise RuntimeError("Page no longer exists!")
+        return iter(PageInterpreter(page, [self.stream]))
+
+    @property
+    def objects(self) -> Iterator["ContentObject"]:
+        """Iterator over lazy layout objects."""
+        page = self.page()
+        if page is None:
+            raise RuntimeError("Page no longer exists!")
+        return iter(LazyInterpreter(page, [self.stream]))
+
+
+@dataclass
+class XObject(PageContentStream):
+    name: str
+
+    @property
+    def subtype(self) -> str:
+        """Sub-type of this XObject"""
+        return literal_name(self.stream["Subtype"])
+
+    @property
+    def layout(self) -> Iterator["LayoutObject"]:
+        """Iterator over eager layout object dictionaries."""
+        page = self.page()
+        if page is None:
+            raise RuntimeError("Page no longer exists!")
+        xobjres = self.stream.get("Resources")
+        resources = None if xobjres is None else dict_value(xobjres)
+        return iter(PageInterpreter(page, [self.stream], resources))
+
+    @property
+    def objects(self) -> Iterator["ContentObject"]:
+        """Iterator over lazy layout objects."""
+        page = self.page()
+        if page is None:
+            raise RuntimeError("Page no longer exists!")
+        xobjres = self.stream.get("Resources")
+        resources = None if xobjres is None else dict_value(xobjres)
+        return iter(LazyInterpreter(page, [self.stream], resources))
 
 
 class Page:
@@ -128,7 +200,9 @@ class Page:
         self.page_idx = page_idx
         self.space = space
         self.lastmod = resolve1(self.attrs.get("LastModified"))
-        self.resources: Dict[str, PDFObject] = dict_value(self.attrs.get("Resources", {}))
+        self.resources: Dict[str, PDFObject] = dict_value(
+            self.attrs.get("Resources", {})
+        )
         if "MediaBox" in self.attrs:
             self.mediabox = normalize_rect(
                 parse_rect(resolve1(val) for val in resolve1(self.attrs["MediaBox"]))
@@ -160,17 +234,18 @@ class Page:
             self._contents = []
 
     @property
-    def contents(self) -> Iterator[ContentStream]:
+    def contents(self) -> Iterator[PageContentStream]:
         """Return resolved content streams."""
         for obj in self._contents:
-            yield stream_value(obj)
+            yield PageContentStream(page=weakref.ref(self), stream=stream_value(obj))
 
     @property
     def xobjects(self) -> Iterator[XObject]:
         """Return resolved XObjects."""
-        xobjects = dict_value(self.resources.get("XObject", {}))
-        for name, obj in xobjects.items():
-            yield XObject(name, stream_value(obj))
+        for name, stream in dict_value(self.resources.get("XObject", {})).items():
+            yield XObject(
+                page=weakref.ref(self), name=name, stream=stream_value(stream)
+            )
 
     @property
     def width(self) -> float:
@@ -186,38 +261,38 @@ class Page:
 
     def __iter__(self) -> Iterator[PDFObject]:
         """Iterator over PDF objects in the content streams."""
-        for pos, obj in ContentParser(self.contents):
+        for pos, obj in ContentParser(self._contents):
             yield obj
 
     @property
     def objects(self) -> Iterator["ContentObject"]:
         """Iterator over lazy layout objects."""
-        return iter(LazyInterpreter(self))
+        return iter(LazyInterpreter(self, self._contents))
 
     @property
     def paths(self) -> Iterator["PathObject"]:
         """Iterator over lazy path objects."""
-        return (obj for obj in LazyInterpreter(self) if isinstance(obj, PathObject))
+        return (obj for obj in self.objects if isinstance(obj, PathObject))
 
     @property
     def images(self) -> Iterator["ImageObject"]:
         """Iterator over lazy image objects."""
-        return (obj for obj in LazyInterpreter(self) if isinstance(obj, ImageObject))
+        return (obj for obj in self.objects if isinstance(obj, ImageObject))
 
     @property
     def texts(self) -> Iterator["TextObject"]:
         """Iterator over lazy text objects."""
-        return (obj for obj in LazyInterpreter(self) if isinstance(obj, TextObject))
+        return (obj for obj in self.objects if isinstance(obj, TextObject))
 
     @property
     def layout(self) -> Iterator["LayoutObject"]:
         """Iterator over eager layout object dictionaries."""
-        return iter(PageInterpreter(self))
+        return iter(PageInterpreter(self, self._contents))
 
     @property
     def tokens(self) -> Iterator[Token]:
         """Iterator over tokens in the content streams."""
-        parser = ContentParser(self.contents)
+        parser = ContentParser(self._contents)
         while True:
             try:
                 pos, tok = parser.nexttoken()
@@ -408,7 +483,7 @@ class ContentParser(ObjectParser):
     the page’s logical content or organization.
     """
 
-    def __init__(self, streams: Iterable[ContentStream]) -> None:
+    def __init__(self, streams: Iterable[PDFObject]) -> None:
         self.streamiter = iter(streams)
         try:
             stream = stream_value(next(self.streamiter))
@@ -474,8 +549,8 @@ class BaseInterpreter:
     def __init__(
         self,
         page: Page,
+        contents: Iterable[PDFObject],
         resources: Union[Dict, None] = None,
-        contents: Union[Iterable[ContentStream], None] = None,
     ) -> None:
         self._dispatch: Dict[PSKeyword, Tuple[Callable, int]] = {}
         for name in dir(self):
@@ -490,7 +565,7 @@ class BaseInterpreter:
                 nargs = func.__code__.co_argcount - 1
                 self._dispatch[kwd] = (func, nargs)
         self.page = page
-        self.contents = page.contents if contents is None else contents
+        self.contents = contents
         (x0, y0, x1, y1) = page.mediabox
         width = x1 - x0
         height = y1 - y0
@@ -2097,7 +2172,9 @@ class LazyInterpreter(BaseInterpreter):
             # unsupported xobject type.
             pass
 
-    def render_image(self, xobjid: Union[str, None], stream: ContentStream) -> ContentObject:
+    def render_image(
+        self, xobjid: Union[str, None], stream: ContentStream
+    ) -> ContentObject:
         colorspace = stream.get_any(("CS", "ColorSpace"))
         colorspace = (
             None if colorspace is None else get_colorspace(resolve1(colorspace))

@@ -92,14 +92,14 @@ for element in structure:
        ...
 ```
 
-Now perhaps we want to look at a specific page.  Okay!
+Now perhaps we want to look at a specific page.  Okay!  You can also
+look at its contents, more on that in a bit:
+
 ```python
 page = pdf.pages[0]        # they are numbered from 0
 page = pdf.pages["xviii"]  # but you can get them by label (a string)
 page = pdf.pages["42"]  # or "logical" page number (also a string)
 print(f"Page {page.label} is {page.width} x {page.height}")
-for stream in page.contents:
-    a_bunch_of_bytes = stream.buffer
 ```
 
 ## Accessing content
@@ -122,6 +122,21 @@ analysis).
 ```python
 for item in page.objects:
     ...
+```
+
+In reality, a PDF page contains multiple "content streams" and
+"external objects" which can also be accessed individually, should you
+so desire:
+
+```python
+for xobj in page.xobjects:
+    if xobj.name != "FabulousExternalObject":
+        pass  # we don't care!
+    for item in xobj.objects:
+        ...
+stream = next(page.contents):
+    for item in stream.objects:
+        ...
 ```
 
 Because it is quite inefficient to expand, calculate, and copy every
