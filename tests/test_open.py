@@ -106,9 +106,9 @@ def test_write_csv() -> None:
         out = StringIO()
         writer = DictWriter(out, fieldnames=playa.fieldnames)
         writer.writeheader()
-        for dic in doc.layout:
-            writer.writerow(dic)
+        writer.writerows(doc.layout)
         assert out.getvalue()
+        # print(out.getvalue())
 
 
 if __name__ == "__main__":

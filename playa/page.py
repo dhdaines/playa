@@ -338,12 +338,17 @@ class GraphicState:
 class LayoutObject(TypedDict, total=False):
     """Dictionary-based layout objects.
 
-    These closely match the dictionaries returned by pdfplumber, except
-    that coordinates are expressed in PDF device space with (0, 0) at
-    lower left.
+    These closely match the dictionaries returned by pdfplumber.  The
+    type of coordinates returned are determined by the `space`
+    argument passed to `Page`.  By default, `(0, 0)` is
+    the top-left corner of the page, with 72 units per inch.
 
-    This API has some limitations, so it is preferable to use
-    ContentObject instead.
+    All values can be converted to strings in some meaningful fashion,
+    such that you can simply write one of these to a CSV (optionally
+    using the `fieldnames` class property, e.g.:
+
+    writer = DictWriter(fieldnames=LayoutObject.fieldnames)
+    dictwriter.write_rows(writer)
     """
 
     object_type: str
@@ -376,6 +381,11 @@ class LayoutObject(TypedDict, total=False):
     colorspace: Union[ColorSpace, None]  # for images (can be none unlike graphics)
     srcsize: Tuple[int, int]
     bits: int
+
+    @classmethod
+    @property
+    def fieldnames(cls) -> List[str]:
+        return list(cls.__annotations__.keys())
 
 
 class ContentParser(ObjectParser):

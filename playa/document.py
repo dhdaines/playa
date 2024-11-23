@@ -717,10 +717,28 @@ class OutlineItem(NamedTuple):
 
 
 class LayoutObject(PageLayoutObject):
-    """Layout object at the document level."""
+    """Dictionary-based layout objects.
+
+    These closely match the dictionaries returned by pdfplumber.  The
+    type of coordinates returned are determined by the `space`
+    argument passed to `Document`.  By default, `(0, 0)` is
+    the top-left corner of the page, with 72 units per inch.
+
+    All values can be converted to strings in some meaningful fashion,
+    such that you can simply write one of these to a CSV (optionally
+    using the `fieldnames` class property, e.g.:
+
+    writer = DictWriter(fieldnames=LayoutObject.fieldnames)
+    dictwriter.write_rows(writer)
+    """
 
     page_index: int
     page_label: Union[str, None]
+
+    @classmethod
+    @property
+    def fieldnames(cls) -> List[str]:
+        return list(cls.__annotations__.keys())
 
 
 class Document:
