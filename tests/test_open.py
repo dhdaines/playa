@@ -84,10 +84,10 @@ def test_multiple_contents() -> None:
 
 
 def test_xobjects() -> None:
-    with playa.open(TESTDIR / "encryption/aes-256.pdf", password="foo") as doc:
-        for page in doc.pages:
-            for item in page.layout:
-                print(item)
+    with playa.open(TESTDIR / "pdf.js" / "basicapi.pdf") as doc:
+        objs = [obj for obj in doc.layout if obj.get("xobjid")]
+    assert objs
+    assert objs[0]["xobjid"] == "XT5"
 
 
 def test_weakrefs() -> None:

@@ -354,6 +354,7 @@ class LayoutObject(TypedDict, total=False):
     object_type: str
     mcid: Union[int, None]
     tag: Union[str, None]
+    xobjid: Union[str, None]
     text: str
     fontname: str
     size: float
@@ -1147,14 +1148,17 @@ class PageInterpreter(BaseInterpreter):
                 self.page, resources=resources, contents=[xobj]
             )
             interpreter.ctm = mult_matrix(matrix, self.ctm)
-            yield from interpreter
+            for obj in interpreter:
+                if obj.get("xobjid") is None:
+                    obj["xobjid"] = xobjid
+                yield obj
         elif subtype is LITERAL_IMAGE and "Width" in xobj and "Height" in xobj:
             yield self.render_image(xobjid, xobj)
         else:
             # unsupported xobject type.
             pass
 
-    def render_image(self, name: str, stream: ContentStream) -> LayoutObject:
+    def render_image(self, xobjid: str, stream: ContentStream) -> LayoutObject:
         # PDF 1.7 sec 8.6.3: Outside a content stream, certain
         # objects, such as image XObjects, shall specify a colour
         # space as an explicit parameter, often associated with the
@@ -1178,7 +1182,7 @@ class PageInterpreter(BaseInterpreter):
             y0=y0,
             x1=x1,
             y1=y1,
-            name=name,
+            xobjid=xobjid,
             mcid=None if self.mcs is None else self.mcs.mcid,
             tag=None if self.mcs is None else self.mcs.tag,
             srcsize=(stream.get_any(("W", "Width")), stream.get_any(("H", "Height"))),
@@ -2044,10 +2048,8 @@ class LazyInterpreter(BaseInterpreter):
     def do_EI(self, obj: PDFObject) -> Iterator[ContentObject]:
         """End inline image object"""
         if isinstance(obj, InlineImage):
-            # Inline images obviously are not indirect objects, so
-            # have no object ID, so... make something up?
-            iobjid = "inline_image_%d" % id(obj)
-            yield self.render_image(iobjid, obj)
+            # Inline images are not XObjects, have no xobjid
+            yield self.render_image(None, obj)
         else:
             # FIXME: Do... something?
             pass
@@ -2074,7 +2076,6 @@ class LazyInterpreter(BaseInterpreter):
                 self.page, resources=resources, contents=[xobj]
             )
             interpreter.ctm = mult_matrix(matrix, self.ctm)
-            # FIXME: Track xobjid in sub-interpreter?
             yield from interpreter
         elif subtype is LITERAL_IMAGE and "Width" in xobj and "Height" in xobj:
             yield self.render_image(xobjid, xobj)
