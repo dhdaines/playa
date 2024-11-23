@@ -91,6 +91,7 @@ class PageContentStream:
     reference to the page in which it is contained.
 
     """
+
     page: weakref.ReferenceType
     stream: ContentStream
 
@@ -260,8 +261,10 @@ class Page:
             xobjres = xobj.get("Resources")
             resources = None if xobjres is None else dict_value(xobjres)
             yield FormXObject(
-                page=weakref.ref(self), name=name, stream=stream_value(stream),
-                resources=resources
+                page=weakref.ref(self),
+                name=name,
+                stream=stream_value(stream),
+                resources=resources,
             )
 
     @property
@@ -1498,8 +1501,12 @@ class PageInterpreter(BaseInterpreter):
             bbox_upper_right = (adv, descent + rise + fontsize)
         (a, b, c, d, e, f) = matrix
         upright = a * d * scaling > 0 and b * c <= 0
-        (x0, y0) = apply_matrix_pt(matrix, bbox_lower_left)
-        (x1, y1) = apply_matrix_pt(matrix, bbox_upper_right)
+        x0, y0, x1, y1 = get_bound(
+            (
+                apply_matrix_pt(matrix, bbox_lower_left),
+                apply_matrix_pt(matrix, bbox_upper_right),
+            )
+        )
         if x1 < x0:
             (x0, x1) = (x1, x0)
         if y1 < y0:

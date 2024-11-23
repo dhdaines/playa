@@ -1,5 +1,6 @@
 """Miscellaneous Routines."""
 
+import itertools
 import string
 from typing import (
     TYPE_CHECKING,
@@ -223,13 +224,16 @@ _T = TypeVar("_T")
 
 def get_bound(pts: Iterable[Point]) -> Rect:
     """Compute a minimal rectangle that covers all the points."""
-    limit: Rect = (INF, INF, -INF, -INF)
-    (x0, y0, x1, y1) = limit
-    for x, y in pts:
-        x0 = min(x0, x)
-        y0 = min(y0, y)
-        x1 = max(x1, x)
-        y1 = max(y1, y)
+    try:
+        xs, ys = zip(*pts)
+    except ValueError:  # Means pts was empty
+        return (-1, -1, -1, -1)
+    xs0, xs1 = itertools.tee(xs)
+    ys0, ys1 = itertools.tee(ys)
+    x0 = min(xs0)
+    y0 = min(ys0)
+    x1 = max(xs1)
+    y1 = max(ys1)
     return x0, y0, x1, y1
 
 

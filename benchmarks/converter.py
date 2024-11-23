@@ -76,7 +76,7 @@ if __name__ == "__main__":
     miner_time = beach_time = lazy_time = 0.0
     for iter in range(niter + 1):
         for path in ALLPDFS:
-            if len(sys.argv) == 1 or "playa" in sys.argv[1:]:
+            if len(sys.argv) == 1 or "eager" in sys.argv[1:]:
                 start = time.time()
                 benchmark_one_pdf(path)
                 if iter != 0:
