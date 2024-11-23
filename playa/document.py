@@ -725,20 +725,15 @@ class LayoutObject(PageLayoutObject):
     the top-left corner of the page, with 72 units per inch.
 
     All values can be converted to strings in some meaningful fashion,
-    such that you can simply write one of these to a CSV (optionally
-    using the `fieldnames` class property, e.g.:
+    such that you can simply write one of these to a CSV.  You can access
+    the field names through the `__annotations__` property:
 
-    writer = DictWriter(fieldnames=LayoutObject.fieldnames)
+    writer = DictWriter(fieldnames=LayoutObject.__annotations__.keys())
     dictwriter.write_rows(writer)
     """
 
     page_index: int
     page_label: Union[str, None]
-
-    @classmethod
-    @property
-    def fieldnames(cls) -> List[str]:
-        return list(cls.__annotations__.keys())
 
 
 class Document:

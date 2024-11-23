@@ -82,6 +82,12 @@ TextSeq = Iterable[Union[int, float, bytes]]
 DeviceSpace = Literal["page", "screen"]
 
 
+class XObject(NamedTuple):
+    """XObject in a page's resource dictionary"""
+    name: str
+    stream: ContentStream
+
+
 class Page:
     """An object that holds the information about a page.
 
@@ -122,9 +128,7 @@ class Page:
         self.page_idx = page_idx
         self.space = space
         self.lastmod = resolve1(self.attrs.get("LastModified"))
-        self.resources: Dict[object, object] = resolve1(
-            self.attrs.get("Resources", dict()),
-        )
+        self.resources: Dict[str, PDFObject] = dict_value(self.attrs.get("Resources", {}))
         if "MediaBox" in self.attrs:
             self.mediabox = normalize_rect(
                 parse_rect(resolve1(val) for val in resolve1(self.attrs["MediaBox"]))
@@ -160,6 +164,13 @@ class Page:
         """Return resolved content streams."""
         for obj in self._contents:
             yield stream_value(obj)
+
+    @property
+    def xobjects(self) -> Iterator[XObject]:
+        """Return resolved XObjects."""
+        xobjects = dict_value(self.resources.get("XObject", {}))
+        for name, obj in xobjects.items():
+            yield XObject(name, stream_value(obj))
 
     @property
     def width(self) -> float:
@@ -344,10 +355,10 @@ class LayoutObject(TypedDict, total=False):
     the top-left corner of the page, with 72 units per inch.
 
     All values can be converted to strings in some meaningful fashion,
-    such that you can simply write one of these to a CSV (optionally
-    using the `fieldnames` class property, e.g.:
+    such that you can simply write one of these to a CSV.  You can access
+    the field names through the `__annotations__` property:
 
-    writer = DictWriter(fieldnames=LayoutObject.fieldnames)
+    writer = DictWriter(fieldnames=LayoutObject.__annotations__.keys())
     dictwriter.write_rows(writer)
     """
 
@@ -382,11 +393,6 @@ class LayoutObject(TypedDict, total=False):
     colorspace: Union[ColorSpace, None]  # for images (can be none unlike graphics)
     srcsize: Tuple[int, int]
     bits: int
-
-    @classmethod
-    @property
-    def fieldnames(cls) -> List[str]:
-        return list(cls.__annotations__.keys())
 
 
 class ContentParser(ObjectParser):
@@ -1509,7 +1515,7 @@ class ContentObject:
 class ImageObject(ContentObject):
     """An image (either inline or XObject)."""
 
-    name: str
+    xobjid: Union[str, None]
     srcsize: Tuple[int, int]
     bits: int
     imagemask: bool
@@ -2091,7 +2097,7 @@ class LazyInterpreter(BaseInterpreter):
             # unsupported xobject type.
             pass
 
-    def render_image(self, name: str, stream: ContentStream) -> ContentObject:
+    def render_image(self, xobjid: Union[str, None], stream: ContentStream) -> ContentObject:
         colorspace = stream.get_any(("CS", "ColorSpace"))
         colorspace = (
             None if colorspace is None else get_colorspace(resolve1(colorspace))
@@ -2099,7 +2105,7 @@ class LazyInterpreter(BaseInterpreter):
         return self.create(
             ImageObject,
             stream=stream,
-            name=name,
+            xobjid=xobjid,
             srcsize=(stream.get_any(("W", "Width")), stream.get_any(("H", "Height"))),
             imagemask=stream.get_any(("IM", "ImageMask")),
             bits=stream.get_any(("BPC", "BitsPerComponent"), 1),

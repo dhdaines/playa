@@ -22,7 +22,7 @@ from playa.page import DeviceSpace
 
 __version__ = "0.2"
 
-fieldnames = LayoutObject.fieldnames
+fieldnames = LayoutObject.__annotations__.keys()
 
 
 def open(

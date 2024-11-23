@@ -1,8 +1,8 @@
 ## PLAYA 0.2
 - [ ] run `pdfplumber` tests in CI
   - [ ] make a separate directory for third party tests
-- [ ] expose form XObjects on Page to allow getting only their contents
-- [ ] expose form XObject IDs in LayoutObject
+- [x] expose form XObjects on Page to allow getting only their contents
+- [x] expose form XObject IDs in LayoutObject
 - [ ] make a proper schema for LayoutObject, document it, and communicate it to Polars
 - [ ] notably NamedTuple things (Color, ColorSpace) should be Tuples in LayoutObject
 - [ ] make TextState conform to PDF spec (leading and line matrix) and document it
