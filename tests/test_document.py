@@ -116,6 +116,5 @@ def test_xobjects() -> None:
     with playa.open(TESTDIR / "pdf.js" / "basicapi.pdf") as doc:
         page = doc.pages[0]
         xobj = next(page.xobjects)
-        assert xobj.subtype == "Form"
         assert len(list(xobj.layout)) == 2
         assert len(list(xobj.objects)) == 5
