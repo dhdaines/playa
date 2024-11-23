@@ -950,7 +950,7 @@ class SimpleFont(Font):
         if "ToUnicode" in spec:
             strm = stream_value(spec["ToUnicode"])
             self.unicode_map = FileUnicodeMap()
-            CMapParser(self.unicode_map, strm.get_data()).run()
+            CMapParser(self.unicode_map, strm.buffer).run()
         Font.__init__(self, descriptor, widths)
 
     def to_unichr(self, cid: int) -> str:
@@ -988,7 +988,7 @@ class Type1Font(SimpleFont):
             # try to recover the missing encoding info from the font file.
             self.fontfile = stream_value(descriptor.get("FontFile"))
             length1 = int_value(self.fontfile["Length1"])
-            data = self.fontfile.get_data()[:length1]
+            data = self.fontfile.buffer[:length1]
             parser = Type1FontHeaderParser(data)
             self.cid2unicode = parser.get_encoding()
 
@@ -1050,13 +1050,13 @@ class CIDFont(Font):
         ttf = None
         if "FontFile2" in descriptor:
             self.fontfile = stream_value(descriptor.get("FontFile2"))
-            ttf = TrueTypeFont(self.basefont, BytesIO(self.fontfile.get_data()))
+            ttf = TrueTypeFont(self.basefont, BytesIO(self.fontfile.buffer))
         self.unicode_map: Optional[UnicodeMap] = None
         if "ToUnicode" in spec:
             if isinstance(spec["ToUnicode"], ContentStream):
                 strm = stream_value(spec["ToUnicode"])
                 self.unicode_map = FileUnicodeMap()
-                CMapParser(self.unicode_map, strm.get_data()).run()
+                CMapParser(self.unicode_map, strm.buffer).run()
             else:
                 cmap_name = literal_name(spec["ToUnicode"])
                 encoding = literal_name(spec["Encoding"])

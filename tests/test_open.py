@@ -78,7 +78,7 @@ def test_inline_data() -> None:
 def test_multiple_contents() -> None:
     with playa.open(TESTDIR / "jo.pdf") as doc:
         page = doc.pages[0]
-        assert len(page.contents) > 1
+        assert len(list(page.contents)) > 1
         items = list(page.layout)
         assert len(items) == 898
 

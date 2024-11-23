@@ -340,12 +340,12 @@ class ContentStream:
         self.attrs = attrs
         self.rawdata: Optional[bytes] = rawdata
         self.decipher = decipher
-        self.data: Optional[bytes] = None
+        self._data: Optional[bytes] = None
         self.objid: Optional[int] = None
         self.genno: Optional[int] = None
 
     def __repr__(self) -> str:
-        if self.data is None:
+        if self._data is None:
             assert self.rawdata is not None
             return "<ContentStream(%r): raw=%d, %r>" % (
                 self.objid,
@@ -353,10 +353,10 @@ class ContentStream:
                 self.attrs,
             )
         else:
-            assert self.data is not None
+            assert self._data is not None
             return "<ContentStream(%r): len=%d, %r>" % (
                 self.objid,
-                len(self.data),
+                len(self._data),
                 self.attrs,
             )
 
@@ -393,8 +393,8 @@ class ContentStream:
         return list(zip(resolved_filters, resolved_params))
 
     def decode(self, strict: bool = False) -> None:
-        assert self.data is None and self.rawdata is not None, str(
-            (self.data, self.rawdata),
+        assert self._data is None and self.rawdata is not None, str(
+            (self._data, self.rawdata),
         )
         data = self.rawdata
         if self.decipher:
@@ -404,7 +404,7 @@ class ContentStream:
             data = self.decipher(self.objid, self.genno, data, self.attrs)
         filters = self.get_filters()
         if not filters:
-            self.data = data
+            self._data = data
             self.rawdata = None
             return
         for f, params in filters:
@@ -466,14 +466,13 @@ class ContentStream:
                 else:
                     error_msg = "Unsupported predictor: %r" % pred
                     raise NotImplementedError(error_msg)
-        self.data = data
+        self._data = data
         self.rawdata = None
 
-    def get_data(self) -> bytes:
-        if self.data is None:
+    @property
+    def buffer(self) -> bytes:
+        """The decoded contents of the stream."""
+        if self._data is None:
             self.decode()
-            assert self.data is not None
-        return self.data
-
-    def get_rawdata(self) -> Optional[bytes]:
-        return self.rawdata
+            assert self._data is not None
+        return self._data

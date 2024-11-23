@@ -215,7 +215,7 @@ class XRefFallback:
                 doc = None if parser.doc is None else parser.doc()
                 if doc is None:
                     raise RuntimeError("Document no longer exists!")
-                parser1 = ObjectParser(stream.get_data(), doc)
+                parser1 = ObjectParser(stream.buffer, doc)
                 objs: List = [obj for _, obj in parser1]
                 # FIXME: This is choplist
                 n = min(n, len(objs) // 2)
@@ -274,7 +274,7 @@ class XRefStream:
         self.ranges.extend(cast(Iterator[Tuple[int, int]], choplist(2, index_array)))
         (self.fl1, self.fl2, self.fl3) = stream["W"]
         assert self.fl1 is not None and self.fl2 is not None and self.fl3 is not None
-        self.data = stream.get_data()
+        self.data = stream.buffer
         self.entlen = self.fl1 + self.fl2 + self.fl3
         self.trailer = stream.attrs
         log.debug(
@@ -916,7 +916,7 @@ class Document:
         except KeyError:
             log.warning("N is not defined in content stream: %r" % stream)
             n = 0
-        parser = ObjectParser(stream.get_data(), self)
+        parser = ObjectParser(stream.buffer, self)
         objs: List[PDFObject] = [obj for _, obj in parser]
         return (objs, n)
 

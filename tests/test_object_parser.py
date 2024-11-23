@@ -397,5 +397,4 @@ def test_inline_images():
     assert img.rawdata == b"VARIOUS UTTER NONSENSE\n"
     pos, img = next(parser)
     assert isinstance(img, InlineImage)
-    img.decode()
-    assert img.data == b"VARIOUS UTTER NONSENSE"
+    assert img.buffer == b"VARIOUS UTTER NONSENSE"

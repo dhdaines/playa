@@ -97,8 +97,9 @@ Now perhaps we want to look at a specific page.  Okay!
 page = pdf.pages[0]        # they are numbered from 0
 page = pdf.pages["xviii"]  # but you can get them by label (a string)
 page = pdf.pages["42"]  # or "logical" page number (also a string)
-a_few_content_streams = list(page.contents) # FIXME
-raw_bytes = b"".join(stream.buffer for stream in page.contents) # FIXME
+print(f"Page {page.label} is {page.width} x {page.height}")
+for stream in page.contents:
+    a_bunch_of_bytes = stream.buffer
 ```
 
 ## Accessing content

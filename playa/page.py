@@ -148,12 +148,18 @@ class Page:
         self.annots = self.attrs.get("Annots")
         self.beads = self.attrs.get("B")
         if "Contents" in self.attrs:
-            self.contents: List[object] = resolve1(self.attrs["Contents"])
-            assert self.contents is not None
-            if not isinstance(self.contents, list):
-                self.contents = [self.contents]
+            self._contents: List[PDFObject] = resolve1(self.attrs["Contents"])
+            assert self._contents is not None
+            if not isinstance(self._contents, list):
+                self._contents = [self._contents]
         else:
-            self.contents = []
+            self._contents = []
+
+    @property
+    def contents(self) -> Iterator[ContentStream]:
+        """Return resolved content streams."""
+        for obj in self._contents:
+            yield stream_value(obj)
 
     @property
     def width(self) -> float:
@@ -385,12 +391,12 @@ class ContentParser(ObjectParser):
     the page’s logical content or organization.
     """
 
-    def __init__(self, streams: Sequence[object]) -> None:
+    def __init__(self, streams: Iterable[ContentStream]) -> None:
         self.streamiter = iter(streams)
         try:
             stream = stream_value(next(self.streamiter))
             log.debug("ContentParser starting stream %r", stream)
-            super().__init__(stream.get_data())
+            super().__init__(stream.buffer)
         except StopIteration:
             log.debug("ContentParser has no content, returning nothing")
             super().__init__(b"")
@@ -409,7 +415,7 @@ class ContentParser(ObjectParser):
                 # which is exactly what we want
                 stream = stream_value(next(self.streamiter))
                 log.debug("ContentParser starting new stream %r", stream)
-                self.newstream(stream.get_data())
+                self.newstream(stream.buffer)
 
 
 class MarkedContentSection(NamedTuple):
@@ -452,7 +458,7 @@ class BaseInterpreter:
         self,
         page: Page,
         resources: Union[Dict, None] = None,
-        contents: Union[List, None] = None,
+        contents: Union[Iterable[ContentStream], None] = None,
     ) -> None:
         self._dispatch: Dict[PSKeyword, Tuple[Callable, int]] = {}
         for name in dir(self):
