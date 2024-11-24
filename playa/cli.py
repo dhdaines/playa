@@ -19,10 +19,13 @@ def make_argparse() -> argparse.ArgumentParser:
         type=argparse.FileType("wt"),
         default="-",
     )
-    parser.add_argument("-s", "--space",
-                        help="Coordinate space for output objects",
-                        choices=["screen", "page", "user"],
-                        default="screen")
+    parser.add_argument(
+        "-s",
+        "--space",
+        help="Coordinate space for output objects",
+        choices=["screen", "page", "user"],
+        default="screen",
+    )
     return parser
 
 

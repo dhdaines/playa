@@ -126,6 +126,7 @@ def test_spaces() -> None:
     print(page_box)
     print(user_box)
 
+
 if __name__ == "__main__":
     import logging
 
