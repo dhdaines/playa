@@ -594,7 +594,7 @@ class BaseInterpreter:
         #
         # "screen" device space: origin is top left of MediaBox
         if page.space == "screen":
-            ctm = (1.0, 0.0, 0.0, -1.0, -x0, height)
+            ctm = (1.0, 0.0, 0.0, -1.0, -x0, y1)
         # "page" device space: origin is bottom left of MediaBox
         elif page.space == "page":
             ctm = (1.0, 0.0, 0.0, 1.0, -x0, -y0)

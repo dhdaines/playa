@@ -113,18 +113,19 @@ def test_write_csv() -> None:
 
 def test_spaces() -> None:
     """Test different coordinate spaces."""
-    with playa.open(TESTDIR / "pdfplumber" / "issue-1181.pdf") as doc:
-        page = doc.pages[0]
-        screen_box = next(page.objects).bbox
     with playa.open(TESTDIR / "pdfplumber" / "issue-1181.pdf", space="page") as doc:
         page = doc.pages[0]
         page_box = next(page.objects).bbox
     with playa.open(TESTDIR / "pdfplumber" / "issue-1181.pdf", space="user") as doc:
         page = doc.pages[0]
         user_box = next(page.objects).bbox
-    print(screen_box)
-    print(page_box)
-    print(user_box)
+    assert page_box[1] == pytest.approx(user_box[1] - page.mediabox[1])
+    with playa.open(TESTDIR / "pdfplumber" / "issue-1181.pdf", space="screen") as doc:
+        page = doc.pages[0]
+        screen_box = next(page.objects).bbox
+    # BBoxes are normalied, so top is 1 for screen and 3 for page
+    assert screen_box[3] == pytest.approx(page.height - page_box[1])
+    assert screen_box[3] == pytest.approx(page.height - page_box[1])
 
 
 if __name__ == "__main__":
