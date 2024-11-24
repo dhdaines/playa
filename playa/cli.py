@@ -19,6 +19,10 @@ def make_argparse() -> argparse.ArgumentParser:
         type=argparse.FileType("wt"),
         default="-",
     )
+    parser.add_argument("-s", "--space",
+                        help="Coordinate space for output objects",
+                        choices=["screen", "page", "user"],
+                        default="screen")
     return parser
 
 
@@ -28,7 +32,7 @@ def main() -> None:
     writer = csv.DictWriter(args.outfile, fieldnames=playa.fieldnames)
     writer.writeheader()
     for path in args.pdfs:
-        with playa.open(path) as doc:
+        with playa.open(path, space=args.space) as doc:
             for dic in doc.layout:
                 writer.writerow(dic)
 

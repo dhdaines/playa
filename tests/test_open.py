@@ -111,6 +111,21 @@ def test_write_csv() -> None:
         # print(out.getvalue())
 
 
+def test_spaces() -> None:
+    """Test different coordinate spaces."""
+    with playa.open(TESTDIR / "pdfplumber" / "issue-1181.pdf") as doc:
+        page = doc.pages[0]
+        screen_box = next(page.objects).bbox
+    with playa.open(TESTDIR / "pdfplumber" / "issue-1181.pdf", space="page") as doc:
+        page = doc.pages[0]
+        page_box = next(page.objects).bbox
+    with playa.open(TESTDIR / "pdfplumber" / "issue-1181.pdf", space="user") as doc:
+        page = doc.pages[0]
+        user_box = next(page.objects).bbox
+    print(screen_box)
+    print(page_box)
+    print(user_box)
+
 if __name__ == "__main__":
     import logging
 

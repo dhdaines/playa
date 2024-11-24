@@ -79,7 +79,7 @@ LITERAL_PAGES = LIT("Pages")
 LITERAL_FORM = LIT("Form")
 LITERAL_IMAGE = LIT("Image")
 TextSeq = Iterable[Union[int, float, bytes]]
-DeviceSpace = Literal["page", "screen"]
+DeviceSpace = Literal["page", "screen", "user"]
 
 
 @dataclass
@@ -178,7 +178,7 @@ class Page:
       attrs: a dictionary of page attributes.
       label: page label string.
       page_idx: 0-based index of the page in the document.
-      space: the device space to use for interpreting content ("screen" or "page")
+      space: the device space to use for interpreting content
 
     Attributes:
       pageid: the integer object ID associated with the page in the page tree
@@ -598,6 +598,9 @@ class BaseInterpreter:
         # "page" device space: origin is bottom left of MediaBox
         elif page.space == "page":
             ctm = (1.0, 0.0, 0.0, 1.0, -x0, -y0)
+        # "user" device space: no transformation or rotation
+        elif page.space == "user":
+            ctm = MATRIX_IDENTITY
         else:
             log.warning("Unknown device space: %r", page.space)
             ctm = MATRIX_IDENTITY
