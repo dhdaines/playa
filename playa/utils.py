@@ -220,6 +220,7 @@ def isnumber(x: object) -> bool:
 
 
 _T = TypeVar("_T")
+BBOX_NONE = (-1, -1, -1, -1)
 
 
 def get_bound(pts: Iterable[Point]) -> Rect:
@@ -227,7 +228,7 @@ def get_bound(pts: Iterable[Point]) -> Rect:
     try:
         xs, ys = zip(*pts)
     except ValueError:  # Means pts was empty
-        return (-1, -1, -1, -1)
+        return BBOX_NONE
     xs0, xs1 = itertools.tee(xs)
     ys0, ys1 = itertools.tee(ys)
     x0 = min(xs0)
