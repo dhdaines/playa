@@ -83,17 +83,20 @@ DeviceSpace = Literal["page", "screen", "user"]
 
 
 @dataclass
-class PageContentStream:
-    """A content stream, in the context of a page.
+class FormXObject:
+    """An eXternal Object, in the context of a page.
 
-    This is no ordinary content stream!  You can also parse and
-    interpret its contents.  In order to do that, it needs a (weak)
-    reference to the page in which it is contained.
-
+    There are a couple of kinds of XObjects.  Here we are only
+    concerned with "Form XObjects" which, despite their name, have
+    nothing at all to do with fillable forms.  Instead they are like
+    little embeddable PDF pages, possibly with their own resources,
+    definitely with their own definition of "user space".
     """
 
+    name: str
     page: weakref.ReferenceType
     stream: ContentStream
+    resources: Union[None, Dict[str, PDFObject]]
 
     def __contains__(self, name: object) -> bool:
         return name in self.stream
@@ -120,37 +123,6 @@ class PageContentStream:
             except StopIteration:
                 return
             yield tok
-
-    @property
-    def layout(self) -> Iterator["LayoutObject"]:
-        """Iterator over eager layout object dictionaries."""
-        page = self.page()
-        if page is None:
-            raise RuntimeError("Page no longer exists!")
-        return iter(PageInterpreter(page, [self.stream]))
-
-    @property
-    def objects(self) -> Iterator["ContentObject"]:
-        """Iterator over lazy layout objects."""
-        page = self.page()
-        if page is None:
-            raise RuntimeError("Page no longer exists!")
-        return iter(LazyInterpreter(page, [self.stream]))
-
-
-@dataclass
-class FormXObject(PageContentStream):
-    """An eXternal Object, in the context of a page.
-
-    There are a couple of kinds of XObjects.  Here we are only
-    concerned with "Form XObjects" which, despite their name, have
-    nothing at all to do with fillable forms.  Instead they are like
-    little embeddable PDF pages, possibly with their own resources,
-    definitely with their own definition of "user space".
-    """
-
-    name: str
-    resources: Union[None, Dict[str, PDFObject]]
 
     @property
     def layout(self) -> Iterator["LayoutObject"]:
@@ -243,10 +215,10 @@ class Page:
             self._contents = []
 
     @property
-    def contents(self) -> Iterator[PageContentStream]:
+    def contents(self) -> Iterator[ContentStream]:
         """Return resolved content streams."""
         for obj in self._contents:
-            yield PageContentStream(page=weakref.ref(self), stream=stream_value(obj))
+            yield obj.resolve()
 
     @property
     def xobjects(self) -> Iterator[FormXObject]:

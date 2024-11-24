@@ -124,21 +124,6 @@ for item in page.objects:
     ...
 ```
 
-In reality, a PDF page contains multiple "content streams" and
-"external objects" which can also be accessed individually, should you
-so desire:
-
-```python
-for xobj in page.xobjects:
-    if xobj.name != "FabulousExternalObject":
-        pass  # we don't care!
-    for item in xobj.objects:
-        ...
-stream = next(page.contents):
-    for item in stream.objects:
-        ...
-```
-
 Because it is quite inefficient to expand, calculate, and copy every
 possible piece of information, PLAYA gives you some options here.
 Wherever possible this information can be computed lazily, but this
@@ -159,6 +144,7 @@ for dic in page.layout:
     print("    the color is {dic['stroking_color']}")
     print("    the text is {dic['text']}")
     print("    it is in MCS {dic['mcid']} which is a {dic['tag']}")
+    print("    it is also in Form XObject {dic['xobjid']}")
 ```
 
 This is for instance quite useful for doing "Artificial Intelligence",
@@ -349,6 +335,27 @@ wisdom, Adobe made `ActualText` a property of *marked content
 sections* and not *text objects*, so you may be out of luck if you
 want to actually match these characters to glyphs.  Sorry, I don't
 write the standards.
+
+### Form XObject Access
+
+A PDF page may also contain "Form XObjects" which are like tiny
+embedded PDF documents (they have nothing to do with fillable forms).
+By default PLAYA will simply expand these into the sequence of objects
+returned by `layout` or `objects`, but in some cases it may be useful
+to look at them in isolation:
+
+```python
+for xobj in page.xobjects:
+    if xobj.name != "FabulousExternalObject":
+        pass  # we don't care!
+    for item in xobj.objects:
+        ...
+    for dic in xobj.layout:
+        ...
+```
+
+In the future we may support similar access to patterns and Type 3
+fonts, which are also embedded PDF documents of the same sort.
 
 As mentioned earlier, if you really just want to do text extraction,
 there's always pdfplumber, pymupdf, pypdfium2, pikepdf, pypdf, borb,
