@@ -454,12 +454,14 @@ class LayoutObject(TypedDict, total=False):
     fill: bool
     linewidth: float
     pts: List[Point]
-    name: str
     stream: ContentStream
     imagemask: bool
     colorspace: Union[ColorSpace, None]  # for images (can be none unlike graphics)
     srcsize: Tuple[int, int]
     bits: int
+
+
+fieldnames = LayoutObject.__annotations__.keys()
 
 
 class ContentParser(ObjectParser):
