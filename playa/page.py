@@ -1506,7 +1506,7 @@ class ContentObject:
     @property
     def object_type(self):
         name = self.__class__.__name__
-        return name[:-len("Object")].lower()
+        return name[: -len("Object")].lower()
 
     @property
     def bbox(self) -> Rect:
@@ -1578,9 +1578,9 @@ class XObjectObject(ContentObject):
         # It is a required attribute!
         x0, y0, x1, y1 = parse_rect(self.stream["BBox"])
         # FIXME: This is *not* the bbox in the case of rotation
-        return get_bound([
-            apply_matrix_pt(self.ctm, (x0, y0)),
-            apply_matrix_pt(self.ctm, (x1, y1))])
+        return get_bound(
+            [apply_matrix_pt(self.ctm, (x0, y0)), apply_matrix_pt(self.ctm, (x1, y1))]
+        )
 
     @property
     def buffer(self) -> bytes:
@@ -2169,12 +2169,15 @@ class LazyInterpreter(BaseInterpreter):
             # instead of having their own Resources entry.
             xobjres = xobj.get("Resources")
             resources = None if xobjres is None else dict_value(xobjres)
-            xobjobj = XObjectObject(ctm=mult_matrix(matrix, self.ctm),
-                                  mcs=self.mcs,
-                                  gstate=self.graphicstate,
-                                  page=weakref.ref(self.page),
-                                  xobjid=xobjid, stream=xobj,
-                                  resources=resources)
+            xobjobj = XObjectObject(
+                ctm=mult_matrix(matrix, self.ctm),
+                mcs=self.mcs,
+                gstate=self.graphicstate,
+                page=weakref.ref(self.page),
+                xobjid=xobjid,
+                stream=xobj,
+                resources=resources,
+            )
             # We are *lazy*, so just yield the XObject itself not its contents
             yield xobjobj
         elif subtype is LITERAL_IMAGE and "Width" in xobj and "Height" in xobj:
