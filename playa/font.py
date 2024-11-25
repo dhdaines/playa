@@ -826,7 +826,7 @@ class TrueTypeFont:
         # create unicode map
         unicode_map = FileUnicodeMap()
         for char, gid in char2gid.items():
-            unicode_map.add_cid2unichr(gid, char)
+            unicode_map.add_cid2code(gid, char)
         return unicode_map
 
 

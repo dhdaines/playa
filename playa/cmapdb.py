@@ -65,7 +65,16 @@ class CMapBase:
     def add_code2cid(self, code: str, cid: int) -> None:
         pass
 
-    def add_cid2unichr(self, cid: int, code: Union[PSLiteral, bytes, int]) -> None:
+    def add_cid2bytes(self, cid: int, utf16: bytes) -> None:
+        pass
+
+    def add_cid2code(self, cid: int, code: int) -> None:
+        pass
+
+    def add_cid2lit(self, cid: int, name: PSLiteral) -> None:
+        pass
+
+    def add_cid2unichr(self, cid: int, unichr: str) -> None:
         pass
 
     def use_cmap(self, cmap: "CMapBase") -> None:
@@ -189,20 +198,21 @@ class FileCMap(CMap):
 
 
 class FileUnicodeMap(UnicodeMap):
-    def add_cid2unichr(self, cid: int, code: Union[PSLiteral, bytes, int]) -> None:
-        assert isinstance(cid, int), str(type(cid))
-        if isinstance(code, PSLiteral):
-            # Interpret as an Adobe glyph name.
-            assert isinstance(code.name, str)
-            unichr = name2unicode(code.name)
-        elif isinstance(code, bytes):
-            # Interpret as UTF-16BE.
-            unichr = code.decode("UTF-16BE", "ignore")
-        elif isinstance(code, int):
-            unichr = chr(code)
-        else:
-            raise TypeError(code)
+    def add_cid2bytes(self, cid: int, utf16: bytes) -> None:
+        unichr = utf16.decode("UTF-16BE", "ignore")
+        self.add_cid2unichr(cid, unichr)
 
+    def add_cid2code(self, cid: int, code: int) -> None:
+        unichr = chr(code)
+        self.add_cid2unichr(cid, unichr)
+
+    def add_cid2lit(self, cid: int, name: PSLiteral) -> None:
+        # Interpret as an Adobe glyph name.
+        assert isinstance(name.name, str)
+        unichr = name2unicode(name.name)
+        self.add_cid2unichr(cid, unichr)
+
+    def add_cid2unichr(self, cid: int, unichr: str) -> None:
         # A0 = non-breaking space, some weird fonts can have a collision on a cid here.
         if unichr == "\u00a0" and self.cid2unichr.get(cid) == " ":
             return
@@ -393,14 +403,14 @@ class CMapParser:
                 vlen = len(svar)
                 for i in range(end - start + 1):
                     x = start_prefix + struct.pack(">L", start + i)[-vlen:]
-                    self.cmap.add_cid2unichr(cid + i, x)
+                    self.cmap.add_cid2bytes(cid + i, x)
             self.popall()
         elif token is KEYWORD_BEGINCIDCHAR:
             self.popall()
         elif token is KEYWORD_ENDCIDCHAR:
             for cid, code in choplist(2, self.stack):
                 if isinstance(code, bytes) and isinstance(cid, int):
-                    self.cmap.add_cid2unichr(cid, code)
+                    self.cmap.add_cid2bytes(cid, code)
             self.popall()
         elif token is KEYWORD_BEGINBFRANGE:
             self.popall()
@@ -433,14 +443,14 @@ class CMapParser:
                     vlen = len(var)
                     for i in range(end - start + 1):
                         x = prefix + struct.pack(">L", base + i)[-vlen:]
-                        self.cmap.add_cid2unichr(start + i, x)
+                        self.cmap.add_cid2bytes(start + i, x)
             self.popall()
         elif token is KEYWORD_BEGINBFCHAR:
             self.popall()
         elif token is KEYWORD_ENDBFCHAR:
             for cid, code in choplist(2, self.stack):
                 if isinstance(cid, bytes) and isinstance(code, bytes):
-                    self.cmap.add_cid2unichr(nunpack(cid), code)
+                    self.cmap.add_cid2bytes(nunpack(cid), code)
             self.popall()
         elif token is KEYWORD_BEGINNOTDEFRANGE:
             self.popall()
