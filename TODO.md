@@ -1,22 +1,24 @@
 ## PLAYA 0.2
-- [ ] run `pdfplumber` tests in CI
-  - [ ] make a separate directory for third party tests
 - [x] expose form XObjects on Page to allow getting only their contents
 - [x] expose form XObject IDs in LayoutDict
-- [ ] transform bbox attributes on FormXObject and StructElement
-- [ ] support ExtGState (TODO in pdfminer as well, submit patch)
-- [x] make a proper schema for LayoutDict, document it, and communicate it to Polars
-  - [ ] notably NamedTuple things (Color, ColorSpace) should be Tuples in LayoutDict
 - [x] make TextState conform to PDF spec (leading and line matrix) and document it
 - [x] expose more of TextState in LayoutDict (render mode in particular - OCRmyPDF)
 - [x] do not try to map characters with no ToUnicode and no Encoding (OCRmyPDF)
 - [x] properly support Pattern color space (uncolored tiling patterns) the
       way pdfplumber expects it to work
+- [ ] support marked content points as LayoutObjects
+- [ ] document LayoutObjects
+- [ ] make a proper schema for LayoutDict, document it, and communicate it to Polars
+- [ ] separate color values and patterns in LayoutDict
+- [ ] run `pdfplumber` tests in CI
+  - [ ] make a separate directory for third party tests
+
+## PLAYA 0.3 and beyond
 - [ ] `decode_text` is remarkably slow
 - [ ] `render_char` and `render_string` are also quite slow
 - [ ] remove the rest of the meaningless abuses of `cast`
-
-## PLAYA 0.3 and beyond
+- [ ] transform bbox attributes on FormXObject and StructElement
+- [ ] support ExtGState (TODO in pdfminer as well, submit patch)
 - [ ] support `unstructured.io` as a user as well as `pdfplumber` (make PR)
   - it uses the default pdfminer analysis (when laparams is not None)
   - decide if we want to do any layout analysis or not...
