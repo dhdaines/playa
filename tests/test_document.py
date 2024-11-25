@@ -73,7 +73,7 @@ def test_pages():
     with playa.open(TESTDIR / "contrib" / "PSC_Station.pdf") as doc:
         page_objects = list(doc.pages)
         assert len(page_objects) == 15
-        objects = list(page_objects[2])
+        objects = list(page_objects[2].contents)
         assert LIT("Artifact") in objects
         tokens = list(page_objects[2].tokens)
         assert b"diversit\xe9 " in tokens

@@ -5,11 +5,11 @@
 - [x] expose form XObject IDs in LayoutDict
 - [ ] transform bbox attributes on FormXObject and StructElement
 - [ ] support ExtGState (TODO in pdfminer as well, submit patch)
-- [ ] make a proper schema for LayoutDict, document it, and communicate it to Polars
+- [x] make a proper schema for LayoutDict, document it, and communicate it to Polars
   - [ ] notably NamedTuple things (Color, ColorSpace) should be Tuples in LayoutDict
 - [ ] make TextState conform to PDF spec (leading and line matrix) and document it
 - [ ] expose more of TextState in LayoutDict (render mode in particular - OCRmyPDF)
-- [ ] do not try to map characters with no ToUnicode and no Encoding (OCRmyPDF)
+- [x] do not try to map characters with no ToUnicode and no Encoding (OCRmyPDF)
 - [x] properly support Pattern color space (uncolored tiling patterns) the
       way pdfplumber expects it to work
 - [ ] `decode_text` is remarkably slow
@@ -18,7 +18,11 @@
 
 ## PLAYA 0.3 and beyond
 - [ ] support `unstructured.io` as a user as well as `pdfplumber` (make PR)
+  - it uses the default pdfminer analysis (when laparams is not None)
+  - decide if we want to do any layout analysis or not...
 - [ ] support `OCRmyPDF` as a user as well as `pdfplumber` (make PR)
+  - it also uses the default pdfminer analysis
+  - decide if we want to do any layout analysis or not...
 - [ ] implement LayoutDict on top of ContentObject
 - [ ] better API for document outline, destinations, and targets
 - [ ] test coverage and more test coverage

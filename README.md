@@ -111,7 +111,7 @@ tokens or mysterious PDF objects:
 ```python
 for token in page.tokens:
     ...
-for object in page:  # PDF objects. NOT graphics/text objects!
+for object in page.contents:
     ...
 ```
 
@@ -120,7 +120,7 @@ graphical objects (if you wanted to, for instance, do layout
 analysis).
 
 ```python
-for item in page.objects:
+for item in page:
     ...
 ```
 
@@ -217,7 +217,7 @@ and PLAYA has you covered there (note that the bbox is normalized, and
 in the aforementioned interpretation of "device space"):
 
 ```python
-for obj in page.objects:
+for obj in page:
     print(f"{obj.object_type} at {obj.bbox}")
     left, top, right, bottom = obj.bbox
     print(f"  top left is {left, top}")
@@ -229,7 +229,7 @@ really handle) is the relationship between layout and logical
 structure, done using *marked content sections*:
 
 ```python
-for obj in page.objects:
+for obj in page:
     print(f"{obj.object_type} is in marked content section {obj.mcs.mcid}")
     print(f"    which is tag {obj.mcs.tag.name}")
     print(f"    with properties {obj.mcs.tag.props}")
@@ -255,7 +255,7 @@ accessible by iteration (note that this is *not* like a Page or a
 Document, where simple iteration gives PDF objects):
 
 ```python
-for obj in page.objects:
+for obj in page:
     if obj.object_type == "xobject":
         for item in obj:
             ...
@@ -271,8 +271,8 @@ for xobj in page.xobjects:
 
 Exceptionally, these have a few more features than the ordinary
 `ContentObject` - you can look at their raw stream contents as well as
-the tokens, and, just to be confusing, you can also see PDF objects
-with `objects`.
+the tokens, and you can also see raw, mysterious PDF objects with
+`contents`.
 
 ### Graphics state
 
@@ -285,7 +285,7 @@ saving them yourself if you should so desire.  This is not
 particularly onerous, because the parameters themselves are immutable:
 
 ```python
-for obj in page.objects:
+for obj in page:
     print(f"{obj.object_type} at {obj.bbox} is:")
     print(f"    {obj.gstate.scolor} stroking color")
     print(f"    {obj.gstate.ncolor} non-stroking color")

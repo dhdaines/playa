@@ -167,7 +167,7 @@ class Page:
             self._contents = []
 
     @property
-    def contents(self) -> Iterator[ContentStream]:
+    def streams(self) -> Iterator[ContentStream]:
         """Return resolved content streams."""
         for obj in self._contents:
             yield stream_value(obj)
@@ -184,30 +184,30 @@ class Page:
         _, y0, _, y1 = self.mediabox
         return y1 - y0
 
-    def __iter__(self) -> Iterator[PDFObject]:
+    @property
+    def contents(self) -> Iterator[PDFObject]:
         """Iterator over PDF objects in the content streams."""
         for pos, obj in ContentParser(self._contents):
             yield obj
 
-    @property
-    def objects(self) -> Iterator["ContentObject"]:
+    def __iter__(self) -> Iterator["ContentObject"]:
         """Iterator over lazy layout objects."""
         return iter(LazyInterpreter(self, self._contents))
 
     @property
     def paths(self) -> Iterator["PathObject"]:
         """Iterator over lazy path objects."""
-        return (obj for obj in self.objects if isinstance(obj, PathObject))
+        return (obj for obj in self if isinstance(obj, PathObject))
 
     @property
     def images(self) -> Iterator["ImageObject"]:
         """Iterator over lazy image objects."""
-        return (obj for obj in self.objects if isinstance(obj, ImageObject))
+        return (obj for obj in self if isinstance(obj, ImageObject))
 
     @property
     def texts(self) -> Iterator["TextObject"]:
         """Iterator over lazy text objects."""
-        return (obj for obj in self.objects if isinstance(obj, TextObject))
+        return (obj for obj in self if isinstance(obj, TextObject))
 
     @property
     def xobjects(self) -> Iterator["XObjectObject"]:
@@ -220,7 +220,7 @@ class Page:
         Note that these are the XObjects as rendered on the page, so
         you may see the same named XObject multiple times.
         """
-        return (obj for obj in self.objects if isinstance(obj, XObjectObject))
+        return (obj for obj in self if isinstance(obj, XObjectObject))
 
     @property
     def layout(self) -> Iterator["LayoutDict"]:
@@ -1658,7 +1658,7 @@ class XObjectObject(ContentObject):
         return iter(PageInterpreter(page, [self.stream], self.resources))
 
     @property
-    def objects(self) -> Iterator[PDFObject]:
+    def contents(self) -> Iterator[PDFObject]:
         """Iterator over PDF objects in the content stream."""
         page = self.page()
         if page is None:

@@ -45,8 +45,10 @@ def benchmark_one_lazy(path: Path):
         LOG.info("Reading %s", path)
         with playa.open(path, password=password) as pdf:
             for page in pdf.pages:
-                # This will actually "render" everything
-                _ = [obj.bbox for obj in page.objects]
+                for obj in page:
+                    _ = obj.bbox
+                    if obj.object_type == "xobject":
+                        _ = [objobj.bbox for objobj in obj]
 
 
 def benchmark_one_pdfminer(path: Path):

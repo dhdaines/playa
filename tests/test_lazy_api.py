@@ -28,7 +28,7 @@ def test_content_objects():
     """Ensure that we can produce all the basic content objects."""
     with playa.open(TESTDIR / "2023-06-20-PV.pdf", space="page") as pdf:
         page = pdf.pages[0]
-        img = next(obj for obj in page.objects if obj.object_type == "image")
+        img = next(page.images)
         assert img.colorspace.name == "ICCBased"
         assert img.colorspace.ncomponents == 3
         ibbox = [round(x) for x in img.bbox]
@@ -36,19 +36,19 @@ def test_content_objects():
         mcs_bbox = img.mcs.props["BBox"]
         # Not quite the same, for Reasons!
         assert mcs_bbox == [254.25, 895.5023, 360.09, 972.6]
-        for obj in page.objects:
-            if obj.object_type == "path":
-                assert len(list(obj)) == 1
-        rect = next(obj for obj in page.objects if obj.object_type == "path")
+        for obj in page.paths:
+            assert obj.object_type == "path"
+            assert len(list(obj)) == 1
+        rect = next(obj for obj in page.paths)
         ibbox = [round(x) for x in rect.bbox]
         assert ibbox == [85, 669, 211, 670]
         boxes = []
         texts = []
-        for obj in page.objects:
-            if obj.object_type == "text":
-                ibbox = [round(x) for x in obj.bbox]
-                boxes.append(ibbox)
-                texts.append(obj.chars)
+        for obj in page.texts:
+            assert obj.object_type == "text"
+            ibbox = [round(x) for x in obj.bbox]
+            boxes.append(ibbox)
+            texts.append(obj.chars)
         assert boxes == [
             [358, 896, 360, 905],
             [71, 681, 490, 895],
@@ -71,7 +71,7 @@ def test_open_lazy(path: Path) -> None:
         beach = []
         with playa.open(path, password=password) as doc:
             for page in doc.pages:
-                for obj in page.objects:
+                for obj in page:
                     beach.append((obj.object_type, obj.bbox))
 
 
