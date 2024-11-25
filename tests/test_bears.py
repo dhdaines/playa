@@ -25,6 +25,7 @@ SCHEMA = {
     "tag": str,
     "xobjid": str,
     "text": str,
+    "cid": int,
     "fontname": str,
     "size": float,
     "adv": float,
@@ -59,4 +60,4 @@ def test_polars_dataframe():
     """Load from PLAYA to Pandas"""
     with playa.open(TESTDIR / "pdf_structure.pdf") as pdf:
         df = pl.DataFrame(pdf.layout, schema=SCHEMA, strict=False)
-        print(df)
+        assert len(df) == 1093

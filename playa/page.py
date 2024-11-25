@@ -433,6 +433,7 @@ class LayoutObject(TypedDict, total=False):
     mcid: Union[int, None]
     tag: Union[str, None]
     xobjid: Union[str, None]
+    cid: int
     text: str
     fontname: str
     size: float
@@ -1442,25 +1443,24 @@ class PageInterpreter(BaseInterpreter):
     def render_char(
         self,
         *,
-        vertical: bool,
-        matrix: Matrix,
-        font: Font,
-        fontsize: float,
-        scaling: float,
-        rise: float,
         cid: int,
+        matrix: Matrix,
+        scaling: float,
     ) -> Tuple[LayoutObject, float]:
+        font = self.textstate.font
+        assert font is not None
+        fontsize = self.textstate.fontsize
+        rise = self.textstate.rise
         try:
             text = font.to_unichr(cid)
             assert isinstance(text, str), f"Text {text!r} is not a str"
         except PDFUnicodeNotDefined:
             log.debug("undefined char: %r, %r", font, cid)
-            # FIXME: This is not really what we want!
-            text = "(cid:%d)" % cid
+            text = ""
         textwidth = font.char_width(cid)
         textdisp = font.char_disp(cid)
         adv = textwidth * fontsize * scaling
-        if vertical:
+        if font.vertical:
             # vertical
             assert isinstance(textdisp, tuple)
             (vx, vy) = textdisp
@@ -1478,17 +1478,14 @@ class PageInterpreter(BaseInterpreter):
             bbox_upper_right = (adv, descent + rise + fontsize)
         (a, b, c, d, e, f) = matrix
         upright = a * d * scaling > 0 and b * c <= 0
+        # FIXME: This is **not** the bounding box if rotation is involved!
         x0, y0, x1, y1 = get_bound(
             (
                 apply_matrix_pt(matrix, bbox_lower_left),
                 apply_matrix_pt(matrix, bbox_upper_right),
             )
         )
-        if x1 < x0:
-            (x0, x1) = (x1, x0)
-        if y1 < y0:
-            (y0, y1) = (y1, y0)
-        if vertical:
+        if font.vertical:
             size = x1 - x0
         else:
             size = y1 - y0
@@ -1502,6 +1499,7 @@ class PageInterpreter(BaseInterpreter):
             adv=adv,
             upright=upright,
             text=text,
+            cid=cid,
             matrix=matrix,
             fontname=font.fontname,
             dash=self.graphicstate.dash,
@@ -1522,17 +1520,15 @@ class PageInterpreter(BaseInterpreter):
         vert = self.textstate.font.vertical
         assert self.ctm is not None
         matrix = mult_matrix(self.textstate.matrix, self.ctm)
-        fontsize = self.textstate.fontsize
         scaling = self.textstate.scaling * 0.01
         charspace = self.textstate.charspace * scaling
         wordspace = self.textstate.wordspace * scaling
-        rise = self.textstate.rise
         if self.textstate.font.multibyte:
             wordspace = 0
-        dxscale = 0.001 * fontsize * scaling
         (x, y) = self.textstate.linematrix
         pos = y if vert else x
         needcharspace = False
+        dxscale = 0.001 * self.textstate.fontsize * scaling
         for obj in seq:
             if isinstance(obj, (int, float)):
                 pos -= obj * dxscale
@@ -1547,13 +1543,9 @@ class PageInterpreter(BaseInterpreter):
                         pos += charspace
                     lm = (x, pos) if vert else (pos, y)
                     item, adv = self.render_char(
-                        vertical=vert,
-                        matrix=translate_matrix(matrix, lm),
-                        font=self.textstate.font,
-                        fontsize=fontsize,
-                        scaling=scaling,
-                        rise=rise,
                         cid=cid,
+                        matrix=translate_matrix(matrix, lm),
+                        scaling=scaling,
                     )
                     pos += adv
                     yield item
@@ -1705,6 +1697,7 @@ class GlyphObject(ContentObject):
 
     @property
     def bbox(self) -> Rect:
+        # FIXME: This is not the bounding box in case of rotation!
         return get_bound((self.lower_left, self.upper_right))
 
 
@@ -1720,14 +1713,14 @@ class TextObject(ContentObject):
     def _render_char(
         self,
         *,
-        vertical: bool,
-        matrix: Matrix,
-        font: Font,
-        fontsize: float,
-        scaling: float,
-        rise: float,
         cid: int,
+        matrix: Matrix,
+        scaling: float,
     ) -> Tuple[GlyphObject, float]:
+        font = self.textstate.font
+        assert font is not None
+        fontsize = self.textstate.fontsize
+        rise = self.textstate.rise
         try:
             text = font.to_unichr(cid)
             assert isinstance(text, str), f"Text {text!r} is not a str"
@@ -1737,7 +1730,7 @@ class TextObject(ContentObject):
         textwidth = font.char_width(cid)
         textdisp = font.char_disp(cid)
         adv = textwidth * fontsize * scaling
-        if vertical:
+        if font.vertical:
             # vertical
             assert isinstance(textdisp, tuple)
             (vx, vy) = textdisp
@@ -1753,7 +1746,6 @@ class TextObject(ContentObject):
             descent = font.get_descent() * fontsize
             bbox_lower_left = (0, descent + rise)
             bbox_upper_right = (adv, descent + rise + fontsize)
-        (a, b, c, d, e, f) = matrix
         item = GlyphObject(
             self.gstate,
             self.ctm,
@@ -1770,17 +1762,15 @@ class TextObject(ContentObject):
         vert = self.textstate.font.vertical
         assert self.ctm is not None
         matrix = mult_matrix(self.textstate.matrix, self.ctm)
-        fontsize = self.textstate.fontsize
         scaling = self.textstate.scaling * 0.01
         charspace = self.textstate.charspace * scaling
         wordspace = self.textstate.wordspace * scaling
-        rise = self.textstate.rise
         if self.textstate.font.multibyte:
             wordspace = 0
-        dxscale = 0.001 * fontsize * scaling
         (x, y) = self.textstate.linematrix
         pos = y if vert else x
         needcharspace = False
+        dxscale = 0.001 * self.textstate.fontsize * scaling
         for obj in item.args:
             if isinstance(obj, (int, float)):
                 pos -= obj * dxscale
@@ -1794,13 +1784,9 @@ class TextObject(ContentObject):
                         pos += charspace
                     lm = (x, pos) if vert else (pos, y)
                     glyph, adv = self._render_char(
-                        vertical=vert,
-                        matrix=translate_matrix(matrix, lm),
-                        font=self.textstate.font,
-                        fontsize=fontsize,
-                        scaling=scaling,
-                        rise=rise,
                         cid=cid,
+                        matrix=translate_matrix(matrix, lm),
+                        scaling=scaling,
                     )
                     pos += adv
                     yield glyph
