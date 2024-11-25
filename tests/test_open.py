@@ -170,6 +170,13 @@ def test_glyph_offsets() -> None:
             glyph_y = dic["glyph_offset_y"]
 
 
+def test_tiff_predictor() -> None:
+    with playa.open(TESTDIR / "contrib" / "test_pdf_with_tiff_predictor.pdf") as doc:
+        image = next(doc.pages[0].images)
+        # Decoded TIFF: 600 x 600 + a header
+        assert len(image.stream.buffer) == 360600
+
+
 if __name__ == "__main__":
     import logging
 
