@@ -520,9 +520,14 @@ class ContentParser(ObjectParser):
                 self.newstream(stream.buffer)
 
 
-class MarkedContentSection(NamedTuple):
+class MarkedContent(NamedTuple):
     """
-    Marked content section in a PDF page.
+    Marked content point or section in a PDF page.
+
+    Attributes:
+      mcid: Marked content section ID, or None for a marked content point.
+      tag: Name of tag for this marked content.
+      props: Marked content property dictionary.
     """
 
     mcid: Union[int, None]
@@ -553,7 +558,7 @@ def point_value(x: PDFObject, y: PDFObject) -> Point:
 class BaseInterpreter:
     """Core state for the PDF interpreter."""
 
-    mcs: Union[MarkedContentSection, None] = None
+    mcs: Union[MarkedContent, None] = None
     ctm: Matrix
     device_ctm: Matrix
 
@@ -1063,18 +1068,6 @@ class BaseInterpreter:
             propdict = dict_value(props)
         self.begin_tag(tag, propdict)
 
-    def do_MP(self, tag: PDFObject) -> None:
-        """Define marked-content point"""
-        self.do_tag(tag)
-
-    def do_DP(self, tag: PDFObject, props: PDFObject) -> None:
-        """Define marked-content point with property list"""
-        # See above
-        if isinstance(props, PSLiteral):
-            props = self.get_property(props)
-        rprops = dict_value(props)
-        self.do_tag(tag, rprops)
-
     def do_EMC(self) -> None:
         """End marked-content sequence"""
         self.mcs = None
@@ -1087,10 +1080,7 @@ class BaseInterpreter:
             mcid = int_value(props["MCID"])
         else:
             mcid = None
-        self.mcs = MarkedContentSection(mcid=mcid, tag=tag, props=props)
-
-    def do_tag(self, tag: PDFObject, props: Optional[PDFObject] = None) -> None:
-        pass
+        self.mcs = MarkedContent(mcid=mcid, tag=tag, props=props)
 
 
 class PageInterpreter(BaseInterpreter):
@@ -1261,6 +1251,14 @@ class PageInterpreter(BaseInterpreter):
         else:
             # unsupported xobject type.
             pass
+
+    def do_MP(self, tag: PDFObject) -> None:
+        """Define marked-content point"""
+        pass
+
+    def do_DP(self, tag: PDFObject, props: PDFObject) -> None:
+        """Define marked-content point with property list"""
+        pass
 
     def render_image(self, xobjid: str, stream: ContentStream) -> LayoutDict:
         # PDF 1.7 sec 8.6.3: Outside a content stream, certain
@@ -1585,7 +1583,7 @@ class ContentObject:
 
     gstate: GraphicState
     ctm: Matrix
-    mcs: Union[MarkedContentSection, None]
+    mcs: Union[MarkedContent, None]
 
     def __iter__(self) -> Iterator["ContentObject"]:
         yield from ()
@@ -1601,6 +1599,13 @@ class ContentObject:
             ((x0, y0), (x1, y1)) for x0, y0, x1, y1 in (item.bbox for item in self)
         )
         return get_bound(points)
+
+
+@dataclass
+class TagObject(ContentObject):
+    """A marked content point with no content."""
+
+    mcs: MarkedContent
 
 
 @dataclass
@@ -2290,4 +2295,20 @@ class LazyInterpreter(BaseInterpreter):
             imagemask=stream.get_any(("IM", "ImageMask")),
             bits=stream.get_any(("BPC", "BitsPerComponent"), 1),
             colorspace=colorspace,
+        )
+
+    def do_MP(self, tag: PDFObject) -> Iterator[ContentObject]:
+        """Define marked-content point"""
+        yield from self.do_DP(tag, None)
+
+    def do_DP(self, tag: PDFObject, props: PDFObject = None) -> Iterator[ContentObject]:
+        """Define marked-content point with property list"""
+        # See above
+        if isinstance(props, PSLiteral):
+            props = self.get_property(props)
+        rprops = {} if props is None else dict_value(props)
+        yield TagObject(
+            ctm=self.ctm,
+            mcs=MarkedContent(mcid=None, tag=literal_name(tag), props=rprops),
+            gstate=self.graphicstate,
         )
