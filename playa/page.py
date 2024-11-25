@@ -1346,13 +1346,6 @@ class PageInterpreter(BaseInterpreter):
                 path[0].points[-1] if p[0] == "h" else p.points[-1] for p in path
             ]
             pts = [apply_matrix_pt(self.ctm, pt) for pt in raw_pts]
-            # FIXME: WTF, this seems to repeat the same transformation
-            # as the previous line?
-            operators = [str(p.operator) for p in path]
-            transformed_points = [
-                [apply_matrix_pt(self.ctm, point) for point in p.points] for p in path
-            ]
-            transformed_path = [(o, *p) for o, p in zip(operators, transformed_points)]
 
             # Drop redundant final "h" on an already closed path
             if len(shape) > 2 and shape[-1] == "h" and pts[-2] == pts[0]:
