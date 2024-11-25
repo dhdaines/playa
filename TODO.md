@@ -7,8 +7,8 @@
 - [ ] support ExtGState (TODO in pdfminer as well, submit patch)
 - [x] make a proper schema for LayoutDict, document it, and communicate it to Polars
   - [ ] notably NamedTuple things (Color, ColorSpace) should be Tuples in LayoutDict
-- [ ] make TextState conform to PDF spec (leading and line matrix) and document it
-- [ ] expose more of TextState in LayoutDict (render mode in particular - OCRmyPDF)
+- [x] make TextState conform to PDF spec (leading and line matrix) and document it
+- [x] expose more of TextState in LayoutDict (render mode in particular - OCRmyPDF)
 - [x] do not try to map characters with no ToUnicode and no Encoding (OCRmyPDF)
 - [x] properly support Pattern color space (uncolored tiling patterns) the
       way pdfplumber expects it to work

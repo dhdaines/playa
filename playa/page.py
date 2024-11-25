@@ -248,10 +248,17 @@ TextArgument = Union[float, bytes, Font]
 
 @dataclass
 class TextState:
-    """PDF Text State (PDF 1.7 section 9.3.1)"""
+    """PDF Text State (PDF 1.7 section 9.3.1).
 
-    matrix: Matrix = MATRIX_IDENTITY
-    linematrix: Point = (0, 0)
+    Exceptionally, the line matrix and text matrix are represented
+    more compactly as the line matrix itself in `line_matrix` and the
+    the `glyph_offset` for the current glyph (expressed in **device
+    space**), which pdfminer confusingly called `linematrix`.
+
+    """
+
+    line_matrix: Matrix = MATRIX_IDENTITY
+    glyph_offset: Point = (0, 0)
     font: Optional[Font] = None
     fontsize: float = 0
     charspace: float = 0
@@ -263,8 +270,8 @@ class TextState:
 
     def reset(self) -> None:
         """Reset the text state"""
-        self.matrix = MATRIX_IDENTITY
-        self.linematrix = (0, 0)
+        self.line_matrix = MATRIX_IDENTITY
+        self.glyph_offset = (0, 0)
 
     def update(self, operator: TextOperator, *args: TextArgument):
         """Apply a text state operator"""
@@ -290,21 +297,21 @@ class TextState:
         elif operator == "Td":
             tx = cast(float, args[0])
             ty = cast(float, args[1])
-            (a, b, c, d, e, f) = self.matrix
+            (a, b, c, d, e, f) = self.line_matrix
             e_new = tx * a + ty * c + e
             f_new = tx * b + ty * d + f
-            self.matrix = (a, b, c, d, e_new, f_new)
-            self.linematrix = (0, 0)
+            self.line_matrix = (a, b, c, d, e_new, f_new)
+            self.glyph_offset = (0, 0)
         elif operator == "Tm":
             a, b, c, d, e, f = (cast(float, x) for x in args)
-            self.matrix = (a, b, c, d, e, f)
-            self.linematrix = (0, 0)
+            self.line_matrix = (a, b, c, d, e, f)
+            self.glyph_offset = (0, 0)
         elif operator == "T*":
             # PDF 1.7 table 108: equivalent to 0 -leading Td - but
             # because we are lazy we don't know the leading until
             # we get here, so we can't expand it in advance.
-            (a, b, c, d, e, f) = self.matrix
-            self.matrix = (
+            (a, b, c, d, e, f) = self.line_matrix
+            self.line_matrix = (
                 a,
                 b,
                 c,
@@ -314,7 +321,7 @@ class TextState:
                 self.leading * c + e,
                 self.leading * d + f,
             )
-            self.linematrix = (0, 0)
+            self.glyph_offset = (0, 0)
 
 
 class DashPattern(NamedTuple):
@@ -383,8 +390,9 @@ class LayoutDict(TypedDict, total=False):
     text: str
     fontname: str
     size: float
-    adv: float
-    matrix: Matrix
+    glyph_offset_x: float
+    glyph_offset_y: float
+    render_mode: int
     upright: bool
     x0: float
     y0: float
@@ -419,8 +427,9 @@ schema = {
     "cid": int,
     "fontname": str,
     "size": float,
-    "adv": float,
-    "matrix": pl.Array(float, 6),
+    "glyph_offset_x": float,
+    "glyph_offset_y": float,
+    "render_mode": int,
     "upright": bool,
     "x0": float,
     "x1": float,
@@ -938,13 +947,13 @@ class BaseInterpreter:
         try:
             tx = num_value(tx)
             ty = num_value(ty)
-            (a, b, c, d, e, f) = self.textstate.matrix
+            (a, b, c, d, e, f) = self.textstate.line_matrix
             e_new = tx * a + ty * c + e
             f_new = tx * b + ty * d + f
-            self.textstate.matrix = (a, b, c, d, e_new, f_new)
+            self.textstate.line_matrix = (a, b, c, d, e_new, f_new)
         except TypeError:
             log.warning("Invalid offset (%r, %r) for Td", tx, ty)
-        self.textstate.linematrix = (0, 0)
+        self.textstate.glyph_offset = (0, 0)
 
     def do_TD(self, tx: PDFObject, ty: PDFObject) -> None:
         """Move to the start of the next line.
@@ -955,15 +964,15 @@ class BaseInterpreter:
         try:
             tx = num_value(tx)
             ty = num_value(ty)
-            (a, b, c, d, e, f) = self.textstate.matrix
+            (a, b, c, d, e, f) = self.textstate.line_matrix
             e_new = tx * a + ty * c + e
             f_new = tx * b + ty * d + f
-            self.textstate.matrix = (a, b, c, d, e_new, f_new)
+            self.textstate.line_matrix = (a, b, c, d, e_new, f_new)
             if ty is not None:
                 self.textstate.leading = ty
         except TypeError:
             log.warning("Invalid offset (%r, %r) for TD", tx, ty)
-        self.textstate.linematrix = (0, 0)
+        self.textstate.glyph_offset = (0, 0)
 
     def do_Tm(
         self,
@@ -975,13 +984,13 @@ class BaseInterpreter:
         f: PDFObject,
     ) -> None:
         """Set text matrix and text line matrix"""
-        self.textstate.matrix = cast(Matrix, (a, b, c, d, e, f))
-        self.textstate.linematrix = (0, 0)
+        self.textstate.line_matrix = cast(Matrix, (a, b, c, d, e, f))
+        self.textstate.glyph_offset = (0, 0)
 
     def do_T_a(self) -> None:
         """Move to start of next text line"""
-        (a, b, c, d, e, f) = self.textstate.matrix
-        self.textstate.matrix = (
+        (a, b, c, d, e, f) = self.textstate.line_matrix
+        self.textstate.line_matrix = (
             a,
             b,
             c,
@@ -989,7 +998,7 @@ class BaseInterpreter:
             self.textstate.leading * c + e,
             self.textstate.leading * d + f,
         )
-        self.textstate.linematrix = (0, 0)
+        self.textstate.glyph_offset = (0, 0)
 
     def do_BI(self) -> None:
         """Begin inline image object"""
@@ -1476,6 +1485,7 @@ class PageInterpreter(BaseInterpreter):
             size = x1 - x0
         else:
             size = y1 - y0
+        glyph_x, glyph_y = self.textstate.glyph_offset
         item = LayoutDict(
             object_type="char",
             x0=x0,
@@ -1483,12 +1493,13 @@ class PageInterpreter(BaseInterpreter):
             x1=x1,
             y1=y1,
             size=size,
-            adv=adv,
             upright=upright,
             text=text,
             cid=cid,
-            matrix=matrix,
             fontname=font.fontname,
+            glyph_offset_x=glyph_x,
+            glyph_offset_y=glyph_y,
+            render_mode=self.textstate.render,
             dash_pattern=self.graphicstate.dash.dash,
             dash_phase=self.graphicstate.dash.phase,
             ncs=self.graphicstate.ncs,
@@ -1507,13 +1518,13 @@ class PageInterpreter(BaseInterpreter):
         assert self.textstate.font is not None
         vert = self.textstate.font.vertical
         assert self.ctm is not None
-        matrix = mult_matrix(self.textstate.matrix, self.ctm)
+        matrix = mult_matrix(self.textstate.line_matrix, self.ctm)
         scaling = self.textstate.scaling * 0.01
         charspace = self.textstate.charspace * scaling
         wordspace = self.textstate.wordspace * scaling
         if self.textstate.font.multibyte:
             wordspace = 0
-        (x, y) = self.textstate.linematrix
+        (x, y) = self.textstate.glyph_offset
         pos = y if vert else x
         needcharspace = False
         dxscale = 0.001 * self.textstate.fontsize * scaling
@@ -1529,10 +1540,10 @@ class PageInterpreter(BaseInterpreter):
                 for cid in self.textstate.font.decode(obj):
                     if needcharspace:
                         pos += charspace
-                    lm = (x, pos) if vert else (pos, y)
+                    self.textstate.glyph_offset = (x, pos) if vert else (pos, y)
                     item, adv = self.render_char(
                         cid=cid,
-                        matrix=translate_matrix(matrix, lm),
+                        matrix=translate_matrix(matrix, self.textstate.glyph_offset),
                         scaling=scaling,
                     )
                     pos += adv
@@ -1540,7 +1551,7 @@ class PageInterpreter(BaseInterpreter):
                     if cid == 32 and wordspace:
                         pos += wordspace
                     needcharspace = True
-        self.textstate.linematrix = (x, pos) if vert else (pos, y)
+        self.textstate.glyph_offset = (x, pos) if vert else (pos, y)
 
 
 @dataclass
@@ -1762,6 +1773,7 @@ def make_txt(operator: TextOperator, *args: TextArgument) -> TextItem:
 class GlyphObject(ContentObject):
     """Individual glyph on the page."""
 
+    textstate: TextState
     cid: int
     text: str
     # FIXME: Subject to change here as not the most useful info
@@ -1823,6 +1835,7 @@ class TextObject(ContentObject):
             self.gstate,
             self.ctm,
             self.mcs,
+            self.textstate,
             cid,
             text,
             apply_matrix_pt(matrix, bbox_lower_left),
@@ -1834,13 +1847,13 @@ class TextObject(ContentObject):
         assert self.textstate.font is not None
         vert = self.textstate.font.vertical
         assert self.ctm is not None
-        matrix = mult_matrix(self.textstate.matrix, self.ctm)
+        matrix = mult_matrix(self.textstate.line_matrix, self.ctm)
         scaling = self.textstate.scaling * 0.01
         charspace = self.textstate.charspace * scaling
         wordspace = self.textstate.wordspace * scaling
         if self.textstate.font.multibyte:
             wordspace = 0
-        (x, y) = self.textstate.linematrix
+        (x, y) = self.textstate.glyph_offset
         pos = y if vert else x
         needcharspace = False
         dxscale = 0.001 * self.textstate.fontsize * scaling
@@ -1855,10 +1868,10 @@ class TextObject(ContentObject):
                 for cid in self.textstate.font.decode(obj):
                     if needcharspace:
                         pos += charspace
-                    lm = (x, pos) if vert else (pos, y)
+                    self.textstate.glyph_offset = (x, pos) if vert else (pos, y)
                     glyph, adv = self._render_char(
                         cid=cid,
-                        matrix=translate_matrix(matrix, lm),
+                        matrix=translate_matrix(matrix, self.textstate.glyph_offset),
                         scaling=scaling,
                     )
                     pos += adv
@@ -1866,7 +1879,7 @@ class TextObject(ContentObject):
                     if cid == 32 and wordspace:
                         pos += wordspace
                     needcharspace = True
-        self.textstate.linematrix = (x, pos) if vert else (pos, y)
+        self.textstate.glyph_offset = (x, pos) if vert else (pos, y)
 
     @property
     def chars(self) -> str:
