@@ -129,7 +129,7 @@ possible piece of information, PLAYA gives you some options here.
 Wherever possible this information can be computed lazily, but this
 involves some more work on the user's part.
 
-### Dictionary-based API
+## Dictionary-based API
 
 If, on the other hand, **you** are lazy, then you can just use
 `page.layout`, which will flatten everything for you into a friendly
@@ -168,7 +168,7 @@ FIXME: support Polars as well
 
 If you have more specific needs or want better performance, then read on.
 
-### An important note about coordinate spaces
+## An important note about coordinate spaces
 
 Wait, what is this "absolute position" of which you speak, and which
 PLAYA gives you?  It's important to understand that there is no
@@ -205,7 +205,7 @@ it isn't).  In this case, no translation or rotation of the default
 user space is done (in other words any values of `MediaBox` or
 `Rotate` in the page dictionary are simply ignored).
 
-### Lazy object API
+## Lazy object API
 
 Fundamentally you may just want to know *what* is *where* on the page,
 and PLAYA has you covered there (note that the bbox is normalized, and
@@ -224,7 +224,7 @@ really handle) is the relationship between layout and logical
 structure, done using *marked content sections*:
 
 ```python
-for obj in page.layout:
+for obj in page.objects:
     print(f"{obj.object_type} is in marked content section {obj.mcs.mcid}")
     print(f"    which is tag {obj.mcs.tag.name}")
     print(f"    with properties {obj.mcs.tag.props}")
@@ -238,6 +238,38 @@ will *always* have a `tag`.
 
 PDF also has the concept of "marked content points" which are not
 currently supported by PLAYA.
+
+### Form XObjects
+
+A PDF page may also contain "Form XObjects" which are like tiny
+embedded PDF documents (they have nothing to do with fillable forms).
+The lazy API (because it is lazy) **will not expand these for you**
+which may be a source of surprise.  You can identify them because they
+have `object_type == "xobject"`.  The layout objects inside them are
+accessible by iteration (note that this is *not* like a Page or a
+Document, where simple iteration gives PDF objects):
+
+```python
+for obj in page.objects:
+    if obj.object_type == "xobject":
+        for item in obj:
+            ...
+```
+
+You can also iterate over them in the page context with `page.xobjects`:
+
+```python
+for xobj in page.xobjects:
+    for item in xobj:
+        ...
+```
+
+Exceptionally, these have a few more features than the ordinary
+`ContentObject` - you can look at their raw stream contents as well as
+the tokens, and, just to be confusing, you can also see PDF objects
+with `objects`.
+
+### Graphics state
 
 You may also wish to know what color an object is, and other aspects of
 what PDF refers to as the *graphics state*, which is accessible
@@ -286,6 +318,8 @@ for subpath in path:
    for seg in subpath.segments:
        print(f"segment: {seg}")
 ```
+
+### Text Objects
 
 Since most PDFs consist primarily of text, obviously you may wish to
 know something about the actual text (or the `ActualText`, which you
@@ -336,26 +370,7 @@ sections* and not *text objects*, so you may be out of luck if you
 want to actually match these characters to glyphs.  Sorry, I don't
 write the standards.
 
-### Form XObject Access
-
-A PDF page may also contain "Form XObjects" which are like tiny
-embedded PDF documents (they have nothing to do with fillable forms).
-By default PLAYA will simply expand these into the sequence of objects
-returned by `layout` or `objects`, but in some cases it may be useful
-to look at them in isolation:
-
-```python
-for xobj in page.xobjects:
-    if xobj.name != "FabulousExternalObject":
-        pass  # we don't care!
-    for item in xobj.objects:
-        ...
-    for dic in xobj.layout:
-        ...
-```
-
-In the future we may support similar access to patterns and Type 3
-fonts, which are also embedded PDF documents of the same sort.
+## Conclusion
 
 As mentioned earlier, if you really just want to do text extraction,
 there's always pdfplumber, pymupdf, pypdfium2, pikepdf, pypdf, borb,

@@ -82,65 +82,6 @@ TextSeq = Iterable[Union[int, float, bytes]]
 DeviceSpace = Literal["page", "screen", "user"]
 
 
-@dataclass
-class FormXObject:
-    """An eXternal Object, in the context of a page.
-
-    There are a couple of kinds of XObjects.  Here we are only
-    concerned with "Form XObjects" which, despite their name, have
-    nothing at all to do with fillable forms.  Instead they are like
-    little embeddable PDF pages, possibly with their own resources,
-    definitely with their own definition of "user space".
-    """
-
-    name: str
-    page: weakref.ReferenceType
-    stream: ContentStream
-    resources: Union[None, Dict[str, PDFObject]]
-
-    def __contains__(self, name: object) -> bool:
-        return name in self.stream
-
-    def __getitem__(self, name: str) -> PDFObject:
-        return self.stream[name]
-
-    @property
-    def buffer(self) -> bytes:
-        return self.stream.buffer
-
-    def __iter__(self) -> Iterator[PDFObject]:
-        """Iterator over PDF objects in the content streams."""
-        for pos, obj in ContentParser([self.stream]):
-            yield obj
-
-    @property
-    def tokens(self) -> Iterator[Token]:
-        """Iterator over tokens in the content streams."""
-        parser = ContentParser([self.stream])
-        while True:
-            try:
-                pos, tok = parser.nexttoken()
-            except StopIteration:
-                return
-            yield tok
-
-    @property
-    def layout(self) -> Iterator["LayoutDict"]:
-        """Iterator over eager layout object dictionaries."""
-        page = self.page()
-        if page is None:
-            raise RuntimeError("Page no longer exists!")
-        return iter(PageInterpreter(page, [self.stream], self.resources))
-
-    @property
-    def objects(self) -> Iterator["ContentObject"]:
-        """Iterator over lazy layout objects."""
-        page = self.page()
-        if page is None:
-            raise RuntimeError("Page no longer exists!")
-        return iter(LazyInterpreter(page, [self.stream], self.resources))
-
-
 class Page:
     """An object that holds the information about a page.
 
@@ -221,25 +162,6 @@ class Page:
             yield stream_value(obj)
 
     @property
-    def xobjects(self) -> Iterator[FormXObject]:
-        """Return resolved Form XObjects.
-
-        This does *not* return any image or PostScript XObjects.  You
-        can get images via the `images` property.  Apparently you
-        aren't supposed to use PostScript XObjects for anything, ever.
-        """
-        for name, stream in dict_value(self.resources.get("XObject", {})).items():
-            xobj = stream_value(stream)
-            xobjres = xobj.get("Resources")
-            resources = None if xobjres is None else dict_value(xobjres)
-            yield FormXObject(
-                page=weakref.ref(self),
-                name=name,
-                stream=stream_value(stream),
-                resources=resources,
-            )
-
-    @property
     def width(self) -> float:
         """Width of the page in default user space units."""
         x0, _, x1, _ = self.mediabox
@@ -275,6 +197,19 @@ class Page:
     def texts(self) -> Iterator["TextObject"]:
         """Iterator over lazy text objects."""
         return (obj for obj in self.objects if isinstance(obj, TextObject))
+
+    @property
+    def xobjects(self) -> Iterator["XObjectObject"]:
+        """Return resolved and rendered Form XObjects.
+
+        This does *not* return any image or PostScript XObjects.  You
+        can get images via the `images` property.  Apparently you
+        aren't supposed to use PostScript XObjects for anything, ever.
+
+        Note that these are the XObjects as rendered on the page, so
+        you may see the same named XObject multiple times.
+        """
+        return (obj for obj in self.objects if isinstance(obj, XObjectObject))
 
     @property
     def layout(self) -> Iterator["LayoutDict"]:
@@ -1192,9 +1127,7 @@ class PageInterpreter(BaseInterpreter):
         self.do_T_a()
         yield from self.do_TJ([s])
 
-    def do__w(
-        self, aw: PDFObject, ac: PDFObject, s: PDFObject
-    ) -> Iterator[LayoutDict]:
+    def do__w(self, aw: PDFObject, ac: PDFObject, s: PDFObject) -> Iterator[LayoutDict]:
         """Set word and character spacing, move to next line, and show text
 
         The " (double quote) operator.
@@ -1568,8 +1501,8 @@ class ContentObject:
 
     @property
     def object_type(self):
-        name, _, _ = self.__class__.__name__.partition("Object")
-        return name.lower()
+        name = self.__class__.__name__
+        return name[:-len("Object")].lower()
 
     @property
     def bbox(self) -> Rect:
@@ -1590,6 +1523,17 @@ class ImageObject(ContentObject):
     stream: ContentStream
     colorspace: Union[ColorSpace, None]
 
+    def __contains__(self, name: object) -> bool:
+        return name in self.stream
+
+    def __getitem__(self, name: str) -> PDFObject:
+        return self.stream[name]
+
+    @property
+    def buffer(self) -> bytes:
+        """Raw stream content for this image"""
+        return self.stream.buffer
+
     @property
     def bbox(self) -> Rect:
         # PDF 1.7 sec 8.3.24: All images shall be 1 unit wide by 1
@@ -1598,6 +1542,80 @@ class ImageObject(ContentObject):
         # region of the page by temporarily altering the CTM.
         bounds = ((0, 0), (1, 0), (0, 1), (1, 1))
         return get_bound(apply_matrix_pt(self.ctm, (p, q)) for (p, q) in bounds)
+
+
+@dataclass
+class XObjectObject(ContentObject):
+    """An eXternal Object, in the context of a page.
+
+    There are a couple of kinds of XObjects.  Here we are only
+    concerned with "Form XObjects" which, despite their name, have
+    nothing at all to do with fillable forms.  Instead they are like
+    little embeddable PDF pages, possibly with their own resources,
+    definitely with their own definition of "user space".
+
+    Image XObjects are handled by `ImageObject`.
+    """
+
+    xobjid: str
+    page: weakref.ReferenceType
+    stream: ContentStream
+    resources: Union[None, Dict[str, PDFObject]]
+
+    def __contains__(self, name: object) -> bool:
+        return name in self.stream
+
+    def __getitem__(self, name: str) -> PDFObject:
+        return self.stream[name]
+
+    @property
+    def bbox(self) -> Rect:
+        """Get the bounding box of this XObject in device space."""
+        # It is a required attribute!
+        x0, y0, x1, y1 = parse_rect(self.stream["BBox"])
+        # FIXME: This is *not* the bbox in the case of rotation
+        return get_bound([
+            apply_matrix_pt(self.ctm, (x0, y0)),
+            apply_matrix_pt(self.ctm, (x1, y1))])
+
+    @property
+    def buffer(self) -> bytes:
+        """Raw stream content for this XObject"""
+        return self.stream.buffer
+
+    @property
+    def tokens(self) -> Iterator[Token]:
+        """Iterate over tokens in the XObject's content stream."""
+        parser = ContentParser([self.stream])
+        while True:
+            try:
+                pos, tok = parser.nexttoken()
+            except StopIteration:
+                return
+            yield tok
+
+    @property
+    def layout(self) -> Iterator["LayoutDict"]:
+        """Iterator over eager layout object dictionaries."""
+        page = self.page()
+        if page is None:
+            raise RuntimeError("Page no longer exists!")
+        return iter(PageInterpreter(page, [self.stream], self.resources))
+
+    @property
+    def objects(self) -> Iterator[PDFObject]:
+        """Iterator over PDF objects in the content stream."""
+        page = self.page()
+        if page is None:
+            raise RuntimeError("Page no longer exists!")
+        for pos, obj in ContentParser([self.stream]):
+            yield obj
+
+    def __iter__(self) -> Iterator["ContentObject"]:
+        page = self.page()
+        if page is None:
+            raise RuntimeError("Page no longer exists!")
+        return iter(LazyInterpreter(page, [self.stream], self.resources))
 
 
 @dataclass
@@ -2141,18 +2159,20 @@ class LazyInterpreter(BaseInterpreter):
         log.debug("Processing xobj: %r", xobj)
         subtype = xobj.get("Subtype")
         if subtype is LITERAL_FORM and "BBox" in xobj:
-            # FIXME: emit a ContentObject for the XObject so we know it exists?
             matrix = cast(Matrix, list_value(xobj.get("Matrix", MATRIX_IDENTITY)))
             # According to PDF reference 1.7 section 4.9.1, XObjects in
             # earlier PDFs (prior to v1.2) use the page's Resources entry
             # instead of having their own Resources entry.
             xobjres = xobj.get("Resources")
             resources = None if xobjres is None else dict_value(xobjres)
-            interpreter = LazyInterpreter(
-                self.page, resources=resources, contents=[xobj]
-            )
-            interpreter.ctm = mult_matrix(matrix, self.ctm)
-            yield from interpreter
+            xobjobj = XObjectObject(ctm=mult_matrix(matrix, self.ctm),
+                                  mcs=self.mcs,
+                                  gstate=self.graphicstate,
+                                  page=weakref.ref(self.page),
+                                  xobjid=xobjid, stream=xobj,
+                                  resources=resources)
+            # We are *lazy*, so just yield the XObject itself not its contents
+            yield xobjobj
         elif subtype is LITERAL_IMAGE and "Width" in xobj and "Height" in xobj:
             yield self.render_image(xobjid, xobj)
         else:
