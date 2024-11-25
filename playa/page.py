@@ -71,6 +71,17 @@ from playa.utils import (
 if TYPE_CHECKING:
     from playa.document import Document
 
+# Stub out Polars if not present
+try:
+    import polars as pl
+except ImportError:
+
+    class pl:  # type: ignore
+        def Array(*args, **kwargs): ...
+        def List(*args, **kwargs): ...
+        def Object(*args, **kwargs): ...
+
+
 log = logging.getLogger(__name__)
 
 # some predefined literals and keywords.
@@ -384,7 +395,8 @@ class LayoutDict(TypedDict, total=False):
     ncs: ColorSpace  # for text/paths
     non_stroking_color: Color
     path: List[Tuple]
-    dash: DashPattern
+    dash_pattern: List[float]
+    dash_phase: float
     evenodd: bool
     stroke: bool
     fill: bool
@@ -398,6 +410,40 @@ class LayoutDict(TypedDict, total=False):
 
 
 fieldnames = LayoutDict.__annotations__.keys()
+schema = {
+    "object_type": str,
+    "mcid": int,
+    "tag": str,
+    "xobjid": str,
+    "text": str,
+    "cid": int,
+    "fontname": str,
+    "size": float,
+    "adv": float,
+    "matrix": pl.Array(float, 6),
+    "upright": bool,
+    "x0": float,
+    "x1": float,
+    "y0": float,
+    "y1": float,
+    "scs": pl.Object,
+    "ncs": pl.Object,
+    "stroking_color": pl.Object,
+    "non_stroking_color": pl.Object,
+    "path": pl.Object,
+    "dash_pattern": pl.List(float),
+    "dash_phase": float,
+    "evenodd": bool,
+    "stroke": bool,
+    "fill": bool,
+    "linewidth": float,
+    "pts": pl.Object,
+    "stream": pl.Object,
+    "imagemask": bool,
+    "colorspace": pl.Object,
+    "srcsize": pl.Array(int, 2),
+    "bits": int,
+}
 
 
 class ContentParser(ObjectParser):
@@ -1295,7 +1341,8 @@ class PageInterpreter(BaseInterpreter):
                     linewidth=gstate.linewidth,
                     stroking_color=gstate.scolor,
                     non_stroking_color=gstate.ncolor,
-                    dash=gstate.dash,
+                    dash_pattern=gstate.dash.dash,
+                    dash_phase=gstate.dash.phase,
                     ncs=ncs,
                     scs=scs,
                 )
@@ -1328,7 +1375,8 @@ class PageInterpreter(BaseInterpreter):
                         linewidth=gstate.linewidth,
                         stroking_color=gstate.scolor,
                         non_stroking_color=gstate.ncolor,
-                        dash=gstate.dash,
+                        dash_pattern=gstate.dash.dash,
+                        dash_phase=gstate.dash.phase,
                         ncs=ncs,
                         scs=scs,
                     )
@@ -1350,7 +1398,8 @@ class PageInterpreter(BaseInterpreter):
                         linewidth=gstate.linewidth,
                         stroking_color=gstate.scolor,
                         non_stroking_color=gstate.ncolor,
-                        dash=gstate.dash,
+                        dash_pattern=gstate.dash.dash,
+                        dash_phase=gstate.dash.phase,
                         ncs=ncs,
                         scs=scs,
                     )
@@ -1372,7 +1421,8 @@ class PageInterpreter(BaseInterpreter):
                     linewidth=gstate.linewidth,
                     stroking_color=gstate.scolor,
                     non_stroking_color=gstate.ncolor,
-                    dash=gstate.dash,
+                    dash_pattern=gstate.dash.dash,
+                    dash_phase=gstate.dash.phase,
                     ncs=ncs,
                     scs=scs,
                 )
@@ -1439,7 +1489,8 @@ class PageInterpreter(BaseInterpreter):
             cid=cid,
             matrix=matrix,
             fontname=font.fontname,
-            dash=self.graphicstate.dash,
+            dash_pattern=self.graphicstate.dash.dash,
+            dash_phase=self.graphicstate.dash.phase,
             ncs=self.graphicstate.ncs,
             scs=self.graphicstate.scs,
             stroking_color=self.graphicstate.scolor,

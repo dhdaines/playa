@@ -17,7 +17,7 @@ import builtins
 from os import PathLike
 from typing import Union
 
-from playa.document import Document, LayoutDict
+from playa.document import Document, LayoutDict, schema as schema
 from playa.page import DeviceSpace
 
 __version__ = "0.2"

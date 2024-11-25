@@ -40,7 +40,12 @@ from playa.exceptions import (
     PDFSyntaxError,
 )
 from playa.font import CIDFont, Font, PDFTrueTypeFont, Type1Font, Type3Font
-from playa.page import Page, LayoutDict as PageLayoutDict, DeviceSpace
+from playa.page import (
+    Page,
+    LayoutDict as PageLayoutDict,
+    DeviceSpace,
+    schema as page_schema,
+)
 from playa.parser import (
     KEYWORD_OBJ,
     KEYWORD_TRAILER,
@@ -734,6 +739,13 @@ class LayoutDict(PageLayoutDict):
 
     page_index: int
     page_label: Union[str, None]
+
+
+schema = {
+    **page_schema,
+    "page_index": int,
+    "page_label": str,
+}
 
 
 class Document:

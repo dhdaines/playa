@@ -164,7 +164,12 @@ you can also create a Pandas DataFrame:
 df = pandas.DataFrame.from_records(pdf.layout)
 ```
 
-FIXME: support Polars as well
+or a Polars DataFrame or LazyFrame (in the future `strict=False` will
+not be necessary...)
+
+```python
+df = polars.DataFrame(pdf.layout, schema=playa.schema, strict=False)
+```
 
 If you have more specific needs or want better performance, then read on.
 
