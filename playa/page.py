@@ -1349,7 +1349,7 @@ class PageInterpreter(BaseInterpreter):
 
             # Drop redundant final "h" on an already closed path
             if len(shape) > 3 and shape[-1] == "h" and pts[-2] == pts[0]:
-                shape = shape[:-2] + "h"
+                shape = shape[:-1]
                 pts.pop()
             if shape in {"mlh", "ml"}:
                 # single line segment ("ml" is a frequent anomaly)
