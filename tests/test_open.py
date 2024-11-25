@@ -84,6 +84,13 @@ def test_inline_data() -> None:
         assert len(items) == 456
 
 
+def test_redundant_h() -> None:
+    with playa.open(TESTDIR / "contrib" / "issue-1008-inline-ascii85.pdf") as doc:
+        page = doc.pages[0]
+        rects = [item for item in page.layout if item["object_type"] == "rect"]
+        assert len(rects) == 6
+
+
 def test_multiple_contents() -> None:
     with playa.open(TESTDIR / "jo.pdf") as doc:
         page = doc.pages[0]
