@@ -475,6 +475,7 @@ class BaseInterpreter:
 
     mcs: Union[MarkedContentSection, None] = None
     ctm: Matrix
+    device_ctm: Matrix
 
     def __init__(
         self,
@@ -502,18 +503,21 @@ class BaseInterpreter:
         # PDF 1.7 section 8.4.1: Initial value: a matrix that
         # transforms default user coordinates to device coordinates.
         #
+        # We keep this as `device_ctm` in order to transform layout
+        # attributes in tagged PDFs which are specified in default
+        # user space (PDF 1.7 section 14.8.5.4.3, table 344)
+        #
         # "screen" device space: origin is top left of MediaBox
         if page.space == "screen":
-            ctm = (1.0, 0.0, 0.0, -1.0, -x0, y1)
+            ctm = self.device_ctm = (1.0, 0.0, 0.0, -1.0, -x0, y1)
         # "page" device space: origin is bottom left of MediaBox
         elif page.space == "page":
-            ctm = (1.0, 0.0, 0.0, 1.0, -x0, -y0)
+            ctm = self.device_ctm = (1.0, 0.0, 0.0, 1.0, -x0, -y0)
         # "user" device space: no transformation or rotation
-        elif page.space == "user":
-            ctm = MATRIX_IDENTITY
         else:
-            log.warning("Unknown device space: %r", page.space)
-            ctm = MATRIX_IDENTITY
+            if page.space != "user":
+                log.warning("Unknown device space: %r", page.space)
+            ctm = self.device_ctm = MATRIX_IDENTITY
             width = height = 0
         # If rotation is requested, apply rotation to the initial ctm
         if page.rotate == 90:
