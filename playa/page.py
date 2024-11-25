@@ -59,6 +59,7 @@ from playa.utils import (
     Point,
     Rect,
     apply_matrix_pt,
+    apply_matrix_norm,
     decode_text,
     get_bound,
     make_compat_bytes,
@@ -252,9 +253,8 @@ class TextState:
 
     Exceptionally, the line matrix and text matrix are represented
     more compactly as the line matrix itself in `line_matrix` and the
-    the `glyph_offset` for the current glyph (expressed in **device
-    space**), which pdfminer confusingly called `linematrix`.
-
+    the `glyph_offset` for the current glyph (note: expressed in
+    **user space**), which pdfminer confusingly called `linematrix`.
     """
 
     line_matrix: Matrix = MATRIX_IDENTITY
@@ -1485,7 +1485,8 @@ class PageInterpreter(BaseInterpreter):
             size = x1 - x0
         else:
             size = y1 - y0
-        glyph_x, glyph_y = self.textstate.glyph_offset
+        glyph_x, glyph_y = apply_matrix_norm(self.ctm,
+                                             self.textstate.glyph_offset)
         item = LayoutDict(
             object_type="char",
             x0=x0,

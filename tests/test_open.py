@@ -128,6 +128,32 @@ def test_spaces() -> None:
     assert screen_box[3] == pytest.approx(page.height - page_box[1])
 
 
+def test_glyph_offsets() -> None:
+    """Verify that glyph_offset is what we say it is."""
+    # screen space
+    with playa.open(TESTDIR / "simple3.pdf", space="screen") as doc:
+        glyph_x = 0
+        glyph_y = 0
+        for dic in doc.layout:
+            if dic["text"] == "e":  # e as in Hello
+                assert dic["glyph_offset_x"] > glyph_x
+            elif dic["text"] == "い": # あ as in あいうえお
+                assert dic["glyph_offset_y"] > glyph_y
+            glyph_x = dic["glyph_offset_x"]
+            glyph_y = dic["glyph_offset_y"]
+    # page / user space
+    with playa.open(TESTDIR / "simple3.pdf", space="page") as doc:
+        glyph_x = 0
+        glyph_y = 0
+        for dic in doc.layout:
+            if dic["text"] == "e":  # e as in Hello
+                assert dic["glyph_offset_x"] > glyph_x
+            elif dic["text"] == "い": # あ as in あいうえお
+                assert dic["glyph_offset_y"] < glyph_y
+            glyph_x = dic["glyph_offset_x"]
+            glyph_y = dic["glyph_offset_y"]
+
+
 if __name__ == "__main__":
     import logging
 
