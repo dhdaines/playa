@@ -137,7 +137,7 @@ def test_glyph_offsets() -> None:
         for dic in doc.layout:
             if dic["text"] == "e":  # e as in Hello
                 assert dic["glyph_offset_x"] > glyph_x
-            elif dic["text"] == "い": # あ as in あいうえお
+            elif dic["text"] == "い":  # あ as in あいうえお
                 assert dic["glyph_offset_y"] > glyph_y
             glyph_x = dic["glyph_offset_x"]
             glyph_y = dic["glyph_offset_y"]
@@ -148,7 +148,7 @@ def test_glyph_offsets() -> None:
         for dic in doc.layout:
             if dic["text"] == "e":  # e as in Hello
                 assert dic["glyph_offset_x"] > glyph_x
-            elif dic["text"] == "い": # あ as in あいうえお
+            elif dic["text"] == "い":  # あ as in あいうえお
                 assert dic["glyph_offset_y"] < glyph_y
             glyph_x = dic["glyph_offset_x"]
             glyph_y = dic["glyph_offset_y"]

@@ -1485,8 +1485,7 @@ class PageInterpreter(BaseInterpreter):
             size = x1 - x0
         else:
             size = y1 - y0
-        glyph_x, glyph_y = apply_matrix_norm(self.ctm,
-                                             self.textstate.glyph_offset)
+        glyph_x, glyph_y = apply_matrix_norm(self.ctm, self.textstate.glyph_offset)
         item = LayoutDict(
             object_type="char",
             x0=x0,
