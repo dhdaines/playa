@@ -11,7 +11,7 @@ import pytest
 try:
     import pdfminer
 except ImportError:
-    pdfminer = None
+    pdfminer = None  # type: ignore
 import playa
 from playa.exceptions import PDFEncryptionError
 

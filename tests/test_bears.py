@@ -7,12 +7,12 @@ from pathlib import Path
 try:
     import polars as pl
 except ImportError:
-    pl = None
+    pl = None  # type: ignore
 
 try:
     import pandas as pd
 except ImportError:
-    pd = None
+    pd = None  # type: ignore
 
 import pytest
 import playa
