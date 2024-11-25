@@ -427,15 +427,16 @@ class LayoutDict(TypedDict, total=False):
     stroking_color: Color
     ncs: ColorSpace  # for text/paths
     non_stroking_color: Color
-    path: List[Tuple]
+    path_ops: str
     dash_pattern: List[float]
     dash_phase: float
     evenodd: bool
     stroke: bool
     fill: bool
     linewidth: float
-    pts: List[Point]
-    stream: ContentStream
+    pts_x: List[float]
+    pts_y: List[float]
+    stream: Union[Tuple[int, int], None]
     imagemask: bool
     colorspace: Union[ColorSpace, None]  # for images (can be none unlike graphics)
     srcsize: Tuple[int, int]
@@ -471,8 +472,9 @@ schema = {
     "stroke": bool,
     "fill": bool,
     "linewidth": float,
-    "pts": pl.Object,
-    "stream": pl.Object,
+    "pts_x": pl.List(float),
+    "pts_y": pl.List(float),
+    "stream": pl.Array(int, 2),
     "imagemask": bool,
     "colorspace": pl.Object,
     "srcsize": pl.Array(int, 2),
@@ -1278,6 +1280,10 @@ class PageInterpreter(BaseInterpreter):
         x0, y0, x1, y1 = get_bound(
             apply_matrix_pt(self.ctm, (p, q)) for (p, q) in bounds
         )
+        if stream.objid is not None and stream.genno is not None:
+            stream_id = (stream.objid, stream.genno)
+        else:
+            stream_id = None
         return LayoutDict(
             object_type="image",
             x0=x0,
@@ -1294,6 +1300,7 @@ class PageInterpreter(BaseInterpreter):
             # use the JPXDecode filter; not allowed forbidden for
             # image masks.
             colorspace=colorspace,
+            stream=stream_id,
         )
 
     def paint_path(
@@ -1365,8 +1372,9 @@ class PageInterpreter(BaseInterpreter):
                     y1=y1,
                     mcid=None if self.mcs is None else self.mcs.mcid,
                     tag=None if self.mcs is None else self.mcs.tag,
-                    path=transformed_path,
-                    pts=pts,
+                    path_ops=shape,
+                    pts_x=[x for x, y in pts],
+                    pts_y=[y for x, y in pts],
                     stroke=stroke,
                     fill=fill,
                     evenodd=evenodd,
@@ -1399,8 +1407,9 @@ class PageInterpreter(BaseInterpreter):
                         y1=y2,
                         mcid=None if self.mcs is None else self.mcs.mcid,
                         tag=None if self.mcs is None else self.mcs.tag,
-                        path=transformed_path,
-                        pts=pts,
+                        path_ops=shape,
+                        pts_x=[x for x, y in pts],
+                        pts_y=[y for x, y in pts],
                         stroke=stroke,
                         fill=fill,
                         evenodd=evenodd,
@@ -1422,8 +1431,9 @@ class PageInterpreter(BaseInterpreter):
                         y1=y1,
                         mcid=None if self.mcs is None else self.mcs.mcid,
                         tag=None if self.mcs is None else self.mcs.tag,
-                        path=transformed_path,
-                        pts=pts,
+                        path_ops=shape,
+                        pts_x=[x for x, y in pts],
+                        pts_y=[y for x, y in pts],
                         stroke=stroke,
                         fill=fill,
                         evenodd=evenodd,
@@ -1445,8 +1455,9 @@ class PageInterpreter(BaseInterpreter):
                     y1=y1,
                     mcid=None if self.mcs is None else self.mcs.mcid,
                     tag=None if self.mcs is None else self.mcs.tag,
-                    path=transformed_path,
-                    pts=pts,
+                    path_ops=shape,
+                    pts_x=[x for x, y in pts],
+                    pts_y=[y for x, y in pts],
                     stroke=stroke,
                     fill=fill,
                     evenodd=evenodd,
