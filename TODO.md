@@ -2,13 +2,13 @@
 - [ ] run `pdfplumber` tests in CI
   - [ ] make a separate directory for third party tests
 - [x] expose form XObjects on Page to allow getting only their contents
-- [x] expose form XObject IDs in LayoutObject
+- [x] expose form XObject IDs in LayoutDict
 - [ ] transform bbox attributes on FormXObject and StructElement
 - [ ] support ExtGState (TODO in pdfminer as well, submit patch)
-- [ ] make a proper schema for LayoutObject, document it, and communicate it to Polars
-  - [ ] notably NamedTuple things (Color, ColorSpace) should be Tuples in LayoutObject
+- [ ] make a proper schema for LayoutDict, document it, and communicate it to Polars
+  - [ ] notably NamedTuple things (Color, ColorSpace) should be Tuples in LayoutDict
 - [ ] make TextState conform to PDF spec (leading and line matrix) and document it
-- [ ] expose more of TextState in LayoutObject (render mode in particular - OCRmyPDF)
+- [ ] expose more of TextState in LayoutDict (render mode in particular - OCRmyPDF)
 - [ ] do not try to map characters with no ToUnicode and no Encoding (OCRmyPDF)
 - [x] properly support Pattern color space (uncolored tiling patterns) the
       way pdfplumber expects it to work
@@ -19,7 +19,7 @@
 ## PLAYA 0.3 and beyond
 - [ ] support `unstructured.io` as a user as well as `pdfplumber` (make PR)
 - [ ] support `OCRmyPDF` as a user as well as `pdfplumber` (make PR)
-- [ ] implement LayoutObject on top of ContentObject
+- [ ] implement LayoutDict on top of ContentObject
 - [ ] better API for document outline, destinations, and targets
 - [ ] test coverage and more test coverage
 - [ ] run pdf.js test suite

@@ -125,7 +125,7 @@ class FormXObject:
             yield tok
 
     @property
-    def layout(self) -> Iterator["LayoutObject"]:
+    def layout(self) -> Iterator["LayoutDict"]:
         """Iterator over eager layout object dictionaries."""
         page = self.page()
         if page is None:
@@ -277,7 +277,7 @@ class Page:
         return (obj for obj in self.objects if isinstance(obj, TextObject))
 
     @property
-    def layout(self) -> Iterator["LayoutObject"]:
+    def layout(self) -> Iterator["LayoutDict"]:
         """Iterator over eager layout object dictionaries."""
         return iter(PageInterpreter(self, self._contents))
 
@@ -413,7 +413,7 @@ class GraphicState:
     ncs: ColorSpace = PREDEFINED_COLORSPACE["DeviceGray"]
 
 
-class LayoutObject(TypedDict, total=False):
+class LayoutDict(TypedDict, total=False):
     """Dictionary-based layout objects.
 
     These closely match the dictionaries returned by pdfplumber.  The
@@ -425,7 +425,7 @@ class LayoutObject(TypedDict, total=False):
     such that you can simply write one of these to a CSV.  You can access
     the field names through the `__annotations__` property:
 
-    writer = DictWriter(fieldnames=LayoutObject.__annotations__.keys())
+    writer = DictWriter(fieldnames=LayoutDict.__annotations__.keys())
     dictwriter.write_rows(writer)
     """
 
@@ -462,7 +462,7 @@ class LayoutObject(TypedDict, total=False):
     bits: int
 
 
-fieldnames = LayoutObject.__annotations__.keys()
+fieldnames = LayoutDict.__annotations__.keys()
 
 
 class ContentParser(ObjectParser):
@@ -1080,7 +1080,7 @@ class PageInterpreter(BaseInterpreter):
     Reference: PDF Reference, Appendix A, Operator Summary
     """
 
-    def __iter__(self) -> Iterator[LayoutObject]:
+    def __iter__(self) -> Iterator[LayoutDict]:
         log.debug(
             "PageInterpreter: resources=%r, streams=%r, ctm=%r",
             self.resources,
@@ -1117,61 +1117,61 @@ class PageInterpreter(BaseInterpreter):
             else:
                 self.push(obj)
 
-    def do_S(self) -> Iterator[LayoutObject]:
+    def do_S(self) -> Iterator[LayoutDict]:
         """Stroke path"""
         yield from self.paint_path(
             stroke=True, fill=False, evenodd=False, path=self.curpath
         )
         self.curpath = []
 
-    def do_s(self) -> Iterator[LayoutObject]:
+    def do_s(self) -> Iterator[LayoutDict]:
         """Close and stroke path"""
         self.do_h()
         yield from self.do_S()
 
-    def do_f(self) -> Iterator[LayoutObject]:
+    def do_f(self) -> Iterator[LayoutDict]:
         """Fill path using nonzero winding number rule"""
         yield from self.paint_path(
             stroke=False, fill=True, evenodd=False, path=self.curpath
         )
         self.curpath = []
 
-    def do_F(self) -> Iterator[LayoutObject]:
+    def do_F(self) -> Iterator[LayoutDict]:
         """Fill path using nonzero winding number rule (obsolete)"""
         yield from self.do_f()
 
-    def do_f_a(self) -> Iterator[LayoutObject]:
+    def do_f_a(self) -> Iterator[LayoutDict]:
         """Fill path using even-odd rule"""
         yield from self.paint_path(
             stroke=False, fill=True, evenodd=True, path=self.curpath
         )
         self.curpath = []
 
-    def do_B(self) -> Iterator[LayoutObject]:
+    def do_B(self) -> Iterator[LayoutDict]:
         """Fill and stroke path using nonzero winding number rule"""
         yield from self.paint_path(
             stroke=True, fill=True, evenodd=False, path=self.curpath
         )
         self.curpath = []
 
-    def do_B_a(self) -> Iterator[LayoutObject]:
+    def do_B_a(self) -> Iterator[LayoutDict]:
         """Fill and stroke path using even-odd rule"""
         yield from self.paint_path(
             stroke=True, fill=True, evenodd=True, path=self.curpath
         )
         self.curpath = []
 
-    def do_b(self) -> Iterator[LayoutObject]:
+    def do_b(self) -> Iterator[LayoutDict]:
         """Close, fill, and stroke path using nonzero winding number rule"""
         self.do_h()
         yield from self.do_B()
 
-    def do_b_a(self) -> Iterator[LayoutObject]:
+    def do_b_a(self) -> Iterator[LayoutDict]:
         """Close, fill, and stroke path using even-odd rule"""
         self.do_h()
         yield from self.do_B_a()
 
-    def do_TJ(self, seq: PDFObject) -> Iterator[LayoutObject]:
+    def do_TJ(self, seq: PDFObject) -> Iterator[LayoutDict]:
         """Show text, allowing individual glyph positioning"""
         if self.textstate.font is None:
             log.warning("No font specified in text state!")
@@ -1180,11 +1180,11 @@ class PageInterpreter(BaseInterpreter):
             cast(TextSeq, seq),
         )
 
-    def do_Tj(self, s: PDFObject) -> Iterator[LayoutObject]:
+    def do_Tj(self, s: PDFObject) -> Iterator[LayoutDict]:
         """Show text"""
         yield from self.do_TJ([s])
 
-    def do__q(self, s: PDFObject) -> Iterator[LayoutObject]:
+    def do__q(self, s: PDFObject) -> Iterator[LayoutDict]:
         """Move to next line and show text
 
         The ' (single quote) operator.
@@ -1194,7 +1194,7 @@ class PageInterpreter(BaseInterpreter):
 
     def do__w(
         self, aw: PDFObject, ac: PDFObject, s: PDFObject
-    ) -> Iterator[LayoutObject]:
+    ) -> Iterator[LayoutDict]:
         """Set word and character spacing, move to next line, and show text
 
         The " (double quote) operator.
@@ -1203,7 +1203,7 @@ class PageInterpreter(BaseInterpreter):
         self.do_Tc(ac)
         yield from self.do_TJ([s])
 
-    def do_EI(self, obj: PDFObject) -> Iterator[LayoutObject]:
+    def do_EI(self, obj: PDFObject) -> Iterator[LayoutDict]:
         """End inline image object"""
         if isinstance(obj, InlineImage):
             # Inline images obviously are not indirect objects, so
@@ -1214,7 +1214,7 @@ class PageInterpreter(BaseInterpreter):
             # FIXME: Do... something?
             pass
 
-    def do_Do(self, xobjid_arg: PDFObject) -> Iterator[LayoutObject]:
+    def do_Do(self, xobjid_arg: PDFObject) -> Iterator[LayoutDict]:
         """Invoke named XObject"""
         xobjid = literal_name(xobjid_arg)
         try:
@@ -1245,7 +1245,7 @@ class PageInterpreter(BaseInterpreter):
             # unsupported xobject type.
             pass
 
-    def render_image(self, xobjid: str, stream: ContentStream) -> LayoutObject:
+    def render_image(self, xobjid: str, stream: ContentStream) -> LayoutDict:
         # PDF 1.7 sec 8.6.3: Outside a content stream, certain
         # objects, such as image XObjects, shall specify a colour
         # space as an explicit parameter, often associated with the
@@ -1263,7 +1263,7 @@ class PageInterpreter(BaseInterpreter):
         x0, y0, x1, y1 = get_bound(
             apply_matrix_pt(self.ctm, (p, q)) for (p, q) in bounds
         )
-        return LayoutObject(
+        return LayoutDict(
             object_type="image",
             x0=x0,
             y0=y0,
@@ -1288,7 +1288,7 @@ class PageInterpreter(BaseInterpreter):
         fill: bool,
         evenodd: bool,
         path: Sequence[PathSegment],
-    ) -> Iterator[LayoutObject]:
+    ) -> Iterator[LayoutDict]:
         """Paint paths described in section 4.4 of the PDF reference manual"""
         shape = "".join(x[0] for x in path)
         gstate = self.graphicstate
@@ -1342,7 +1342,7 @@ class PageInterpreter(BaseInterpreter):
                     (x1, x0) = (x0, x1)
                 if y0 > y1:
                     (y1, y0) = (y0, y1)
-                yield LayoutObject(
+                yield LayoutDict(
                     object_type="line",
                     x0=x0,
                     y0=y0,
@@ -1375,7 +1375,7 @@ class PageInterpreter(BaseInterpreter):
                         (x2, x0) = (x0, x2)
                     if y0 > y2:
                         (y2, y0) = (y0, y2)
-                    yield LayoutObject(
+                    yield LayoutDict(
                         object_type="rect",
                         x0=x0,
                         y0=y0,
@@ -1397,7 +1397,7 @@ class PageInterpreter(BaseInterpreter):
                     )
                 else:
                     x0, y0, x1, y1 = get_bound(pts)
-                    yield LayoutObject(
+                    yield LayoutDict(
                         object_type="curve",
                         x0=x0,
                         y0=y0,
@@ -1419,7 +1419,7 @@ class PageInterpreter(BaseInterpreter):
                     )
             else:
                 x0, y0, x1, y1 = get_bound(pts)
-                yield LayoutObject(
+                yield LayoutDict(
                     object_type="curve",
                     x0=x0,
                     y0=y0,
@@ -1446,7 +1446,7 @@ class PageInterpreter(BaseInterpreter):
         cid: int,
         matrix: Matrix,
         scaling: float,
-    ) -> Tuple[LayoutObject, float]:
+    ) -> Tuple[LayoutDict, float]:
         font = self.textstate.font
         assert font is not None
         fontsize = self.textstate.fontsize
@@ -1489,7 +1489,7 @@ class PageInterpreter(BaseInterpreter):
             size = x1 - x0
         else:
             size = y1 - y0
-        item = LayoutObject(
+        item = LayoutDict(
             object_type="char",
             x0=x0,
             y0=y0,
@@ -1515,7 +1515,7 @@ class PageInterpreter(BaseInterpreter):
     def render_string(
         self,
         seq: TextSeq,
-    ) -> Iterator[LayoutObject]:
+    ) -> Iterator[LayoutDict]:
         assert self.textstate.font is not None
         vert = self.textstate.font.vertical
         assert self.ctm is not None

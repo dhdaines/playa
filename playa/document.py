@@ -40,7 +40,7 @@ from playa.exceptions import (
     PDFSyntaxError,
 )
 from playa.font import CIDFont, Font, PDFTrueTypeFont, Type1Font, Type3Font
-from playa.page import Page, LayoutObject as PageLayoutObject, DeviceSpace
+from playa.page import Page, LayoutDict as PageLayoutDict, DeviceSpace
 from playa.parser import (
     KEYWORD_OBJ,
     KEYWORD_TRAILER,
@@ -716,7 +716,7 @@ class OutlineItem(NamedTuple):
     se: Union[ObjRef, None]
 
 
-class LayoutObject(PageLayoutObject):
+class LayoutDict(PageLayoutDict):
     """Dictionary-based layout objects.
 
     These closely match the dictionaries returned by pdfplumber.  The
@@ -728,7 +728,7 @@ class LayoutObject(PageLayoutObject):
     such that you can simply write one of these to a CSV.  You can access
     the field names through the `__annotations__` property:
 
-    writer = DictWriter(fieldnames=LayoutObject.__annotations__.keys())
+    writer = DictWriter(fieldnames=LayoutDict.__annotations__.keys())
     dictwriter.write_rows(writer)
     """
 
@@ -896,11 +896,11 @@ class Document:
         return (tok for pos, tok in Lexer(self.buffer))
 
     @property
-    def layout(self) -> Iterator[LayoutObject]:
-        """Iterate over `LayoutObject` for all pages."""
+    def layout(self) -> Iterator[LayoutDict]:
+        """Iterate over `LayoutDict` for all pages."""
         for idx, page in enumerate(self.pages):
             for dic in page.layout:
-                dic = cast(LayoutObject, dic)  # ugh
+                dic = cast(LayoutDict, dic)  # ugh
                 dic["page_index"] = idx
                 dic["page_label"] = page.label
                 yield dic

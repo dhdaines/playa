@@ -17,12 +17,12 @@ import builtins
 from os import PathLike
 from typing import Union
 
-from playa.document import Document, LayoutObject
+from playa.document import Document, LayoutDict
 from playa.page import DeviceSpace
 
 __version__ = "0.2"
 
-fieldnames = LayoutObject.__annotations__.keys()
+fieldnames = LayoutDict.__annotations__.keys()
 
 
 def open(
