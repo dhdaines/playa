@@ -754,8 +754,8 @@ class LayoutDict(PageLayoutDict):
     such that you can simply write one of these to a CSV.  You can access
     the field names through the `__annotations__` property:
 
-    writer = DictWriter(fieldnames=LayoutDict.__annotations__.keys())
-    dictwriter.write_rows(writer)
+        writer = DictWriter(fieldnames=LayoutDict.__annotations__.keys())
+        dictwriter.write_rows(writer)
     """
 
     page_index: int

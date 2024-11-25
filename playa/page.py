@@ -108,7 +108,6 @@ class Page:
     Attributes:
       pageid: the integer object ID associated with the page in the page tree
       attrs: a dictionary of page attributes.
-      contents: a list of ContentStream objects that represents the page content.
       resources: a dictionary of resources used by the page.
       mediabox: the physical size of the page.
       cropbox: the crop rectangle of the page.
@@ -219,7 +218,9 @@ class Page:
         aren't supposed to use PostScript XObjects for anything, ever.
 
         Note that these are the XObjects as rendered on the page, so
-        you may see the same named XObject multiple times.
+        you may see the same named XObject multiple times.  If you
+        need to access their actual definitions you'll have to look at
+        `page.resources`.
         """
         return (obj for obj in self if isinstance(obj, XObjectObject))
 
@@ -252,9 +253,37 @@ class TextState:
     """PDF Text State (PDF 1.7 section 9.3.1).
 
     Exceptionally, the line matrix and text matrix are represented
-    more compactly as the line matrix itself in `line_matrix` and the
-    the `glyph_offset` for the current glyph (note: expressed in
-    **user space**), which pdfminer confusingly called `linematrix`.
+    more compactly as the line matrix itself in `line_matrix`, which
+    gets translated by `glyph_offset` for the current glyph (note:
+    expressed in **user space**), which pdfminer confusingly called
+    `linematrix`.
+
+    Attributes:
+      line_matrix: The text line matrix, which defines (in user
+        space) the start of the current line of text, which may or may
+        not correspond to an actual line because PDF is a presentation
+        format.
+      glyph_offset: The offset of the current glyph with relation to
+        the line matrix (in user space).  To get this in device space
+        you may use `playa.utils.apply_matrix_norm` with
+        `TextObject.ctm`.
+      font: The current font.
+      fontsize: The current font size, **in text space units**.
+        This is often just 1.0 as it relies on the text matrix (you
+        may use `line_matrix` here) to scale it to the actual size in
+        user space.
+      charspace: Extra spacing to add between each glyph, in
+        text space units.
+      wordspace: The width of a space, defined curiously as cid=32
+        (But PDF Is A prESeNTaTion fORmAT sO ThERe maY NOt Be aNY
+        SpACeS!!) in text space units.
+      scaling: The scaling factor as defined by the PDF standard.
+      leading: The leading as defined by the PDF standard.
+      render_mode: The PDF rendering mode.  The really important one
+        here is 3, which means "don't render the text".  You might
+        want to use this to detect invisible text.
+      rise: The rise as defined by the PDF standard.
+
     """
 
     line_matrix: Matrix = MATRIX_IDENTITY
@@ -265,7 +294,7 @@ class TextState:
     wordspace: float = 0
     scaling: float = 100
     leading: float = 0
-    render: int = 0
+    render_mode: int = 0
     rise: float = 0
 
     def reset(self) -> None:
@@ -284,14 +313,12 @@ class TextState:
         elif operator == "Tz":
             self.scaling = cast(float, args[0])
         elif operator == "TL":
-            # FIXME: we should not negate it as that is
-            # confusing... but kept here for pdfminer compatibility
-            self.leading = -cast(float, args[0])
+            self.leading = cast(float, args[0])
         elif operator == "Tf":
             self.font = cast(Font, args[0])
             self.fontsize = cast(float, args[1])
         elif operator == "Tr":
-            self.render = cast(int, args[0])
+            self.render_mode = cast(int, args[0])
         elif operator == "Ts":
             self.rise = cast(float, args[0])
         elif operator == "Td":
@@ -316,10 +343,8 @@ class TextState:
                 b,
                 c,
                 d,
-                # FIXME: note that leading is pre-negated (it
-                # shouldn't be, this is confusing)
-                self.leading * c + e,
-                self.leading * d + f,
+                -self.leading * c + e,
+                -self.leading * d + f,
             )
             self.glyph_offset = (0, 0)
 
@@ -378,8 +403,8 @@ class LayoutDict(TypedDict, total=False):
     such that you can simply write one of these to a CSV.  You can access
     the field names through the `__annotations__` property:
 
-    writer = DictWriter(fieldnames=LayoutDict.__annotations__.keys())
-    dictwriter.write_rows(writer)
+        writer = DictWriter(fieldnames=LayoutDict.__annotations__.keys())
+        dictwriter.write_rows(writer)
     """
 
     object_type: str
@@ -909,7 +934,7 @@ class BaseInterpreter:
 
         :param leading: a number expressed in unscaled text space units
         """
-        self.textstate.leading = -cast(float, leading)
+        self.textstate.leading = cast(float, leading)
 
     def do_Tf(self, fontid: PDFObject, fontsize: PDFObject) -> None:
         """Set the text font
@@ -930,7 +955,7 @@ class BaseInterpreter:
 
     def do_Tr(self, render: PDFObject) -> None:
         """Set the text rendering mode"""
-        self.textstate.render = cast(int, render)
+        self.textstate.render_mode = cast(int, render)
 
     def do_Ts(self, rise: PDFObject) -> None:
         """Set the text rise
@@ -969,7 +994,7 @@ class BaseInterpreter:
             f_new = tx * b + ty * d + f
             self.textstate.line_matrix = (a, b, c, d, e_new, f_new)
             if ty is not None:
-                self.textstate.leading = ty
+                self.textstate.leading = -ty
         except TypeError:
             log.warning("Invalid offset (%r, %r) for TD", tx, ty)
         self.textstate.glyph_offset = (0, 0)
@@ -995,8 +1020,8 @@ class BaseInterpreter:
             b,
             c,
             d,
-            self.textstate.leading * c + e,
-            self.textstate.leading * d + f,
+            -self.textstate.leading * c + e,
+            -self.textstate.leading * d + f,
         )
         self.textstate.glyph_offset = (0, 0)
 
@@ -1499,7 +1524,7 @@ class PageInterpreter(BaseInterpreter):
             fontname=font.fontname,
             glyph_offset_x=glyph_x,
             glyph_offset_y=glyph_y,
-            render_mode=self.textstate.render,
+            render_mode=self.textstate.render_mode,
             dash_pattern=self.graphicstate.dash.dash,
             dash_phase=self.graphicstate.dash.phase,
             ncs=self.graphicstate.ncs,
