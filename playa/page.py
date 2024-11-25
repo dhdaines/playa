@@ -1348,13 +1348,11 @@ class PageInterpreter(BaseInterpreter):
             pts = [apply_matrix_pt(self.ctm, pt) for pt in raw_pts]
 
             # Drop redundant final "h" on an already closed path
-            if len(shape) > 2 and shape[-1] == "h" and pts[-2] == pts[0]:
-                shape = shape[:-1]
+            if len(shape) > 3 and shape[-1] == "h" and pts[-2] == pts[0]:
+                shape = shape[:-2] + "h"
                 pts.pop()
             if shape in {"mlh", "ml"}:
-                # single line segment (note that we may have removed a
-                # redundant `h`, or it might just not have been there
-                # in the first place as this is a frequent anomaly)
+                # single line segment ("ml" is a frequent anomaly)
                 (x0, y0), (x1, y1) = pts[0:2]
                 if x0 > x1:
                     (x1, x0) = (x0, x1)
