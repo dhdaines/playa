@@ -6,7 +6,7 @@
 - [x] do not try to map characters with no ToUnicode and no Encoding (OCRmyPDF)
 - [x] properly support Pattern color space (uncolored tiling patterns) the
       way pdfplumber expects it to work
-- [ ] support marked content points as LayoutObjects
+- [x] support marked content points as LayoutObjects
 - [ ] document LayoutObjects
 - [ ] make a proper schema for LayoutDict, document it, and communicate it to Polars
 - [ ] separate color values and patterns in LayoutDict

@@ -525,7 +525,7 @@ class MarkedContent(NamedTuple):
     Marked content point or section in a PDF page.
 
     Attributes:
-      mcid: Marked content section ID, or None for a marked content point.
+      mcid: Marked content section ID, or `None` for a marked content point.
       tag: Name of tag for this marked content.
       props: Marked content property dictionary.
     """
@@ -1604,8 +1604,6 @@ class ContentObject:
 @dataclass
 class TagObject(ContentObject):
     """A marked content point with no content."""
-
-    mcs: MarkedContent
 
 
 @dataclass
