@@ -251,8 +251,7 @@ embedded PDF documents (they have nothing to do with fillable forms).
 The lazy API (because it is lazy) **will not expand these for you**
 which may be a source of surprise.  You can identify them because they
 have `object_type == "xobject"`.  The layout objects inside them are
-accessible by iteration (note that this is *not* like a Page or a
-Document, where simple iteration gives PDF objects):
+accessible by iteration, as with pages (but **not* documents):
 
 ```python
 for obj in page:
