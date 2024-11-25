@@ -10,14 +10,16 @@
 - [ ] document LayoutObjects
 - [ ] make a proper schema for LayoutDict, document it, and communicate it to Polars
 - [ ] separate color values and patterns in LayoutDict
-- [ ] run `pdfplumber` tests in CI
-  - [ ] make a separate directory for third party tests
 
-## PLAYA 0.3 and beyond
+## PLAYA 0.2.x
+- [ ] update `pdfplumber` branch and run `pdfplumber` tests in CI
+  - [ ] make a separate directory for third party tests
 - [ ] `decode_text` is remarkably slow
 - [ ] `render_char` and `render_string` are also quite slow
 - [ ] remove the rest of the meaningless abuses of `cast`
-- [ ] transform bbox attributes on FormXObject and StructElement
+- [ ] document transformation of bbox attributes on StructElement
+
+## PLAYA 0.3 and beyond
 - [ ] support ExtGState (TODO in pdfminer as well, submit patch)
 - [ ] support `unstructured.io` as a user as well as `pdfplumber` (make PR)
   - it uses the default pdfminer analysis (when laparams is not None)
