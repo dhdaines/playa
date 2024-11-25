@@ -22,7 +22,7 @@ from playa.ascii85 import ascii85decode, asciihexdecode
 from playa.ccitt import ccittfaxdecode
 from playa.lzw import lzwdecode
 from playa.runlength import rldecode
-from playa.utils import apply_png_predictor
+from playa.utils import apply_png_predictor, apply_tiff_predictor
 
 if TYPE_CHECKING:
     from playa.document import Document
@@ -450,6 +450,18 @@ class ContentStream:
                 if pred == 1:
                     # no predictor
                     pass
+                elif pred == 2:
+                    # TIFF predictor 2
+                    colors = int_value(params.get("Colors", 1))
+                    columns = int_value(params.get("Columns", 1))
+                    raw_bits_per_component = params.get("BitsPerComponent", 8)
+                    bitspercomponent = int_value(raw_bits_per_component)
+                    data = apply_tiff_predictor(
+                        colors,
+                        columns,
+                        bitspercomponent,
+                        data,
+                    )
                 elif pred >= 10:
                     # PNG predictor
                     colors = int_value(params.get("Colors", 1))
