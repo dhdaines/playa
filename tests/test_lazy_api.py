@@ -9,6 +9,7 @@ import pytest
 import playa
 from playa.parser import LIT
 from playa.color import PREDEFINED_COLORSPACE
+from playa.exceptions import PDFEncryptionError
 
 TESTDIR = Path(__file__).parent.parent / "samples"
 ALLPDFS = TESTDIR.glob("**/*.pdf")
@@ -69,10 +70,13 @@ def test_open_lazy(path: Path) -> None:
     passwords = PASSWORDS.get(path.name, [""])
     for password in passwords:
         beach = []
-        with playa.open(path, password=password) as doc:
-            for page in doc.pages:
-                for obj in page:
-                    beach.append((obj.object_type, obj.bbox))
+        try:
+            with playa.open(path, password=password) as doc:
+                for page in doc.pages:
+                    for obj in page:
+                        beach.append((obj.object_type, obj.bbox))
+        except PDFEncryptionError:
+            pytest.skip("cryptography package not installed")
 
 
 def test_uncoloured_tiling() -> None:

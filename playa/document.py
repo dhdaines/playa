@@ -29,8 +29,11 @@ from typing import (
     cast,
 )
 
-from cryptography.hazmat.backends import default_backend
-from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+try:
+    from cryptography.hazmat.backends import default_backend
+    from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+except ImportError:
+    default_backend = None  # type: ignore
 
 from playa.arcfour import Arcfour
 from playa.data_structures import NameTree, NumberTree
@@ -479,6 +482,15 @@ class PDFStandardSecurityHandlerV4(PDFStandardSecurityHandler):
 
     supported_revisions: Tuple[int, ...] = (4,)
 
+    def __init__(self, *args, **kwargs) -> None:
+        if default_backend is None:
+            raise PDFEncryptionError(
+                "Encryption type requires the "
+                "optional `cryptography` package. "
+                "You may install it with playa[crypto]."
+            )
+        super().__init__(*args, **kwargs)
+
     def init_params(self) -> None:
         super().init_params()
         self.length = 128
@@ -552,6 +564,15 @@ class PDFStandardSecurityHandlerV5(PDFStandardSecurityHandlerV4):
     """Security handler for encryption types 5 and 6."""
 
     supported_revisions = (5, 6)
+
+    def __init__(self, *args, **kwargs) -> None:
+        if default_backend is None:
+            raise PDFEncryptionError(
+                "Encryption type requires the "
+                "optional `cryptography` package. "
+                "You may install it with playa[crypto]."
+            )
+        super().__init__(*args, **kwargs)
 
     def init_params(self) -> None:
         super().init_params()

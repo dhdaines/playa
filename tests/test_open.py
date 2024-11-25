@@ -8,7 +8,12 @@ from pathlib import Path
 
 import pytest
 
+try:
+    import pdfminer
+except ImportError:
+    pdfminer = None
 import playa
+from playa.exceptions import PDFEncryptionError
 
 TESTDIR = Path(__file__).parent.parent / "samples"
 ALLPDFS = TESTDIR.glob("**/*.pdf")
@@ -24,6 +29,7 @@ PASSWORDS = {
 }
 
 
+@pytest.mark.skipif(pdfminer is None, reason="pdfminer.six is not installed")
 @pytest.mark.parametrize("path", ALLPDFS, ids=str)
 def test_open(path: Path) -> None:
     """Open all the documents and compare with pdfplumber"""
@@ -59,11 +65,14 @@ def test_open(path: Path) -> None:
                 continue
 
         beach = []
-        with playa.open(path, password=password, space="page") as doc:
-            for page in doc.pages:
-                for item in page.layout:
-                    bbox = (item["x0"], item["y0"], item["x1"], item["y1"])
-                    beach.append((item["object_type"], bbox))
+        try:
+            with playa.open(path, password=password, space="page") as doc:
+                for page in doc.pages:
+                    for item in page.layout:
+                        bbox = (item["x0"], item["y0"], item["x1"], item["y1"])
+                        beach.append((item["object_type"], bbox))
+        except PDFEncryptionError:
+            pytest.skip("cryptography package not installed")
 
         assert beach == miner
 
@@ -132,8 +141,8 @@ def test_glyph_offsets() -> None:
     """Verify that glyph_offset is what we say it is."""
     # screen space
     with playa.open(TESTDIR / "simple3.pdf", space="screen") as doc:
-        glyph_x = 0
-        glyph_y = 0
+        glyph_x = 0.0
+        glyph_y = 0.0
         for dic in doc.layout:
             if dic["text"] == "e":  # e as in Hello
                 assert dic["glyph_offset_x"] > glyph_x
@@ -143,8 +152,8 @@ def test_glyph_offsets() -> None:
             glyph_y = dic["glyph_offset_y"]
     # page / user space
     with playa.open(TESTDIR / "simple3.pdf", space="page") as doc:
-        glyph_x = 0
-        glyph_y = 0
+        glyph_x = 0.0
+        glyph_y = 0.0
         for dic in doc.layout:
             if dic["text"] == "e":  # e as in Hello
                 assert dic["glyph_offset_x"] > glyph_x

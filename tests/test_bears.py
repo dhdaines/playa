@@ -4,14 +4,23 @@ Test PLAYA integration with various kinds of bears (polars, pandas).
 
 from pathlib import Path
 
-import polars as pl
-import pandas as pd
+try:
+    import polars as pl
+except ImportError:
+    pl = None
 
+try:
+    import pandas as pd
+except ImportError:
+    pd = None
+
+import pytest
 import playa
 
 TESTDIR = Path(__file__).parent.parent / "samples"
 
 
+@pytest.mark.skipif(pd is None, reason="Pandas is not installed")
 def test_pandas_dataframe():
     """Load from PLAYA to Pandas"""
     with playa.open(TESTDIR / "pdf_structure.pdf") as pdf:
@@ -19,6 +28,7 @@ def test_pandas_dataframe():
         assert len(df) == 1093
 
 
+@pytest.mark.skipif(pl is None, reason="Polars is not instaled")
 def test_polars_dataframe():
     """Load from PLAYA to Pandas"""
     with playa.open(TESTDIR / "pdf_structure.pdf") as pdf:
