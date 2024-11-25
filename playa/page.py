@@ -218,7 +218,7 @@ class Page:
     def contents(self) -> Iterator[ContentStream]:
         """Return resolved content streams."""
         for obj in self._contents:
-            yield obj.resolve()
+            yield stream_value(obj)
 
     @property
     def xobjects(self) -> Iterator[FormXObject]:
