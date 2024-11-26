@@ -7,7 +7,6 @@ from pathlib import Path
 import pytest
 
 import playa
-from playa.parser import LIT
 from playa.color import PREDEFINED_COLORSPACE, Color
 from playa.exceptions import PDFEncryptionError
 
