@@ -6,14 +6,15 @@
 - [x] do not try to map characters with no ToUnicode and no Encoding (OCRmyPDF)
 - [x] properly support Pattern color space (uncolored tiling patterns) the
       way pdfplumber expects it to work
-- [x] support marked content points as LayoutObjects
-- [ ] document LayoutObjects
+- [x] support marked content points as ContentObjects
+- [x] document ContentObjects
 - [ ] make a proper schema for LayoutDict, document it, and communicate it to Polars
 - [ ] separate color values and patterns in LayoutDict
 
 ## PLAYA 0.2.x
 - [ ] update `pdfplumber` branch and run `pdfplumber` tests in CI
   - [ ] make a separate directory for third party tests
+- [ ] fix incorrect bboxes when rotation/skewing is applied (performance hit...)
 - [ ] `decode_text` is remarkably slow
 - [ ] `render_char` and `render_string` are also quite slow
 - [ ] remove the rest of the meaningless abuses of `cast`

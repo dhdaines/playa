@@ -1600,7 +1600,13 @@ class PageInterpreter(BaseInterpreter):
 
 @dataclass
 class ContentObject:
-    """Any sort of content object."""
+    """Any sort of content object.
+
+    Attributes:
+      gstate: Graphics state.
+      ctm: Coordinate transformation matrix (PDF 1.7 section 8.3.2).
+      mcs: Marked content (point or section).
+    """
 
     gstate: GraphicState
     ctm: Matrix
@@ -1629,7 +1635,17 @@ class TagObject(ContentObject):
 
 @dataclass
 class ImageObject(ContentObject):
-    """An image (either inline or XObject)."""
+    """An image (either inline or XObject).
+
+    Attributes:
+      xobjid: Name of XObject (or None for inline images).
+      srcsize: Size of source image in pixels.
+      bits: Number of bits per component, if required (otherwise 1).
+      imagemask: True if the image is a mask.
+      stream: Content stream with image data.
+      colorspace: Colour space for this image, if required (otherwise
+        None).
+    """
 
     xobjid: Union[str, None]
     srcsize: Tuple[int, int]
@@ -1646,7 +1662,7 @@ class ImageObject(ContentObject):
 
     @property
     def buffer(self) -> bytes:
-        """Raw stream content for this image"""
+        """Binary stream content for this image"""
         return self.stream.buffer
 
     @property
@@ -1670,6 +1686,12 @@ class XObjectObject(ContentObject):
     definitely with their own definition of "user space".
 
     Image XObjects are handled by `ImageObject`.
+
+    Attributes:
+      xobjid: Name of this XObject (in the page resources).
+      page: Weak reference to containing page.
+      stream: Content stream with PDF operators.
+      resources: Resources specific to this XObject, if any.
     """
 
     xobjid: str
@@ -1735,7 +1757,16 @@ class XObjectObject(ContentObject):
 
 @dataclass
 class PathObject(ContentObject):
-    """A path object."""
+    """A path object.
+
+    Attributes:
+      raw_segments: Segments in path (in user space).
+      stroke: True if the outline of the path is stroked.
+      fill: True if the path is filled.
+      evenodd: True if the filling of complex paths uses the even-odd
+        winding rule, False if the non-zero winding number rule is
+        used (PDF 1.7 section 8.5.3.3)
+    """
 
     raw_segments: List[PathSegment]
     stroke: bool
@@ -1808,7 +1839,13 @@ class PathObject(ContentObject):
 
 class TextItem(NamedTuple):
     """Semi-parsed item in a text object.  Actual "rendering" is
-    deferred, just like with paths."""
+    deferred, just like with paths.
+
+    Attributes:
+      operator: Text operator for this item. Many operators simply
+        modify the `TextState` and do not actually output any text.
+      args: Arguments for the operator.
+    """
 
     operator: TextOperator
     args: Tuple[TextArgument, ...]
@@ -1820,7 +1857,16 @@ def make_txt(operator: TextOperator, *args: TextArgument) -> TextItem:
 
 @dataclass
 class GlyphObject(ContentObject):
-    """Individual glyph on the page."""
+    """Individual glyph on the page.
+
+    Attributes:
+      textstate: Text state for this glyph.  This is a **mutable**
+        object and you should not expect it to be valid outside the
+        context of iteration over the parent `TextObject`.
+      cid: Character ID for this glyph.
+      text: Unicode text of this glyph, if any (otherwise `""`).
+
+    """
 
     textstate: TextState
     cid: int
@@ -1837,7 +1883,14 @@ class GlyphObject(ContentObject):
 
 @dataclass
 class TextObject(ContentObject):
-    """Text object (contains one or more glyphs)."""
+    """Text object (contains one or more glyphs).
+
+    Attributes:
+      textstate: Text state for this object.  This is a **mutable**
+        object and you should not expect it to be valid outside the
+        context of iteration over the parent `TextObject`.
+      items: Raw text items (strings and operators) for this object.
+    """
 
     textstate: TextState
     items: List[TextItem]
