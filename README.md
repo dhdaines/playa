@@ -240,8 +240,9 @@ do with the structure tree element, because Reasons).  A marked
 content section does not necessarily have a `mcid` or `props`, but it
 will *always* have a `tag`.
 
-PDF also has the concept of "marked content points" which are not
-currently supported by PLAYA.
+PDF also has the concept of "marked content points". PLAYA suports
+these with objects of `object_type == "tag"`.  The tag name and
+properties are also accessible via the `mcs` attribute.
 
 ### Form XObjects
 
@@ -250,7 +251,7 @@ embedded PDF documents (they have nothing to do with fillable forms).
 The lazy API (because it is lazy) **will not expand these for you**
 which may be a source of surprise.  You can identify them because they
 have `object_type == "xobject"`.  The layout objects inside them are
-accessible by iteration, as with pages (but **not* documents):
+accessible by iteration, as with pages (but **not** documents):
 
 ```python
 for obj in page:
