@@ -258,6 +258,20 @@ def get_bound(pts: Iterable[Point]) -> Rect:
     return x0, y0, x1, y1
 
 
+def get_transformed_bound(matrix: Matrix, bbox: Rect) -> Rect:
+    """Transform a bounding box and return the rectangle that covers
+    the points of the resulting shape."""
+    x0, y0, x1, y1 = bbox
+    return get_bound(
+        (
+            apply_matrix_pt(matrix, (x0, y0)),
+            apply_matrix_pt(matrix, (x0, y1)),
+            apply_matrix_pt(matrix, (x1, y1)),
+            apply_matrix_pt(matrix, (x1, y0)),
+        )
+    )
+
+
 def choplist(n: int, seq: Iterable[_T]) -> Iterator[Tuple[_T, ...]]:
     """Groups every n elements of the list."""
     r = []

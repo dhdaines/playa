@@ -1146,7 +1146,7 @@ class CIDFont(Font):
         return self.cmap.decode(data)
 
     def char_disp(self, cid: int) -> Union[float, Tuple[Optional[float], float]]:
-        """Returns an integer for horizontal fonts, a tuple for vertical fonts."""
+        """Returns 0 for horizontal fonts, a tuple for vertical fonts."""
         return self.disps.get(cid, self.default_disp)
 
     def to_unichr(self, cid: int) -> str:
