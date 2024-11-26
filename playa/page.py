@@ -359,7 +359,7 @@ class DashPattern(NamedTuple):
       phase: starting position in the dash pattern
     """
 
-    dash: List[float]
+    dash: Tuple[float, ...]
     phase: float
 
     def __str__(self):
@@ -392,7 +392,7 @@ class GraphicState:
     linecap: int = 0
     linejoin: int = 0
     miterlimit: float = 10
-    dash: DashPattern = DashPattern([], 0)
+    dash: DashPattern = DashPattern((), 0)
     intent: PSLiteral = LITERAL_RELATIVE_COLORIMETRIC
     flatness: float = 1
     # stroking color
@@ -420,6 +420,71 @@ class LayoutDict(TypedDict, total=False):
         writer = DictWriter(fieldnames=LayoutDict.__annotations__.keys())
         dictwriter.write_rows(writer)
 
+    Attributes:
+      object_type: Type of object as a string.
+      mcid: Containing marked content section ID (or None if marked
+        content has no ID, such as artifacts or if there is no logical
+        structure).
+      tag: Containing marked content tag name (or None if not in a marked
+        content section).
+      xobjid: String name of containing Form XObject, if any.
+      cid: Integer character ID of glyph, if `object_type == "char"`.
+      text: Unicode mapping for glyph, if any.
+      fontname: str
+      size: Font size in device space.
+      glyph_offset_x: Horizontal offset (in device space) of glyph
+        from start of line.
+      glyph_offset_y: Vertical offset (in device space) of glyph from
+        start of line.
+      render_mode: Text rendering mode.
+      upright: FIXME: Not really sure what this means.  pdfminer.six?
+      x0: Minimum x coordinate of bounding box (top or bottom
+        depending on device space).
+      x1: Maximum x coordinate of bounding box (top or bottom
+        depending on device space).
+      y0: Minimum y coordinate of bounding box (left or right
+        depending on device space).
+      x1: Minimum x coordinate of bounding box (left or right
+        depending on device space).
+      stroking_colorspace: String name of colour space for stroking
+        operations.
+      stroking_color: Numeric parameters for stroking color.
+      stroking_pattern: Name of stroking pattern, if any.
+      non_stroking_colorspace: String name of colour space for non-stroking
+        operations.
+      non_stroking_color: Numeric parameters for non-stroking color.
+      non_stroking_pattern: Name of stroking pattern, if any.
+      path_ops: Sequence of path operations (e.g. `"mllh"` for a
+        triangle or `"mlllh"` for a quadrilateral)
+      dash_pattern: Sequence of user space units for alternating
+        stroke and non-stroke segments of dash pattern, `()` for solid
+        line. (Cannot be in device space because this would depend on
+        which direction the line or curve is drawn).
+      dash_phase: Initial position in `dash_pattern` in user space
+        units.  (see above for why it's in user space)
+      evenodd: Was this path filled with Even-Odd (if `True`) or
+        Nonzero-Winding-Number rule (if `False`)?  Note that this is
+        **meaningless** for determining if a path is actually filled
+        since subpaths have already been decomposed.  If you really
+        care then use the lazy API instead.
+      stroke: Is this path stroked?
+      fill: Is this path filled?
+      linewidth: Line width in user space units (again, not possible
+        to transform to device space).
+      pts_x: X coordinates of path endpoints, one for each character
+        in `path_ops`.  This is optimized for CSV/DataFrame output, if
+        you care about the control points then use the lazy API.
+      pts_y: Y coordinates of path endpoints, one for each character
+        in `path_ops`.  This is optimized for CSV/DataFrame output, if
+        you care about the control points then use the lazy API.
+      stream: Object number and generation number for the content
+        stream associated with an image, or `None` for inline images.
+        If you want image data then use the lazy API.
+      imagemask: Is this image a mask?
+      image_colorspace: String description of image colour space, or
+        `None` if irrelevant/forbidden,
+      srcsize: Source dimensions of image in pixels.
+      bits: Number of bits per channel of image.
     """
 
     object_type: str
@@ -427,7 +492,7 @@ class LayoutDict(TypedDict, total=False):
     tag: Union[str, None]
     xobjid: Union[str, None]
     cid: int
-    text: str
+    text: Union[str, None]
     fontname: str
     size: float
     glyph_offset_x: float
@@ -438,12 +503,14 @@ class LayoutDict(TypedDict, total=False):
     y0: float
     x1: float
     y1: float
-    scs: ColorSpace  # for text/paths
-    stroking_color: Color
-    ncs: ColorSpace  # for text/paths
-    non_stroking_color: Color
+    stroking_colorspace: str
+    stroking_color: Tuple[float, ...]
+    stroking_pattern: Union[str, None]
+    non_stroking_colorspace: str
+    non_stroking_color: Tuple[float, ...]
+    non_stroking_pattern: Union[str, None]
     path_ops: str
-    dash_pattern: List[float]
+    dash_pattern: Tuple[float, ...]
     dash_phase: float
     evenodd: bool
     stroke: bool
@@ -453,7 +520,7 @@ class LayoutDict(TypedDict, total=False):
     pts_y: List[float]
     stream: Union[Tuple[int, int], None]
     imagemask: bool
-    colorspace: Union[ColorSpace, None]  # for images (can be none unlike graphics)
+    image_colorspace: Union[ColorSpace, None]
     srcsize: Tuple[int, int]
     bits: int
 
@@ -476,11 +543,11 @@ schema = {
     "x1": float,
     "y0": float,
     "y1": float,
-    "scs": pl.Object,
-    "ncs": pl.Object,
-    "stroking_color": pl.Object,
-    "non_stroking_color": pl.Object,
-    "path": pl.Object,
+    "stroking_colorspace": str,
+    "non_stroking_colorspace": str,
+    "stroking_color": pl.List(float),
+    "non_stroking_color": pl.List(float),
+    "path_ops": str,
     "dash_pattern": pl.List(float),
     "dash_phase": float,
     "evenodd": bool,
@@ -491,7 +558,7 @@ schema = {
     "pts_y": pl.List(float),
     "stream": pl.Array(int, 2),
     "imagemask": bool,
-    "colorspace": pl.Object,
+    "image_colorspace": str,
     "srcsize": pl.Array(int, 2),
     "bits": int,
 }
@@ -741,7 +808,7 @@ class BaseInterpreter:
 
     def do_d(self, dash: PDFObject, phase: PDFObject) -> None:
         """Set line dash pattern"""
-        ndash = [num_value(x) for x in list_value(dash)]
+        ndash = tuple(num_value(x) for x in list_value(dash))
         self.graphicstate.dash = DashPattern(ndash, num_value(phase))
 
     def do_ri(self, intent: PDFObject) -> None:
@@ -932,7 +999,7 @@ class BaseInterpreter:
 
         :param space: a number expressed in unscaled text space units.
         """
-        self.textstate.charspace = cast(float, space)
+        self.textstate.charspace = num_value(space)
 
     def do_Tw(self, space: PDFObject) -> None:
         """Set the word spacing.
@@ -941,14 +1008,14 @@ class BaseInterpreter:
 
         :param space: a number expressed in unscaled text space units
         """
-        self.textstate.wordspace = cast(float, space)
+        self.textstate.wordspace = num_value(space)
 
     def do_Tz(self, scale: PDFObject) -> None:
         """Set the horizontal scaling.
 
         :param scale: is a number specifying the percentage of the normal width
         """
-        self.textstate.scaling = cast(float, scale)
+        self.textstate.scaling = num_value(scale)
 
     def do_TL(self, leading: PDFObject) -> None:
         """Set the text leading.
@@ -957,7 +1024,7 @@ class BaseInterpreter:
 
         :param leading: a number expressed in unscaled text space units
         """
-        self.textstate.leading = cast(float, leading)
+        self.textstate.leading = num_value(leading)
 
     def do_Tf(self, fontid: PDFObject, fontsize: PDFObject) -> None:
         """Set the text font
@@ -974,18 +1041,18 @@ class BaseInterpreter:
             if doc is None:
                 raise RuntimeError("Document no longer exists!")
             self.textstate.font = doc.get_font(None, {})
-        self.textstate.fontsize = cast(float, fontsize)
+        self.textstate.fontsize = num_value(fontsize)
 
     def do_Tr(self, render: PDFObject) -> None:
         """Set the text rendering mode"""
-        self.textstate.render_mode = cast(int, render)
+        self.textstate.render_mode = int_value(render)
 
     def do_Ts(self, rise: PDFObject) -> None:
         """Set the text rise
 
         :param rise: a number expressed in unscaled text space units
         """
-        self.textstate.rise = cast(float, rise)
+        self.textstate.rise = num_value(rise)
 
     def do_Td(self, tx: PDFObject, ty: PDFObject) -> None:
         """Move to the start of the next line
@@ -1099,6 +1166,15 @@ class BaseInterpreter:
         else:
             mcid = None
         self.mcs = MarkedContent(mcid=mcid, tag=tag, props=props)
+
+
+def normalize_color(color: Color) -> Tuple[Tuple[float, ...], Union[str, None]]:
+    """Make a color acceptable to Polars (separate, uniform types for
+    color and pattern name)."""
+    if isinstance(color[-1], PSLiteral):
+        return tuple(num_value(x) for x in color[:-1]), color[-1].name
+    else:
+        return color, None  # type: ignore
 
 
 class PageInterpreter(BaseInterpreter):
@@ -1315,8 +1391,51 @@ class PageInterpreter(BaseInterpreter):
             # PDF 1.7 Tabe 89: Required for images, except those that
             # use the JPXDecode filter; not allowed forbidden for
             # image masks.
-            colorspace=colorspace,
+            image_colorspace=colorspace,
             stream=stream_id,
+        )
+
+    def make_path(
+        self,
+        *,
+        object_type: str,
+        x0: float,
+        y0: float,
+        x1: float,
+        y1: float,
+        path_ops: str,
+        pts: List[Point],
+        stroke: bool,
+        fill: bool,
+        evenodd: bool,
+    ) -> LayoutDict:
+        """Make a `LayoutDict` for a path."""
+        gstate = self.graphicstate
+        scolor, spattern = normalize_color(gstate.scolor)
+        ncolor, npattern = normalize_color(gstate.ncolor)
+        return LayoutDict(
+            object_type=object_type,
+            x0=x0,
+            y0=y0,
+            x1=x1,
+            y1=y1,
+            mcid=None if self.mcs is None else self.mcs.mcid,
+            tag=None if self.mcs is None else self.mcs.tag,
+            path_ops=path_ops,
+            pts_x=[x for x, y in pts],
+            pts_y=[y for x, y in pts],
+            stroke=stroke,
+            fill=fill,
+            evenodd=evenodd,
+            linewidth=gstate.linewidth,
+            dash_pattern=gstate.dash.dash,
+            dash_phase=gstate.dash.phase,
+            stroking_colorspace=str(gstate.scs),
+            stroking_color=scolor,
+            stroking_pattern=spattern,
+            non_stroking_colorspace=str(gstate.ncs),
+            non_stroking_color=ncolor,
+            non_stroking_pattern=npattern,
         )
 
     def paint_path(
@@ -1329,9 +1448,6 @@ class PageInterpreter(BaseInterpreter):
     ) -> Iterator[LayoutDict]:
         """Paint paths described in section 4.4 of the PDF reference manual"""
         shape = "".join(x[0] for x in path)
-        gstate = self.graphicstate
-        ncs = self.graphicstate.ncs
-        scs = self.graphicstate.scs
 
         if shape[:1] != "m":
             # Per PDF Reference Section 4.4.1, "path construction operators may
@@ -1374,27 +1490,17 @@ class PageInterpreter(BaseInterpreter):
                     (x1, x0) = (x0, x1)
                 if y0 > y1:
                     (y1, y0) = (y0, y1)
-                yield LayoutDict(
+                yield self.make_path(
                     object_type="line",
                     x0=x0,
                     y0=y0,
                     x1=x1,
                     y1=y1,
-                    mcid=None if self.mcs is None else self.mcs.mcid,
-                    tag=None if self.mcs is None else self.mcs.tag,
                     path_ops=shape,
-                    pts_x=[x for x, y in pts],
-                    pts_y=[y for x, y in pts],
+                    pts=pts,
                     stroke=stroke,
                     fill=fill,
                     evenodd=evenodd,
-                    linewidth=gstate.linewidth,
-                    stroking_color=gstate.scolor,
-                    non_stroking_color=gstate.ncolor,
-                    dash_pattern=gstate.dash.dash,
-                    dash_phase=gstate.dash.phase,
-                    ncs=ncs,
-                    scs=scs,
                 )
 
             elif shape in {"mlllh", "mllll"}:
@@ -1409,75 +1515,45 @@ class PageInterpreter(BaseInterpreter):
                         (x2, x0) = (x0, x2)
                     if y0 > y2:
                         (y2, y0) = (y0, y2)
-                    yield LayoutDict(
+                    yield self.make_path(
                         object_type="rect",
                         x0=x0,
                         y0=y0,
                         x1=x2,
                         y1=y2,
-                        mcid=None if self.mcs is None else self.mcs.mcid,
-                        tag=None if self.mcs is None else self.mcs.tag,
                         path_ops=shape,
-                        pts_x=[x for x, y in pts],
-                        pts_y=[y for x, y in pts],
+                        pts=pts,
                         stroke=stroke,
                         fill=fill,
                         evenodd=evenodd,
-                        linewidth=gstate.linewidth,
-                        stroking_color=gstate.scolor,
-                        non_stroking_color=gstate.ncolor,
-                        dash_pattern=gstate.dash.dash,
-                        dash_phase=gstate.dash.phase,
-                        ncs=ncs,
-                        scs=scs,
                     )
                 else:
                     x0, y0, x1, y1 = get_bound(pts)
-                    yield LayoutDict(
+                    yield self.make_path(
                         object_type="curve",
                         x0=x0,
                         y0=y0,
                         x1=x1,
                         y1=y1,
-                        mcid=None if self.mcs is None else self.mcs.mcid,
-                        tag=None if self.mcs is None else self.mcs.tag,
                         path_ops=shape,
-                        pts_x=[x for x, y in pts],
-                        pts_y=[y for x, y in pts],
+                        pts=pts,
                         stroke=stroke,
                         fill=fill,
                         evenodd=evenodd,
-                        linewidth=gstate.linewidth,
-                        stroking_color=gstate.scolor,
-                        non_stroking_color=gstate.ncolor,
-                        dash_pattern=gstate.dash.dash,
-                        dash_phase=gstate.dash.phase,
-                        ncs=ncs,
-                        scs=scs,
                     )
             else:
                 x0, y0, x1, y1 = get_bound(pts)
-                yield LayoutDict(
+                yield self.make_path(
                     object_type="curve",
                     x0=x0,
                     y0=y0,
                     x1=x1,
                     y1=y1,
-                    mcid=None if self.mcs is None else self.mcs.mcid,
-                    tag=None if self.mcs is None else self.mcs.tag,
                     path_ops=shape,
-                    pts_x=[x for x, y in pts],
-                    pts_y=[y for x, y in pts],
+                    pts=pts,
                     stroke=stroke,
                     fill=fill,
                     evenodd=evenodd,
-                    linewidth=gstate.linewidth,
-                    stroking_color=gstate.scolor,
-                    non_stroking_color=gstate.ncolor,
-                    dash_pattern=gstate.dash.dash,
-                    dash_phase=gstate.dash.phase,
-                    ncs=ncs,
-                    scs=scs,
                 )
 
     def render_char(
@@ -1496,7 +1572,7 @@ class PageInterpreter(BaseInterpreter):
             assert isinstance(text, str), f"Text {text!r} is not a str"
         except PDFUnicodeNotDefined:
             log.debug("undefined char: %r, %r", font, cid)
-            text = ""
+            text = None
         textwidth = font.char_width(cid)
         textdisp = font.char_disp(cid)
         adv = textwidth * fontsize * scaling
@@ -1530,6 +1606,8 @@ class PageInterpreter(BaseInterpreter):
         else:
             size = y1 - y0
         glyph_x, glyph_y = apply_matrix_norm(self.ctm, self.textstate.glyph_offset)
+        scolor, spattern = normalize_color(self.graphicstate.scolor)
+        ncolor, npattern = normalize_color(self.graphicstate.ncolor)
         item = LayoutDict(
             object_type="char",
             x0=x0,
@@ -1546,10 +1624,12 @@ class PageInterpreter(BaseInterpreter):
             render_mode=self.textstate.render_mode,
             dash_pattern=self.graphicstate.dash.dash,
             dash_phase=self.graphicstate.dash.phase,
-            ncs=self.graphicstate.ncs,
-            scs=self.graphicstate.scs,
-            stroking_color=self.graphicstate.scolor,
-            non_stroking_color=self.graphicstate.ncolor,
+            stroking_colorspace=str(self.graphicstate.scs),
+            stroking_color=scolor,
+            stroking_pattern=spattern,
+            non_stroking_colorspace=str(self.graphicstate.ncs),
+            non_stroking_color=ncolor,
+            non_stroking_pattern=npattern,
             mcid=None if self.mcs is None else self.mcs.mcid,
             tag=None if self.mcs is None else self.mcs.tag,
         )
@@ -1617,6 +1697,7 @@ class ContentObject:
 
     @property
     def object_type(self):
+        """Type of this object as a string, e.g. "text", "path", "image"."""
         name = self.__class__.__name__
         return name[: -len("Object")].lower()
 
@@ -1864,13 +1945,13 @@ class GlyphObject(ContentObject):
         object and you should not expect it to be valid outside the
         context of iteration over the parent `TextObject`.
       cid: Character ID for this glyph.
-      text: Unicode text of this glyph, if any (otherwise `""`).
+      text: Unicode mapping of this glyph, if any.
 
     """
 
     textstate: TextState
     cid: int
-    text: str
+    text: Union[str, None]
     # FIXME: Subject to change here as not the most useful info
     lower_left: Point
     upper_right: Point
@@ -1913,7 +1994,7 @@ class TextObject(ContentObject):
             assert isinstance(text, str), f"Text {text!r} is not a str"
         except PDFUnicodeNotDefined:
             log.debug("undefined char: %r, %r", font, cid)
-            text = ""
+            text = None
         textwidth = font.char_width(cid)
         textdisp = font.char_disp(cid)
         adv = textwidth * fontsize * scaling

@@ -32,5 +32,5 @@ def test_pandas_dataframe():
 def test_polars_dataframe():
     """Load from PLAYA to Pandas"""
     with playa.open(TESTDIR / "pdf_structure.pdf") as pdf:
-        df = pl.DataFrame(pdf.layout, schema=playa.schema, strict=False)
+        df = pl.DataFrame(pdf.layout, schema=playa.schema)
         assert len(df) == 1093

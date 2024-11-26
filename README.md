@@ -164,11 +164,10 @@ you can also create a Pandas DataFrame:
 df = pandas.DataFrame.from_records(pdf.layout)
 ```
 
-or a Polars DataFrame or LazyFrame (in the future `strict=False` will
-not be necessary...)
+or a Polars DataFrame or LazyFrame:
 
 ```python
-df = polars.DataFrame(pdf.layout, schema=playa.schema, strict=False)
+df = polars.DataFrame(pdf.layout, schema=playa.schema)
 ```
 
 If you have more specific needs or want better performance, then read on.
