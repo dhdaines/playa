@@ -27,6 +27,7 @@ from typing import (
 
 from playa.color import (
     PREDEFINED_COLORSPACE,
+    LITERAL_RELATIVE_COLORIMETRIC,
     Color,
     ColorSpace,
     get_colorspace,
@@ -253,10 +254,10 @@ class TextState:
     """PDF Text State (PDF 1.7 section 9.3.1).
 
     Exceptionally, the line matrix and text matrix are represented
-    more compactly as the line matrix itself in `line_matrix`, which
+    more compactly with the line matrix itself in `line_matrix`, which
     gets translated by `glyph_offset` for the current glyph (note:
     expressed in **user space**), which pdfminer confusingly called
-    `linematrix`.
+    `linematrix`, to produce the text matrix.
 
     Attributes:
       line_matrix: The text line matrix, which defines (in user
@@ -274,7 +275,7 @@ class TextState:
         user space.
       charspace: Extra spacing to add between each glyph, in
         text space units.
-      wordspace: The width of a space, defined curiously as cid=32
+      wordspace: The width of a space, defined curiously as `cid=32`
         (But PDF Is A prESeNTaTion fORmAT sO ThERe maY NOt Be aNY
         SpACeS!!) in text space units.
       scaling: The scaling factor as defined by the PDF standard.
@@ -370,17 +371,30 @@ class DashPattern(NamedTuple):
 
 @dataclass
 class GraphicState:
-    """
-    PDF Graphics state (PDF 1.7 section 8.4)
+    """PDF Graphics state (PDF 1.7 section 8.4)
+
+    Attributes:
+      linewidth: Line width in user space units (sec. 8.4.3.2)
+      linecap: Line cap style (sec. 8.4.3.3)
+      linejoin: Line join style (sec. 8.4.3.4)
+      miterlimit: Maximum length of mitered line joins (sec. 8.4.3.5)
+      dash: Dash pattern for stroking (sec 8.4.3.6)
+      intent: Rendering intent (sec. 8.6.5.8)
+      flatness: The precision with which curves shall be rendered on
+        the output device (sec. 10.6.2)
+      scolor: Colour used for stroking operations
+      scs: Colour space used for stroking operations
+      ncolor: Colour used for non-stroking operations
+      scs: Colour space used for non-stroking operations
     """
 
     linewidth: float = 0
-    linecap: Optional[object] = None
-    linejoin: Optional[object] = None
-    miterlimit: Optional[object] = None
+    linecap: int = 0
+    linejoin: int = 0
+    miterlimit: float = 10
     dash: DashPattern = DashPattern([], 0)
-    intent: Optional[object] = None
-    flatness: Optional[object] = None
+    intent: PSLiteral = LITERAL_RELATIVE_COLORIMETRIC
+    flatness: float = 1
     # stroking color
     scolor: Color = (0,)
     # stroking color space
@@ -394,9 +408,9 @@ class GraphicState:
 class LayoutDict(TypedDict, total=False):
     """Dictionary-based layout objects.
 
-    These closely match the dictionaries returned by pdfplumber.  The
-    type of coordinates returned are determined by the `space`
-    argument passed to `Page`.  By default, `(0, 0)` is
+    These are somewhat like the `T_obj` dictionaries returned by
+    pdfplumber.  The type of coordinates returned are determined by
+    the `space` argument passed to `Page`.  By default, `(0, 0)` is
     the top-left corner of the page, with 72 units per inch.
 
     All values can be converted to strings in some meaningful fashion,
@@ -405,6 +419,7 @@ class LayoutDict(TypedDict, total=False):
 
         writer = DictWriter(fieldnames=LayoutDict.__annotations__.keys())
         dictwriter.write_rows(writer)
+
     """
 
     object_type: str
@@ -710,19 +725,19 @@ class BaseInterpreter:
 
     def do_w(self, linewidth: PDFObject) -> None:
         """Set line width"""
-        self.graphicstate.linewidth = cast(float, linewidth)
+        self.graphicstate.linewidth = num_value(linewidth)
 
     def do_J(self, linecap: PDFObject) -> None:
         """Set line cap style"""
-        self.graphicstate.linecap = linecap
+        self.graphicstate.linecap = int_value(linecap)
 
     def do_j(self, linejoin: PDFObject) -> None:
         """Set line join style"""
-        self.graphicstate.linejoin = linejoin
+        self.graphicstate.linejoin = int_value(linejoin)
 
     def do_M(self, miterlimit: PDFObject) -> None:
         """Set miter limit"""
-        self.graphicstate.miterlimit = miterlimit
+        self.graphicstate.miterlimit = num_value(miterlimit)
 
     def do_d(self, dash: PDFObject, phase: PDFObject) -> None:
         """Set line dash pattern"""
@@ -731,11 +746,12 @@ class BaseInterpreter:
 
     def do_ri(self, intent: PDFObject) -> None:
         """Set color rendering intent"""
-        self.graphicstate.intent = intent
+        # FIXME: Should actually be a (runtime checked) enum
+        self.graphicstate.intent = cast(PSLiteral, intent)
 
     def do_i(self, flatness: PDFObject) -> None:
         """Set flatness tolerance"""
-        self.graphicstate.flatness = flatness
+        self.graphicstate.flatness = num_value(flatness)
 
     def do_gs(self, name: PDFObject) -> None:
         """Set parameters from graphics state parameter dictionary"""

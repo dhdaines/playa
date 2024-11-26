@@ -7,12 +7,18 @@ from playa.pdftypes import num_value, list_value, literal_name, stream_value
 LITERAL_DEVICE_GRAY = LIT("DeviceGray")
 LITERAL_DEVICE_RGB = LIT("DeviceRGB")
 LITERAL_DEVICE_CMYK = LIT("DeviceCMYK")
+LITERAL_DEVICE_N = LIT("DeviceN")
+LITERAL_ICC_BASED = LIT("ICCBased")
 LITERAL_PATTERN = LIT("Pattern")
 # Abbreviations for inline images
 LITERAL_INLINE_DEVICE_GRAY = LIT("G")
 LITERAL_INLINE_DEVICE_RGB = LIT("RGB")
 LITERAL_INLINE_DEVICE_CMYK = LIT("CMYK")
-
+# Rendering intents
+LITERAL_RELATIVE_COLORIMETRIC = LIT("RelativeColorimetric")
+LITERAL_ABSOLUTE_COLORIMETRIC = LIT("AbsoluteColorimetric")
+LITERAL_SATURATION = LIT("Saturation")
+LITERAL_PERCEPTUAL = LIT("Perceptual")
 
 ColorValue = Union[int, float, PSLiteral]
 Color = Tuple[ColorValue, ...]
@@ -67,14 +73,13 @@ for name, n in [
 
 def get_colorspace(spec: PDFObject) -> Union[ColorSpace, None]:
     if isinstance(spec, list):
-        name = literal_name(spec[0])
-        if name == "ICCBased" and len(spec) >= 2:
-            return ColorSpace(name, stream_value(spec[1])["N"], spec)
-        elif name == "DeviceN" and len(spec) >= 2:
+        if spec[0] is LITERAL_ICC_BASED and len(spec) >= 2:
+            return ColorSpace(spec[0].name, stream_value(spec[1])["N"], spec)
+        elif spec[0] is LITERAL_DEVICE_N and len(spec) >= 2:
             # DeviceN colour spaces (PDF 1.7 sec 8.6.6.5)
 
-            return ColorSpace(name, len(list_value(spec[1])), spec)
-        elif name == "Pattern" and len(spec) == 2:
+            return ColorSpace(spec[0].name, len(list_value(spec[1])), spec)
+        elif spec[0] is LITERAL_PATTERN and len(spec) == 2:
             # Uncoloured tiling patterns (PDF 1.7 sec 8.7.3.3)
             if spec[1] is LITERAL_PATTERN:
                 raise ValueError(
@@ -85,9 +90,9 @@ def get_colorspace(spec: PDFObject) -> Union[ColorSpace, None]:
                 raise ValueError("Unrecognized underlying colour space: %r", (spec,))
             # Not super important what we call it but we need to know it
             # has N+1 "components" (the last one being the pattern)
-            return ColorSpace(name, underlying.ncomponents + 1, spec)
+            return ColorSpace(spec[0].name, underlying.ncomponents + 1, spec)
         else:
-            cs = PREDEFINED_COLORSPACE.get(name)
+            cs = PREDEFINED_COLORSPACE.get(literal_name(spec[0]))
             if cs is None:
                 return None
             return ColorSpace(cs.name, cs.ncomponents, spec)
