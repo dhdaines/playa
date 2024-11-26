@@ -3,6 +3,7 @@ Test PDF types and data structures.
 """
 
 from playa.data_structures import NameTree, NumberTree
+from playa.runlength import rldecode
 
 NUMTREE1 = {
     "Kids": [
@@ -75,3 +76,8 @@ def test_name_tree():
         (b"xylophone", 123),
         (b"zzyzx", {"x": "y"}),
     ]
+
+
+def test_rle():
+    large_white_image_encoded = bytes([129, 255] * (3 * 3000 * 4000 // 128))
+    _ = rldecode(large_white_image_encoded)

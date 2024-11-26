@@ -1,4 +1,4 @@
-from typing import Dict, List, NamedTuple, Union, Tuple
+from typing import Dict, NamedTuple, Union, Tuple
 
 from playa.exceptions import PDFInterpreterError
 from playa.parser import LIT, PDFObject, PSLiteral
