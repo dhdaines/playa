@@ -1990,6 +1990,7 @@ class TextObject(ContentObject):
             return "".join(self._chars)
         self._chars = []
         for item in self.items:
+            # Only TJ and Tf are relevant to Unicode output
             if item.operator == "TJ":
                 font = self.textstate.font
                 assert font is not None, "No font was selected"
@@ -2167,9 +2168,16 @@ class LazyInterpreter(BaseInterpreter):
 
     def do_ET(self) -> Iterator[ContentObject]:
         """End a text object"""
-        # FIXME: Create a new TextState here instead, as textstate has
-        # no meaning and is not preserved outside BT / ET pairs
-        yield self.create(TextObject, textstate=self.textstate, items=self.textobj)
+        # Only output text if... there is text to output (we rewrite all text operators to TJ)
+        has_text = False
+        for item in self.textobj:
+            if item.operator == "TJ":
+                has_text = True
+        if has_text:
+            yield self.create(TextObject, textstate=self.textstate, items=self.textobj)
+        else:
+            for item in self.textobj:
+                self.textstate.update(item.operator, *item.args)
 
     def do_Tc(self, space: PDFObject) -> None:
         """Set character spacing.

@@ -118,4 +118,4 @@ def test_xobjects() -> None:
         xobj = next(page.xobjects)
         assert xobj.object_type == "xobject"
         assert len(list(xobj.layout)) == 2
-        assert len(list(xobj)) == 5
+        assert len(list(xobj)) == 2
