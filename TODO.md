@@ -1,16 +1,3 @@
-## PLAYA 0.2
-- [x] expose form XObjects on Page to allow getting only their contents
-- [x] expose form XObject IDs in LayoutDict
-- [x] make TextState conform to PDF spec (leading and line matrix) and document it
-- [x] expose more of TextState in LayoutDict (render mode in particular - OCRmyPDF)
-- [x] do not try to map characters with no ToUnicode and no Encoding (OCRmyPDF)
-- [x] properly support Pattern color space (uncolored tiling patterns) the
-      way pdfplumber expects it to work
-- [x] support marked content points as ContentObjects
-- [x] document ContentObjects
-- [x] make a proper schema for LayoutDict, document it, and communicate it to Polars
-- [x] separate color values and patterns in LayoutDict
-
 ## PLAYA 0.2.x
 - [ ] update `pdfplumber` branch and run `pdfplumber` tests in CI
   - [ ] make a separate directory for third party tests
