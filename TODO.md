@@ -8,8 +8,8 @@
       way pdfplumber expects it to work
 - [x] support marked content points as ContentObjects
 - [x] document ContentObjects
-- [ ] make a proper schema for LayoutDict, document it, and communicate it to Polars
-- [ ] separate color values and patterns in LayoutDict
+- [x] make a proper schema for LayoutDict, document it, and communicate it to Polars
+- [x] separate color values and patterns in LayoutDict
 
 ## PLAYA 0.2.x
 - [ ] update `pdfplumber` branch and run `pdfplumber` tests in CI

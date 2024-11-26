@@ -20,9 +20,15 @@ LITERAL_ABSOLUTE_COLORIMETRIC = LIT("AbsoluteColorimetric")
 LITERAL_SATURATION = LIT("Saturation")
 LITERAL_PERCEPTUAL = LIT("Perceptual")
 
-ColorValue = Union[int, float, PSLiteral]
-Color = Tuple[ColorValue, ...]
 PREDEFINED_COLORSPACE: Dict[str, "ColorSpace"] = {}
+
+
+class Color(NamedTuple):
+    values: Tuple[float, ...]
+    pattern: Union[str, None]
+
+
+BASIC_BLACK = Color((0,), None)
 
 
 class ColorSpace(NamedTuple):
@@ -36,21 +42,23 @@ class ColorSpace(NamedTuple):
                 "%s requires %d components, got %d!"
                 % (self.name, self.ncomponents, len(components))
             )
-        cc: List[ColorValue] = []
-        for x in components[0 : self.ncomponents]:
-            if isinstance(x, PSLiteral):
-                cc.append(x)
-            else:
-                try:
-                    cc.append(num_value(x))
-                except TypeError:
-                    cc.append(0)
-        while len(cc) < self.ncomponents:
+        nc = self.ncomponents
+        pattern = None
+        if isinstance(components[-1], PSLiteral):
+            pattern = components[-1].name
+            nc -= 1
+        cc = []
+        for x in components[:nc]:
+            try:
+                cc.append(num_value(x))
+            except TypeError:
+                cc.append(0)
+        while len(cc) < nc:
             cc.append(0)
-        return tuple(cc)
+        return Color(tuple(cc), pattern)
 
     def __str__(self):
-        # FIXME: do patterns too
+        # FIXME: do pattern names too?
         if self.name in PREDEFINED_COLORSPACE:
             return self.name
         else:

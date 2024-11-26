@@ -8,7 +8,7 @@ import pytest
 
 import playa
 from playa.parser import LIT
-from playa.color import PREDEFINED_COLORSPACE
+from playa.color import PREDEFINED_COLORSPACE, Color
 from playa.exceptions import PDFEncryptionError
 
 TESTDIR = Path(__file__).parent.parent / "samples"
@@ -85,15 +85,15 @@ def test_uncoloured_tiling() -> None:
         paths = pdf.pages[0].paths
         path = next(paths)
         assert path.gstate.ncs == PREDEFINED_COLORSPACE["DeviceRGB"]
-        assert path.gstate.ncolor == (1.0, 1.0, 0.0)
+        assert path.gstate.ncolor == Color((1.0, 1.0, 0.0), None)
         path = next(paths)
-        assert path.gstate.ncolor == (0.77, 0.2, 0.0, LIT("P1"))
+        assert path.gstate.ncolor == Color((0.77, 0.2, 0.0), "P1")
         path = next(paths)
-        assert path.gstate.ncolor == (0.2, 0.8, 0.4, LIT("P1"))
+        assert path.gstate.ncolor == Color((0.2, 0.8, 0.4), "P1")
         path = next(paths)
-        assert path.gstate.ncolor == (0.3, 0.7, 1.0, LIT("P1"))
+        assert path.gstate.ncolor == Color((0.3, 0.7, 1.0), "P1")
         path = next(paths)
-        assert path.gstate.ncolor == (0.5, 0.2, 1.0, LIT("P1"))
+        assert path.gstate.ncolor == Color((0.5, 0.2, 1.0), "P1")
 
 
 if __name__ == "__main__":

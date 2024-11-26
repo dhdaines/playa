@@ -28,6 +28,7 @@ from typing import (
 from playa.color import (
     PREDEFINED_COLORSPACE,
     LITERAL_RELATIVE_COLORIMETRIC,
+    BASIC_BLACK,
     Color,
     ColorSpace,
     get_colorspace,
@@ -396,11 +397,11 @@ class GraphicState:
     intent: PSLiteral = LITERAL_RELATIVE_COLORIMETRIC
     flatness: float = 1
     # stroking color
-    scolor: Color = (0,)
+    scolor: Color = BASIC_BLACK
     # stroking color space
     scs: ColorSpace = PREDEFINED_COLORSPACE["DeviceGray"]
     # non stroking color
-    ncolor: Color = (0,)
+    ncolor: Color = BASIC_BLACK
     # non stroking color space
     ncs: ColorSpace = PREDEFINED_COLORSPACE["DeviceGray"]
 
@@ -1168,15 +1169,6 @@ class BaseInterpreter:
         self.mcs = MarkedContent(mcid=mcid, tag=tag, props=props)
 
 
-def normalize_color(color: Color) -> Tuple[Tuple[float, ...], Union[str, None]]:
-    """Make a color acceptable to Polars (separate, uniform types for
-    color and pattern name)."""
-    if isinstance(color[-1], PSLiteral):
-        return tuple(num_value(x) for x in color[:-1]), color[-1].name
-    else:
-        return color, None  # type: ignore
-
-
 class PageInterpreter(BaseInterpreter):
     """Processor for the content of a PDF page
 
@@ -1411,8 +1403,6 @@ class PageInterpreter(BaseInterpreter):
     ) -> LayoutDict:
         """Make a `LayoutDict` for a path."""
         gstate = self.graphicstate
-        scolor, spattern = normalize_color(gstate.scolor)
-        ncolor, npattern = normalize_color(gstate.ncolor)
         return LayoutDict(
             object_type=object_type,
             x0=x0,
@@ -1431,11 +1421,11 @@ class PageInterpreter(BaseInterpreter):
             dash_pattern=gstate.dash.dash,
             dash_phase=gstate.dash.phase,
             stroking_colorspace=str(gstate.scs),
-            stroking_color=scolor,
-            stroking_pattern=spattern,
+            stroking_color=gstate.scolor.values,
+            stroking_pattern=gstate.scolor.pattern,
             non_stroking_colorspace=str(gstate.ncs),
-            non_stroking_color=ncolor,
-            non_stroking_pattern=npattern,
+            non_stroking_color=gstate.ncolor.values,
+            non_stroking_pattern=gstate.ncolor.pattern,
         )
 
     def paint_path(
@@ -1606,8 +1596,6 @@ class PageInterpreter(BaseInterpreter):
         else:
             size = y1 - y0
         glyph_x, glyph_y = apply_matrix_norm(self.ctm, self.textstate.glyph_offset)
-        scolor, spattern = normalize_color(self.graphicstate.scolor)
-        ncolor, npattern = normalize_color(self.graphicstate.ncolor)
         item = LayoutDict(
             object_type="char",
             x0=x0,
@@ -1625,11 +1613,11 @@ class PageInterpreter(BaseInterpreter):
             dash_pattern=self.graphicstate.dash.dash,
             dash_phase=self.graphicstate.dash.phase,
             stroking_colorspace=str(self.graphicstate.scs),
-            stroking_color=scolor,
-            stroking_pattern=spattern,
+            stroking_color=self.graphicstate.scolor.values,
+            stroking_pattern=self.graphicstate.scolor.pattern,
             non_stroking_colorspace=str(self.graphicstate.ncs),
-            non_stroking_color=ncolor,
-            non_stroking_pattern=npattern,
+            non_stroking_color=self.graphicstate.ncolor.values,
+            non_stroking_pattern=self.graphicstate.ncolor.pattern,
             mcid=None if self.mcs is None else self.mcs.mcid,
             tag=None if self.mcs is None else self.mcs.tag,
         )
