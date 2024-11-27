@@ -1640,6 +1640,7 @@ class PageInterpreter(BaseInterpreter):
                 if isinstance(obj, str):
                     obj = make_compat_bytes(obj)
                 if not isinstance(obj, bytes):
+                    log.warning("Found non-string %r in text object", obj)
                     continue
                 for cid in self.textstate.font.decode(obj):
                     if needcharspace:
