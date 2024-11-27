@@ -732,7 +732,7 @@ class BaseInterpreter:
                     self.fontmap[fontid] = doc.get_font(objid, spec)
             elif k == "ColorSpace":
                 for csid, spec in dict_value(v).items():
-                    colorspace = get_colorspace(resolve1(spec))
+                    colorspace = get_colorspace(resolve1(spec), csid)
                     if colorspace is not None:
                         self.csmap[csid] = colorspace
             elif k == "ProcSet":
@@ -1986,14 +1986,7 @@ class TextObject(ContentObject):
             x1, y1 = (adv, descent + rise + fontsize)
         bbox = get_transformed_bound(matrix, (x0, y0, x1, y1))
         return GlyphObject(
-            self.gstate,
-            self.ctm,
-            self.mcs,
-            self.textstate,
-            cid,
-            text,
-            adv,
-            bbox
+            self.gstate, self.ctm, self.mcs, self.textstate, cid, text, adv, bbox
         )
 
     def _render_string(self, item: TextItem) -> Iterator[GlyphObject]:

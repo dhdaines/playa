@@ -58,11 +58,7 @@ class ColorSpace(NamedTuple):
         return Color(tuple(cc), pattern)
 
     def __str__(self):
-        # FIXME: do pattern names too?
-        if self.name in PREDEFINED_COLORSPACE:
-            return self.name
-        else:
-            return f"{self.name}({self.ncomponents})"
+        return self.name
 
 
 for name, n in [
@@ -79,14 +75,18 @@ for name, n in [
     PREDEFINED_COLORSPACE[name] = ColorSpace(name, n)
 
 
-def get_colorspace(spec: PDFObject) -> Union[ColorSpace, None]:
+def get_colorspace(
+    spec: PDFObject, csid: Union[str, None] = None
+) -> Union[ColorSpace, None]:
     if isinstance(spec, list):
+        name = spec[0].name if csid is None else csid
         if spec[0] is LITERAL_ICC_BASED and len(spec) >= 2:
-            return ColorSpace(spec[0].name, stream_value(spec[1])["N"], spec)
+            n = stream_value(spec[1])["N"]
+            return ColorSpace(name, n, spec)
         elif spec[0] is LITERAL_DEVICE_N and len(spec) >= 2:
             # DeviceN colour spaces (PDF 1.7 sec 8.6.6.5)
-
-            return ColorSpace(spec[0].name, len(list_value(spec[1])), spec)
+            n = len(list_value(spec[1]))
+            return ColorSpace(name, n, spec)
         elif spec[0] is LITERAL_PATTERN and len(spec) == 2:
             # Uncoloured tiling patterns (PDF 1.7 sec 8.7.3.3)
             if spec[1] is LITERAL_PATTERN:
@@ -98,7 +98,7 @@ def get_colorspace(spec: PDFObject) -> Union[ColorSpace, None]:
                 raise ValueError("Unrecognized underlying colour space: %r", (spec,))
             # Not super important what we call it but we need to know it
             # has N+1 "components" (the last one being the pattern)
-            return ColorSpace(spec[0].name, underlying.ncomponents + 1, spec)
+            return ColorSpace(name, underlying.ncomponents + 1, spec)
         else:
             cs = PREDEFINED_COLORSPACE.get(literal_name(spec[0]))
             if cs is None:

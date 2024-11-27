@@ -623,9 +623,9 @@ class IndirectObjectParser:
                 linepos, line = self._parser.nextline()
                 log.debug("After stream data: %r %r", linepos, line)
                 if self.strict:
-                     # In reality there usually is no end-of-line
-                     # marker.  We will nonetheless warn if there's
-                     # something other than 'endstream'.
+                    # In reality there usually is no end-of-line
+                    # marker.  We will nonetheless warn if there's
+                    # something other than 'endstream'.
                     if line not in (b"\n", b"\r\n", b"endstream\n", b"endstream\r\n"):
                         log.warning("Expected newline or 'endstream', got %r", line)
                 else:
@@ -642,7 +642,9 @@ class IndirectObjectParser:
                         linepos, line = self._parser.nextline()
                         log.debug("After stream data: %r %r", linepos, line)
                         if line == b"":  # Means EOF
-                            log.warning("Incorrect legnth for stream, no 'endstream' found")
+                            log.warning(
+                                "Incorrect legnth for stream, no 'endstream' found"
+                            )
                             break
                 doc = None if self.doc is None else self.doc()
                 stream = ContentStream(

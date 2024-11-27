@@ -89,7 +89,7 @@ def benchmark_one_pdfminer(path: Path):
 if __name__ == "__main__":
     # Silence warnings about broken PDFs
     logging.basicConfig(level=logging.ERROR)
-    niter = 10
+    niter = 5
     miner_time = beach_time = lazy_time = 0.0
     for iter in range(niter + 1):
         for path in ALLPDFS:
