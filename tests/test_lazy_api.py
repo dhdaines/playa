@@ -22,6 +22,9 @@ PASSWORDS = {
     "aes-256-m.pdf": ["foo"],
     "aes-256-r6.pdf": ["usersecret", "ownersecret"],
 }
+XFAILS = {
+    "bogus-stream-length.pdf",
+}
 
 
 def test_content_objects():
@@ -66,6 +69,8 @@ def test_content_objects():
 @pytest.mark.parametrize("path", ALLPDFS, ids=str)
 def test_open_lazy(path: Path) -> None:
     """Open all the documents"""
+    if path.name in XFAILS:
+        pytest.xfail("Intentionally corrupt file: %s" % path.name)
     passwords = PASSWORDS.get(path.name, [""])
     for password in passwords:
         beach = []

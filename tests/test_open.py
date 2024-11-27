@@ -13,7 +13,7 @@ try:
 except ImportError:
     pdfminer = None  # type: ignore
 import playa
-from playa.exceptions import PDFEncryptionError
+from playa.exceptions import PDFEncryptionError, PDFSyntaxError
 
 TESTDIR = Path(__file__).parent.parent / "samples"
 ALLPDFS = TESTDIR.glob("**/*.pdf")
@@ -31,6 +31,10 @@ PDFMINER_BUGS = {
     "issue-449-vertical.pdf",
     "issue_495_pdfobjref.pdf",
     "issue-1008-inline-ascii85.pdf",
+    "rotated.pdf",
+}
+XFAILS = {
+    "bogus-stream-length.pdf",
 }
 
 
@@ -38,6 +42,8 @@ PDFMINER_BUGS = {
 @pytest.mark.parametrize("path", ALLPDFS, ids=str)
 def test_open(path: Path) -> None:
     """Open all the documents and compare with pdfplumber"""
+    if path.name in XFAILS:
+        pytest.xfail("Intentionally corrupt file: %s" % path.name)
     from pdfminer.converter import PDFPageAggregator
     from pdfminer.pdfdocument import PDFDocument
     from pdfminer.pdfinterp import PDFPageInterpreter, PDFResourceManager
@@ -183,3 +189,8 @@ def test_tiff_predictor() -> None:
         image = next(doc.pages[0].images)
         # Decoded TIFF: 600 x 600 + a header
         assert len(image.stream.buffer) == 360600
+
+
+def test_bogus_stream_length() -> None:
+    with pytest.raises(PDFSyntaxError):
+        _ = playa.open(TESTDIR / "bogus-stream-length.pdf")

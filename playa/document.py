@@ -132,6 +132,8 @@ class XRefTable:
     def _load(self, parser: ObjectParser) -> None:
         while True:
             pos, line = parser.nextline()
+            if line == b"":
+                break
             line = line.strip()
             if not line:
                 continue
@@ -149,6 +151,8 @@ class XRefTable:
                 raise ValueError(error_msg)
             for objid in range(start, start + nobjs):
                 _, line = parser.nextline()
+                if line == b"":
+                    break
                 line = line.strip()
                 f = line.split(b" ")
                 if len(f) != 3:
