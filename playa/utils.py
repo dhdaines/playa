@@ -214,16 +214,27 @@ def mult_matrix(m1: Matrix, m0: Matrix) -> Matrix:
 
 
 def translate_matrix(m: Matrix, v: Point) -> Matrix:
-    """Translates a matrix by (x, y)."""
+    """Pre-translates a matrix by `v == (dx, dy)`.
+
+    Specifically this translates the *input space* of the matrix by
+    `(dx, dy)`, so:
+
+       (apply_matrix_pt(matrix, (x + dx, y + dy))
+        == apply_matrix_pt(translate_matrix(matrix,
+                                            (dx, dy)),
+                           x, y))
+
+    For all `x, y, dx, dy`.
+    """
     (a, b, c, d, e, f) = m
     (x, y) = v
     return a, b, c, d, x * a + y * c + e, x * b + y * d + f
 
 
 def apply_matrix_pt(m: Matrix, v: Point) -> Point:
+    """Applies a matrix to a point."""
     (a, b, c, d, e, f) = m
     (x, y) = v
-    """Applies a matrix to a point."""
     return a * x + c * y + e, b * x + d * y + f
 
 
