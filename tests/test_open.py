@@ -27,7 +27,11 @@ PASSWORDS = {
     "aes-256-m.pdf": ["foo"],
     "aes-256-r6.pdf": ["usersecret", "ownersecret"],
 }
-PDFMINER_BUGS = { "issue_495_pdfobjref.pdf", "issue-1008-inline-ascii85.pdf" }
+PDFMINER_BUGS = {
+    "issue-449-vertical.pdf",
+    "issue_495_pdfobjref.pdf",
+    "issue-1008-inline-ascii85.pdf",
+}
 
 
 @pytest.mark.skipif(pdfminer is None, reason="pdfminer.six is not installed")
@@ -46,7 +50,7 @@ def test_open(path: Path) -> None:
             if itype == "figure":
                 yield from convert_miner(ltitem)
             else:
-                yield ((itype, [round(x) for x in ltitem.bbox]))
+                yield (itype, ltitem.bbox)
 
     passwords = PASSWORDS.get(path.name, [""])
     for password in passwords:
@@ -73,7 +77,7 @@ def test_open(path: Path) -> None:
             with playa.open(path, password=password, space="page") as doc:
                 for page in doc.pages:
                     for item in page.layout:
-                        bbox = [round(item[x]) for x in ("x0", "y0", "x1", "y1")]
+                        bbox = (item["x0"], item["y0"], item["x1"], item["y1"])
                         beach.append((item["object_type"], bbox))
         except PDFEncryptionError:
             pytest.skip("cryptography package not installed")

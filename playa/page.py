@@ -1919,20 +1919,19 @@ class GlyphObject(ContentObject):
         context of iteration over the parent `TextObject`.
       cid: Character ID for this glyph.
       text: Unicode mapping of this glyph, if any.
-
+      adv: glyph displacement in user space units.
+      bbox: glyph bounding box in device space.
     """
 
     textstate: TextState
     cid: int
     text: Union[str, None]
-    # FIXME: Subject to change here as not the most useful info
-    lower_left: Point
-    upper_right: Point
+    adv: float
+    _bbox: Rect
 
     @property
     def bbox(self) -> Rect:
-        # FIXME: This is not the bounding box in case of rotation!
-        return get_bound((self.lower_left, self.upper_right))
+        return self._bbox
 
 
 @dataclass
@@ -1957,7 +1956,7 @@ class TextObject(ContentObject):
         cid: int,
         matrix: Matrix,
         scaling: float,
-    ) -> Tuple[GlyphObject, float]:
+    ) -> GlyphObject:
         font = self.textstate.font
         assert font is not None
         fontsize = self.textstate.fontsize
@@ -1969,10 +1968,9 @@ class TextObject(ContentObject):
             log.debug("undefined char: %r, %r", font, cid)
             text = None
         textwidth = font.char_width(cid)
-        textdisp = font.char_disp(cid)
         adv = textwidth * fontsize * scaling
         if font.vertical:
-            # vertical
+            textdisp = font.char_disp(cid)
             assert isinstance(textdisp, tuple)
             (vx, vy) = textdisp
             if vx is None:
@@ -1980,24 +1978,23 @@ class TextObject(ContentObject):
             else:
                 vx = vx * fontsize * 0.001
             vy = (1000 - vy) * fontsize * 0.001
-            bbox_lower_left = (-vx, vy + rise + adv)
-            bbox_upper_right = (-vx + fontsize, vy + rise)
+            x0, y0 = (-vx, vy + rise + adv)
+            x1, y1 = (-vx + fontsize, vy + rise)
         else:
-            # horizontal
             descent = font.get_descent() * fontsize
-            bbox_lower_left = (0, descent + rise)
-            bbox_upper_right = (adv, descent + rise + fontsize)
-        item = GlyphObject(
+            x0, y0 = (0, descent + rise)
+            x1, y1 = (adv, descent + rise + fontsize)
+        bbox = get_transformed_bound(matrix, (x0, y0, x1, y1))
+        return GlyphObject(
             self.gstate,
             self.ctm,
             self.mcs,
             self.textstate,
             cid,
             text,
-            apply_matrix_pt(matrix, bbox_lower_left),
-            apply_matrix_pt(matrix, bbox_upper_right),
+            adv,
+            bbox
         )
-        return item, adv
 
     def _render_string(self, item: TextItem) -> Iterator[GlyphObject]:
         assert self.textstate.font is not None
@@ -2025,12 +2022,12 @@ class TextObject(ContentObject):
                     if needcharspace:
                         pos += charspace
                     self.textstate.glyph_offset = (x, pos) if vert else (pos, y)
-                    glyph, adv = self._render_char(
+                    glyph = self._render_char(
                         cid=cid,
                         matrix=translate_matrix(matrix, self.textstate.glyph_offset),
                         scaling=scaling,
                     )
-                    pos += adv
+                    pos += glyph.adv
                     yield glyph
                     if cid == 32 and wordspace:
                         pos += wordspace
