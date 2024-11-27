@@ -273,6 +273,14 @@ def get_transformed_bound(matrix: Matrix, bbox: Rect) -> Rect:
     """Transform a bounding box and return the rectangle that covers
     the points of the resulting shape."""
     x0, y0, x1, y1 = bbox
+    # No rotation involved, corners are still valid.  FIXME: proof
+    if matrix[1] >= 0 and matrix[2] >= 0:
+        return get_bound(
+            (
+                apply_matrix_pt(matrix, (x0, y0)),
+                apply_matrix_pt(matrix, (x1, y1)),
+            )
+        )
     return get_bound(
         (
             apply_matrix_pt(matrix, (x0, y0)),

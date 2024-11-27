@@ -1,7 +1,8 @@
 ## PLAYA 0.2.x
 - [ ] update `pdfplumber` branch and run `pdfplumber` tests in CI
   - [ ] make a separate directory for third party tests
-- [ ] fix incorrect bboxes when rotation/skewing is applied (performance hit...)
+- [x] fix incorrect bboxes when rotation is applied
+- [x] return more useful names for custom colorspaces/patterns
 - [ ] `decode_text` is remarkably slow
 - [ ] `render_char` and `render_string` are also quite slow
 - [ ] remove the rest of the meaningless abuses of `cast`
