@@ -22,12 +22,23 @@ PASSWORDS = {
     "aes-256-m.pdf": ["foo"],
     "aes-256-r6.pdf": ["usersecret", "ownersecret"],
 }
+PDFMINER_BUGS = {
+    "issue-449-vertical.pdf",
+    "issue_495_pdfobjref.pdf",
+    "issue-1008-inline-ascii85.pdf",
+    "rotated.pdf",
+}
+XFAILS = {
+    "bogus-stream-length.pdf",
+}
 
 
 def benchmark_one_pdf(path: Path):
     """Open one of the documents"""
     import playa
 
+    if path.name in PDFMINER_BUGS or path.name in XFAILS:
+        return
     passwords = PASSWORDS.get(path.name, [""])
     for password in passwords:
         LOG.info("Reading %s", path)
@@ -40,6 +51,8 @@ def benchmark_one_lazy(path: Path):
     """Open one of the documents"""
     import playa
 
+    if path.name in PDFMINER_BUGS or path.name in XFAILS:
+        return
     passwords = PASSWORDS.get(path.name, [""])
     for password in passwords:
         LOG.info("Reading %s", path)
@@ -59,6 +72,8 @@ def benchmark_one_pdfminer(path: Path):
     from pdfminer.pdfpage import PDFPage
     from pdfminer.pdfparser import PDFParser
 
+    if path.name in PDFMINER_BUGS or path.name in XFAILS:
+        return
     passwords = PASSWORDS.get(path.name, [""])
     for password in passwords:
         with open(path, "rb") as infh:
