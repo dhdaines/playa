@@ -2064,14 +2064,10 @@ class TextObject(ContentObject):
 
     def __iter__(self) -> Iterator[GlyphObject]:
         """Generate glyphs for this text object"""
-        if self._glyphs is not None:
-            yield from self._glyphs
-        self._glyphs = []
         for item in self.items:
             if item.operator == "TJ":
                 for glyph in self._render_string(item):
                     yield glyph
-                    self._glyphs.append(glyph)
             else:
                 self.textstate.update(item.operator, *item.args)
 
