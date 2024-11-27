@@ -2334,7 +2334,8 @@ class LazyInterpreter(BaseInterpreter):
         positioning"""
         args = list_value(strings)
         if not all(isinstance(s, (int, float, bytes)) for s in args):
-            raise TypeError("TJ takes only strings and numbers, not %r" % args)
+            log.warning("Found non-string in text object %r", args)
+            return
         self.textobj.append(make_txt("TJ", *args))
 
     def do_Tj(self, s: PDFObject) -> None:
