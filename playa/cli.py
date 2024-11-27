@@ -3,6 +3,7 @@ Basic CLI for Playa's "eager" API.  Writes CSV to standard output.
 """
 
 import argparse
+import logging
 import csv
 from pathlib import Path
 
@@ -26,12 +27,18 @@ def make_argparse() -> argparse.ArgumentParser:
         choices=["screen", "page", "user"],
         default="screen",
     )
+    parser.add_argument(
+        "--debug",
+        help="Very verbose debugging output",
+        action="store_true",
+    )
     return parser
 
 
 def main() -> None:
     parser = make_argparse()
     args = parser.parse_args()
+    logging.basicConfig(level=logging.DEBUG if args.debug else logging.WARNING)
     writer = csv.DictWriter(args.outfile, fieldnames=playa.fieldnames)
     writer.writeheader()
     for path in args.pdfs:
