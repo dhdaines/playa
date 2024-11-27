@@ -64,6 +64,7 @@ from playa.utils import (
     apply_matrix_norm,
     decode_text,
     get_bound,
+    get_transformed_bound,
     make_compat_bytes,
     mult_matrix,
     parse_rect,
@@ -276,16 +277,17 @@ class TextState:
         user space.
       charspace: Extra spacing to add between each glyph, in
         text space units.
-      wordspace: The width of a space, defined curiously as `cid=32`
+      wordspace: The width of a space, defined curiously as `cid==32`
         (But PDF Is A prESeNTaTion fORmAT sO ThERe maY NOt Be aNY
-        SpACeS!!) in text space units.
-      scaling: The scaling factor as defined by the PDF standard.
+        SpACeS!!), in text space units.
+      scaling: The horizontal scaling factor as defined by the PDF
+        standard.
       leading: The leading as defined by the PDF standard.
       render_mode: The PDF rendering mode.  The really important one
         here is 3, which means "don't render the text".  You might
         want to use this to detect invisible text.
-      rise: The rise as defined by the PDF standard.
-
+      rise: The text rise (superscript or subscript position), in text
+        space units.
     """
 
     line_matrix: Matrix = MATRIX_IDENTITY
@@ -1360,10 +1362,7 @@ class PageInterpreter(BaseInterpreter):
         # unit high in user space, regardless of the number of samples
         # in the image. To be painted, an image shall be mapped to a
         # region of the page by temporarily altering the CTM.
-        bounds = ((0, 0), (1, 0), (0, 1), (1, 1))
-        x0, y0, x1, y1 = get_bound(
-            apply_matrix_pt(self.ctm, (p, q)) for (p, q) in bounds
-        )
+        x0, y0, x1, y1 = get_transformed_bound(self.ctm, (0, 0, 1, 1))
         if stream.objid is not None and stream.genno is not None:
             stream_id = (stream.objid, stream.genno)
         else:
@@ -1564,10 +1563,9 @@ class PageInterpreter(BaseInterpreter):
             log.debug("undefined char: %r, %r", font, cid)
             text = None
         textwidth = font.char_width(cid)
-        textdisp = font.char_disp(cid)
         adv = textwidth * fontsize * scaling
         if font.vertical:
-            # vertical
+            textdisp = font.char_disp(cid)
             assert isinstance(textdisp, tuple)
             (vx, vy) = textdisp
             if vx is None:
@@ -1575,22 +1573,16 @@ class PageInterpreter(BaseInterpreter):
             else:
                 vx = vx * fontsize * 0.001
             vy = (1000 - vy) * fontsize * 0.001
-            bbox_lower_left = (-vx, vy + rise + adv)
-            bbox_upper_right = (-vx + fontsize, vy + rise)
+            x0, y0 = (-vx, vy + rise + adv)
+            x1, y1 = (-vx + fontsize, vy + rise)
         else:
-            # horizontal
             descent = font.get_descent() * fontsize
-            bbox_lower_left = (0, descent + rise)
-            bbox_upper_right = (adv, descent + rise + fontsize)
+            x0, y0 = (0, descent + rise)
+            x1, y1 = (adv, descent + rise + fontsize)
         (a, b, c, d, e, f) = matrix
         upright = a * d * scaling > 0 and b * c <= 0
-        # FIXME: This is **not** the bounding box if rotation is involved!
-        x0, y0, x1, y1 = get_bound(
-            (
-                apply_matrix_pt(matrix, bbox_lower_left),
-                apply_matrix_pt(matrix, bbox_upper_right),
-            )
-        )
+        x0, y0, x1, y1 = get_transformed_bound(matrix, (x0, y0, x1, y1))
+        # NOTE: This is not right at all for rotated text, but we'll live with it
         if font.vertical:
             size = x1 - x0
         else:
@@ -1692,7 +1684,8 @@ class ContentObject:
     @property
     def bbox(self) -> Rect:
         points = itertools.chain.from_iterable(
-            ((x0, y0), (x1, y1)) for x0, y0, x1, y1 in (item.bbox for item in self)
+            ((x0, y0), (x0, y1), (x1, y1), (x1, y0))
+            for x0, y0, x1, y1 in (item.bbox for item in self)
         )
         return get_bound(points)
 
@@ -1740,8 +1733,7 @@ class ImageObject(ContentObject):
         # unit high in user space, regardless of the number of samples
         # in the image. To be painted, an image shall be mapped to a
         # region of the page by temporarily altering the CTM.
-        bounds = ((0, 0), (1, 0), (0, 1), (1, 1))
-        return get_bound(apply_matrix_pt(self.ctm, (p, q)) for (p, q) in bounds)
+        return get_transformed_bound(self.ctm, (0, 0, 1, 1))
 
 
 @dataclass
@@ -1778,11 +1770,7 @@ class XObjectObject(ContentObject):
     def bbox(self) -> Rect:
         """Get the bounding box of this XObject in device space."""
         # It is a required attribute!
-        x0, y0, x1, y1 = parse_rect(self.stream["BBox"])
-        # FIXME: This is *not* the bbox in the case of rotation
-        return get_bound(
-            [apply_matrix_pt(self.ctm, (x0, y0)), apply_matrix_pt(self.ctm, (x1, y1))]
-        )
+        return get_transformed_bound(self.ctm, parse_rect(self.stream["BBox"]))
 
     @property
     def buffer(self) -> bytes:
@@ -1896,14 +1884,11 @@ class PathObject(ContentObject):
         """Get bounding box of path in device space as defined by its
         points and control points."""
         # First get the bounding box in user space (fast)
-        x0, y0, x1, y1 = get_bound(
+        bbox = get_bound(
             itertools.chain.from_iterable(seg.points for seg in self.raw_segments)
         )
-        # Now transform it
-        x0, y0 = apply_matrix_pt(self.ctm, (x0, y0))
-        x1, y1 = apply_matrix_pt(self.ctm, (x1, y1))
-        # And get the new bounds (also normalizes)
-        return get_bound(((x0, y0), (x1, y1)))
+        # Transform it and get the new bounding box
+        return get_transformed_bound(self.ctm, bbox)
 
 
 class TextItem(NamedTuple):
@@ -1934,20 +1919,19 @@ class GlyphObject(ContentObject):
         context of iteration over the parent `TextObject`.
       cid: Character ID for this glyph.
       text: Unicode mapping of this glyph, if any.
-
+      adv: glyph displacement in user space units.
+      bbox: glyph bounding box in device space.
     """
 
     textstate: TextState
     cid: int
     text: Union[str, None]
-    # FIXME: Subject to change here as not the most useful info
-    lower_left: Point
-    upper_right: Point
+    adv: float
+    _bbox: Rect
 
     @property
     def bbox(self) -> Rect:
-        # FIXME: This is not the bounding box in case of rotation!
-        return get_bound((self.lower_left, self.upper_right))
+        return self._bbox
 
 
 @dataclass
@@ -1972,7 +1956,7 @@ class TextObject(ContentObject):
         cid: int,
         matrix: Matrix,
         scaling: float,
-    ) -> Tuple[GlyphObject, float]:
+    ) -> GlyphObject:
         font = self.textstate.font
         assert font is not None
         fontsize = self.textstate.fontsize
@@ -1984,10 +1968,9 @@ class TextObject(ContentObject):
             log.debug("undefined char: %r, %r", font, cid)
             text = None
         textwidth = font.char_width(cid)
-        textdisp = font.char_disp(cid)
         adv = textwidth * fontsize * scaling
         if font.vertical:
-            # vertical
+            textdisp = font.char_disp(cid)
             assert isinstance(textdisp, tuple)
             (vx, vy) = textdisp
             if vx is None:
@@ -1995,24 +1978,23 @@ class TextObject(ContentObject):
             else:
                 vx = vx * fontsize * 0.001
             vy = (1000 - vy) * fontsize * 0.001
-            bbox_lower_left = (-vx, vy + rise + adv)
-            bbox_upper_right = (-vx + fontsize, vy + rise)
+            x0, y0 = (-vx, vy + rise + adv)
+            x1, y1 = (-vx + fontsize, vy + rise)
         else:
-            # horizontal
             descent = font.get_descent() * fontsize
-            bbox_lower_left = (0, descent + rise)
-            bbox_upper_right = (adv, descent + rise + fontsize)
-        item = GlyphObject(
+            x0, y0 = (0, descent + rise)
+            x1, y1 = (adv, descent + rise + fontsize)
+        bbox = get_transformed_bound(matrix, (x0, y0, x1, y1))
+        return GlyphObject(
             self.gstate,
             self.ctm,
             self.mcs,
             self.textstate,
             cid,
             text,
-            apply_matrix_pt(matrix, bbox_lower_left),
-            apply_matrix_pt(matrix, bbox_upper_right),
+            adv,
+            bbox
         )
-        return item, adv
 
     def _render_string(self, item: TextItem) -> Iterator[GlyphObject]:
         assert self.textstate.font is not None
@@ -2040,12 +2022,12 @@ class TextObject(ContentObject):
                     if needcharspace:
                         pos += charspace
                     self.textstate.glyph_offset = (x, pos) if vert else (pos, y)
-                    glyph, adv = self._render_char(
+                    glyph = self._render_char(
                         cid=cid,
                         matrix=translate_matrix(matrix, self.textstate.glyph_offset),
                         scaling=scaling,
                     )
-                    pos += adv
+                    pos += glyph.adv
                     yield glyph
                     if cid == 32 and wordspace:
                         pos += wordspace
@@ -2079,14 +2061,10 @@ class TextObject(ContentObject):
 
     def __iter__(self) -> Iterator[GlyphObject]:
         """Generate glyphs for this text object"""
-        if self._glyphs is not None:
-            yield from self._glyphs
-        self._glyphs = []
         for item in self.items:
             if item.operator == "TJ":
                 for glyph in self._render_string(item):
                     yield glyph
-                    self._glyphs.append(glyph)
             else:
                 self.textstate.update(item.operator, *item.args)
 

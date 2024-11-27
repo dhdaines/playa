@@ -27,6 +27,11 @@ PASSWORDS = {
     "aes-256-m.pdf": ["foo"],
     "aes-256-r6.pdf": ["usersecret", "ownersecret"],
 }
+PDFMINER_BUGS = {
+    "issue-449-vertical.pdf",
+    "issue_495_pdfobjref.pdf",
+    "issue-1008-inline-ascii85.pdf",
+}
 
 
 @pytest.mark.skipif(pdfminer is None, reason="pdfminer.six is not installed")
@@ -45,12 +50,15 @@ def test_open(path: Path) -> None:
             if itype == "figure":
                 yield from convert_miner(ltitem)
             else:
-                yield ((itype, ltitem.bbox))
+                yield (itype, ltitem.bbox)
 
     passwords = PASSWORDS.get(path.name, [""])
     for password in passwords:
         miner = []
         with open(path, "rb") as infh:
+            if path.name in PDFMINER_BUGS:
+                pytest.skip("pdfminer.six has a bug, skipping %s" % path.name)
+                break
             try:
                 rsrc = PDFResourceManager()
                 agg = PDFPageAggregator(rsrc, pageno=1)
@@ -175,10 +183,3 @@ def test_tiff_predictor() -> None:
         image = next(doc.pages[0].images)
         # Decoded TIFF: 600 x 600 + a header
         assert len(image.stream.buffer) == 360600
-
-
-if __name__ == "__main__":
-    import logging
-
-    logging.basicConfig(level=logging.DEBUG)
-    test_xobjects()

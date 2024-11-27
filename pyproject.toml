@@ -57,10 +57,10 @@ ban-relative-imports = "all"
 testpaths = [ "tests" ]
 
 [tool.hatch.envs.hatch-test]
-extra-dependencies = [ "cryptography", "pdfminer.six", "pandas", "polars" ]
+extra-dependencies = [ "cryptography", "pdfminer.six", "pandas", "polars-lts-cpu" ]
 
 [tool.hatch.envs.default]
-dependencies = [ "cryptography", "pytest", "mypy", "pdfminer.six", "pandas", "polars" ]
+dependencies = [ "cryptography", "pytest", "mypy", "pdfminer.six", "pandas", "polars-lts-cpu" ]
 
 [tool.hatch.envs.default.scripts]
 bench = [

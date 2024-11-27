@@ -214,16 +214,27 @@ def mult_matrix(m1: Matrix, m0: Matrix) -> Matrix:
 
 
 def translate_matrix(m: Matrix, v: Point) -> Matrix:
-    """Translates a matrix by (x, y)."""
+    """Pre-translates a matrix by `v == (dx, dy)`.
+
+    Specifically this translates the *input space* of the matrix by
+    `(dx, dy)`, so:
+
+       (apply_matrix_pt(matrix, (x + dx, y + dy))
+        == apply_matrix_pt(translate_matrix(matrix,
+                                            (dx, dy)),
+                           x, y))
+
+    For all `x, y, dx, dy`.
+    """
     (a, b, c, d, e, f) = m
     (x, y) = v
     return a, b, c, d, x * a + y * c + e, x * b + y * d + f
 
 
 def apply_matrix_pt(m: Matrix, v: Point) -> Point:
+    """Applies a matrix to a point."""
     (a, b, c, d, e, f) = m
     (x, y) = v
-    """Applies a matrix to a point."""
     return a * x + c * y + e, b * x + d * y + f
 
 
@@ -256,6 +267,20 @@ def get_bound(pts: Iterable[Point]) -> Rect:
     x1 = max(xs)
     y1 = max(ys)
     return x0, y0, x1, y1
+
+
+def get_transformed_bound(matrix: Matrix, bbox: Rect) -> Rect:
+    """Transform a bounding box and return the rectangle that covers
+    the points of the resulting shape."""
+    x0, y0, x1, y1 = bbox
+    return get_bound(
+        (
+            apply_matrix_pt(matrix, (x0, y0)),
+            apply_matrix_pt(matrix, (x0, y1)),
+            apply_matrix_pt(matrix, (x1, y1)),
+            apply_matrix_pt(matrix, (x1, y0)),
+        )
+    )
 
 
 def choplist(n: int, seq: Iterable[_T]) -> Iterator[Tuple[_T, ...]]:

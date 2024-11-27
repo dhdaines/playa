@@ -95,5 +95,20 @@ def test_uncoloured_tiling() -> None:
         assert path.gstate.ncolor == Color((0.5, 0.2, 1.0), "P1")
 
 
+def test_rotated_glyphs() -> None:
+    """Verify that we (unlike pdfminer) properly calculate the bbox
+    for rotated text."""
+    with playa.open(TESTDIR / "contrib" / "issue_495_pdfobjref.pdf") as pdf:
+        chars = []
+        for text in pdf.pages[0].texts:
+            for glyph in text:
+                if 1 not in glyph.textstate.line_matrix:
+                    chars.append(glyph.text)
+                    x0, y0, x1, y1 = glyph.bbox
+                    width = x1 - x0
+                    assert width > 6
+        assert "".join(chars) == "R18,00"
+
+
 if __name__ == "__main__":
     test_content_objects()
