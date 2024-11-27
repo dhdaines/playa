@@ -1,3 +1,8 @@
+## PLAYA 0.2.1: 2024-11-26
+- fix serious bug on malformed stream_length
+- report actual bounding box for rotated glyphs
+  - eager API is no longer faster than pdfminer :( but it is more correct
+
 ## PLAYA 0.2: 2024-11-25
 - expose form XObjects on Page to allow getting only their contents
 - expose form XObject IDs in LayoutDict
