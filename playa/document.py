@@ -1042,43 +1042,42 @@ class Document:
 
     def get_font(self, objid: object, spec: Mapping[str, object]) -> Font:
         if objid and objid in self._cached_fonts:
-            font = self._cached_fonts[objid]
+            return self._cached_fonts[objid]
+        log.debug("get_font: create: objid=%r, spec=%r", objid, spec)
+        if spec["Type"] is not LITERAL_FONT:
+            log.warning("Font specification Type is not /Font: %r", spec)
+        # Create a Font object.
+        if "Subtype" in spec:
+            subtype = literal_name(spec["Subtype"])
         else:
-            log.debug("get_font: create: objid=%r, spec=%r", objid, spec)
-            if spec["Type"] is not LITERAL_FONT:
-                log.warning("Font specification Type is not /Font: %r", spec)
-            # Create a Font object.
-            if "Subtype" in spec:
-                subtype = literal_name(spec["Subtype"])
-            else:
-                log.warning("Font specification Subtype is not specified: %r", spec)
-                subtype = "Type1"
-            if subtype in ("Type1", "MMType1"):
-                # Type1 Font
-                font = Type1Font(spec)
-            elif subtype == "TrueType":
-                # TrueType Font
-                font = PDFTrueTypeFont(spec)
-            elif subtype == "Type3":
-                # Type3 Font
-                font = Type3Font(spec)
-            elif subtype in ("CIDFontType0", "CIDFontType2"):
-                # CID Font
-                font = CIDFont(spec)
-            elif subtype == "Type0":
-                # Type0 Font
-                dfonts = list_value(spec["DescendantFonts"])
-                assert dfonts
-                subspec = dict_value(dfonts[0]).copy()
-                for k in ("Encoding", "ToUnicode"):
-                    if k in spec:
-                        subspec[k] = resolve1(spec[k])
-                font = self.get_font(None, subspec)
-            else:
-                log.warning("Invalid Font spec: %r" % spec)
-                font = Type1Font(spec)  # FIXME: this is so wrong!
-            if objid:
-                self._cached_fonts[objid] = font
+            log.warning("Font specification Subtype is not specified: %r", spec)
+            subtype = "Type1"
+        if subtype in ("Type1", "MMType1"):
+            # Type1 Font
+            font = Type1Font(spec)
+        elif subtype == "TrueType":
+            # TrueType Font
+            font = PDFTrueTypeFont(spec)
+        elif subtype == "Type3":
+            # Type3 Font
+            font = Type3Font(spec)
+        elif subtype in ("CIDFontType0", "CIDFontType2"):
+            # CID Font
+            font = CIDFont(spec)
+        elif subtype == "Type0":
+            # Type0 Font
+            dfonts = list_value(spec["DescendantFonts"])
+            assert dfonts
+            subspec = dict_value(dfonts[0]).copy()
+            for k in ("Encoding", "ToUnicode"):
+                if k in spec:
+                    subspec[k] = resolve1(spec[k])
+            font = self.get_font(None, subspec)
+        else:
+            log.warning("Invalid Font spec: %r" % spec)
+            font = Type1Font(spec)  # FIXME: this is so wrong!
+        if objid:
+            self._cached_fonts[objid] = font
         return font
 
     @property

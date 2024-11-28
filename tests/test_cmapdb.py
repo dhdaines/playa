@@ -2,7 +2,7 @@
 Inadequately test CMap parsing and such.
 """
 
-from playa.cmapdb import CMapParser, FileUnicodeMap
+from playa.cmapdb import parse_tounicode
 from playa.font import Type1FontHeaderParser
 
 STREAMDATA = b"""
@@ -32,9 +32,7 @@ end
 
 
 def test_cmap_parser():
-    cmap = FileUnicodeMap()
-    cp = CMapParser(cmap, STREAMDATA)
-    cp.run()
+    cmap = parse_tounicode(STREAMDATA)
     assert cmap.cid2unichr == {1: "x", 2: "̌", 3: "u"}
 
 

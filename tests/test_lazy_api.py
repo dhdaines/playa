@@ -108,7 +108,8 @@ def test_rotated_glyphs() -> None:
         for text in pdf.pages[0].texts:
             for glyph in text:
                 if 1 not in glyph.textstate.line_matrix:
-                    chars.append(glyph.text)
+                    if glyph.text is not None:
+                        chars.append(glyph.text)
                     x0, y0, x1, y1 = glyph.bbox
                     width = x1 - x0
                     assert width > 6
