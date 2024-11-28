@@ -1691,9 +1691,26 @@ class ContentObject:
         return get_bound(points)
 
 
+BBOX_NONE = (-1, -1, -1, -1)
+
+
 @dataclass
 class TagObject(ContentObject):
     """A marked content point with no content."""
+
+    @property
+    def bbox(self) -> Rect:
+        """A tag has no content and thus no bounding box.
+
+        To avoid needlessly complicating user code this returns
+        `BBOX_NONE` instead of `None` or throwing a exception.
+        Because that is a specific object, you can reliably check for
+        it with:
+
+            if obj.bbox is BBOX_NONE:
+                ...
+        """
+        return BBOX_NONE
 
 
 @dataclass
@@ -2209,11 +2226,13 @@ class LazyInterpreter(BaseInterpreter):
 
     def do_ET(self) -> Iterator[ContentObject]:
         """End a text object"""
-        # Only output text if... there is text to output (we rewrite all text operators to TJ)
+        # Only output text if... there is text to output (we rewrite
+        # all text operators to TJ)
         has_text = False
         for item in self.textobj:
             if item.operator == "TJ":
-                has_text = True
+                if any(b for b in item.args if isinstance(b, bytes)):
+                    has_text = True
         if has_text:
             yield self.create(TextObject, textstate=self.textstate, items=self.textobj)
         else:

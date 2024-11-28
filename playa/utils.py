@@ -253,15 +253,15 @@ def isnumber(x: object) -> bool:
 
 
 _T = TypeVar("_T")
-BBOX_NONE = (-1, -1, -1, -1)
 
 
 def get_bound(pts: Iterable[Point]) -> Rect:
-    """Compute a minimal rectangle that covers all the points."""
-    try:
-        xs, ys = list(zip(*pts))
-    except ValueError:  # Means pts was empty
-        return BBOX_NONE
+    """Compute a minimal rectangle that covers all the points.
+
+    Raises:
+      ValueError on empty input (as there is no bounding box).
+    """
+    xs, ys = list(zip(*pts))
     x0 = min(xs)
     y0 = min(ys)
     x1 = max(xs)
