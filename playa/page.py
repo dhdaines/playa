@@ -1684,8 +1684,10 @@ class ContentObject:
 
     @property
     def bbox(self) -> Rect:
+        # These bboxes have already been computed in device space so
+        # we don't need all 4 corners!
         points = itertools.chain.from_iterable(
-            ((x0, y0), (x0, y1), (x1, y1), (x1, y0))
+            ((x0, y0), (x1, y1))
             for x0, y0, x1, y1 in (item.bbox for item in self)
         )
         return get_bound(points)

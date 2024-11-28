@@ -261,7 +261,7 @@ def get_bound(pts: Iterable[Point]) -> Rect:
     Raises:
       ValueError on empty input (as there is no bounding box).
     """
-    xs, ys = list(zip(*pts))
+    xs, ys = zip(*pts)
     x0 = min(xs)
     y0 = min(ys)
     x1 = max(xs)
