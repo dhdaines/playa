@@ -1,3 +1,10 @@
+## PLAYA 0.2.3: 2024-11-28:
+- release early and often
+- fix some embarrassing bugs, again:
+  - CMap parser did not recognize bfrange correctly (regression)
+  - corner cases of inline images caused endless woe
+  - documentation said document.structtree exists but nope it didn't
+
 ## PLAYA 0.2.2: 2024-11-27
 - make everything quite a lot faster (25-35% faster than pdfminer now)
 - fix some more pdfminer.six bugs and verify others already fixed
