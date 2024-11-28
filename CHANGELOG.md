@@ -1,3 +1,8 @@
+## PLAYA 0.2.2: 2024-11-27
+- make everything quite a lot faster (25-35% faster than pdfminer now)
+- fix some more pdfminer.six bugs and verify others already fixed
+- really make sure not to return text objects with no text
+
 ## PLAYA 0.2.1: 2024-11-26
 - fix serious bug on malformed stream_length
 - report actual bounding box for rotated glyphs
