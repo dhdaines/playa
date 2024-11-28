@@ -273,6 +273,7 @@ class FileUnicodeMap(UnicodeMap):
 
     def add_cid2unichr(self, cid: int, unichr: str) -> None:
         # A0 = non-breaking space, some weird fonts can have a collision on a cid here.
+        assert isinstance(unichr, str)
         if unichr == "\u00a0" and self.cid2unichr.get(cid) == " ":
             return
         self.cid2unichr[cid] = unichr
@@ -311,7 +312,8 @@ def add_bf_range(
                 "offsets does not match the code length.",
             )
         for cid, unicode_value in zip(range(start, end + 1), code):
-            cmap.add_cid2unichr(cid, unicode_value)
+            assert isinstance(unicode_value, bytes)
+            cmap.add_cid2bytes(cid, unicode_value)
     else:
         assert isinstance(code, bytes)
         var = code[-4:]
@@ -380,18 +382,18 @@ def parse_tounicode(data: bytes) -> FileUnicodeMap:
             for start_byte, end_byte, cid in choplist(3, stack):
                 if not isinstance(start_byte, bytes):
                     log.warning("The start object of begincidrange is not a byte.")
-                    return
+                    return cmap
                 if not isinstance(end_byte, bytes):
                     log.warning("The end object of begincidrange is not a byte.")
-                    return
+                    return cmap
                 if not isinstance(cid, int):
                     log.warning("The cid object of begincidrange is not a byte.")
-                    return
+                    return cmap
                 if len(start_byte) != len(end_byte):
                     log.warning(
                         "The start and end byte of begincidrange have different lengths.",
                     )
-                    return
+                    return cmap
                 add_cid_range(cmap, start_byte, end_byte, cid)
             del stack[:]
         elif obj is KEYWORD_BEGINCIDCHAR:

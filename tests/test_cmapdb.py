@@ -19,6 +19,9 @@ begincmap
 1 begincodespacerange
 <00> <FF>
 endcodespacerange
+1 beginbfrange
+<006F> <0072> [<00E7> <00E9> <00E8> <00EA>]
+endbfrange
 3 beginbfchar
 <01> <0078>
 <02> <030C>
@@ -33,7 +36,15 @@ end
 
 def test_cmap_parser():
     cmap = parse_tounicode(STREAMDATA)
-    assert cmap.cid2unichr == {1: "x", 2: "̌", 3: "u"}
+    assert cmap.cid2unichr == {
+        1: "x",
+        2: "̌",
+        3: "u",
+        111: "ç",
+        112: "é",
+        113: "è",
+        114: "ê",
+    }
 
 
 # Basically the sort of stuff we try to find in a Type 1 font

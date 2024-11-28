@@ -1054,7 +1054,7 @@ class Document:
             subtype = "Type1"
         if subtype in ("Type1", "MMType1"):
             # Type1 Font
-            font = Type1Font(spec)
+            font: Font = Type1Font(spec)
         elif subtype == "TrueType":
             # TrueType Font
             font = PDFTrueTypeFont(spec)
