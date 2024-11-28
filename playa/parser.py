@@ -170,7 +170,7 @@ class Lexer:
         return (linepos, self.data[linepos : self.pos])
 
     def get_inline_data(
-        self, target: bytes = b"EI", blocksize: int = -1
+        self, target: bytes = b"\nEI", blocksize: int = -1
     ) -> Tuple[int, bytes]:
         """Get the data for an inline image up to the target
         end-of-stream marker.
@@ -349,6 +349,7 @@ class ObjectParser:
             if self.stack and top is None:
                 return self.stack.pop()
             (pos, token) = self.nexttoken()
+            log.debug("token at %d: %r", pos, token)
             if token is KEYWORD_ARRAY_BEGIN:
                 if top is None:
                     top = pos
@@ -429,7 +430,7 @@ class ObjectParser:
                 dic = {
                     literal_name(k): v for (k, v) in choplist(2, objs) if v is not None
                 }
-                eos = b"EI"
+                eos = b"\nEI"
                 filter = dic.get("F")
                 if filter is not None:
                     if not isinstance(filter, list):
@@ -441,16 +442,19 @@ class ObjectParser:
                 # operator shall be followed by a single white-space
                 # character, and the next character shall be
                 # interpreted as the first byte of image data.
-                if eos == b"EI":
+                if eos == b"\nEI":
                     self.seek(idpos + len(KEYWORD_ID.name) + 1)
                     (eipos, data) = self.get_inline_data(target=eos)
-                    # FIXME: it is totally unspecified what to do with
-                    # a newline between the end of the data and "EI",
-                    # since there is no explicit stream length.  (PDF
-                    # 1.7 p. 756: There should be an end-of-line
-                    # marker after the data and before endstream; this
-                    # marker shall not be included in the stream
-                    # length.)  We will include it, which might be wrong.
+                    log.debug("data at %d: %r", eipos, data)
+                    # It is totally unspecified what to do with a
+                    # newline between the end of the data and "EI",
+                    # since there is no explicit stream length, but in
+                    # practice, there is always a newline, since "EI"
+                    # may occur in the stream data even when it is not
+                    # ASCII85, so we will not include it.  (PDF 1.7
+                    # p. 756: There *should* be an end-of-line marker
+                    # after the data and before endstream; this marker
+                    # shall not be included in the stream length.)
                     data = data[: -len(eos)]
                 else:
                     # Note absence of + 1 here (the "Unless" above)
@@ -468,7 +472,9 @@ class ObjectParser:
                 log.debug("InlineImage @ %d: %r", pos, obj)
                 # Inline images must occur at the top level, otherwise
                 # something is wrong (probably a corrupt file)
-                assert pos == top, f"Inline image {obj} not at top level of stream"
+                assert (
+                    pos == top
+                ), f"Inline image {obj} not at top level of stream ({pos} != {top}, {self.stack})"
                 top = None
                 return pos, obj
             else:
