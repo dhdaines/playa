@@ -430,6 +430,10 @@ class ObjectParser:
                 dic = {
                     literal_name(k): v for (k, v) in choplist(2, objs) if v is not None
                 }
+                # First try EI preceded by newline, because some
+                # badly-behaved PDFs contain inline images without
+                # ASCII85Decode encoding but nonetheless with "EI" in
+                # their data.
                 eos = b"\nEI"
                 filter = dic.get("F")
                 if filter is not None:
@@ -437,25 +441,24 @@ class ObjectParser:
                         filter = [filter]
                     if filter[0] in LITERALS_ASCII85_DECODE:
                         eos = b"~>"
-                # PDF 1.7 p. 215: Unless the image uses ASCIIHexDecode
-                # or ASCII85Decode as one of its filters, the ID
-                # operator shall be followed by a single white-space
-                # character, and the next character shall be
-                # interpreted as the first byte of image data.
                 if eos == b"\nEI":
+                    # PDF 1.7 p. 215: Unless the image uses
+                    # ASCIIHexDecode or ASCII85Decode as one of its
+                    # filters, the ID operator shall be followed by a
+                    # single white-space character, and the next
+                    # character shall be interpreted as the first byte
+                    # of image data.
                     self.seek(idpos + len(KEYWORD_ID.name) + 1)
                     (eipos, data) = self.get_inline_data(target=eos)
-                    log.debug("data at %d: %r", eipos, data)
-                    # It is totally unspecified what to do with a
-                    # newline between the end of the data and "EI",
-                    # since there is no explicit stream length, but in
-                    # practice, there is always a newline, since "EI"
-                    # may occur in the stream data even when it is not
-                    # ASCII85, so we will not include it.  (PDF 1.7
-                    # p. 756: There *should* be an end-of-line marker
-                    # after the data and before endstream; this marker
-                    # shall not be included in the stream length.)
-                    data = data[: -len(eos)]
+                    if eipos == -1:
+                        # Try again with just plain b"EI"
+                        self.seek(idpos + len(KEYWORD_ID.name) + 1)
+                        (eipos, data) = self.get_inline_data(target=b"EI")
+                        log.debug("data at %d: %r", eipos, data)
+                        data = re.sub(rb"(?:\r\n|[\r\n])$", b"", data[: -len(eos)])
+                    else:
+                        log.debug("data at %d: %r", eipos, data)
+                        data = re.sub(rb"\r$", b"", data[: -len(eos)])
                 else:
                     # Note absence of + 1 here (the "Unless" above)
                     self.seek(idpos + len(KEYWORD_ID.name))
