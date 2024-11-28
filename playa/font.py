@@ -22,7 +22,7 @@ from playa.cmapdb import (
     CMap,
     CMapBase,
     CMapDB,
-    CMapParser,
+    parse_tounicode,
     FileUnicodeMap,
     IdentityUnicodeMap,
     UnicodeMap,
@@ -949,8 +949,7 @@ class SimpleFont(Font):
         self.unicode_map: Optional[UnicodeMap] = None
         if "ToUnicode" in spec:
             strm = stream_value(spec["ToUnicode"])
-            self.unicode_map = FileUnicodeMap()
-            CMapParser(self.unicode_map, strm.buffer).run()
+            self.unicode_map = parse_tounicode(strm.buffer)
         Font.__init__(self, descriptor, widths)
 
     def to_unichr(self, cid: int) -> str:
@@ -1055,8 +1054,7 @@ class CIDFont(Font):
         if "ToUnicode" in spec:
             if isinstance(spec["ToUnicode"], ContentStream):
                 strm = stream_value(spec["ToUnicode"])
-                self.unicode_map = FileUnicodeMap()
-                CMapParser(self.unicode_map, strm.buffer).run()
+                self.unicode_map = parse_tounicode(strm.buffer)
             else:
                 cmap_name = literal_name(spec["ToUnicode"])
                 encoding = literal_name(spec["Encoding"])
