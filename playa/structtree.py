@@ -20,7 +20,6 @@ from typing import (
 )
 
 from playa.data_structures import NumberTree
-from playa.page import Page
 from playa.parser import KEYWORD_NULL, PSLiteral
 from playa.pdftypes import ObjRef, resolve1
 from playa.utils import decode_text
@@ -29,6 +28,7 @@ logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from playa.document import Document
+    from playa.page import Page
 
 
 MatchFunc = Callable[["StructElement"], bool]
@@ -152,12 +152,12 @@ class StructTree(Findable):
              attribute of `StructElement`.
     """
 
-    page: Union[Page, None]
+    page: Union["Page", None]
 
     def __init__(
         self,
         doc: "Document",
-        pages: Union[Iterable[Page], None] = None,
+        pages: Union[Iterable["Page"], None] = None,
     ):
         if "StructTreeRoot" not in doc.catalog:
             raise KeyError("Catalog has no 'StructTreeRoot' entry")

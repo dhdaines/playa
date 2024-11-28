@@ -84,6 +84,7 @@ from playa.utils import (
     format_int_roman,
     nunpack,
 )
+from playa.structtree import StructTree
 
 log = logging.getLogger(__name__)
 
@@ -941,6 +942,11 @@ class Document:
                 dic["page_index"] = idx
                 dic["page_label"] = page.label
                 yield dic
+
+    @property
+    def structtree(self) -> StructTree:
+        """Return the PDF structure tree."""
+        return StructTree(self)
 
     def _getobj_objstm(
         self, stream: ContentStream, index: int, objid: int

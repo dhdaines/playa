@@ -71,6 +71,7 @@ from playa.utils import (
     normalize_rect,
     translate_matrix,
 )
+from playa.structtree import StructTree
 
 if TYPE_CHECKING:
     from playa.document import Document
@@ -242,6 +243,14 @@ class Page:
             except StopIteration:
                 return
             yield tok
+
+    @property
+    def structtree(self) -> StructTree:
+        """Return the PDF structure tree."""
+        doc = self.doc()
+        if doc is None:
+            raise RuntimeError("Document no longer exists!")
+        return StructTree(doc, (self,))
 
     def __repr__(self) -> str:
         return f"<Page: Resources={self.resources!r}, MediaBox={self.mediabox!r}>"
