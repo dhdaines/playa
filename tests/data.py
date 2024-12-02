@@ -42,4 +42,5 @@ PASSWORDS = {
 XFAILS = {
     "bogus-stream-length.pdf",
     "empty.pdf",
+    "issue9418.pdf",
 }

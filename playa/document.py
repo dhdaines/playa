@@ -853,7 +853,7 @@ class Document:
         try:
             pos = self._find_xref()
             self._read_xref_from(pos, self.xrefs)
-        except (ValueError, IndexError, PDFSyntaxError) as e:
+        except (ValueError, IndexError, StopIteration, PDFSyntaxError) as e:
             log.debug("Using fallback XRef parsing: %s", e)
             newxref = XRefFallback(self.parser)
             self.xrefs.append(newxref)
@@ -874,7 +874,10 @@ class Document:
                 self.encryption = (id_value, dict_value(trailer["Encrypt"]))
                 self._initialize_password(password)
             if "Info" in trailer:
-                self.info.append(dict_value(trailer["Info"]))
+                try:
+                    self.info.append(dict_value(trailer["Info"]))
+                except TypeError:
+                    log.warning("Info is a broken reference (incorrect xref table?)")
             if "Root" in trailer:
                 # Every PDF file must have exactly one /Root dictionary.
                 try:
@@ -982,30 +985,28 @@ class Document:
         self.parser.seek(pos)
         try:
             _, obj = next(self.parser)
-        except (ValueError, IndexError) as e:
+        except (ValueError, IndexError, PDFSyntaxError) as e:
             log.warning(
                 "Indirect object %d not found at position %d: %r", objid, pos, e
             )
-            # Hack around malformed pdf files where the offset in the
+            # In case of malformed pdf files where the offset in the
             # xref table doesn't point exactly at the object
-            # definition (probably more frequent than you think).
-            # Back up a bit, then parse forward until we find the right
-            # object. Fixes
-            # https://github.com/pdfminer/pdfminer.six/issues/56
-            tokenizer = Lexer(self.buffer, max(0, pos - 16))
-            q: Deque[int] = deque([], 3)
-            while True:
-                try:
-                    (pos, token) = next(tokenizer)
-                except StopIteration:
-                    raise PDFSyntaxError(
-                        f"Indirect object {objid!r} not found at or after position {pos}"
-                    )
-                q.append(pos)
-                if len(q) == 3 and token is KEYWORD_OBJ:
-                    break
-            log.debug("seeking to %r", q[0])
-            self.parser.seek(q[0])
+            # definition (probably more frequent than you think), just
+            # use a regular expression to find the object because we
+            # can do that.
+            realpos = -1
+            lastgen = -1
+            for m in re.finditer(rb"%d\s+(\d+)\s+obj" % objid, self.buffer):
+                genno = int(m.group(1))
+                if genno > lastgen:
+                    lastgen = genno
+                    realpos = m.start(0)
+            if realpos == -1:
+                raise PDFSyntaxError(
+                    f"Indirect object {objid!r} not found in document"
+                )
+            log.debug("found object (%r) seeking to %r", m.group(0), realpos)
+            self.parser.seek(realpos)
             (_, obj) = next(self.parser)
         if obj.objid != objid:
             raise PDFSyntaxError(f"objid mismatch: {obj.objid!r}={objid!r}")
