@@ -2146,6 +2146,8 @@ class LazyInterpreter(BaseInterpreter):
 
     def do_S(self) -> Iterator[ContentObject]:
         """Stroke path"""
+        if not self.curpath:
+            return
         yield self.create(
             PathObject,
             stroke=True,
@@ -2162,6 +2164,8 @@ class LazyInterpreter(BaseInterpreter):
 
     def do_f(self) -> Iterator[ContentObject]:
         """Fill path using nonzero winding number rule"""
+        if not self.curpath:
+            return
         yield self.create(
             PathObject,
             stroke=False,
@@ -2177,6 +2181,8 @@ class LazyInterpreter(BaseInterpreter):
 
     def do_f_a(self) -> Iterator[ContentObject]:
         """Fill path using even-odd rule"""
+        if not self.curpath:
+            return
         yield self.create(
             PathObject,
             stroke=False,
@@ -2188,6 +2194,8 @@ class LazyInterpreter(BaseInterpreter):
 
     def do_B(self) -> Iterator[ContentObject]:
         """Fill and stroke path using nonzero winding number rule"""
+        if not self.curpath:
+            return
         yield self.create(
             PathObject,
             stroke=True,
@@ -2199,6 +2207,8 @@ class LazyInterpreter(BaseInterpreter):
 
     def do_B_a(self) -> Iterator[ContentObject]:
         """Fill and stroke path using even-odd rule"""
+        if not self.curpath:
+            return
         yield self.create(
             PathObject,
             stroke=True,
