@@ -737,8 +737,13 @@ class BaseInterpreter:
                     objid = None
                     if isinstance(spec, ObjRef):
                         objid = spec.objid
-                    spec = dict_value(spec)
-                    self.fontmap[fontid] = doc.get_font(objid, spec)
+                    try:
+                        spec = dict_value(spec)
+                        self.fontmap[fontid] = doc.get_font(objid, spec)
+                    except TypeError:
+                        log.warning("Broken/missing font spec for %r",
+                                    fontid)
+                        self.fontmap[fontid] = doc.get_font(objid, {})
             elif k == "ColorSpace":
                 for csid, spec in dict_value(v).items():
                     colorspace = get_colorspace(resolve1(spec), csid)

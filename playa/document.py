@@ -1055,14 +1055,14 @@ class Document:
         if objid and objid in self._cached_fonts:
             return self._cached_fonts[objid]
         log.debug("get_font: create: objid=%r, spec=%r", objid, spec)
-        if spec["Type"] is not LITERAL_FONT:
+        if spec.get("Type") is not LITERAL_FONT:
             log.warning("Font specification Type is not /Font: %r", spec)
         # Create a Font object.
         if "Subtype" in spec:
             subtype = literal_name(spec["Subtype"])
         else:
             log.warning("Font specification Subtype is not specified: %r", spec)
-            subtype = "Type1"
+            subtype = ""
         if subtype in ("Type1", "MMType1"):
             # Type1 Font
             font: Font = Type1Font(spec)
