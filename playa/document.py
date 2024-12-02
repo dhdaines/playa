@@ -853,7 +853,7 @@ class Document:
         try:
             pos = self._find_xref()
             self._read_xref_from(pos, self.xrefs)
-        except (ValueError, IndexError) as e:
+        except (ValueError, IndexError, PDFSyntaxError) as e:
             log.debug("Using fallback XRef parsing: %s", e)
             newxref = XRefFallback(self.parser)
             self.xrefs.append(newxref)
