@@ -14,27 +14,13 @@ except ImportError:
     pdfminer = None  # type: ignore
 import playa
 from playa.exceptions import PDFEncryptionError, PDFSyntaxError
+from .data import TESTDIR, ALLPDFS, PASSWORDS, XFAILS
 
-TESTDIR = Path(__file__).parent.parent / "samples"
-ALLPDFS = TESTDIR.glob("**/*.pdf")
-PASSWORDS = {
-    "base.pdf": ["foo"],
-    "rc4-40.pdf": ["foo"],
-    "rc4-128.pdf": ["foo"],
-    "aes-128.pdf": ["foo"],
-    "aes-128-m.pdf": ["foo"],
-    "aes-256.pdf": ["foo"],
-    "aes-256-m.pdf": ["foo"],
-    "aes-256-r6.pdf": ["usersecret", "ownersecret"],
-}
 PDFMINER_BUGS = {
     "issue-449-vertical.pdf",
     "issue_495_pdfobjref.pdf",
     "issue-1008-inline-ascii85.pdf",
     "rotated.pdf",
-}
-XFAILS = {
-    "bogus-stream-length.pdf",
 }
 
 
