@@ -1975,7 +1975,6 @@ class TextObject(ContentObject):
 
     textstate: TextState
     items: List[TextItem]
-    _glyphs: Union[List[GlyphObject], None] = None
     _chars: Union[List[str], None] = None
 
     def _render_char(
@@ -2061,6 +2060,9 @@ class TextObject(ContentObject):
         if self._chars is not None:
             return "".join(self._chars)
         self._chars = []
+        # This is not strictly necessary since we don't care about
+        # positioning, but perhaps we might in the future
+        self.textstate.reset()
         for item in self.items:
             # Only TJ and Tf are relevant to Unicode output
             if item.operator == "TJ":
@@ -2082,6 +2084,8 @@ class TextObject(ContentObject):
 
     def __iter__(self) -> Iterator[GlyphObject]:
         """Generate glyphs for this text object"""
+        # This corresponds to a BT operator so reset the textstate
+        self.textstate.reset()
         for item in self.items:
             if item.operator == "TJ":
                 for glyph in self._render_string(item):
@@ -2228,8 +2232,11 @@ class LazyInterpreter(BaseInterpreter):
     def do_BT(self) -> None:
         """Update text state and begin text object.
 
-        All operators until ET will be normalized, but executed lazily.
+        First we handle any operarors that were seen before BT, so as
+        to get the initial textstate.  Next, we collect any subsequent
+        operators until ET, and then execute them lazily.
         """
+        log.debug("executing ops before BT: %r", self.textobj)
         for item in self.textobj:
             self.textstate.update(item.operator, *item.args)
         self.textobj = []
@@ -2246,8 +2253,13 @@ class LazyInterpreter(BaseInterpreter):
         if has_text:
             yield self.create(TextObject, textstate=self.textstate, items=self.textobj)
         else:
+            # We will not create a text object, so make sure to update
+            # the text/graphics state with anything we saw inside BT/ET
+            self.textstate.reset()
             for item in self.textobj:
                 self.textstate.update(item.operator, *item.args)
+        # Make sure to clear textobj!!!
+        self.textobj = []
 
     def do_Tc(self, space: PDFObject) -> None:
         """Set character spacing.
