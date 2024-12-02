@@ -14,7 +14,7 @@ except ImportError:
     pdfminer = None  # type: ignore
 import playa
 from playa.exceptions import PDFEncryptionError, PDFSyntaxError
-from .data import TESTDIR, ALLPDFS, PASSWORDS, XFAILS, CONTRIB
+from .data import TESTDIR, BASEPDFS, PASSWORDS, XFAILS, CONTRIB
 
 # We know pdfminer.six gives different output for these and we don't
 # care (generally because of PLAYA's better rectangle detection and
@@ -29,11 +29,11 @@ PDFMINER_BUGS = {
     "mcid_example.pdf",
 }
 
-
+# Only do "base" PDFs as we know pdfminer has issues with others
 @pytest.mark.skipif(pdfminer is None, reason="pdfminer.six is not installed")
-@pytest.mark.parametrize("path", ALLPDFS, ids=str)
+@pytest.mark.parametrize("path", BASEPDFS, ids=str)
 def test_open(path: Path) -> None:
-    """Open all the documents and compare with pdfplumber"""
+    """Open all the documents and compare with pdfminer"""
     if path.name in XFAILS:
         pytest.xfail("Intentionally corrupt file: %s" % path.name)
     from pdfminer.converter import PDFPageAggregator

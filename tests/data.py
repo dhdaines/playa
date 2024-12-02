@@ -7,12 +7,14 @@ import json
 
 TESTDIR = Path(__file__).parent.parent / "samples"
 SUBDIRS = ["acroform", "encryption", "scancode"]
-ALLPDFS = list(TESTDIR.glob("*.pdf"))
+BASEPDFS = list(TESTDIR.glob("*.pdf"))
 for name in SUBDIRS:
-    ALLPDFS.extend((TESTDIR / name).glob("*.pdf"))
+    BASEPDFS.extend((TESTDIR / name).glob("*.pdf"))
 CONTRIB = TESTDIR / "contrib"
 if CONTRIB.exists():
-    ALLPDFS.extend(CONTRIB.glob("*.pdf"))
+    BASEPDFS.extend(CONTRIB.glob("*.pdf"))
+
+ALLPDFS = list(BASEPDFS)
 PLUMBERS = TESTDIR / "3rdparty" / "pdfplumber" / "tests" / "pdfs"
 if PLUMBERS.exists():
     ALLPDFS.extend(PLUMBERS.glob("*.pdf"))
