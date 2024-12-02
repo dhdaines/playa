@@ -16,11 +16,17 @@ import playa
 from playa.exceptions import PDFEncryptionError, PDFSyntaxError
 from .data import TESTDIR, ALLPDFS, PASSWORDS, XFAILS
 
+# We know pdfminer.six gives different output for these and we don't
+# care (generally because of PLAYA's better rectangle detection and
+# correct bboxes for rotated glyphs)
 PDFMINER_BUGS = {
     "issue-449-vertical.pdf",
     "issue_495_pdfobjref.pdf",
     "issue-1008-inline-ascii85.pdf",
     "rotated.pdf",
+    "issue-1114-dedupe-chars.pdf",
+    "malformed-from-issue-932.pdf",
+    "mcid_example.pdf",
 }
 
 
