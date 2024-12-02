@@ -10,12 +10,13 @@ import playa
 from playa.color import PREDEFINED_COLORSPACE, Color
 from playa.exceptions import PDFEncryptionError
 
-from .data import TESTDIR, ALLPDFS, PASSWORDS, XFAILS
+from .data import TESTDIR, ALLPDFS, PASSWORDS, XFAILS, CONTRIB
 
 
+@pytest.mark.skipif(not CONTRIB.exists(), reason="contrib samples not present")
 def test_content_objects():
     """Ensure that we can produce all the basic content objects."""
-    with playa.open(TESTDIR / "2023-06-20-PV.pdf", space="page") as pdf:
+    with playa.open(CONTRIB / "2023-06-20-PV.pdf", space="page") as pdf:
         page = pdf.pages[0]
         img = next(page.images)
         assert img.colorspace.name == "ICCBased"
@@ -86,10 +87,11 @@ def test_uncoloured_tiling() -> None:
         assert path.gstate.ncolor == Color((0.5, 0.2, 1.0), "P1")
 
 
+@pytest.mark.skipif(not CONTRIB.exists(), reason="contrib samples not present")
 def test_rotated_glyphs() -> None:
     """Verify that we (unlike pdfminer) properly calculate the bbox
     for rotated text."""
-    with playa.open(TESTDIR / "contrib" / "issue_495_pdfobjref.pdf") as pdf:
+    with playa.open(CONTRIB / "issue_495_pdfobjref.pdf") as pdf:
         chars = []
         for text in pdf.pages[0].texts:
             for glyph in text:

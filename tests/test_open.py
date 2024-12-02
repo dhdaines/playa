@@ -14,7 +14,7 @@ except ImportError:
     pdfminer = None  # type: ignore
 import playa
 from playa.exceptions import PDFEncryptionError, PDFSyntaxError
-from .data import TESTDIR, ALLPDFS, PASSWORDS, XFAILS
+from .data import TESTDIR, ALLPDFS, PASSWORDS, XFAILS, CONTRIB
 
 # We know pdfminer.six gives different output for these and we don't
 # care (generally because of PLAYA's better rectangle detection and
@@ -83,15 +83,17 @@ def test_open(path: Path) -> None:
         assert beach == miner
 
 
+@pytest.mark.skipif(not CONTRIB.exists(), reason="contrib samples not present")
 def test_inline_data() -> None:
-    with playa.open(TESTDIR / "contrib" / "issue-1008-inline-ascii85.pdf") as doc:
+    with playa.open(CONTRIB / "issue-1008-inline-ascii85.pdf") as doc:
         page = doc.pages[0]
         items = list(page.layout)
         assert len(items) == 456
 
 
+@pytest.mark.skipif(not CONTRIB.exists(), reason="contrib samples not present")
 def test_redundant_h() -> None:
-    with playa.open(TESTDIR / "contrib" / "issue-1008-inline-ascii85.pdf") as doc:
+    with playa.open(CONTRIB / "issue-1008-inline-ascii85.pdf") as doc:
         page = doc.pages[0]
         rects = [item for item in page.layout if item["object_type"] == "rect"]
         assert len(rects) == 6
@@ -105,8 +107,9 @@ def test_multiple_contents() -> None:
         assert len(items) == 898
 
 
+@pytest.mark.skipif(not CONTRIB.exists(), reason="contrib samples not present")
 def test_xobjects() -> None:
-    with playa.open(TESTDIR / "pdf.js" / "basicapi.pdf") as doc:
+    with playa.open(CONTRIB / "basicapi.pdf") as doc:
         objs = [obj for obj in doc.layout if obj.get("xobjid")]
     assert objs
     assert objs[0]["xobjid"] == "XT5"
@@ -133,16 +136,17 @@ def test_write_csv() -> None:
         # print(out.getvalue())
 
 
+@pytest.mark.skipif(not CONTRIB.exists(), reason="contrib samples not present")
 def test_spaces() -> None:
     """Test different coordinate spaces."""
-    with playa.open(TESTDIR / "pdfplumber" / "issue-1181.pdf", space="page") as doc:
+    with playa.open(CONTRIB / "issue-1181.pdf", space="page") as doc:
         page = doc.pages[0]
         page_box = next(iter(page)).bbox
-    with playa.open(TESTDIR / "pdfplumber" / "issue-1181.pdf", space="user") as doc:
+    with playa.open(CONTRIB / "issue-1181.pdf", space="user") as doc:
         page = doc.pages[0]
         user_box = next(iter(page)).bbox
     assert page_box[1] == pytest.approx(user_box[1] - page.mediabox[1])
-    with playa.open(TESTDIR / "pdfplumber" / "issue-1181.pdf", space="screen") as doc:
+    with playa.open(CONTRIB / "issue-1181.pdf", space="screen") as doc:
         page = doc.pages[0]
         screen_box = next(iter(page)).bbox
     # BBoxes are normalied, so top is 1 for screen and 3 for page
@@ -177,7 +181,7 @@ def test_glyph_offsets() -> None:
 
 
 def test_tiff_predictor() -> None:
-    with playa.open(TESTDIR / "contrib" / "test_pdf_with_tiff_predictor.pdf") as doc:
+    with playa.open(TESTDIR / "test_pdf_with_tiff_predictor.pdf") as doc:
         image = next(doc.pages[0].images)
         # Decoded TIFF: 600 x 600 + a header
         assert len(image.stream.buffer) == 360600

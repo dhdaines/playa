@@ -13,6 +13,7 @@ from playa.document import read_header
 from playa.exceptions import PDFSyntaxError
 from playa.parser import LIT
 from playa.utils import decode_text
+from .data import CONTRIB
 
 TESTDIR = Path(__file__).parent.parent / "samples"
 
@@ -54,14 +55,15 @@ def test_objects():
         # assert objects[0].obj is doc[1]
 
 
+@pytest.mark.skipif(not CONTRIB.exists(), reason="contrib samples not present")
 def test_page_labels():
-    with playa.open(TESTDIR / "contrib" / "pagelabels.pdf") as doc:
+    with playa.open(CONTRIB / "pagelabels.pdf") as doc:
         labels = [label for _, label in zip(range(10), doc.page_labels)]
         assert labels == ["iii", "iv", "1", "2", "1", "2", "3", "4", "5", "6"]
         assert doc.pages["iii"] is doc.pages[0]
         assert doc.pages["iv"] is doc.pages[1]
         assert doc.pages["2"] is doc.pages[3]
-    with playa.open("samples/2023-06-20-PV.pdf") as doc:
+    with playa.open(CONTRIB / "2023-06-20-PV.pdf") as doc:
         assert doc.pages["1"] is doc.pages[0]
         with pytest.raises(KeyError):
             _ = doc.pages["3"]
@@ -69,8 +71,9 @@ def test_page_labels():
             _ = doc.pages[2]
 
 
+@pytest.mark.skipif(not CONTRIB.exists(), reason="contrib samples not present")
 def test_pages():
-    with playa.open(TESTDIR / "contrib" / "PSC_Station.pdf") as doc:
+    with playa.open(CONTRIB / "PSC_Station.pdf") as doc:
         page_objects = list(doc.pages)
         assert len(page_objects) == 15
         objects = list(page_objects[2].contents)
@@ -79,8 +82,9 @@ def test_pages():
         assert b"diversit\xe9 " in tokens
 
 
+@pytest.mark.skipif(not CONTRIB.exists(), reason="contrib samples not present")
 def test_names():
-    with playa.open(TESTDIR / "contrib" / "issue-625-identity-cmap.pdf") as doc:
+    with playa.open(CONTRIB / "issue-625-identity-cmap.pdf") as doc:
         ef = NameTree(doc.names["EmbeddedFiles"])
         # Because yes, they can be UTF-16... (the spec says nothing
         # about this but it appears some authoring tools assume that
@@ -92,15 +96,17 @@ def test_names():
         assert names == ["382901691/01_UBL.xml", "382901691/02_EAN_UCC.xml"]
 
 
+@pytest.mark.skipif(not CONTRIB.exists(), reason="contrib samples not present")
 def test_dests():
-    with playa.open(TESTDIR / "pdf.js" / "issue620f.pdf") as doc:
+    with playa.open(CONTRIB / "issue620f.pdf") as doc:
         names = [name for name, _ in doc.dests]
         assert names == ["Page.1", "Page.2"]
 
 
+@pytest.mark.skipif(not CONTRIB.exists(), reason="contrib samples not present")
 def test_outlines():
     with playa.open(
-        "samples/2023-04-06-ODJ et Résolutions-séance xtra 6 avril 2023.pdf"
+        CONTRIB / "2023-04-06-ODJ et Résolutions-séance xtra 6 avril 2023.pdf"
     ) as doc:
         titles = [o.title for o in doc.outlines]
         assert titles == [
@@ -112,8 +118,9 @@ def test_outlines():
         ]
 
 
+@pytest.mark.skipif(not CONTRIB.exists(), reason="contrib samples not present")
 def test_xobjects() -> None:
-    with playa.open(TESTDIR / "pdf.js" / "basicapi.pdf") as doc:
+    with playa.open(CONTRIB / "basicapi.pdf") as doc:
         page = doc.pages[0]
         xobj = next(page.xobjects)
         assert xobj.object_type == "xobject"
