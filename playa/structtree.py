@@ -21,7 +21,7 @@ from typing import (
 
 from playa.data_structures import NumberTree
 from playa.parser import KEYWORD_NULL, PSLiteral
-from playa.pdftypes import ObjRef, resolve1
+from playa.pdftypes import ObjRef, resolve1, dict_value, list_value
 from playa.utils import decode_text
 
 logger = logging.getLogger(__name__)
@@ -161,9 +161,9 @@ class StructTree(Findable):
     ):
         if "StructTreeRoot" not in doc.catalog:
             raise KeyError("Catalog has no 'StructTreeRoot' entry")
-        self.root = resolve1(doc.catalog["StructTreeRoot"])
-        self.role_map = resolve1(self.root.get("RoleMap", {}))
-        self.class_map = resolve1(self.root.get("ClassMap", {}))
+        self.root = dict_value(doc.catalog["StructTreeRoot"])
+        self.role_map = dict_value(self.root.get("RoleMap", {}))
+        self.class_map = dict_value(self.root.get("ClassMap", {}))
         self.children: List[StructElement] = []
         self.page_dict: Dict[Any, Union[int, None]]
 
@@ -189,7 +189,7 @@ class StructTree(Findable):
                 if "StructParents" not in page.attrs:
                     return
                 parent_id = page.attrs["StructParents"]
-                parent_array = resolve1(parent_tree[parent_id])
+                parent_array = list_value(parent_tree[parent_id])
                 self._parse_parent_tree(parent_array)
             else:
                 # ...EXCEPT that the ParentTree is sometimes missing, in which
@@ -206,25 +206,25 @@ class StructTree(Findable):
             attr_obj = resolve1(obj[key])
             # It could be a list of attribute objects (why?)
             if isinstance(attr_obj, list):
-                attr_obj_list.extend(attr_obj)
+                attr_obj_list.extend(resolve1(val) for val in attr_obj)
             else:
                 attr_obj_list.append(attr_obj)
-        attr_objs = []
+        attr_objs: List[Union[int, dict]] = []
         prev_obj = None
-        for aref in attr_obj_list:
+        for aobj in attr_obj_list:
             # If we find a revision number, which might "follow the
             # revision object" (the spec is not clear about what this
             # should look like but it implies they are simply adjacent
             # in a flat array), then use it to decide whether to take
             # the previous object...
-            if isinstance(aref, int):
-                if aref == revision and prev_obj is not None:
+            if isinstance(aobj, int):
+                if aobj == revision and prev_obj is not None:
                     attr_objs.append(prev_obj)
                 prev_obj = None
             else:
                 if prev_obj is not None:
                     attr_objs.append(prev_obj)
-                prev_obj = resolve1(aref)
+                prev_obj = aobj
         if prev_obj is not None:
             attr_objs.append(prev_obj)
         # Now merge all the attribute objects in the collected to a
@@ -232,17 +232,23 @@ class StructTree(Findable):
         # does say that attributes in /A supersede those in /C)
         attr = {}
         for obj in attr_objs:
+            # They should all be resolved by now!
+            assert not isinstance(obj, ObjRef)
+            # A class name
             if isinstance(obj, PSLiteral):
                 key = decode_text(obj.name)
                 if key not in self.class_map:
                     logger.warning("Unknown attribute class %s", key)
                     continue
                 obj = self.class_map[key]
-            for k, v in obj.items():
-                if isinstance(v, PSLiteral):
-                    attr[k] = decode_text(v.name)
-                else:
-                    attr[k] = obj[k]
+            elif isinstance(obj, dict):
+                for k, v in obj.items():
+                    if isinstance(v, PSLiteral):
+                        attr[k] = decode_text(v.name)
+                    else:
+                        attr[k] = obj[k]
+            else:
+                logger.warning("Unexpected attribute object type: %r", obj)
         return attr
 
     def _make_element(self, obj: Any) -> Tuple[Union[StructElement, None], List[Any]]:
@@ -304,7 +310,7 @@ class StructTree(Findable):
                 continue
             if repr(ref) in s:
                 continue
-            obj = resolve1(ref)
+            obj = dict_value(ref)
             assert obj is not None  # This means the XRef tables are borked
             # This is required! It's in the spec!
             if "Type" in obj and decode_text(obj["Type"].name) == "StructTreeRoot":
