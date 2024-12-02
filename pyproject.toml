@@ -60,6 +60,9 @@ config-path = "none"  # Disable hatch's unreasonable ruff defaults
 [tool.ruff.lint.flake8-tidy-imports]
 ban-relative-imports = "all"
 
+[tool.ruff]
+exclude = ["samples/3rdparty"] # why no leading slash?
+
 [tool.pytest.ini_options]
 testpaths = [ "tests" ]
 

@@ -6,9 +6,7 @@ from pathlib import Path
 import json
 
 TESTDIR = Path(__file__).parent.parent / "samples"
-SUBDIRS = [
-    "acroform", "encryption", "scancode"
-]
+SUBDIRS = ["acroform", "encryption", "scancode"]
 ALLPDFS = list(TESTDIR.glob("*.pdf"))
 for name in SUBDIRS:
     ALLPDFS.extend((TESTDIR / name).glob("*.pdf"))
@@ -18,7 +16,7 @@ if CONTRIB.exists():
 PLUMBERS = TESTDIR / "3rdparty" / "pdfplumber" / "tests" / "pdfs"
 if PLUMBERS.exists():
     ALLPDFS.extend(PLUMBERS.glob("*.pdf"))
-PDFJS =  TESTDIR / "3rdparty" / "pdf.js" / "test"
+PDFJS = TESTDIR / "3rdparty" / "pdf.js" / "test"
 try:
     with open(PDFJS / "test_manifest.json") as infh:
         manifest = json.load(infh)
