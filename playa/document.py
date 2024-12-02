@@ -1038,7 +1038,12 @@ class Document:
                     else:
                         obj = self._getobj_parse(index, objid)
                     break
-                except (StopIteration, PDFSyntaxError):
+                # FIXME: We might not actually want to catch these...
+                except StopIteration:
+                    log.debug("EOF when searching for object %d", objid)
+                    continue
+                except PDFSyntaxError as e:
+                    log.debug("Syntax error when searching for object %d: %s", objid, e)
                     continue
             if obj is None:
                 raise IndexError(f"Object with ID {objid} not found")
