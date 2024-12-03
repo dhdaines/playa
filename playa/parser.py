@@ -77,7 +77,7 @@ ESC_STRING = {
 }
 
 
-def reverse_iter_lines(buffer: Union[bytes, mmap.mmap]) -> Iterator[bytes]:
+def reverse_iter_lines(buffer: Union[bytes, mmap.mmap]) -> Iterator[Tuple[int, bytes]]:
     """Iterate backwards over lines starting at the current position.
 
     This is used to locate the trailers at the end of a file.
@@ -87,10 +87,9 @@ def reverse_iter_lines(buffer: Union[bytes, mmap.mmap]) -> Iterator[bytes]:
         nidx = buffer.rfind(b"\n", 0, pos)
         ridx = buffer.rfind(b"\r", 0, pos)
         best = max(nidx, ridx)
+        yield best + 1, buffer[best + 1 : endline]
         if best == -1:
-            yield buffer[:endline]
             break
-        yield buffer[best + 1 : endline]
         endline = best + 1
         pos = best
         if pos > 0 and buffer[pos - 1 : pos + 1] == b"\r\n":
@@ -561,6 +560,7 @@ class IndirectObjectParser:
         strict: bool = False,
     ) -> None:
         self._parser = ObjectParser(data, doc)
+        self.buffer = data
         self.trailer: List[Tuple[int, Union[PDFObject, ContentStream]]] = []
         self.doc = None if doc is None else weakref.ref(doc)
         self.strict = strict
@@ -657,7 +657,7 @@ class IndirectObjectParser:
                         log.debug("After stream data: %r %r", linepos, line)
                         if line == b"":  # Means EOF
                             log.warning(
-                                "Incorrect legnth for stream, no 'endstream' found"
+                                "Incorrect length for stream, no 'endstream' found"
                             )
                             break
                 doc = None if self.doc is None else self.doc()

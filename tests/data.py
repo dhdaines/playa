@@ -40,7 +40,6 @@ PASSWORDS = {
     "aes-256-r6.pdf": ["usersecret", "ownersecret"],
 }
 XFAILS = {
-    "bogus-stream-length.pdf",
     "empty.pdf",
     # pdf.js accepts these... maybe some day we will but they are
     # really rather broken.
@@ -48,4 +47,10 @@ XFAILS = {
     "issue9105_other.pdf",
     "bug1250079.pdf",
     "issue18986.pdf",
+    # FIXME: These can likely be fixed by correctly parsing CMaps
+    # (which should also be submitted as a PR to pdfminer.six)
+    "issue9915_reduced.pdf",
+    "issue2931.pdf",
+    "issue9534_reduced.pdf",
+    "issue18117.pdf",
 }

@@ -147,15 +147,19 @@ class Page:
         self.page_idx = page_idx
         self.space = space
         self.lastmod = resolve1(self.attrs.get("LastModified"))
-        self.resources: Dict[str, PDFObject] = dict_value(
-            self.attrs.get("Resources", {})
-        )
+        try:
+            self.resources: Dict[str, PDFObject] = dict_value(
+                self.attrs.get("Resources")
+            )
+        except TypeError:
+            log.warning("Resources missing or invalid from Page id %d", pageid)
+            self.resources = {}
         if "MediaBox" in self.attrs:
             self.mediabox = normalize_rect(parse_rect(self.attrs["MediaBox"]))
         else:
             log.warning(
-                "MediaBox missing from /Page (and not inherited),"
-                " defaulting to US Letter (612x792)"
+                "MediaBox missing from Page id %d (and not inherited),"
+                " defaulting to US Letter (612x792)", pageid
             )
             self.mediabox = (0, 0, 612, 792)
         self.cropbox = self.mediabox
@@ -168,13 +172,14 @@ class Page:
         self.rotate = (int_value(self.attrs.get("Rotate", 0)) + 360) % 360
         self.annots = self.attrs.get("Annots")
         self.beads = self.attrs.get("B")
-        if "Contents" in self.attrs:
-            self._contents: List[PDFObject] = resolve1(self.attrs["Contents"])
-            assert self._contents is not None
-            if not isinstance(self._contents, list):
-                self._contents = [self._contents]
-        else:
+        contents = resolve1(self.attrs.get("Contents"))
+        if contents is None:
             self._contents = []
+        else:
+            if isinstance(contents, list):
+                self._contents = contents
+            else:
+                self._contents = [contents]
 
     @property
     def streams(self) -> Iterator[ContentStream]:
@@ -2437,6 +2442,9 @@ class LazyInterpreter(BaseInterpreter):
             xobj = stream_value(self.xobjmap[xobjid])
         except KeyError:
             log.debug("Undefined xobject id: %r", xobjid)
+            return
+        except TypeError as e:
+            log.debug("Empty or invalid xobject with id %r: %s", xobjid, e)
             return
         log.debug("Processing xobj: %r", xobj)
         subtype = xobj.get("Subtype")

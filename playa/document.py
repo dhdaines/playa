@@ -50,6 +50,7 @@ from playa.page import (
 from playa.parser import (
     KEYWORD_TRAILER,
     KEYWORD_XREF,
+    KEYWORD_OBJ,
     LIT,
     IndirectObject,
     IndirectObjectParser,
@@ -208,6 +209,9 @@ class XRefFallback:
     def _load(self, parser: IndirectObjectParser) -> None:
         parser.seek(0)
         parser.reset()
+        doc = None if parser.doc is None else parser.doc()
+        if doc is None:
+            raise RuntimeError("Document no longer exists!")
         # Get all the objects
         for pos, obj in parser:
             self.offsets[obj.objid] = XRefPos(None, pos, obj.genno)
@@ -222,9 +226,6 @@ class XRefFallback:
                 except KeyError:
                     log.warning("N is not defined in object stream: %r", stream)
                     n = 0
-                doc = None if parser.doc is None else parser.doc()
-                if doc is None:
-                    raise RuntimeError("Document no longer exists!")
                 parser1 = ObjectParser(stream.buffer, doc)
                 objs: List = [obj for _, obj in parser1]
                 # FIXME: This is choplist
@@ -241,10 +242,17 @@ class XRefFallback:
                 _, dic = s2
                 self.trailer.update(dict_value(dic))
                 log.debug("trailer=%r", self.trailer)
-                break
+                return
             s1 = s2
-        else:
-            log.warning("b'trailer' not found in document")
+        # If not, then try harder
+        for pos, line in reverse_iter_lines(parser.buffer):
+            line = line.strip()
+            if line == b"trailer":
+                _, trailer = next(ObjectParser(parser.buffer, doc, pos + len(b"trailer")))
+                self.trailer.update(trailer)
+                log.debug("trailer=%r", self.trailer)
+                return
+        log.warning("b'trailer' not found in document")
 
     @property
     def objids(self) -> Iterable[int]:
@@ -1263,19 +1271,27 @@ class Document:
         """Internal function used to locate the first XRef."""
         # search the last xref table by scanning the file backwards.
         prev = b""
-        # FIXME: This will scan *the whole file* looking for an xref
-        # table, it should maybe give up sooner?
-        for line in reverse_iter_lines(self.buffer):
+        for pos, line in reverse_iter_lines(self.buffer):
             line = line.strip()
             log.debug("find_xref: %r", line)
             if line == b"startxref":
                 log.debug("xref found: pos=%r", prev)
                 if not prev.isdigit():
-                    raise ValueError(f"Invalid xref position: {prev!r}")
+                    log.warning("Invalid startxref position: %r", prev)
+                    continue
                 start = int(prev)
                 if not start >= 0:
-                    raise ValueError(f"Invalid negative xref position: {start}")
+                    log.warning("Invalid negative startxref position: %d", start)
+                    continue
+                elif start > pos:
+                    log.warning("Invalid startxref position (> %d): %d", pos, start)
+                    continue
                 return start
+            elif line == b"xref":
+                return pos
+            elif line == b"endobj":
+                # Okay, we're probably not in Kansas anymore...
+                break
             if line:
                 prev = line
         raise ValueError("No xref table found at end of file")
@@ -1293,15 +1309,23 @@ class Document:
         except StopIteration:
             raise ValueError("Unexpected EOF at {start}")
         log.debug("read_xref_from: start=%d, token=%r", start, token)
-        if isinstance(token, int):
-            # XRefStream: PDF-1.5
-            self.parser.seek(pos)
-            self.parser.reset()
-            xref: XRef = XRefStream(self.parser)
-        else:
-            if token is KEYWORD_XREF:
-                parser.nextline()
+        if token is KEYWORD_XREF:
+            parser.nextline()
             xref = XRefTable(parser)
+        else:
+            # It might be an XRefStream, if this is an indirect object...
+            _, token2 = parser.nexttoken()
+            _, token3 = parser.nexttoken()
+            if token3 is KEYWORD_OBJ:
+                # XRefStream: PDF-1.5
+                self.parser.seek(pos)
+                self.parser.reset()
+                xref: XRef = XRefStream(self.parser)
+            else:
+                # Well, maybe it's an XRef table without "xref" (but
+                # probably not)
+                parser.seek(pos)
+                xref = XRefTable(parser)
         xrefs.append(xref)
         trailer = xref.trailer
         # For hybrid-reference files, an additional set of xrefs as a
@@ -1327,10 +1351,10 @@ class PageList:
         self._pages = []
         self._labels: Dict[str, Page] = {}
         try:
-            itor = doc._get_page_objects()
-        except KeyError:
-            itor = doc._get_pages_from_xrefs()
-        for page_idx, ((objid, properties), label) in enumerate(zip(itor, page_labels)):
+            page_objects = list(doc._get_page_objects())
+        except (KeyError, IndexError):
+            page_objects = list(doc._get_pages_from_xrefs())
+        for page_idx, ((objid, properties), label) in enumerate(zip(page_objects, page_labels)):
             page = Page(doc, objid, properties, label, page_idx, doc.space)
             self._pages.append(page)
             if label is not None:

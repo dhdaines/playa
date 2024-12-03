@@ -50,7 +50,15 @@ from playa.pdftypes import (
     resolve_all,
     stream_value,
 )
-from playa.utils import Matrix, Point, Rect, apply_matrix_norm, choplist, nunpack, decode_text
+from playa.utils import (
+    Matrix,
+    Point,
+    Rect,
+    apply_matrix_norm,
+    choplist,
+    nunpack,
+    decode_text,
+)
 
 log = logging.getLogger(__name__)
 
@@ -1034,8 +1042,12 @@ class CIDFont(Font):
         self.cidsysteminfo = dict_value(spec.get("CIDSystemInfo", {}))
         # These are *supposed* to be ASCII (PDF 1.7 section 9.7.3),
         # but for whatever reason they are sometimes UTF-16BE
-        cid_registry = decode_text(resolve1(self.cidsysteminfo.get("Registry", b"unknown")))
-        cid_ordering = decode_text(resolve1(self.cidsysteminfo.get("Ordering", b"unknown")))
+        cid_registry = decode_text(
+            resolve1(self.cidsysteminfo.get("Registry", b"unknown"))
+        )
+        cid_ordering = decode_text(
+            resolve1(self.cidsysteminfo.get("Ordering", b"unknown"))
+        )
         self.cidcoding = f"{cid_registry.strip()}-{cid_ordering.strip()}"
         self.cmap: CMapBase = self.get_cmap_from_spec(spec)
 

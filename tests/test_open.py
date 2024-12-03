@@ -186,8 +186,3 @@ def test_tiff_predictor() -> None:
         image = next(doc.pages[0].images)
         # Decoded TIFF: 600 x 600 + a header
         assert len(image.stream.buffer) == 360600
-
-
-def test_bogus_stream_length() -> None:
-    with pytest.raises(PDFSyntaxError):
-        _ = playa.open(TESTDIR / "bogus-stream-length.pdf")
