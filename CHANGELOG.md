@@ -1,3 +1,11 @@
+## PLAYA 0.2.4: 2024-12-02
+- fix more embarrassing bugs largely regarding the creation of empty
+  ContentObjects
+- these are not actually all fixed because (surprise!) sometimes we
+  neglect to map the characters in fonts correctly
+- oh and also lots and lots of robustness fixes thanks to the pdf.js
+  testsuite of pdf horrors
+
 ## PLAYA 0.2.3: 2024-11-28:
 - release early and often
 - fix some embarrassing bugs, again:
