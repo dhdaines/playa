@@ -13,7 +13,7 @@ try:
 except ImportError:
     pdfminer = None  # type: ignore
 import playa
-from playa.exceptions import PDFEncryptionError, PDFSyntaxError
+from playa.exceptions import PDFEncryptionError
 from .data import TESTDIR, BASEPDFS, PASSWORDS, XFAILS, CONTRIB
 
 # We know pdfminer.six gives different output for these and we don't

@@ -20,7 +20,7 @@ from typing import (
 )
 
 from playa.data_structures import NumberTree
-from playa.parser import KEYWORD_NULL, PSLiteral
+from playa.parser import KEYWORD_NULL, PSLiteral, PDFObject
 from playa.pdftypes import ObjRef, resolve1, dict_value, list_value
 from playa.utils import decode_text
 
@@ -190,6 +190,7 @@ class StructTree(Findable):
                     return
                 parent_id = page.attrs["StructParents"]
                 parent_array = list_value(parent_tree[parent_id])
+                assert isinstance(parent_array, list)  # srsly
                 self._parse_parent_tree(parent_array)
             else:
                 # ...EXCEPT that the ParentTree is sometimes missing, in which
@@ -197,13 +198,13 @@ class StructTree(Findable):
                 self._parse_struct_tree()
 
     def _make_attributes(
-        self, obj: Dict[str, Any], revision: Union[int, None]
+        self, attrs: Dict[str, Any], revision: Union[int, None]
     ) -> Dict[str, Any]:
-        attr_obj_list = []
+        attr_obj_list: List[PDFObject] = []
         for key in "C", "A":
-            if key not in obj:
+            if key not in attrs:
                 continue
-            attr_obj = resolve1(obj[key])
+            attr_obj = resolve1(attrs[key])
             # It could be a list of attribute objects (why?)
             if isinstance(attr_obj, list):
                 attr_obj_list.extend(resolve1(val) for val in attr_obj)
@@ -221,10 +222,12 @@ class StructTree(Findable):
                 if aobj == revision and prev_obj is not None:
                     attr_objs.append(prev_obj)
                 prev_obj = None
-            else:
+            elif isinstance(aobj, dict):
                 if prev_obj is not None:
                     attr_objs.append(prev_obj)
                 prev_obj = aobj
+            else:
+                logger.warning("Structure attribute of unknown type: %r", aobj)
         if prev_obj is not None:
             attr_objs.append(prev_obj)
         # Now merge all the attribute objects in the collected to a

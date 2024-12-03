@@ -159,7 +159,8 @@ class Page:
         else:
             log.warning(
                 "MediaBox missing from Page id %d (and not inherited),"
-                " defaulting to US Letter (612x792)", pageid
+                " defaulting to US Letter (612x792)",
+                pageid,
             )
             self.mediabox = (0, 0, 612, 792)
         self.cropbox = self.mediabox

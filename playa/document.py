@@ -248,11 +248,15 @@ class XRefFallback:
         for pos, line in reverse_iter_lines(parser.buffer):
             line = line.strip()
             if line == b"trailer":
-                _, trailer = next(ObjectParser(parser.buffer, doc, pos + len(b"trailer")))
+                _, trailer = next(
+                    ObjectParser(parser.buffer, doc, pos + len(b"trailer"))
+                )
+                if not isinstance(trailer, dict):
+                    break
                 self.trailer.update(trailer)
                 log.debug("trailer=%r", self.trailer)
                 return
-        log.warning("b'trailer' not found in document")
+        log.warning("b'trailer' not found in document or invalid")
 
     @property
     def objids(self) -> Iterable[int]:
@@ -1311,16 +1315,16 @@ class Document:
         log.debug("read_xref_from: start=%d, token=%r", start, token)
         if token is KEYWORD_XREF:
             parser.nextline()
-            xref = XRefTable(parser)
+            xref: XRef = XRefTable(parser)
         else:
             # It might be an XRefStream, if this is an indirect object...
-            _, token2 = parser.nexttoken()
-            _, token3 = parser.nexttoken()
-            if token3 is KEYWORD_OBJ:
+            _, token = parser.nexttoken()
+            _, token = parser.nexttoken()
+            if token is KEYWORD_OBJ:
                 # XRefStream: PDF-1.5
                 self.parser.seek(pos)
                 self.parser.reset()
-                xref: XRef = XRefStream(self.parser)
+                xref = XRefStream(self.parser)
             else:
                 # Well, maybe it's an XRef table without "xref" (but
                 # probably not)
@@ -1354,7 +1358,9 @@ class PageList:
             page_objects = list(doc._get_page_objects())
         except (KeyError, IndexError):
             page_objects = list(doc._get_pages_from_xrefs())
-        for page_idx, ((objid, properties), label) in enumerate(zip(page_objects, page_labels)):
+        for page_idx, ((objid, properties), label) in enumerate(
+            zip(page_objects, page_labels)
+        ):
             page = Page(doc, objid, properties, label, page_idx, doc.space)
             self._pages.append(page)
             if label is not None:
