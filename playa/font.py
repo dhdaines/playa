@@ -1069,7 +1069,8 @@ class CIDFont(Font):
                 self.unicode_map = parse_tounicode(strm.buffer)
             if isinstance(spec["Encoding"], ContentStream):
                 strm = stream_value(spec["Encoding"])
-                # FIXME: parse it, somehow?
+                # FIXME: it's not a tounicode, but it plays one on TV
+                # _ = parse_tounicode(strm.buffer)
 
             if self.unicode_map is None:
                 cmap_name = literal_name(spec["ToUnicode"])

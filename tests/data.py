@@ -44,9 +44,7 @@ XFAILS = {
     # pdf.js accepts these... maybe some day we will but they are
     # really rather broken.
     "issue9418.pdf",
-    "issue9105_other.pdf",
     "bug1250079.pdf",
-    "issue18986.pdf",
     # FIXME: These can likely be fixed by correctly parsing CMaps
     # (which should also be submitted as a PR to pdfminer.six)
     "issue9915_reduced.pdf",
