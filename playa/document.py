@@ -8,13 +8,11 @@ import logging
 import mmap
 import re
 import struct
-from collections import deque
 from hashlib import md5, sha256, sha384, sha512
 from typing import (
     Any,
     BinaryIO,
     Callable,
-    Deque,
     Dict,
     Iterable,
     Iterator,
@@ -50,9 +48,9 @@ from playa.page import (
     schema as page_schema,
 )
 from playa.parser import (
-    KEYWORD_OBJ,
     KEYWORD_TRAILER,
     KEYWORD_XREF,
+    KEYWORD_OBJ,
     LIT,
     IndirectObject,
     IndirectObjectParser,
@@ -211,6 +209,9 @@ class XRefFallback:
     def _load(self, parser: IndirectObjectParser) -> None:
         parser.seek(0)
         parser.reset()
+        doc = None if parser.doc is None else parser.doc()
+        if doc is None:
+            raise RuntimeError("Document no longer exists!")
         # Get all the objects
         for pos, obj in parser:
             self.offsets[obj.objid] = XRefPos(None, pos, obj.genno)
@@ -225,9 +226,6 @@ class XRefFallback:
                 except KeyError:
                     log.warning("N is not defined in object stream: %r", stream)
                     n = 0
-                doc = None if parser.doc is None else parser.doc()
-                if doc is None:
-                    raise RuntimeError("Document no longer exists!")
                 parser1 = ObjectParser(stream.buffer, doc)
                 objs: List = [obj for _, obj in parser1]
                 # FIXME: This is choplist
@@ -244,10 +242,17 @@ class XRefFallback:
                 _, dic = s2
                 self.trailer.update(dict_value(dic))
                 log.debug("trailer=%r", self.trailer)
-                break
+                return
             s1 = s2
-        else:
-            log.warning("b'trailer' not found in document")
+        # If not, then try harder
+        for pos, line in reverse_iter_lines(parser.buffer):
+            line = line.strip()
+            if line == b"trailer":
+                _, trailer = next(ObjectParser(parser.buffer, doc, pos + len(b"trailer")))
+                self.trailer.update(trailer)
+                log.debug("trailer=%r", self.trailer)
+                return
+        log.warning("b'trailer' not found in document")
 
     @property
     def objids(self) -> Iterable[int]:
@@ -508,7 +513,8 @@ class PDFStandardSecurityHandlerV4(PDFStandardSecurityHandler):
             raise PDFEncryptionError(error_msg)
         self.cfm = {}
         for k, v in self.cf.items():
-            f = self.get_cfm(literal_name(v["CFM"]))
+            dictv = dict_value(v)
+            f = self.get_cfm(literal_name(dictv["CFM"]))
             if f is None:
                 error_msg = "Unknown crypt filter method: param=%r" % self.param
                 raise PDFEncryptionError(error_msg)
@@ -833,13 +839,14 @@ class Document:
         except PDFSyntaxError:
             log.warning("PDF header not found, will try to read the file anyway")
             self.pdf_version = "UNKNOWN"
+        # Make sure we read the whole file if we need to read the file!
+        fp.seek(0, 0)
         try:
             self.buffer: Union[bytes, mmap.mmap] = mmap.mmap(
                 fp.fileno(), 0, access=mmap.ACCESS_READ
             )
         except io.UnsupportedOperation:
             log.warning("mmap not supported on %r, reading document into memory", fp)
-            fp.seek(0, 0)
             self.buffer = fp.read()
         except ValueError:
             raise
@@ -853,7 +860,7 @@ class Document:
         try:
             pos = self._find_xref()
             self._read_xref_from(pos, self.xrefs)
-        except (ValueError, IndexError) as e:
+        except (ValueError, IndexError, StopIteration, PDFSyntaxError) as e:
             log.debug("Using fallback XRef parsing: %s", e)
             newxref = XRefFallback(self.parser)
             self.xrefs.append(newxref)
@@ -874,7 +881,10 @@ class Document:
                 self.encryption = (id_value, dict_value(trailer["Encrypt"]))
                 self._initialize_password(password)
             if "Info" in trailer:
-                self.info.append(dict_value(trailer["Info"]))
+                try:
+                    self.info.append(dict_value(trailer["Info"]))
+                except TypeError:
+                    log.warning("Info is a broken reference (incorrect xref table?)")
             if "Root" in trailer:
                 # Every PDF file must have exactly one /Root dictionary.
                 try:
@@ -982,30 +992,30 @@ class Document:
         self.parser.seek(pos)
         try:
             _, obj = next(self.parser)
-        except (ValueError, IndexError) as e:
+            if obj.objid != objid:
+                raise PDFSyntaxError(f"objid mismatch: {obj.objid!r}={objid!r}")
+        except (ValueError, IndexError, PDFSyntaxError) as e:
             log.warning(
                 "Indirect object %d not found at position %d: %r", objid, pos, e
             )
-            # Hack around malformed pdf files where the offset in the
+            # In case of malformed pdf files where the offset in the
             # xref table doesn't point exactly at the object
-            # definition (probably more frequent than you think).
-            # Back up a bit, then parse forward until we find the right
-            # object. Fixes
-            # https://github.com/pdfminer/pdfminer.six/issues/56
-            tokenizer = Lexer(self.buffer, max(0, pos - 16))
-            q: Deque[int] = deque([], 3)
-            while True:
-                try:
-                    (pos, token) = next(tokenizer)
-                except StopIteration:
-                    raise PDFSyntaxError(
-                        f"Indirect object {objid!r} not found at or after position {pos}"
-                    )
-                q.append(pos)
-                if len(q) == 3 and token is KEYWORD_OBJ:
-                    break
-            log.debug("seeking to %r", q[0])
-            self.parser.seek(q[0])
+            # definition (probably more frequent than you think), just
+            # use a regular expression to find the object because we
+            # can do that.
+            realpos = -1
+            lastgen = -1
+            for m in re.finditer(rb"%d\s+(\d+)\s+obj" % objid, self.buffer):
+                genno = int(m.group(1))
+                if genno > lastgen:
+                    lastgen = genno
+                    realpos = m.start(0)
+            if realpos == -1:
+                raise PDFSyntaxError(
+                    f"Indirect object {objid!r} not found in document"
+                ) from e
+            log.debug("found object (%r) seeking to %r", m.group(0), realpos)
+            self.parser.seek(realpos)
             (_, obj) = next(self.parser)
         if obj.objid != objid:
             raise PDFSyntaxError(f"objid mismatch: {obj.objid!r}={objid!r}")
@@ -1038,7 +1048,12 @@ class Document:
                     else:
                         obj = self._getobj_parse(index, objid)
                     break
-                except (StopIteration, PDFSyntaxError):
+                # FIXME: We might not actually want to catch these...
+                except StopIteration:
+                    log.debug("EOF when searching for object %d", objid)
+                    continue
+                except PDFSyntaxError as e:
+                    log.debug("Syntax error when searching for object %d: %s", objid, e)
                     continue
             if obj is None:
                 raise IndexError(f"Object with ID {objid} not found")
@@ -1050,14 +1065,14 @@ class Document:
         if objid and objid in self._cached_fonts:
             return self._cached_fonts[objid]
         log.debug("get_font: create: objid=%r, spec=%r", objid, spec)
-        if spec["Type"] is not LITERAL_FONT:
+        if spec.get("Type") is not LITERAL_FONT:
             log.warning("Font specification Type is not /Font: %r", spec)
         # Create a Font object.
         if "Subtype" in spec:
             subtype = literal_name(spec["Subtype"])
         else:
             log.warning("Font specification Subtype is not specified: %r", spec)
-            subtype = "Type1"
+            subtype = ""
         if subtype in ("Type1", "MMType1"):
             # Type1 Font
             font: Font = Type1Font(spec)
@@ -1075,6 +1090,7 @@ class Document:
             dfonts = list_value(spec["DescendantFonts"])
             assert dfonts
             subspec = dict_value(dfonts[0]).copy()
+            # FIXME: Bad tightly coupled with internals of CIDFont
             for k in ("Encoding", "ToUnicode"):
                 if k in spec:
                     subspec[k] = resolve1(spec[k])
@@ -1255,19 +1271,27 @@ class Document:
         """Internal function used to locate the first XRef."""
         # search the last xref table by scanning the file backwards.
         prev = b""
-        # FIXME: This will scan *the whole file* looking for an xref
-        # table, it should maybe give up sooner?
-        for line in reverse_iter_lines(self.buffer):
+        for pos, line in reverse_iter_lines(self.buffer):
             line = line.strip()
             log.debug("find_xref: %r", line)
             if line == b"startxref":
                 log.debug("xref found: pos=%r", prev)
                 if not prev.isdigit():
-                    raise ValueError(f"Invalid xref position: {prev!r}")
+                    log.warning("Invalid startxref position: %r", prev)
+                    continue
                 start = int(prev)
                 if not start >= 0:
-                    raise ValueError(f"Invalid negative xref position: {start}")
+                    log.warning("Invalid negative startxref position: %d", start)
+                    continue
+                elif start > pos:
+                    log.warning("Invalid startxref position (> %d): %d", pos, start)
+                    continue
                 return start
+            elif line == b"xref":
+                return pos
+            elif line == b"endobj":
+                # Okay, we're probably not in Kansas anymore...
+                break
             if line:
                 prev = line
         raise ValueError("No xref table found at end of file")
@@ -1285,15 +1309,23 @@ class Document:
         except StopIteration:
             raise ValueError("Unexpected EOF at {start}")
         log.debug("read_xref_from: start=%d, token=%r", start, token)
-        if isinstance(token, int):
-            # XRefStream: PDF-1.5
-            self.parser.seek(pos)
-            self.parser.reset()
-            xref: XRef = XRefStream(self.parser)
-        else:
-            if token is KEYWORD_XREF:
-                parser.nextline()
+        if token is KEYWORD_XREF:
+            parser.nextline()
             xref = XRefTable(parser)
+        else:
+            # It might be an XRefStream, if this is an indirect object...
+            _, token2 = parser.nexttoken()
+            _, token3 = parser.nexttoken()
+            if token3 is KEYWORD_OBJ:
+                # XRefStream: PDF-1.5
+                self.parser.seek(pos)
+                self.parser.reset()
+                xref: XRef = XRefStream(self.parser)
+            else:
+                # Well, maybe it's an XRef table without "xref" (but
+                # probably not)
+                parser.seek(pos)
+                xref = XRefTable(parser)
         xrefs.append(xref)
         trailer = xref.trailer
         # For hybrid-reference files, an additional set of xrefs as a
@@ -1319,10 +1351,10 @@ class PageList:
         self._pages = []
         self._labels: Dict[str, Page] = {}
         try:
-            itor = doc._get_page_objects()
-        except KeyError:
-            itor = doc._get_pages_from_xrefs()
-        for page_idx, ((objid, properties), label) in enumerate(zip(itor, page_labels)):
+            page_objects = list(doc._get_page_objects())
+        except (KeyError, IndexError):
+            page_objects = list(doc._get_pages_from_xrefs())
+        for page_idx, ((objid, properties), label) in enumerate(zip(page_objects, page_labels)):
             page = Page(doc, objid, properties, label, page_idx, doc.space)
             self._pages.append(page)
             if label is not None:

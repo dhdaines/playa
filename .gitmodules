@@ -1,0 +1,6 @@
+[submodule "tests/3rdparty/pdfplumber"]
+	path = samples/3rdparty/pdfplumber
+	url = https://github.com/jsvine/pdfplumber.git
+[submodule "tests/3rdparty/pdf.js"]
+	path = samples/3rdparty/pdf.js
+	url = https://github.com/mozilla/pdf.js.git

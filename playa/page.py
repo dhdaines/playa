@@ -34,8 +34,8 @@ from playa.color import (
     get_colorspace,
 )
 from playa.exceptions import (
-    PDFInterpreterError,
     PDFUnicodeNotDefined,
+    PDFSyntaxError,
 )
 from playa.font import Font
 
@@ -67,7 +67,6 @@ from playa.utils import (
     get_transformed_bound,
     make_compat_bytes,
     mult_matrix,
-    parse_rect,
     normalize_rect,
     translate_matrix,
 )
@@ -96,6 +95,17 @@ LITERAL_FORM = LIT("Form")
 LITERAL_IMAGE = LIT("Image")
 TextSeq = Iterable[Union[int, float, bytes]]
 DeviceSpace = Literal["page", "screen", "user"]
+
+
+# FIXME: This should go in utils/pdftypes but there are circular imports
+def parse_rect(o: PDFObject) -> Rect:
+    try:
+        (x0, y0, x1, y1) = (num_value(x) for x in list_value(o))
+        return x0, y0, x1, y1
+    except ValueError:
+        raise ValueError("Could not parse rectangle %r" % (o,))
+    except TypeError:
+        raise PDFSyntaxError("Rectangle contains non-numeric values")
 
 
 class Page:
@@ -137,38 +147,39 @@ class Page:
         self.page_idx = page_idx
         self.space = space
         self.lastmod = resolve1(self.attrs.get("LastModified"))
-        self.resources: Dict[str, PDFObject] = dict_value(
-            self.attrs.get("Resources", {})
-        )
-        if "MediaBox" in self.attrs:
-            self.mediabox = normalize_rect(
-                parse_rect(resolve1(val) for val in resolve1(self.attrs["MediaBox"]))
+        try:
+            self.resources: Dict[str, PDFObject] = dict_value(
+                self.attrs.get("Resources")
             )
+        except TypeError:
+            log.warning("Resources missing or invalid from Page id %d", pageid)
+            self.resources = {}
+        if "MediaBox" in self.attrs:
+            self.mediabox = normalize_rect(parse_rect(self.attrs["MediaBox"]))
         else:
             log.warning(
-                "MediaBox missing from /Page (and not inherited),"
-                " defaulting to US Letter (612x792)"
+                "MediaBox missing from Page id %d (and not inherited),"
+                " defaulting to US Letter (612x792)", pageid
             )
             self.mediabox = (0, 0, 612, 792)
         self.cropbox = self.mediabox
         if "CropBox" in self.attrs:
             try:
-                self.cropbox = normalize_rect(
-                    parse_rect(resolve1(val) for val in resolve1(self.attrs["CropBox"]))
-                )
+                self.cropbox = normalize_rect(parse_rect(self.attrs["CropBox"]))
             except ValueError:
                 log.warning("Invalid CropBox in /Page, defaulting to MediaBox")
 
         self.rotate = (int_value(self.attrs.get("Rotate", 0)) + 360) % 360
         self.annots = self.attrs.get("Annots")
         self.beads = self.attrs.get("B")
-        if "Contents" in self.attrs:
-            self._contents: List[PDFObject] = resolve1(self.attrs["Contents"])
-            assert self._contents is not None
-            if not isinstance(self._contents, list):
-                self._contents = [self._contents]
-        else:
+        contents = resolve1(self.attrs.get("Contents"))
+        if contents is None:
             self._contents = []
+        else:
+            if isinstance(contents, list):
+                self._contents = contents
+            else:
+                self._contents = [contents]
 
     @property
     def streams(self) -> Iterator[ContentStream]:
@@ -737,8 +748,12 @@ class BaseInterpreter:
                     objid = None
                     if isinstance(spec, ObjRef):
                         objid = spec.objid
-                    spec = dict_value(spec)
-                    self.fontmap[fontid] = doc.get_font(objid, spec)
+                    try:
+                        spec = dict_value(spec)
+                        self.fontmap[fontid] = doc.get_font(objid, spec)
+                    except TypeError:
+                        log.warning("Broken/missing font spec for %r", fontid)
+                        self.fontmap[fontid] = doc.get_font(objid, {})
             elif k == "ColorSpace":
                 for csid, spec in dict_value(v).items():
                     colorspace = get_colorspace(resolve1(spec), csid)
@@ -1208,11 +1223,11 @@ class PageInterpreter(BaseInterpreter):
                         if len(args) == nargs:
                             gen = method(*args)
                         else:
-                            error_msg = (
-                                "Insufficient arguments (%d) for operator: %r"
-                                % (len(args), obj)
+                            log.warning(
+                                "Insufficient arguments (%d) for operator: %r",
+                                len(args),
+                                obj,
                             )
-                            raise PDFInterpreterError(error_msg)
                     else:
                         log.debug("exec: %r", obj)
                         gen = method()
@@ -2121,17 +2136,18 @@ class LazyInterpreter(BaseInterpreter):
                         if len(args) == nargs:
                             gen = method(*args)
                         else:
-                            error_msg = (
-                                "Insufficient arguments (%d) for operator: %r"
-                                % (len(args), obj)
+                            log.warning(
+                                "Insufficient arguments (%d) for operator: %r",
+                                len(args),
+                                obj,
                             )
-                            raise PDFInterpreterError(error_msg)
                     else:
                         log.debug("exec: %r", obj)
                         gen = method()
                     if gen is not None:
                         yield from gen
                 else:
+                    # TODO: This can get very verbose
                     log.warning("Unknown operator: %r", obj)
             else:
                 self.push(obj)
@@ -2426,6 +2442,9 @@ class LazyInterpreter(BaseInterpreter):
             xobj = stream_value(self.xobjmap[xobjid])
         except KeyError:
             log.debug("Undefined xobject id: %r", xobjid)
+            return
+        except TypeError as e:
+            log.debug("Empty or invalid xobject with id %r: %s", xobjid, e)
             return
         log.debug("Processing xobj: %r", xobj)
         subtype = xobj.get("Subtype")

@@ -2,7 +2,6 @@
 
 import string
 from typing import (
-    Any,
     Iterable,
     Iterator,
     List,
@@ -10,8 +9,6 @@ from typing import (
     TypeVar,
     Union,
 )
-
-from playa.exceptions import PDFSyntaxError
 
 
 def make_compat_bytes(in_str: str) -> bytes:
@@ -178,16 +175,6 @@ Matrix = Tuple[float, float, float, float, float, float]
 
 #  Matrix operations
 MATRIX_IDENTITY: Matrix = (1, 0, 0, 1, 0, 0)
-
-
-def parse_rect(o: Any) -> Rect:
-    try:
-        (x0, y0, x1, y1) = o
-        return float(x0), float(y0), float(x1), float(y1)
-    except ValueError:
-        raise ValueError("Could not parse rectangle")
-    except TypeError:
-        raise PDFSyntaxError("Rectangle contains non-numeric values")
 
 
 def normalize_rect(r: Rect) -> Rect:

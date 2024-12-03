@@ -161,9 +161,8 @@ EXPECTED2 = [
 
 def test_revlines() -> None:
     """Verify that we replicate the old revreadlines method."""
-    expected = list(reversed([line for pos, line in EXPECTED2]))
     output = list(reverse_iter_lines(TESTDATA2))
-    assert output == expected
+    assert output == list(reversed(EXPECTED2))
 
 
 SIMPLE1 = b"""1 0 obj

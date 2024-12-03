@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from playa.parser import LIT, ContentStream, IndirectObjectParser
+from playa.parser import LIT, ContentStream, IndirectObjectParser, PDFSyntaxError
 
 TESTDIR = Path(__file__).parent.parent / "samples"
 
@@ -67,6 +67,6 @@ def test_streams():
     assert stream.rawdata == b"150 250 m\n150 350 l\nS\nA BUNCH OF EXTRA CRAP!!!\n"
 
     parser = IndirectObjectParser(DATA2, strict=True)
-    with pytest.raises(TypeError) as e:
+    with pytest.raises(PDFSyntaxError) as e:
         positions, objs = zip(*list(parser))
         assert "Integer" in e

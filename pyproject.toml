@@ -44,6 +44,13 @@ playa = "playa.cli:main"
 [tool.hatch.version]
 path = "playa/__init__.py"
 
+[tool.hatch.build.targets.sdist]
+exclude = [
+  "/.github",
+  "/samples/contrib",
+  "/samples/3rdparty",
+]
+
 [tool.hatch.build.targets.wheel]
 packages = ["playa"]
 
@@ -52,6 +59,9 @@ config-path = "none"  # Disable hatch's unreasonable ruff defaults
 
 [tool.ruff.lint.flake8-tidy-imports]
 ban-relative-imports = "all"
+
+[tool.ruff]
+exclude = ["samples/3rdparty"] # why no leading slash?
 
 [tool.pytest.ini_options]
 testpaths = [ "tests" ]
