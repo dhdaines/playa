@@ -29,6 +29,7 @@ PDFMINER_BUGS = {
     "mcid_example.pdf",
 }
 
+
 # Only do "base" PDFs as we know pdfminer has issues with others
 @pytest.mark.skipif(pdfminer is None, reason="pdfminer.six is not installed")
 @pytest.mark.parametrize("path", BASEPDFS, ids=str)

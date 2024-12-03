@@ -209,6 +209,8 @@ class CMapDB:
     def get_cmap(cls, name: str) -> CMapBase:
         if name == "Identity-H":
             return IdentityCMap(WMode=0)
+        elif name == "Adobe-Identity-UCS":
+            return IdentityCMap(WMode=0)  # FIXME: WMode???
         elif name == "Identity-V":
             return IdentityCMap(WMode=1)
         elif name == "OneByteIdentityH":

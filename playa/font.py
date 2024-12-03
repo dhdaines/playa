@@ -50,7 +50,7 @@ from playa.pdftypes import (
     resolve_all,
     stream_value,
 )
-from playa.utils import Matrix, Point, Rect, apply_matrix_norm, choplist, nunpack
+from playa.utils import Matrix, Point, Rect, apply_matrix_norm, choplist, nunpack, decode_text
 
 log = logging.getLogger(__name__)
 
@@ -1032,12 +1032,10 @@ class CIDFont(Font):
             log.warning("Font spec is missing BaseFont: %r", spec)
             self.basefont = "unknown"
         self.cidsysteminfo = dict_value(spec.get("CIDSystemInfo", {}))
-        cid_registry = resolve1(self.cidsysteminfo.get("Registry", b"unknown")).decode(
-            "latin1",
-        )
-        cid_ordering = resolve1(self.cidsysteminfo.get("Ordering", b"unknown")).decode(
-            "latin1",
-        )
+        # These are *supposed* to be ASCII (PDF 1.7 section 9.7.3),
+        # but for whatever reason they are sometimes UTF-16BE
+        cid_registry = decode_text(resolve1(self.cidsysteminfo.get("Registry", b"unknown")))
+        cid_ordering = decode_text(resolve1(self.cidsysteminfo.get("Ordering", b"unknown")))
         self.cidcoding = f"{cid_registry.strip()}-{cid_ordering.strip()}"
         self.cmap: CMapBase = self.get_cmap_from_spec(spec)
 
@@ -1051,11 +1049,17 @@ class CIDFont(Font):
             self.fontfile = stream_value(descriptor.get("FontFile2"))
             ttf = TrueTypeFont(self.basefont, BytesIO(self.fontfile.buffer))
         self.unicode_map: Optional[UnicodeMap] = None
+        # FIXME: This is magical and means that we are not actually a
+        # CIDFont but really a Type0 font.
         if "ToUnicode" in spec:
             if isinstance(spec["ToUnicode"], ContentStream):
                 strm = stream_value(spec["ToUnicode"])
                 self.unicode_map = parse_tounicode(strm.buffer)
-            else:
+            if isinstance(spec["Encoding"], ContentStream):
+                strm = stream_value(spec["Encoding"])
+                # FIXME: parse it, somehow?
+
+            if self.unicode_map is None:
                 cmap_name = literal_name(spec["ToUnicode"])
                 encoding = literal_name(spec["Encoding"])
                 if (

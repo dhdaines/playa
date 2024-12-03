@@ -34,7 +34,6 @@ from playa.color import (
     get_colorspace,
 )
 from playa.exceptions import (
-    PDFInterpreterError,
     PDFUnicodeNotDefined,
     PDFSyntaxError,
 )
@@ -748,8 +747,7 @@ class BaseInterpreter:
                         spec = dict_value(spec)
                         self.fontmap[fontid] = doc.get_font(objid, spec)
                     except TypeError:
-                        log.warning("Broken/missing font spec for %r",
-                                    fontid)
+                        log.warning("Broken/missing font spec for %r", fontid)
                         self.fontmap[fontid] = doc.get_font(objid, {})
             elif k == "ColorSpace":
                 for csid, spec in dict_value(v).items():
@@ -1222,7 +1220,8 @@ class PageInterpreter(BaseInterpreter):
                         else:
                             log.warning(
                                 "Insufficient arguments (%d) for operator: %r",
-                                len(args), obj
+                                len(args),
+                                obj,
                             )
                     else:
                         log.debug("exec: %r", obj)
@@ -2134,7 +2133,8 @@ class LazyInterpreter(BaseInterpreter):
                         else:
                             log.warning(
                                 "Insufficient arguments (%d) for operator: %r",
-                                len(args), obj
+                                len(args),
+                                obj,
                             )
                     else:
                         log.debug("exec: %r", obj)

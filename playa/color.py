@@ -1,8 +1,7 @@
 from typing import Dict, NamedTuple, Union, Tuple
 
-from playa.exceptions import PDFInterpreterError
 from playa.parser import LIT, PDFObject, PSLiteral
-from playa.pdftypes import num_value, list_value, literal_name, stream_value
+from playa.pdftypes import num_value, list_value, literal_name, stream_value, resolve1
 
 LITERAL_DEVICE_GRAY = LIT("DeviceGray")
 LITERAL_DEVICE_RGB = LIT("DeviceRGB")
@@ -37,15 +36,12 @@ class ColorSpace(NamedTuple):
     spec: PDFObject = None
 
     def make_color(self, *components) -> Color:
-        if len(components) != self.ncomponents:
-            raise PDFInterpreterError(
-                "%s requires %d components, got %d!"
-                % (self.name, self.ncomponents, len(components))
-            )
-        nc = self.ncomponents
         pattern = None
-        if isinstance(components[-1], PSLiteral):
+        nc = self.ncomponents
+        if components and isinstance(components[-1], PSLiteral):
             pattern = components[-1].name
+            components = components[:-1]
+            # Remove the pattern we added to ncomponents
             nc -= 1
         cc = []
         for x in components[:nc]:
@@ -93,14 +89,14 @@ def get_colorspace(
                 raise ValueError(
                     "Underlying colour space cannot be /Pattern: %r" % (spec,)
                 )
-            underlying = get_colorspace(spec[1])
+            underlying = get_colorspace(resolve1(spec[1]))
             if underlying is None:
                 raise ValueError("Unrecognized underlying colour space: %r", (spec,))
             # Not super important what we call it but we need to know it
             # has N+1 "components" (the last one being the pattern)
             return ColorSpace(name, underlying.ncomponents + 1, spec)
         else:
-            cs = PREDEFINED_COLORSPACE.get(literal_name(spec[0]))
+            cs = PREDEFINED_COLORSPACE.get(literal_name(resolve1(spec[0])))
             if cs is None:
                 return None
             return ColorSpace(cs.name, cs.ncomponents, spec)

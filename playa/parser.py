@@ -580,8 +580,13 @@ class IndirectObjectParser:
                 (_, obj) = self.trailer.pop()
                 (_, genno) = self.trailer.pop()
                 (pos, objid) = self.trailer.pop()
-                objid = int_value(objid)
-                genno = int_value(genno)
+                try:
+                    objid = int_value(objid)
+                    genno = int_value(genno)
+                except TypeError as e:
+                    raise PDFSyntaxError(
+                        f"Object numbers must be integers, got {objid!r} {genno!r}"
+                    ) from e
                 # ContentStream is *special* and needs these
                 # internally for decryption.
                 if isinstance(obj, ContentStream):

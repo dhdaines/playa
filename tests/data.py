@@ -42,5 +42,10 @@ PASSWORDS = {
 XFAILS = {
     "bogus-stream-length.pdf",
     "empty.pdf",
+    # pdf.js accepts these... maybe some day we will but they are
+    # really rather broken.
     "issue9418.pdf",
+    "issue9105_other.pdf",
+    "bug1250079.pdf",
+    "issue18986.pdf",
 }

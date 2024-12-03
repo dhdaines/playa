@@ -8,13 +8,11 @@ import logging
 import mmap
 import re
 import struct
-from collections import deque
 from hashlib import md5, sha256, sha384, sha512
 from typing import (
     Any,
     BinaryIO,
     Callable,
-    Deque,
     Dict,
     Iterable,
     Iterator,
@@ -50,7 +48,6 @@ from playa.page import (
     schema as page_schema,
 )
 from playa.parser import (
-    KEYWORD_OBJ,
     KEYWORD_TRAILER,
     KEYWORD_XREF,
     LIT,
@@ -508,7 +505,8 @@ class PDFStandardSecurityHandlerV4(PDFStandardSecurityHandler):
             raise PDFEncryptionError(error_msg)
         self.cfm = {}
         for k, v in self.cf.items():
-            f = self.get_cfm(literal_name(v["CFM"]))
+            dictv = dict_value(v)
+            f = self.get_cfm(literal_name(dictv["CFM"]))
             if f is None:
                 error_msg = "Unknown crypt filter method: param=%r" % self.param
                 raise PDFEncryptionError(error_msg)
@@ -833,13 +831,14 @@ class Document:
         except PDFSyntaxError:
             log.warning("PDF header not found, will try to read the file anyway")
             self.pdf_version = "UNKNOWN"
+        # Make sure we read the whole file if we need to read the file!
+        fp.seek(0, 0)
         try:
             self.buffer: Union[bytes, mmap.mmap] = mmap.mmap(
                 fp.fileno(), 0, access=mmap.ACCESS_READ
             )
         except io.UnsupportedOperation:
             log.warning("mmap not supported on %r, reading document into memory", fp)
-            fp.seek(0, 0)
             self.buffer = fp.read()
         except ValueError:
             raise
@@ -985,6 +984,8 @@ class Document:
         self.parser.seek(pos)
         try:
             _, obj = next(self.parser)
+            if obj.objid != objid:
+                raise PDFSyntaxError(f"objid mismatch: {obj.objid!r}={objid!r}")
         except (ValueError, IndexError, PDFSyntaxError) as e:
             log.warning(
                 "Indirect object %d not found at position %d: %r", objid, pos, e
@@ -1004,7 +1005,7 @@ class Document:
             if realpos == -1:
                 raise PDFSyntaxError(
                     f"Indirect object {objid!r} not found in document"
-                )
+                ) from e
             log.debug("found object (%r) seeking to %r", m.group(0), realpos)
             self.parser.seek(realpos)
             (_, obj) = next(self.parser)
@@ -1081,6 +1082,7 @@ class Document:
             dfonts = list_value(spec["DescendantFonts"])
             assert dfonts
             subspec = dict_value(dfonts[0]).copy()
+            # FIXME: Bad tightly coupled with internals of CIDFont
             for k in ("Encoding", "ToUnicode"):
                 if k in spec:
                     subspec[k] = resolve1(spec[k])
