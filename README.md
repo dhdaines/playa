@@ -135,8 +135,9 @@ If, on the other hand, **you** are lazy, then you can just use
 `page.layout`, which will flatten everything for you into a friendly
 dictionary representation (but it is a
 [`TypedDict`](https://typing.readthedocs.io/en/latest/spec/typeddict.html#typeddict))
-which, um, looks a lot like what `pdfplumber` gives you, except in the
-coordinate space defined previously.
+which, um, looks a lot like what `pdfplumber` gives you, except possibly in
+a different
+coordinate space, as defined [below](#an-important-note-about-coordinate-spaces).
 
 ```python
 for dic in page.layout:
@@ -195,7 +196,7 @@ device space, specifically:
 - `(0, 0)` is the top-left corner of the page, as defined by its
   `MediaBox` after rotation is applied.
 - Coordinates increase from the top-left corner of the page towards
-  the bottom-left corner.
+  the bottom-right corner.
 
 However, for compatibility with `pdfminer.six`, you can also pass
 `space="page"` to `playa.open`.  In this case, `(0, 0)` is the
@@ -207,7 +208,10 @@ If you don't care about absolute positioning, you can use
 `space="user"`, which may be somewhat faster in the future (currently
 it isn't).  In this case, no translation or rotation of the default
 user space is done (in other words any values of `MediaBox` or
-`Rotate` in the page dictionary are simply ignored).
+`Rotate` in the page dictionary are simply ignored).  This is **definitely**
+what you want if you wish to take advantage of the coordinates that
+you may find in `outlines`, `dests`, tags and logical structure
+elements.
 
 ## Lazy object API
 
@@ -342,7 +346,13 @@ don't access `obj.bbox` and it won't be computed.  If you don't need
 to know the position of each glyph but simply want the Unicode
 characters, then just look at `obj.chars`.
 
-Also, a lot of PDFs, especially ones produced by OCR, don't organize
+It is important to understand that `obj.chars` may or may not correspond
+to the actual text that a human will read on the page.  To
+actually extract *text* from a PDF necessarily involves Heuristics
+or Machine Learning (yes, capitalized, like that) and PLAYA does not do
+either of those things.
+
+This is because PDFs, especially ones produced by OCR, don't organize
 text objects in any meaningful fashion, so you will want to actually
 look at the glyphs.  This becomes a matter of iterating over the item,
 giving you, well, more items, which are the individual glyphs:
@@ -360,7 +370,7 @@ PDF has the concept of a *text state* which determines some aspects of
 how text is rendered.  You can obviously access this though
 `glyph.textstate` - note that the text state, like the graphics state,
 is mutable, so you will have to copy it or save individual parameters
-that you might care about.
+that you might care about.  This may be a major footgun so watch out.
 
 PLAYA doesn't guarantee that text objects come at you in anything
 other than the order they occur in the file (but it does guarantee
