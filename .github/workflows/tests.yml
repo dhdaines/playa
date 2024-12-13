@@ -20,3 +20,9 @@ jobs:
         uses: pypa/hatch@install
       - name: Run tests
         run: hatch test --cover -py 3.9
+      - name: Run pdfplumber tests
+        run: |
+          cd samples/3rdparty/pdfplumber
+          pip install -e ../../..
+          make venv
+          make tests
