@@ -207,13 +207,13 @@ class CMapDB:
     @classmethod
     def get_cmap(cls, name: str) -> CMapBase:
         if name == "Identity-H":
-            return IdentityCMap(WMode=0)
+            return IdentityCMap(CMapName=name, WMode=0)
         elif name == "Identity-V":
-            return IdentityCMap(WMode=1)
+            return IdentityCMap(CMapName=name, WMode=1)
         elif name == "OneByteIdentityH":
-            return IdentityCMapByte(WMode=0)
+            return IdentityCMapByte(CMapName=name, WMode=0)
         elif name == "OneByteIdentityV":
-            return IdentityCMapByte(WMode=1)
+            return IdentityCMapByte(CMapName=name, WMode=1)
         if name in cls._cmap_cache:
             return cls._cmap_cache[name]
         data = cls._load_data(name)
