@@ -23,6 +23,7 @@ from playa.cmapdb import (
     CMapBase,
     CMapDB,
     parse_tounicode,
+    parse_encoding,
     FileUnicodeMap,
     IdentityUnicodeMap,
     UnicodeMap,
@@ -1067,10 +1068,14 @@ class CIDFont(Font):
             if isinstance(spec["ToUnicode"], ContentStream):
                 strm = stream_value(spec["ToUnicode"])
                 self.unicode_map = parse_tounicode(strm.buffer)
-            if isinstance(spec["Encoding"], ContentStream):
+            # FIXME: For the moment only replace the cmap if we don't
+            # have a predefined one (this may or may not be correct)
+            # FIXME: self.cmap should just be None here, WTF pdfminer.six!
+            if self.cmap.attrs.get("CMapName") is None and isinstance(
+                spec["Encoding"], ContentStream
+            ):
                 strm = stream_value(spec["Encoding"])
-                # FIXME: it's not a tounicode, but it plays one on TV
-                # _ = parse_tounicode(strm.buffer)
+                self.cmap = parse_encoding(strm.buffer)
 
             if self.unicode_map is None:
                 cmap_name = literal_name(spec["ToUnicode"])

@@ -9,6 +9,7 @@ More information is available on:
 
 """
 
+from bisect import bisect_left
 import functools
 import gzip
 import logging
@@ -31,14 +32,12 @@ from typing import (
     cast,
 )
 
-from playa.encodingdb import name2unicode
 from playa.exceptions import PDFSyntaxError
 from playa.parser import (
     KWD,
     ObjectParser,
     PDFObject,
     PSKeyword,
-    PSLiteral,
     literal_name,
 )
 from playa.utils import choplist, nunpack
@@ -209,8 +208,6 @@ class CMapDB:
     def get_cmap(cls, name: str) -> CMapBase:
         if name == "Identity-H":
             return IdentityCMap(WMode=0)
-        elif name == "Adobe-Identity-UCS":
-            return IdentityCMap(WMode=0)  # FIXME: WMode???
         elif name == "Identity-V":
             return IdentityCMap(WMode=1)
         elif name == "OneByteIdentityH":
@@ -260,17 +257,12 @@ def decode_utf16_char(utf16: bytes) -> str:
 
 
 class FileUnicodeMap(UnicodeMap):
+    """ToUnicode map loaded from a PDF stream"""
     def add_cid2bytes(self, cid: int, utf16: bytes) -> None:
         self.add_cid2unichr(cid, decode_utf16_char(utf16))
 
     def add_cid2code(self, cid: int, code: int) -> None:
         unichr = chr(code)
-        self.add_cid2unichr(cid, unichr)
-
-    def add_cid2lit(self, cid: int, name: PSLiteral) -> None:
-        # Interpret as an Adobe glyph name.
-        assert isinstance(name.name, str)
-        unichr = name2unicode(name.name)
         self.add_cid2unichr(cid, unichr)
 
     def add_cid2unichr(self, cid: int, unichr: str) -> None:
@@ -280,51 +272,29 @@ class FileUnicodeMap(UnicodeMap):
             return
         self.cid2unichr[cid] = unichr
 
-
-def add_cid_range(
-    cmap: FileUnicodeMap, start_byte: bytes, end_byte: bytes, cid: int
-) -> None:
-    start_prefix = start_byte[:-4]
-    end_prefix = end_byte[:-4]
-    if start_prefix != end_prefix:
-        log.warning(
-            "The prefix of the start and end byte of "
-            "begincidrange are not the same.",
-        )
-        return
-    svar = start_byte[-4:]
-    evar = end_byte[-4:]
-    start = nunpack(svar)
-    end = nunpack(evar)
-    vlen = len(svar)
-    for i in range(end - start + 1):
-        x = start_prefix + struct.pack(">L", start + i)[-vlen:]
-        cmap.add_cid2bytes(cid + i, x)
-
-
-def add_bf_range(
-    cmap: FileUnicodeMap, start_byte: bytes, end_byte: bytes, code: PDFObject
-) -> None:
-    start = nunpack(start_byte)
-    end = nunpack(end_byte)
-    if isinstance(code, list):
-        if len(code) != end - start + 1:
-            log.warning(
-                "The difference between the start and end "
-                "offsets does not match the code length.",
-            )
-        for cid, unicode_value in zip(range(start, end + 1), code):
-            assert isinstance(unicode_value, bytes)
-            cmap.add_cid2bytes(cid, unicode_value)
-    else:
-        assert isinstance(code, bytes)
-        var = code[-4:]
-        base = nunpack(var)
-        prefix = code[:-4]
-        vlen = len(var)
-        for i in range(end - start + 1):
-            x = prefix + struct.pack(">L", base + i)[-vlen:]
-            cmap.add_cid2bytes(start + i, x)
+    def add_bf_range(
+        self, start_byte: bytes, end_byte: bytes, code: PDFObject
+    ) -> None:
+        start = nunpack(start_byte)
+        end = nunpack(end_byte)
+        if isinstance(code, list):
+            if len(code) != end - start + 1:
+                log.warning(
+                    "The difference between the start and end "
+                    "offsets does not match the code length.",
+                )
+            for cid, unicode_value in zip(range(start, end + 1), code):
+                assert isinstance(unicode_value, bytes)
+                self.add_cid2bytes(cid, unicode_value)
+        else:
+            assert isinstance(code, bytes)
+            var = code[-4:]
+            base = nunpack(var)
+            prefix = code[:-4]
+            vlen = len(var)
+            for i in range(end - start + 1):
+                x = prefix + struct.pack(">L", base + i)[-vlen:]
+                self.add_cid2bytes(start + i, x)
 
 
 def parse_tounicode(data: bytes) -> FileUnicodeMap:
@@ -381,6 +351,132 @@ def parse_tounicode(data: bytes) -> FileUnicodeMap:
         elif obj is KEYWORD_BEGINCIDRANGE:
             del stack[:]
         elif obj is KEYWORD_ENDCIDRANGE:
+            del stack[:]
+        elif obj is KEYWORD_BEGINCIDCHAR:
+            del stack[:]
+        elif obj is KEYWORD_ENDCIDCHAR:
+            del stack[:]
+        elif obj is KEYWORD_BEGINBFRANGE:
+            del stack[:]
+        elif obj is KEYWORD_ENDBFRANGE:
+            for start_byte, end_byte, code in choplist(3, stack):
+                if not isinstance(start_byte, bytes):
+                    log.warning("The start object is not a byte.")
+                    continue
+                if not isinstance(end_byte, bytes):
+                    log.warning("The end object is not a byte.")
+                    continue
+                if len(start_byte) != len(end_byte):
+                    log.warning("The start and end byte have different lengths.")
+                    continue
+                cmap.add_bf_range(start_byte, end_byte, code)
+            del stack[:]
+        elif obj is KEYWORD_BEGINBFCHAR:
+            del stack[:]
+        elif obj is KEYWORD_ENDBFCHAR:
+            for cid, code in choplist(2, stack):
+                if isinstance(cid, bytes) and isinstance(code, bytes):
+                    cmap.add_cid2bytes(nunpack(cid), code)
+            del stack[:]
+        elif obj is KEYWORD_BEGINNOTDEFRANGE:
+            del stack[:]
+        elif obj is KEYWORD_ENDNOTDEFRANGE:
+            del stack[:]
+        else:
+            # It's ... something else (probably bogus)
+            stack.append(obj)
+    return cmap
+
+
+class EncodingCMap(CMap):
+    """Encoding map loaded from a PDF stream."""
+    def __init__(self):
+        super().__init__()
+        self.bytes2cid: Dict[bytes, int] = {}
+        self.code_lengths = []
+
+    def decode(self, code: bytes) -> Tuple[int, ...]:
+        idx = 0
+        codes = []
+        # Match longest substring in bytes2cid
+        while idx < len(code):
+            for codelen in self.code_lengths[::-1]:
+                if code[idx: idx + codelen] in self.bytes2cid:
+                    codes.append(self.bytes2cid[code[idx: idx + codelen]])
+                    idx += codelen
+                    break
+            else:
+                log.warning("Unknown byte sequence %r", code[idx:])
+                idx += 1
+        return tuple(codes)
+
+    def add_bytes2cid(self, utf16: bytes, cid: int) -> None:
+        codelen = len(utf16)
+        pos = bisect_left(self.code_lengths, codelen)
+        if pos == len(self.code_lengths) or self.code_lengths[pos] != codelen:
+            self.code_lengths.insert(pos, codelen)
+        self.bytes2cid[utf16] = cid
+
+    def add_cid_range(
+        self, start_byte: bytes, end_byte: bytes, cid: int
+    ) -> None:
+        start_prefix = start_byte[:-4]
+        end_prefix = end_byte[:-4]
+        if start_prefix != end_prefix:
+            log.warning(
+                "The prefix of the start and end byte of "
+                "begincidrange are not the same.",
+            )
+            return
+        svar = start_byte[-4:]
+        evar = end_byte[-4:]
+        start = nunpack(svar)
+        end = nunpack(evar)
+        vlen = len(svar)
+        for i in range(end - start + 1):
+            x = start_prefix + struct.pack(">L", start + i)[-vlen:]
+            self.add_bytes2cid(x, cid + i)
+
+
+def parse_encoding(data: bytes) -> EncodingCMap:
+    """Parse an Encoding CMap."""
+    cmap = EncodingCMap()
+    stack: List[PDFObject] = []
+    parser = ObjectParser(data)
+
+    while True:
+        try:
+            pos, obj = next(parser)
+        except PDFSyntaxError as e:
+            log.debug("Ignoring syntax error: %s", e)
+            parser.reset()
+            continue
+        except StopIteration:
+            break
+
+        if not isinstance(obj, PSKeyword):
+            stack.append(obj)
+            continue
+        log.debug("keyword: %r (%r)", obj, stack)
+
+        if obj is KEYWORD_DEF:
+            try:
+                # Might fail with IndexError if the file is corrputed
+                v = stack.pop()
+                k = stack.pop()
+                cmap.set_attr(literal_name(k), v)
+            except (IndexError, TypeError):
+                pass
+        elif obj is KEYWORD_USECMAP:
+            log.warning("usecmap not supported for EncodingCMap")
+            del stack[:]
+        elif obj is KEYWORD_BEGINCODESPACERANGE:
+            del stack[:]
+        elif obj is KEYWORD_ENDCODESPACERANGE:
+            del stack[:]
+        elif obj is KEYWORD_BEGINCIDRANGE:
+            del stack[:]
+        elif obj is KEYWORD_ENDCIDRANGE:
             for start_byte, end_byte, cid in choplist(3, stack):
                 if not isinstance(start_byte, bytes):
                     log.warning("The start object of begincidrange is not a byte.")
@@ -396,36 +492,22 @@ def parse_tounicode(data: bytes) -> FileUnicodeMap:
                         "The start and end byte of begincidrange have different lengths.",
                     )
                     return cmap
-                add_cid_range(cmap, start_byte, end_byte, cid)
+                cmap.add_cid_range(start_byte, end_byte, cid)
             del stack[:]
         elif obj is KEYWORD_BEGINCIDCHAR:
             del stack[:]
         elif obj is KEYWORD_ENDCIDCHAR:
-            for cid, code in choplist(2, stack):
+            for code, cid in choplist(2, stack):
                 if isinstance(code, bytes) and isinstance(cid, int):
-                    cmap.add_cid2bytes(cid, code)
+                    cmap.add_bytes2cid(code, cid)
             del stack[:]
         elif obj is KEYWORD_BEGINBFRANGE:
             del stack[:]
         elif obj is KEYWORD_ENDBFRANGE:
-            for start_byte, end_byte, code in choplist(3, stack):
-                if not isinstance(start_byte, bytes):
-                    log.warning("The start object is not a byte.")
-                    continue
-                if not isinstance(end_byte, bytes):
-                    log.warning("The end object is not a byte.")
-                    continue
-                if len(start_byte) != len(end_byte):
-                    log.warning("The start and end byte have different lengths.")
-                    continue
-                add_bf_range(cmap, start_byte, end_byte, code)
             del stack[:]
         elif obj is KEYWORD_BEGINBFCHAR:
             del stack[:]
         elif obj is KEYWORD_ENDBFCHAR:
-            for cid, code in choplist(2, stack):
-                if isinstance(cid, bytes) and isinstance(code, bytes):
-                    cmap.add_cid2bytes(nunpack(cid), code)
             del stack[:]
         elif obj is KEYWORD_BEGINNOTDEFRANGE:
             del stack[:]

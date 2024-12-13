@@ -1,5 +1,5 @@
 ## PLAYA 0.2.5
-- [ ] implement CMap parsing for CIDs (submit PR to pdfminer)
+- [x] implement CMap parsing for Encoding CMaps
 - [x] add "default" as a synonym of badly-named "user" space
 - [x] update `pdfplumber` branch and run `pdfplumber` tests in CI
   - [x] reimplement on top of ContentObject

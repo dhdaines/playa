@@ -2,40 +2,18 @@
 Inadequately test CMap parsing and such.
 """
 
-from playa.cmapdb import parse_tounicode
+from pathlib import Path
+
+from playa.cmapdb import parse_tounicode, parse_encoding
 from playa.font import Type1FontHeaderParser
 
-STREAMDATA = b"""
-/CIDInit/ProcSet findresource begin
-12 dict begin
-begincmap
-/CIDSystemInfo<<
-/Registry (Adobe)
-/Ordering (UCS)
-/Supplement 0
->> def
-/CMapName/Adobe-Identity-UCS def
-/CMapType 2 def
-1 begincodespacerange
-<00> <FF>
-endcodespacerange
-1 beginbfrange
-<006F> <0072> [<00E7> <00E9> <00E8> <00EA>]
-endbfrange
-3 beginbfchar
-<01> <0078>
-<02> <030C>
-<03> <0075>
-endbfchar
-endcmap
-CMapName currentdict /CMap defineresource pop
-end
-end
-"""
+THISDIR = Path(__file__).parent
 
 
-def test_cmap_parser():
-    cmap = parse_tounicode(STREAMDATA)
+def test_parse_tounicode():
+    with open(THISDIR / "cmap-tounicode.txt", "rb") as infh:
+        data = infh.read()
+    cmap = parse_tounicode(data)
     assert cmap.cid2unichr == {
         1: "x",
         2: "̌",
@@ -45,6 +23,17 @@ def test_cmap_parser():
         113: "è",
         114: "ê",
     }
+
+
+def test_parse_encoding():
+    with open(THISDIR / "cmap-encoding.txt", "rb") as infh:
+        data = infh.read()
+    cmap = parse_encoding(data)
+    cids = list(cmap.decode("hello world".encode("UTF-16-BE")))
+    assert cids == [ord(x) for x in "hello world"]
+    cids = list(cmap.decode(b"\x00W \x00T \x00F"))
+    assert cids == [87, 229, 84, 229, 70]
+
 
 
 # Basically the sort of stuff we try to find in a Type 1 font
