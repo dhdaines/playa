@@ -3,7 +3,7 @@
 - [x] add "default" as a synonym of badly-named "user" space
 - [x] update `pdfplumber` branch and run `pdfplumber` tests in CI
   - [x] reimplement on top of ContentObject
-  - [ ] make a separate directory for third party tests
+- [ ] work around invalid ToUnicode CMaps
 - [ ] `decode_text` is remarkably slow
 - [ ] `render_char` and `render_string` are also quite slow
 - [ ] add something inbetween `chars` and full bbox for TextObject

@@ -23,6 +23,7 @@ jobs:
       - name: Run pdfplumber tests
         run: |
           cd samples/3rdparty/pdfplumber
-          pip install -e ../../..
+          python -m venv venv
+          venv/bin/pip install -e ../../..
           make venv
           make tests
