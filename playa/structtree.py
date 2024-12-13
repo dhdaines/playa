@@ -110,6 +110,10 @@ class StructElement(Findable):
     mcids: List[int] = field(default_factory=list)
     children: List["StructElement"] = field(default_factory=list)
 
+    @property
+    def page_number(self) -> Union[int, None]:
+        return None if self.page_idx is None else self.page_idx + 1
+
     def __iter__(self) -> Iterator["StructElement"]:
         return iter(self.children)
 
