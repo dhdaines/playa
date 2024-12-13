@@ -32,7 +32,7 @@ classifiers = [
     "Topic :: Text Processing",
 ]
 
-[project.optional_dependencies]
+[project.optional-dependencies]
 crypto = ["cryptography >= 36.0.0"]
 
 [project.urls]

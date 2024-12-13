@@ -501,7 +501,7 @@ class PDFStandardSecurityHandlerV4(PDFStandardSecurityHandler):
             raise PDFEncryptionError(
                 "Encryption type requires the "
                 "optional `cryptography` package. "
-                "You may install it with playa[crypto]."
+                "You may install it with `pip install playa-pdf[crypto]`."
             )
         super().__init__(*args, **kwargs)
 
