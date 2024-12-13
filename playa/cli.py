@@ -24,7 +24,7 @@ def make_argparse() -> argparse.ArgumentParser:
         "-s",
         "--space",
         help="Coordinate space for output objects",
-        choices=["screen", "page", "user"],
+        choices=["screen", "page", "default"],
         default="screen",
     )
     parser.add_argument(

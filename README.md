@@ -205,7 +205,7 @@ rotation, and coordinates increase from the bottom-left corner of the
 page towards the top-right, as they do in PDF user space.
 
 If you don't care about absolute positioning, you can use
-`space="user"`, which may be somewhat faster in the future (currently
+`space="default"`, which may be somewhat faster in the future (currently
 it isn't).  In this case, no translation or rotation of the default
 user space is done (in other words any values of `MediaBox` or
 `Rotate` in the page dictionary are simply ignored).  This is **definitely**

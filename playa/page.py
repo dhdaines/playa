@@ -94,7 +94,7 @@ LITERAL_PAGES = LIT("Pages")
 LITERAL_FORM = LIT("Form")
 LITERAL_IMAGE = LIT("Image")
 TextSeq = Iterable[Union[int, float, bytes]]
-DeviceSpace = Literal["page", "screen", "user"]
+DeviceSpace = Literal["page", "screen", "default", "user"]
 
 
 # FIXME: This should go in utils/pdftypes but there are circular imports
@@ -706,9 +706,11 @@ class BaseInterpreter:
         # "page" device space: origin is bottom left of MediaBox
         elif page.space == "page":
             ctm = self.device_ctm = (1.0, 0.0, 0.0, 1.0, -x0, -y0)
-        # "user" device space: no transformation or rotation
+        # "default" device space: no transformation or rotation
         else:
-            if page.space != "user":
+            if page.space == "user":
+                log.warning('"user" device space is deprecated, use "default" instead')
+            elif page.space != "default":
                 log.warning("Unknown device space: %r", page.space)
             ctm = self.device_ctm = MATRIX_IDENTITY
             width = height = 0

@@ -143,7 +143,7 @@ def test_spaces() -> None:
     with playa.open(CONTRIB / "issue-1181.pdf", space="page") as doc:
         page = doc.pages[0]
         page_box = next(iter(page)).bbox
-    with playa.open(CONTRIB / "issue-1181.pdf", space="user") as doc:
+    with playa.open(CONTRIB / "issue-1181.pdf", space="default") as doc:
         page = doc.pages[0]
         user_box = next(iter(page)).bbox
     assert page_box[1] == pytest.approx(user_box[1] - page.mediabox[1])
