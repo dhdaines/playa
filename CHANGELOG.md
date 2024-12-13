@@ -5,6 +5,8 @@
 - Fix installation of playa-pdf[crypto]
 - Fix attribute classes in structure tree elements
 - Deprecate "user" device space to avoid confusion with user space
+- Parse arbitrary Encoding CMaps
+- Update `pdfplumber` support
 
 ## PLAYA 0.2.4: 2024-12-02
 - fix more embarrassing bugs largely regarding the creation of empty

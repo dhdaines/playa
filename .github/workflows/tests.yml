@@ -20,6 +20,8 @@ jobs:
         uses: pypa/hatch@install
       - name: Run tests
         run: hatch test --cover -py 3.9
+      - name: Install ghostscript
+        run: sudo apt update && sudo apt install ghostscript
       - name: Run pdfplumber tests
         run: |
           cd samples/3rdparty/pdfplumber
