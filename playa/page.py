@@ -1703,6 +1703,10 @@ class ContentObject:
     def __iter__(self) -> Iterator["ContentObject"]:
         yield from ()
 
+    def __len__(self) -> int:
+        """Return the number of children of this object (generic implementation)."""
+        return sum(1 for _ in self)
+
     @property
     def object_type(self):
         """Type of this object as a string, e.g. "text", "path", "image"."""
@@ -1725,6 +1729,10 @@ BBOX_NONE = (-1, -1, -1, -1)
 @dataclass
 class TagObject(ContentObject):
     """A marked content point with no content."""
+
+    def __len__(self) -> int:
+        """A tag has no contents, iterating over it returns nothing."""
+        return 0
 
     @property
     def bbox(self) -> Rect:
@@ -1767,6 +1775,11 @@ class ImageObject(ContentObject):
 
     def __getitem__(self, name: str) -> PDFObject:
         return self.stream[name]
+
+    def __len__(self) -> int:
+        """Even though you can __getitem__ from an image you cannot iterate
+        over its keys, sorry about that.  Returns zero."""
+        return 0
 
     @property
     def buffer(self) -> bytes:
@@ -1883,14 +1896,17 @@ class PathObject(ContentObject):
     def __iter__(self):
         """Iterate over subpaths.
 
+        If there is only a single subpath, it will still be iterated
+        over.  This means that some care must be taken (for example,
+        checking if `len(path) == 1`) to avoid endless recursion.
+
         Note: subpaths inherit the values of `fill` and `evenodd` from
         the parent path, but these values are no longer meaningful
         since the winding rules must be applied to the composite path
         as a whole (this is not a bug, just don't rely on them to know
         which regions are filled or not).
+
         """
-        if len(self) == 1:
-            return
         # FIXME: Is there an itertool or a more_itertool for this?
         segs = []
         for seg in self.raw_segments:
@@ -1977,6 +1993,10 @@ class GlyphObject(ContentObject):
     text: Union[str, None]
     adv: float
     _bbox: Rect
+
+    def __len__(self) -> int:
+        """Fool! You cannot iterate over a GlyphObject!"""
+        return 0
 
     @property
     def bbox(self) -> Rect:
@@ -2081,8 +2101,6 @@ class TextObject(ContentObject):
         if self._chars is not None:
             return "".join(self._chars)
         self._chars = []
-        # This is not strictly necessary since we don't care about
-        # positioning, but perhaps we might in the future
         self.textstate.reset()
         for item in self.items:
             # Only TJ and Tf are relevant to Unicode output
@@ -2102,6 +2120,21 @@ class TextObject(ContentObject):
             elif item.operator == "Tf":
                 self.textstate.update(item.operator, *item.args)
         return "".join(self._chars)
+
+    def __len__(self) -> int:
+        """Return the number of glyphs that would result from iterating over
+        this object."""
+        nglyphs = 0
+        for item in self.items:
+            # Only TJ and Tf are relevant to Unicode output
+            if item.operator == "TJ":
+                font = self.textstate.font
+                assert font is not None, "No font was selected"
+                for obj in item.args:
+                    if not isinstance(obj, bytes):
+                        continue
+                    nglyphs += len(font.decode(obj))
+        return nglyphs
 
     def __iter__(self) -> Iterator[GlyphObject]:
         """Generate glyphs for this text object"""

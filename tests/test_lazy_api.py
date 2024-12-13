@@ -28,6 +28,7 @@ def test_content_objects():
         assert mcs_bbox == [254.25, 895.5023, 360.09, 972.6]
         for obj in page.paths:
             assert obj.object_type == "path"
+            assert len(obj) == 1
             assert len(list(obj)) == 1
         rect = next(obj for obj in page.paths)
         ibbox = [round(x) for x in rect.bbox]
@@ -39,6 +40,7 @@ def test_content_objects():
             ibbox = [round(x) for x in obj.bbox]
             boxes.append(ibbox)
             texts.append(obj.chars)
+            assert len(obj) == sum(1 for glyph in obj)
         assert boxes == [
             [358, 896, 360, 905],
             [71, 681, 490, 895],
