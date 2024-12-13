@@ -27,6 +27,16 @@ PDFMINER_BUGS = {
     "issue-1114-dedupe-chars.pdf",
     "malformed-from-issue-932.pdf",
     "mcid_example.pdf",
+    # FIXME: This can be fixed by correctly parsing Encoding CMaps,
+    # which be submitted as a PR to pdfminer.six
+    "issue7901.pdf",
+    # FIXME: These have invalid ToUnicode mappings but can be fixed by
+    # falling back to the input string (as PDFDocEncoding or UTF-16BE)
+    "issue9915_reduced.pdf",
+    "issue2931.pdf",
+    "issue9534_reduced.pdf",
+    # FIXME: And this here one is just UTF-8
+    "issue18117.pdf",
 }
 
 

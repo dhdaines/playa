@@ -45,8 +45,10 @@ XFAILS = {
     # really rather broken.
     "issue9418.pdf",
     "bug1250079.pdf",
-    # FIXME: These can likely be fixed by correctly parsing CMaps
-    # (which should also be submitted as a PR to pdfminer.six)
+    # FIXME: We "accept" these but the Unicode mappings are incorrect.
+    # Need to see what pdf.js does for them - it seems falling back to
+    # the string may work, but it might be ASCII, PDFDocEncoding,
+    # UTF-16BE, or UTF-8 (each of these is different), so...
     "issue9915_reduced.pdf",
     "issue2931.pdf",
     "issue9534_reduced.pdf",
