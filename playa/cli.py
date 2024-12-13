@@ -14,9 +14,15 @@ def make_argparse() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("pdfs", nargs="+", type=Path)
     parser.add_argument(
+        "-t",
+        "--stream",
+        type=int,
+        help="Extract the contents of an object or content stream",
+    )
+    parser.add_argument(
         "-o",
         "--outfile",
-        help="File to write output CSV (or - for standard output)",
+        help="File to write output (or - for standard output)",
         type=argparse.FileType("wt"),
         default="-",
     )
@@ -39,12 +45,16 @@ def main() -> None:
     parser = make_argparse()
     args = parser.parse_args()
     logging.basicConfig(level=logging.DEBUG if args.debug else logging.WARNING)
-    writer = csv.DictWriter(args.outfile, fieldnames=playa.fieldnames)
-    writer.writeheader()
     for path in args.pdfs:
         with playa.open(path, space=args.space) as doc:
-            for dic in doc.layout:
-                writer.writerow(dic)
+            if args.stream is not None:  # it can't be zero either though
+                stream = doc[args.stream]
+                args.outfile.buffer.write(stream.buffer)
+            else:
+                writer = csv.DictWriter(args.outfile, fieldnames=playa.fieldnames)
+                writer.writeheader()
+                for dic in doc.layout:
+                    writer.writerow(dic)
 
 
 if __name__ == "__main__":
