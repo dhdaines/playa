@@ -1887,6 +1887,8 @@ class PathObject(ContentObject):
         as a whole (this is not a bug, just don't rely on them to know
         which regions are filled or not).
         """
+        if len(self) == 1:
+            return
         # FIXME: Is there an itertool or a more_itertool for this?
         segs = []
         for seg in self.raw_segments:
@@ -1900,6 +1902,7 @@ class PathObject(ContentObject):
                     self.fill,
                     self.evenodd,
                 )
+                segs = []
             segs.append(seg)
         if segs:
             yield PathObject(
