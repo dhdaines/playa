@@ -222,7 +222,7 @@ class StructTree(Findable):
                 if aobj == revision and prev_obj is not None:
                     attr_objs.append(prev_obj)
                 prev_obj = None
-            elif isinstance(aobj, dict):
+            elif isinstance(aobj, dict) or isinstance(aobj, PSLiteral):
                 if prev_obj is not None:
                     attr_objs.append(prev_obj)
                 prev_obj = aobj
@@ -244,14 +244,20 @@ class StructTree(Findable):
                     logger.warning("Unknown attribute class %s", key)
                     continue
                 obj = self.class_map[key]
-            elif isinstance(obj, dict):
                 for k, v in obj.items():
                     if isinstance(v, PSLiteral):
                         attr[k] = decode_text(v.name)
                     else:
                         attr[k] = obj[k]
-            else:
-                logger.warning("Unexpected attribute object type: %r", obj)
+        for obj in attr_objs:
+            assert not isinstance(obj, ObjRef)
+            # An attribute dict
+            if isinstance(obj, dict):
+                for k, v in obj.items():
+                    if isinstance(v, PSLiteral):
+                        attr[k] = decode_text(v.name)
+                    else:
+                        attr[k] = obj[k]
         return attr
 
     def _make_element(self, obj: Any) -> Tuple[Union[StructElement, None], List[Any]]:
