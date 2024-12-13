@@ -1,3 +1,11 @@
+## PLAYA 0.2.5: 2024-12-15
+- Fix various bugs in the lazy API
+  - Add specialized `__len__` methods to ContentObject classes
+  - Clarify iteration over ContentObject
+- Fix installation of playa-pdf[crypto]
+- Fix attribute classes in structure tree elements
+- Deprecate "user" device space to avoid confusion with user space
+
 ## PLAYA 0.2.4: 2024-12-02
 - fix more embarrassing bugs largely regarding the creation of empty
   ContentObjects
