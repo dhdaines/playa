@@ -56,6 +56,7 @@ from playa.parser import (
     IndirectObjectParser,
     Lexer,
     ObjectParser,
+    ObjectStreamParser,
     PDFObject,
     PSLiteral,
     Token,
@@ -939,8 +940,20 @@ class Document:
         self.parser.strict = True
 
     def __iter__(self) -> Iterator[IndirectObject]:
-        """Iterate over `IndirectObject`"""
+        """Iterate over top-level `IndirectObject` (does not expand object streams)"""
         return (obj for pos, obj in IndirectObjectParser(self.buffer, self))
+
+    @property
+    def objects(self) -> Iterator[IndirectObject]:
+        """Iterate over all indirect objects (expanding object streams)"""
+        for pos, obj in IndirectObjectParser(self.buffer, self):
+            if (isinstance(obj.obj, ContentStream)
+                and obj.obj.get("Type") is LITERAL_OBJSTM):
+                parser = ObjectStreamParser(obj.obj, self)
+                for spos, sobj in parser:
+                    yield sobj
+            else:
+                yield(obj)
 
     @property
     def tokens(self) -> Iterator[Token]:
@@ -982,9 +995,12 @@ class Document:
         if stream.get("Type") is not LITERAL_OBJSTM:
             log.warning("Content stream Type is not /ObjStm: %r" % stream)
         try:
-            n = cast(int, stream["N"])
+            n = int_value(stream["N"])
         except KeyError:
             log.warning("N is not defined in content stream: %r" % stream)
+            n = 0
+        except TypeError:
+            log.warning("N is invalid in content stream: %r" % stream)
             n = 0
         parser = ObjectParser(stream.buffer, self)
         objs: List[PDFObject] = [obj for _, obj in parser]

@@ -60,30 +60,51 @@ for obj in pdf:
 
 Also, these will only be the top-level objects and not those found
 inside object streams (the streams are themselves indirect objects).
-You can access all objects directly by indexing the PDF document:
+You can iterate over all indirect objects including object streams
+using the `objects` property:
+
+```python
+for obj in pdf.objects:
+    obj.objid, obj.genno, obj.obj
+```
+
+In this case it is possible you will encounter multiple objects with
+the same `objid` due to the "incremental updates" feature of PDF.
+Currently, iterating over the objects in a particular stream is
+possible, but complicated.  It may be simplified in PLAYA 0.3.
+
+You can also access indirect objects by number (this will return the
+object with most recent generation number):
 
 ```python
 a_particular_object = pdf[42]
 ```
 
-It probably has some pages.  How many?  What are their numbers/labels?
-(they could be things like "xviii", 'a", or "42", for instance)
+Your PDF document probably has some pages.  How many?  What are their
+numbers/labels?  (they could be things like "xviii", 'a", or "42", for
+instance)
 
 ```python
 npages = len(pdf.pages)
 page_numbers = [page.label for page in pdf.pages]
 ```
 
-What's in the table of contents?
+What's in the table of contents?  (NOTE: this API will likely change
+in PLAYA 0.3 as it is not Lazy nor does it properly represent the
+hierarchy of the document outline)
 
 ```python
 for entry in pdf.outlines:
+    level, title, dest, action, struct_element = entry
+    # or
+    entry.level, entry.title, entry.dest, entry.action, entry.se
     ...
 ```
 
 If you are lucky it has a "logical structure tree".  The elements here
 might even be referenced from the table of contents!  (or, they might
-not... with PDF you never know)
+not... with PDF you never know).  (NOTE: this API will definitely
+change in PLAYA 0.3 as it is not the least bit Lazy)
 
 ```python
 structure = pdf.structtree
@@ -98,7 +119,7 @@ look at its contents, more on that in a bit:
 ```python
 page = pdf.pages[0]        # they are numbered from 0
 page = pdf.pages["xviii"]  # but you can get them by label (a string)
-page = pdf.pages["42"]  # or "logical" page number (also a string)
+page = pdf.pages["42"]     # or "logical" page number (also a string)
 print(f"Page {page.label} is {page.width} x {page.height}")
 ```
 

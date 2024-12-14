@@ -679,3 +679,38 @@ class IndirectObjectParser:
     def reset(self) -> None:
         """Clear internal parser state."""
         self._parser.reset()
+
+
+class ObjectStreamParser:
+    """
+    Parse indirect objects from an object stream.
+    """
+    def __init__(
+        self,
+            stream: ContentStream,
+            doc: Union["Document", None] = None,
+    ) -> None:
+        self._parser = ObjectParser(stream.buffer, doc)
+        self.buffer = stream.buffer
+        self.doc = None if doc is None else weakref.ref(doc)
+        self.nobj = int_value(stream["N"])
+        self.first = int_value(stream["First"])
+        self.offsets = []
+        while True:
+            try:
+                _, objid = next(self._parser)
+                _, pos = next(self._parser)
+            except StopIteration:
+                log.warning("Unexpected EOF in object stream")
+                break
+            self.offsets.append((objid, pos))
+            if len(self.offsets) == self.nobj:
+                break
+
+    def __iter__(self) -> Iterator[Tuple[int, IndirectObject]]:
+        self._parser.seek(self.first)
+        for (objid, opos), (pos, obj) in zip(self.offsets, self._parser):
+            if pos != self.first + opos:
+                log.warning("Invalid object stream: object %d is at %d, should be at %d",
+                            objid, pos, self.first + opos)
+            yield pos, IndirectObject(objid=objid, genno=0, obj=obj)

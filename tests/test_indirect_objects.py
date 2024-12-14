@@ -2,7 +2,13 @@ from pathlib import Path
 
 import pytest
 
-from playa.parser import LIT, ContentStream, IndirectObjectParser, PDFSyntaxError
+from playa.parser import (
+    LIT,
+    ContentStream,
+    IndirectObjectParser,
+    ObjectStreamParser,
+    PDFSyntaxError,
+)
 
 TESTDIR = Path(__file__).parent.parent / "samples"
 
@@ -70,3 +76,50 @@ def test_streams():
     with pytest.raises(PDFSyntaxError) as e:
         positions, objs = zip(*list(parser))
         assert "Integer" in e
+
+
+DATA3 = rb"""18 0 obj
+<</Type/ObjStm/N 9/First 60/Length 755>>
+stream
+16 0 19 50 20 100 15 236 11 303 12 393 13 637 14 659 17 673
+<</P 15 0 R/S/P/Type/StructElem/K[ 0] /Pg 3 0 R>>
+<</P 15 0 R/S/P/Type/StructElem/K[ 1] /Pg 3 0 R>>
+<</P 15 0 R/S/Figure/Alt(pdfplumber on github\n\na screen capture of the github page for pdfplumber) /Type/StructElem/K[ 2] /Pg 3 0 R>>
+<</P 11 0 R/S/Document/Type/StructElem/K[ 16 0 R 19 0 R 20 0 R] >>
+<</Type/StructTreeRoot/RoleMap 12 0 R/ParentTree 13 0 R/K[ 15 0 R] /ParentTreeNextKey 1>>
+<</Footnote/Note/Endnote/Note/Textbox/Sect/Header/Sect/Footer/Sect/InlineShape/Sect/Annotation/Sect/Artifact/Sect/Workbook/Document/Worksheet/Part/Macrosheet/Part/Chartsheet/Part/Dialogsheet/Part/Slide/Part/Chart/Sect/Diagram/Figure/Title/H1>>
+<</Nums[ 0 17 0 R] >>
+<</Names[] >>
+[ 16 0 R 19 0 R 20 0 R]
+endstream
+endobj
+"""
+
+DATA4 = rb"""1 0 obj
+<</Type/ObjStm/N 2/First 7/Length 17>>
+stream
+1 0 2 4
+333
+
+666
+endstream
+endobj
+"""
+
+
+def test_object_streams():
+    """Test the parsing of object streams."""
+    _, stmobj = next(IndirectObjectParser(DATA3))
+    parser = ObjectStreamParser(stmobj.obj)
+    objects = list(parser)
+    assert all(obj.genno == 0 for _, obj in objects)
+    objids = [obj.objid for _, obj in objects]
+    assert objids == [16, 19, 20, 15, 11, 12, 13, 14, 17]
+    assert objects[-2][1].obj == {"Names": []}
+
+    # Offsets are slightly incorrect but we get the objects anyway!
+    _, stmobj = next(IndirectObjectParser(DATA4))
+    parser = ObjectStreamParser(stmobj.obj)
+    objects = list(parser)
+    assert objects[0][1].obj == 333
+    assert objects[1][1].obj == 666
