@@ -406,7 +406,6 @@ class EncodingCMap(CMap):
         self.code_lengths.insert(pos, codelen)
         self.code_space.insert(pos, (start, end))
 
-    @functools.cache
     def decode(self, code: bytes) -> Tuple[int, ...]:
         idx = 0
         codelen = 1
@@ -417,8 +416,8 @@ class EncodingCMap(CMap):
                 substr = code[idx : idx + codelen]
                 # NOTE: lexicographical ordering is the same as
                 # big-endian numerical ordering so this works
-                if substr >= start and substr <= end:
-                    codes.append(self.bytes2cid[code[idx : idx + codelen]])
+                if substr >= start and substr <= end and substr in self.bytes2cid:
+                    codes.append(self.bytes2cid[substr])
                     idx += codelen
                     break
             else:
