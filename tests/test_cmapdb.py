@@ -10,6 +10,18 @@ from playa.font import Type1FontHeaderParser
 THISDIR = Path(__file__).parent
 
 
+BOGUS = rb"""begincmap
+1 begincodespacerange
+<0001> <0002>
+endcodespacerange
+2 begincidchar
+<0001> 65
+<0002> 66
+endcidchar
+endcmap
+"""
+
+
 def test_parse_tounicode():
     with open(THISDIR / "cmap-tounicode.txt", "rb") as infh:
         data = infh.read()
@@ -22,6 +34,16 @@ def test_parse_tounicode():
         112: "é",
         113: "è",
         114: "ê",
+    }
+    with open(THISDIR / "issue9367-tounicode.txt", "rb") as infh:
+        data = infh.read()
+    cmap = parse_tounicode(data)
+    assert cmap.cid2unichr[40] == "E"
+
+    cmap = parse_tounicode(BOGUS)
+    assert cmap.cid2unichr == {
+        1: "A",
+        2: "B",
     }
 
 

@@ -285,8 +285,7 @@ class FileUnicodeMap(UnicodeMap):
             for cid, unicode_value in zip(range(start, end + 1), code):
                 assert isinstance(unicode_value, bytes)
                 self.add_cid2bytes(cid, unicode_value)
-        else:
-            assert isinstance(code, bytes)
+        elif isinstance(code, bytes):
             var = code[-4:]
             base = nunpack(var)
             prefix = code[:-4]
@@ -294,6 +293,11 @@ class FileUnicodeMap(UnicodeMap):
             for i in range(end - start + 1):
                 x = prefix + struct.pack(">L", base + i)[-vlen:]
                 self.add_cid2bytes(start + i, x)
+        elif isinstance(code, int):
+            for i in range(end - start + 1):
+                self.add_cid2code(start + i, code + i)
+        else:
+            raise ValueError("Unuspported character code %r", code)
 
 
 def parse_tounicode(data: bytes) -> FileUnicodeMap:
@@ -350,10 +354,24 @@ def parse_tounicode(data: bytes) -> FileUnicodeMap:
         elif obj is KEYWORD_BEGINCIDRANGE:
             del stack[:]
         elif obj is KEYWORD_ENDCIDRANGE:
+            for start_byte, end_byte, code in choplist(3, stack):
+                if not isinstance(start_byte, bytes):
+                    log.warning("The start object is not a byte.")
+                    continue
+                if not isinstance(end_byte, bytes):
+                    log.warning("The end object is not a byte.")
+                    continue
+                if len(start_byte) != len(end_byte):
+                    log.warning("The start and end byte have different lengths.")
+                    continue
+                cmap.add_bf_range(start_byte, end_byte, code)
             del stack[:]
         elif obj is KEYWORD_BEGINCIDCHAR:
             del stack[:]
         elif obj is KEYWORD_ENDCIDCHAR:
+            for cid, code in choplist(2, stack):
+                if isinstance(cid, bytes) and isinstance(code, int):
+                    cmap.add_cid2code(nunpack(cid), code)
             del stack[:]
         elif obj is KEYWORD_BEGINBFRANGE:
             del stack[:]
@@ -399,7 +417,9 @@ class EncodingCMap(CMap):
     def add_code_range(self, start: bytes, end: bytes):
         """Add a code-space range"""
         if len(start) != len(end):
-            log.warning("Ignoring inconsistent code lengths in code space: %r / %r", start, end)
+            log.warning(
+                "Ignoring inconsistent code lengths in code space: %r / %r", start, end
+            )
             return
         codelen = len(start)
         pos = bisect_left(self.code_lengths, codelen)
@@ -494,12 +514,18 @@ def parse_encoding(data: bytes) -> EncodingCMap:
         elif obj is KEYWORD_ENDCODESPACERANGE:
             for start_code, end_code in choplist(2, stack):
                 if not isinstance(start_code, bytes):
-                    log.warning("Start of code space range %r %r is not bytes.",
-                                start_code, end_code)
+                    log.warning(
+                        "Start of code space range %r %r is not bytes.",
+                        start_code,
+                        end_code,
+                    )
                     return cmap
                 if not isinstance(end_code, bytes):
-                    log.warning("End of code space range %r %r is not bytes.",
-                                start_code, end_code)
+                    log.warning(
+                        "End of code space range %r %r is not bytes.",
+                        start_code,
+                        end_code,
+                    )
                     return cmap
                 cmap.add_code_range(start_code, end_code)
             del stack[:]
