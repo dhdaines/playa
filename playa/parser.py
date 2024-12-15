@@ -575,7 +575,10 @@ class IndirectObjectParser:
             log.debug("pos %r obj %r stack %r", pos, obj, self.trailer)
             if obj is KEYWORD_OBJ:
                 pass
-            elif obj is KEYWORD_ENDOBJ:
+            elif isinstance(obj, PSKeyword) and obj.name.startswith(b"endobj"):
+                # Some broken PDFs omit the space after `endobj`...
+                if obj is not KEYWORD_ENDOBJ:
+                    self._parser.seek(pos + len(b"endobj"))
                 # objid genno "obj" (skipped) ... and the object
                 (_, obj) = self.trailer.pop()
                 (_, genno) = self.trailer.pop()

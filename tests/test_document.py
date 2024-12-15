@@ -60,6 +60,17 @@ def test_objects():
         # FIXME: this should also be the case but is not as it gets reparsed:
         # assert objects[0].obj is doc[1]
 
+    with playa.open(TESTDIR / "simple5.pdf") as doc:
+        # Ensure robustness to missing space after `endobj`
+        assert doc[43]
+
+
+def test_object_streams():
+    """Test iterating inside object streams."""
+    with playa.open(TESTDIR / "simple5.pdf") as doc:
+        objs = list(doc.objects)
+        assert len(objs) == 52
+
 
 @pytest.mark.skipif(not CONTRIB.exists(), reason="contrib samples not present")
 def test_page_labels():
