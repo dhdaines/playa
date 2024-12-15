@@ -6,45 +6,10 @@ import logging
 import sys
 import time
 from pathlib import Path
+from tests.data import TESTDIR, BASEPDFS, PASSWORDS, XFAILS, CONTRIB
+from tests.test_open import PDFMINER_BUGS
 
 LOG = logging.getLogger("benchmark-convert")
-TESTDIR = Path(__file__).parent.parent / "samples"
-ALLPDFS = list(TESTDIR.glob("**/*.pdf"))
-PASSWORDS = {
-    "base.pdf": ["foo"],
-    "rc4-40.pdf": ["foo"],
-    "rc4-128.pdf": ["foo"],
-    "aes-128.pdf": ["foo"],
-    "aes-128-m.pdf": ["foo"],
-    "aes-256.pdf": ["foo"],
-    "aes-256-m.pdf": ["foo"],
-    "aes-256-r6.pdf": ["usersecret", "ownersecret"],
-}
-PDFMINER_BUGS = {
-    "issue-449-vertical.pdf",
-    "issue_495_pdfobjref.pdf",
-    "issue-886-xref-stream-widths.pdf",
-    "issue-1004-indirect-mediabox.pdf",
-    "issue-1008-inline-ascii85.pdf",
-    "issue-1059-cmap-decode.pdf",
-    "issue-1062-filters.pdf",
-    "rotated.pdf",
-    "issue-1114-dedupe-chars.pdf",
-    "malformed-from-issue-932.pdf",
-    "mcid_example.pdf",
-    "issue7901.pdf",
-    "issue9915_reduced.pdf",
-    "issue2931.pdf",
-    "issue9534_reduced.pdf",
-    "issue18117.pdf",
-    "annotations-rotated-270.pdf",
-    "annotations-rotated-180.pdf",
-    "password-example.pdf",
-}
-XFAILS = {
-    "empty.pdf",
-    "bogus-stream-length.pdf",
-}
 
 
 def benchmark_one_pdf(path: Path):
@@ -102,11 +67,11 @@ def benchmark_one_pdfminer(path: Path):
 
 if __name__ == "__main__":
     # Silence warnings about broken PDFs
-    logging.basicConfig(level=logging.INFO)
+    logging.basicConfig(level=logging.ERROR)
     niter = 5
     miner_time = beach_time = lazy_time = 0.0
     for iter in range(niter + 1):
-        for path in ALLPDFS:
+        for path in BASEPDFS:
             if len(sys.argv) == 1 or "eager" in sys.argv[1:]:
                 start = time.time()
                 benchmark_one_pdf(path)
