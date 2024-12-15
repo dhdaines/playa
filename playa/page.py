@@ -2124,7 +2124,11 @@ class TextObject(ContentObject):
 
     def __len__(self) -> int:
         """Return the number of glyphs that would result from iterating over
-        this object."""
+        this object.
+
+        Important: this is the number of glyphs, *not* the number of
+        Unicode characters.
+        """
         nglyphs = 0
         for item in self.items:
             # Only TJ and Tf are relevant to Unicode output
@@ -2135,6 +2139,8 @@ class TextObject(ContentObject):
                     if not isinstance(obj, bytes):
                         continue
                     nglyphs += len(font.decode(obj))
+            elif item.operator == "Tf":
+                self.textstate.update(item.operator, *item.args)
         return nglyphs
 
     def __iter__(self) -> Iterator[GlyphObject]:
