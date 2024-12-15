@@ -9,9 +9,7 @@ from pathlib import Path
 
 LOG = logging.getLogger("benchmark-convert")
 TESTDIR = Path(__file__).parent.parent / "samples"
-ALLPDFS = [
-    path for path in TESTDIR.glob("**/*.pdf") if not path.name.startswith("issue-")
-]
+ALLPDFS = list(TESTDIR.glob("**/*.pdf"))
 PASSWORDS = {
     "base.pdf": ["foo"],
     "rc4-40.pdf": ["foo"],
@@ -25,10 +23,26 @@ PASSWORDS = {
 PDFMINER_BUGS = {
     "issue-449-vertical.pdf",
     "issue_495_pdfobjref.pdf",
+    "issue-886-xref-stream-widths.pdf",
+    "issue-1004-indirect-mediabox.pdf",
     "issue-1008-inline-ascii85.pdf",
+    "issue-1059-cmap-decode.pdf",
+    "issue-1062-filters.pdf",
     "rotated.pdf",
+    "issue-1114-dedupe-chars.pdf",
+    "malformed-from-issue-932.pdf",
+    "mcid_example.pdf",
+    "issue7901.pdf",
+    "issue9915_reduced.pdf",
+    "issue2931.pdf",
+    "issue9534_reduced.pdf",
+    "issue18117.pdf",
+    "annotations-rotated-270.pdf",
+    "annotations-rotated-180.pdf",
+    "password-example.pdf",
 }
 XFAILS = {
+    "empty.pdf",
     "bogus-stream-length.pdf",
 }
 
@@ -88,7 +102,7 @@ def benchmark_one_pdfminer(path: Path):
 
 if __name__ == "__main__":
     # Silence warnings about broken PDFs
-    logging.basicConfig(level=logging.ERROR)
+    logging.basicConfig(level=logging.INFO)
     niter = 5
     miner_time = beach_time = lazy_time = 0.0
     for iter in range(niter + 1):
