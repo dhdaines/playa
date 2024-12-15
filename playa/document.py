@@ -899,7 +899,7 @@ class Document:
                     self.catalog = {}
                 break
         else:
-            raise PDFSyntaxError("No /Root object! - Is this really a PDF?")
+            log.warning("No /Root object! - Is this really a PDF?")
         if self.catalog.get("Type") is not LITERAL_CATALOG:
             log.warning("Catalog not found!")
         if "Version" in self.catalog:
