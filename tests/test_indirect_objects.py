@@ -54,6 +54,26 @@ endstream
 endobj
 """
 
+DATA2A = b"""
+5 0 obj << /Length 21 >>
+stream
+150 250 m
+150 350 l
+Sendstream
+endobj
+"""
+
+
+DATA2B = b"""
+5 0 obj << /Length 22 >>
+stream
+150 250 m
+150 350 l
+S
+endstream
+endobj
+"""
+
 
 def test_streams():
     """Test the handling of content streams."""
@@ -76,6 +96,22 @@ def test_streams():
     with pytest.raises(PDFSyntaxError) as e:
         positions, objs = zip(*list(parser))
         assert "Integer" in e
+
+    # Accept the case where there isn't an EOL before endstream
+    parser = IndirectObjectParser(DATA2A, strict=True)
+    positions, objs = zip(*list(parser))
+    assert isinstance(objs[0].obj, ContentStream)
+    stream = objs[0].obj
+    assert stream.rawdata == b"150 250 m\n150 350 l\nS"
+
+    # Accept the case where the EOL is included in the
+    # stream length (it will be in the stream in that case)
+    parser = IndirectObjectParser(DATA2B, strict=True)
+    positions, objs = zip(*list(parser))
+    assert isinstance(objs[0].obj, ContentStream)
+    stream = objs[0].obj
+    assert stream.rawdata == b"150 250 m\n150 350 l\nS\n"
+
 
 
 DATA3 = rb"""18 0 obj
