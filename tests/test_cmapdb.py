@@ -35,7 +35,6 @@ def test_parse_encoding():
     assert cids == [87, 229, 84, 229, 70]
 
 
-
 # Basically the sort of stuff we try to find in a Type 1 font
 TYPE1DATA = b"""
 %!PS-AdobeFont-1.0: MyBogusFont 0.1

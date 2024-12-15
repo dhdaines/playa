@@ -113,7 +113,6 @@ def test_streams():
     assert stream.rawdata == b"150 250 m\n150 350 l\nS\n"
 
 
-
 DATA3 = rb"""18 0 obj
 <</Type/ObjStm/N 9/First 60/Length 755>>
 stream

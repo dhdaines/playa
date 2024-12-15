@@ -258,6 +258,7 @@ def decode_utf16_char(utf16: bytes) -> str:
 
 class FileUnicodeMap(UnicodeMap):
     """ToUnicode map loaded from a PDF stream"""
+
     def add_cid2bytes(self, cid: int, utf16: bytes) -> None:
         self.add_cid2unichr(cid, decode_utf16_char(utf16))
 
@@ -272,9 +273,7 @@ class FileUnicodeMap(UnicodeMap):
             return
         self.cid2unichr[cid] = unichr
 
-    def add_bf_range(
-        self, start_byte: bytes, end_byte: bytes, code: PDFObject
-    ) -> None:
+    def add_bf_range(self, start_byte: bytes, end_byte: bytes, code: PDFObject) -> None:
         start = nunpack(start_byte)
         end = nunpack(end_byte)
         if isinstance(code, list):
@@ -390,6 +389,7 @@ def parse_tounicode(data: bytes) -> FileUnicodeMap:
 
 class EncodingCMap(CMap):
     """Encoding map loaded from a PDF stream."""
+
     def __init__(self):
         super().__init__()
         self.bytes2cid: Dict[bytes, int] = {}
@@ -401,8 +401,8 @@ class EncodingCMap(CMap):
         # Match longest substring in bytes2cid
         while idx < len(code):
             for codelen in self.code_lengths[::-1]:
-                if code[idx: idx + codelen] in self.bytes2cid:
-                    codes.append(self.bytes2cid[code[idx: idx + codelen]])
+                if code[idx : idx + codelen] in self.bytes2cid:
+                    codes.append(self.bytes2cid[code[idx : idx + codelen]])
                     idx += codelen
                     break
             else:
@@ -417,9 +417,7 @@ class EncodingCMap(CMap):
             self.code_lengths.insert(pos, codelen)
         self.bytes2cid[utf16] = cid
 
-    def add_cid_range(
-        self, start_byte: bytes, end_byte: bytes, cid: int
-    ) -> None:
+    def add_cid_range(self, start_byte: bytes, end_byte: bytes, cid: int) -> None:
         start_prefix = start_byte[:-4]
         end_prefix = end_byte[:-4]
         if start_prefix != end_prefix:

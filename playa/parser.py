@@ -688,10 +688,11 @@ class ObjectStreamParser:
     """
     Parse indirect objects from an object stream.
     """
+
     def __init__(
         self,
-            stream: ContentStream,
-            doc: Union["Document", None] = None,
+        stream: ContentStream,
+        doc: Union["Document", None] = None,
     ) -> None:
         self._parser = ObjectParser(stream.buffer, doc)
         self.buffer = stream.buffer
@@ -714,6 +715,10 @@ class ObjectStreamParser:
         self._parser.seek(self.first)
         for (objid, opos), (pos, obj) in zip(self.offsets, self._parser):
             if pos != self.first + opos:
-                log.warning("Invalid object stream: object %d is at %d, should be at %d",
-                            objid, pos, self.first + opos)
+                log.warning(
+                    "Invalid object stream: object %d is at %d, should be at %d",
+                    objid,
+                    pos,
+                    self.first + opos,
+                )
             yield pos, IndirectObject(objid=objid, genno=0, obj=obj)
