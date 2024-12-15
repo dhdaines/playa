@@ -7,6 +7,8 @@
 - Deprecate "user" device space to avoid confusion with user space
 - Parse arbitrary Encoding CMaps
 - Update `pdfplumber` support
+- Add parser for object streams and iterator over all indirect objects
+  in a document
 
 ## PLAYA 0.2.4: 2024-12-02
 - fix more embarrassing bugs largely regarding the creation of empty
