@@ -427,6 +427,7 @@ class EncodingCMap(CMap):
         self.code_space.insert(pos, (start, end))
 
     def decode(self, code: bytes) -> Iterator[int]:
+        """Decode a multi-byte string according to the CMap"""
         idx = 0
         codelen = 1
         while idx < len(code):

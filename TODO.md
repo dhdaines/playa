@@ -5,9 +5,7 @@
   - [x] reimplement on top of ContentObject
 
 ## PLAYA 0.2.x
-- [ ] work around invalid ToUnicode CMaps
-  - Implement and test all special cases from pdf.js readToUniocde
-  - Debug/trace pdf.js on the cases noted in tests/data.py
+- [ ] Fix ToUnicode CMaps for CID fonts (file bug against pdfminer)
 - [ ] `decode_text` is remarkably slow
 - [ ] `render_char` and `render_string` are also quite slow
 - [ ] add something inbetween `chars` and full bbox for TextObject
