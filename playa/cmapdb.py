@@ -394,27 +394,40 @@ class EncodingCMap(CMap):
         super().__init__()
         self.bytes2cid: Dict[bytes, int] = {}
         self.code_lengths = []
+        self.code_space = []
 
+    def add_code_range(self, start: bytes, end: bytes):
+        """Add a code-space range"""
+        if len(start) != len(end):
+            log.warning("Ignoring inconsistent code lengths in code space: %r / %r", start, end)
+            return
+        codelen = len(start)
+        pos = bisect_left(self.code_lengths, codelen)
+        self.code_lengths.insert(pos, codelen)
+        self.code_space.insert(pos, (start, end))
+
+    @functools.cache
     def decode(self, code: bytes) -> Tuple[int, ...]:
         idx = 0
+        codelen = 1
         codes = []
-        # Match longest substring in bytes2cid
         while idx < len(code):
-            for codelen in self.code_lengths[::-1]:
-                if code[idx : idx + codelen] in self.bytes2cid:
+            # Match code space ranges
+            for codelen, (start, end) in zip(self.code_lengths, self.code_space):
+                substr = code[idx : idx + codelen]
+                # NOTE: lexicographical ordering is the same as
+                # big-endian numerical ordering so this works
+                if substr >= start and substr <= end:
                     codes.append(self.bytes2cid[code[idx : idx + codelen]])
                     idx += codelen
                     break
             else:
-                log.warning("Unknown byte sequence %r", code[idx:])
+                log.warning("Undefined byte sequence %r", code[idx: idx + codelen])
+                codes.append(0)
                 idx += 1
         return tuple(codes)
 
     def add_bytes2cid(self, utf16: bytes, cid: int) -> None:
-        codelen = len(utf16)
-        pos = bisect_left(self.code_lengths, codelen)
-        if pos == len(self.code_lengths) or self.code_lengths[pos] != codelen:
-            self.code_lengths.insert(pos, codelen)
         self.bytes2cid[utf16] = cid
 
     def add_cid_range(self, start_byte: bytes, end_byte: bytes, cid: int) -> None:
@@ -471,6 +484,8 @@ def parse_encoding(data: bytes) -> EncodingCMap:
         elif obj is KEYWORD_BEGINCODESPACERANGE:
             del stack[:]
         elif obj is KEYWORD_ENDCODESPACERANGE:
+            for start_code, end_code in choplist(2, stack):
+                cmap.add_code_range(start_code, end_code)
             del stack[:]
         elif obj is KEYWORD_BEGINCIDRANGE:
             del stack[:]
