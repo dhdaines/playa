@@ -40,17 +40,18 @@ PASSWORDS = {
     "aes-256-r6.pdf": ["usersecret", "ownersecret"],
 }
 XFAILS = {
+    # can't mmap an empty file... don't even try!
     "empty.pdf",
     # pdf.js accepts these... maybe some day we will but they are
     # really rather broken.
     "issue9418.pdf",
     "bug1250079.pdf",
-    # FIXME: We "accept" these but the Unicode mappings are incorrect.
-    # Need to see what pdf.js does for them - it seems falling back to
-    # the string may work, but it might be ASCII, PDFDocEncoding,
-    # UTF-16BE, or UTF-8 (each of these is different), so...
-    "issue9915_reduced.pdf",
-    "issue2931.pdf",
-    "issue9534_reduced.pdf",
-    "issue18117.pdf",
+    # FIXME: We "accept" these but the Unicode mappings are incorrect,
+    # so no text is produced for the glyphs.  Leaving them here as the
+    # tests should be updated to verify text extraction works once we
+    # figure out how to support them
+    # "issue9915_reduced.pdf",  # ToUnicode incorrectly points to Encoding
+    # "issue2931.pdf",  # ToUnicode maps input characters not CIDs (ASCII)
+    # "issue9534_reduced.pdf",  # ToUnicode maps input characters not CIDs (UTF-16BE)
+    # "issue18117.pdf",  # ToUnicode maps input characters not CIDs (UTF-8)
 }
