@@ -1,3 +1,7 @@
+## PLAYA 0.2.6: Unreleased
+- Correct some type annotations (these were not really bugs)
+- Handle more CMap and ToUnicode corner cases
+
 ## PLAYA 0.2.5: 2024-12-15
 - Fix various bugs in the lazy API
   - Add specialized `__len__` methods to ContentObject classes
