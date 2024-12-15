@@ -416,13 +416,24 @@ class EncodingCMap(CMap):
                 substr = code[idx : idx + codelen]
                 # NOTE: lexicographical ordering is the same as
                 # big-endian numerical ordering so this works
-                if substr >= start and substr <= end and substr in self.bytes2cid:
-                    codes.append(self.bytes2cid[substr])
+                if substr >= start and substr <= end:
+                    if substr not in self.bytes2cid:
+                        # 9.7.6.3: If a code maps to a CID for which
+                        # no such glyph exists in the descendant
+                        # CIDFont...
+                        # FIXME: Implement notdef mappings
+                        codes.append(0)
+                    else:
+                        codes.append(self.bytes2cid[substr])
                     idx += codelen
                     break
             else:
-                log.warning("Undefined byte sequence %r", code[idx: idx + codelen])
-                codes.append(0)
+                # 9.7.6.3 If the code is invalid—that is, the bytes
+                # extracted from the string to be shown do not match
+                # any codespace range in the CMap...
+                log.warning("No code space found for %r", code[idx:])
+                # FIXME: Implement the somewhat obscure partial
+                # matching algorithm (might consume more than 1 byte)
                 idx += 1
         return tuple(codes)
 
