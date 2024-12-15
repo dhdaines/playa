@@ -42,6 +42,12 @@ def test_tokens():
 
 def test_objects():
     with playa.open(TESTDIR / "simple1.pdf") as doc:
+        # See note in Document.__getitem__ - this is not standards
+        # compliant but since returning None would inevitably lead to
+        # a TypeError down the line we signal it right away for the
+        # moment.
+        with pytest.raises(IndexError):
+            _ = doc[12345]
         doc7 = doc[7]
         assert doc7["Type"] == LIT("Font")
         doc1 = doc[1]

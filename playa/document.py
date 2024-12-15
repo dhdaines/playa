@@ -1043,8 +1043,15 @@ class Document:
             return decipher_all(self.decipher, obj.objid, obj.genno, obj.obj)
         return obj.obj
 
-    def __getitem__(self, objid: int) -> Any:
+    def __getitem__(self, objid: int) -> PDFObject:
         """Get an indirect object from the PDF.
+
+        Note that the behaviour in the case of a non-existent object,
+        while Pythonic, is not PDFic, as PDF 1.7 sec 7.3.10 states:
+
+        > An indirect reference to an undefined object shall not be
+        considered an error by a conforming reader; it shall be
+        treated as a reference to the null object.
 
         Raises:
           ValueError: if Document is not initialized
@@ -1372,7 +1379,7 @@ class PageList:
         self._labels: Dict[str, Page] = {}
         try:
             page_objects = list(doc._get_page_objects())
-        except (KeyError, IndexError):
+        except (KeyError, IndexError, TypeError):
             page_objects = list(doc._get_pages_from_xrefs())
         for page_idx, ((objid, properties), label) in enumerate(
             zip(page_objects, page_labels)
