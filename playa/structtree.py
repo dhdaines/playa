@@ -214,7 +214,7 @@ class StructTree(Findable):
                 attr_obj_list.extend(resolve1(val) for val in attr_obj)
             else:
                 attr_obj_list.append(attr_obj)
-        attr_objs: List[Union[int, dict]] = []
+        attr_objs: List[Union[int, dict, PSLiteral]] = []
         prev_obj = None
         for aobj in attr_obj_list:
             # If we find a revision number, which might "follow the
@@ -247,12 +247,12 @@ class StructTree(Findable):
                 if key not in self.class_map:
                     logger.warning("Unknown attribute class %s", key)
                     continue
-                obj = self.class_map[key]
-                for k, v in obj.items():
+                class_obj = self.class_map[key]
+                for k, v in class_obj.items():
                     if isinstance(v, PSLiteral):
                         attr[k] = decode_text(v.name)
                     else:
-                        attr[k] = obj[k]
+                        attr[k] = class_obj[k]
         for obj in attr_objs:
             assert not isinstance(obj, ObjRef)
             # An attribute dict

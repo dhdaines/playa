@@ -8,6 +8,7 @@ import csv
 from pathlib import Path
 
 import playa
+from playa.pdftypes import ContentStream
 
 
 def make_argparse() -> argparse.ArgumentParser:
@@ -49,6 +50,8 @@ def main() -> None:
         with playa.open(path, space=args.space) as doc:
             if args.stream is not None:  # it can't be zero either though
                 stream = doc[args.stream]
+                if not isinstance(stream, ContentStream):
+                    parser.error(f"Indirect object {args.stream} is not a stream")
                 args.outfile.buffer.write(stream.buffer)
             else:
                 writer = csv.DictWriter(args.outfile, fieldnames=playa.fieldnames)

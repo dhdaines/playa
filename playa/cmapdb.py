@@ -390,11 +390,11 @@ def parse_tounicode(data: bytes) -> FileUnicodeMap:
 class EncodingCMap(CMap):
     """Encoding map loaded from a PDF stream."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__()
         self.bytes2cid: Dict[bytes, int] = {}
-        self.code_lengths = []
-        self.code_space = []
+        self.code_lengths: List[int] = []
+        self.code_space: List[Tuple[bytes, bytes]] = []
 
     def add_code_range(self, start: bytes, end: bytes):
         """Add a code-space range"""
@@ -406,10 +406,9 @@ class EncodingCMap(CMap):
         self.code_lengths.insert(pos, codelen)
         self.code_space.insert(pos, (start, end))
 
-    def decode(self, code: bytes) -> Tuple[int, ...]:
+    def decode(self, code: bytes) -> Iterator[int]:
         idx = 0
         codelen = 1
-        codes = []
         while idx < len(code):
             # Match code space ranges
             for codelen, (start, end) in zip(self.code_lengths, self.code_space):
@@ -422,9 +421,9 @@ class EncodingCMap(CMap):
                         # no such glyph exists in the descendant
                         # CIDFont...
                         # FIXME: Implement notdef mappings
-                        codes.append(0)
+                        yield 0
                     else:
-                        codes.append(self.bytes2cid[substr])
+                        yield self.bytes2cid[substr]
                     idx += codelen
                     break
             else:
@@ -435,7 +434,6 @@ class EncodingCMap(CMap):
                 # FIXME: Implement the somewhat obscure partial
                 # matching algorithm (might consume more than 1 byte)
                 idx += 1
-        return tuple(codes)
 
     def add_bytes2cid(self, utf16: bytes, cid: int) -> None:
         self.bytes2cid[utf16] = cid
@@ -495,6 +493,14 @@ def parse_encoding(data: bytes) -> EncodingCMap:
             del stack[:]
         elif obj is KEYWORD_ENDCODESPACERANGE:
             for start_code, end_code in choplist(2, stack):
+                if not isinstance(start_code, bytes):
+                    log.warning("Start of code space range %r %r is not bytes.",
+                                start_code, end_code)
+                    return cmap
+                if not isinstance(end_code, bytes):
+                    log.warning("End of code space range %r %r is not bytes.",
+                                start_code, end_code)
+                    return cmap
                 cmap.add_code_range(start_code, end_code)
             del stack[:]
         elif obj is KEYWORD_BEGINCIDRANGE:

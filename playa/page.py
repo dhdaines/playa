@@ -2138,7 +2138,7 @@ class TextObject(ContentObject):
                 for obj in item.args:
                     if not isinstance(obj, bytes):
                         continue
-                    nglyphs += len(font.decode(obj))
+                    nglyphs += sum(1 for _ in font.decode(obj))
             elif item.operator == "Tf":
                 self.textstate.update(item.operator, *item.args)
         return nglyphs

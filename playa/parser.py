@@ -704,6 +704,8 @@ class ObjectStreamParser:
             try:
                 _, objid = next(self._parser)
                 _, pos = next(self._parser)
+                objid = int_value(objid)
+                pos = int_value(pos)
             except StopIteration:
                 log.warning("Unexpected EOF in object stream")
                 break

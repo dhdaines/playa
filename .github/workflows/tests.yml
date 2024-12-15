@@ -18,6 +18,8 @@ jobs:
           python-version: "3.9"
       - name: Install Hatch
         uses: pypa/hatch@install
+      - name: Check types with mypy
+        run: hatch run mypy --install-types --non-interactive playa
       - name: Run tests
         run: hatch test --cover -py 3.9
       - name: Install ghostscript
