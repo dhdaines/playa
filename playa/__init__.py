@@ -19,8 +19,7 @@ from typing import Union
 
 from playa.document import Document, LayoutDict, schema as schema  # noqa: F401
 from playa.page import DeviceSpace
-
-__version__ = "0.2.5"
+from playa._version import __version__  # noqa: F401
 
 fieldnames = LayoutDict.__annotations__.keys()
 

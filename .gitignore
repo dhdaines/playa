@@ -25,3 +25,4 @@ Pipfile.lock
 poetry.lock
 .eggs
 *~
+/playa/_version.py
