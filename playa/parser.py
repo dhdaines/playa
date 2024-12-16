@@ -257,7 +257,10 @@ class Lexer:
             elif m.lastgroup == "escape":  # type: ignore
                 chr = m[0][1:2]
                 if chr not in ESC_STRING:
-                    log.warning("Unrecognized escape %r", m[0])
+                    # PDF 1.7 sec 7.3.4.2: If the character following
+                    # the REVERSE SOLIDUS is not one of those shown in
+                    # Table 3, the REVERSE SOLIDUS shall be ignored.
+                    log.debug("Unrecognized escape %r", m[0])
                     parts.append(chr)
                 else:
                     parts.append(bytes((ESC_STRING[chr],)))

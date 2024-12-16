@@ -397,3 +397,9 @@ def test_inline_images():
     pos, img = next(parser)
     assert isinstance(img, InlineImage)
     assert img.buffer == b"VARIOUS UTTER NONSENSE"
+
+
+def test_reverse_solidus():
+    """Test the handling of useless backslashes that are not escapes."""
+    parser = Lexer(rb"(OMG\ WTF \W \T\ F)")
+    assert next(parser) == (0, b"OMG WTF W T F")
