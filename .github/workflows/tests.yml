@@ -23,13 +23,14 @@ jobs:
       - name: Install Hatch
         uses: pypa/hatch@install
       - name: Check types with mypy
+        if: ${{ matrix.os }} == "ubuntu-latest"
         run: hatch run mypy --install-types --non-interactive playa
       - name: Run tests
         run: hatch test --cover -py 3.9
-      - name: Install ghostscript
-        run: sudo apt update && sudo apt install ghostscript
       - name: Run pdfplumber tests
+        if: ${{ matrix.os }} == "ubuntu-latest"
         run: |
+          sudo apt update && sudo apt install ghostscript
           cd samples/3rdparty/pdfplumber
           python -m venv venv
           SETUPTOOLS_SCM_PRETEND_VERSION=0.2.5 venv/bin/pip install -e ../../..
