@@ -298,8 +298,7 @@ def bench_mmap():
         parser = Lexer(mapping)
         _ = list(parser)
         print(
-            "PLAYA Lexer (mmap): %fms / run"
-            % ((time.time() - start) / runs * 1000),
+            "PLAYA Lexer (mmap): %fms / run" % ((time.time() - start) / runs * 1000),
         )
 
 

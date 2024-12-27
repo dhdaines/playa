@@ -47,6 +47,7 @@ def benchmark_multi(path: Path, ncpu: int):
 
 if __name__ == "__main__":
     import argparse
+
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("-n", "--ncpu", type=int, default=4)
     parser.add_argument("pdf", type=Path)
@@ -55,7 +56,13 @@ if __name__ == "__main__":
     start = time.time()
     benchmark_multi(args.pdf, args.ncpu)
     multi_time = time.time() - start
-    print("PLAYA (%d CPUs) took %.2fs" % (args.ncpu, multi_time,))
+    print(
+        "PLAYA (%d CPUs) took %.2fs"
+        % (
+            args.ncpu,
+            multi_time,
+        )
+    )
 
     start = time.time()
     benchmark_single(args.pdf)
