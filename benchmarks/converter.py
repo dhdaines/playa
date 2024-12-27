@@ -45,7 +45,7 @@ def benchmark_one_lazy(path: Path):
 
 def benchmark_one_pdfminer(path: Path):
     """Open one of the documents"""
-    from pdfminer.converter import PDFPageAggregator
+    from pdfminer.converter import PDFLayoutAnalyzer
     from pdfminer.pdfdocument import PDFDocument
     from pdfminer.pdfinterp import PDFPageInterpreter, PDFResourceManager
     from pdfminer.pdfpage import PDFPage
@@ -58,8 +58,8 @@ def benchmark_one_pdfminer(path: Path):
         with open(path, "rb") as infh:
             LOG.debug("Reading %s", path)
             rsrc = PDFResourceManager()
-            agg = PDFPageAggregator(rsrc, pageno=1)
-            interp = PDFPageInterpreter(rsrc, agg)
+            analyzer = PDFLayoutAnalyzer(rsrc)
+            interp = PDFPageInterpreter(rsrc, analyzer)
             pdf = PDFDocument(PDFParser(infh), password=password)
             for page in PDFPage.create_pages(pdf):
                 interp.process_page(page)

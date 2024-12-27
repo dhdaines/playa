@@ -3,6 +3,7 @@ Attempt to scale.
 """
 
 import time
+import multiprocessing
 from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 from typing import List
@@ -18,7 +19,7 @@ def process_page(page: Page) -> List:
 def benchmark_single(path: Path):
     global pdf, pages
     with playa.open(path) as pdf:
-        boxes = list(map(process_page, pdf.pages))
+        _ = [list(page.layout) for page in pdf.pages]
 
 
 def open_doc_g(path: Path):
@@ -29,18 +30,19 @@ def open_doc_g(path: Path):
 
 def process_page_g(idx) -> List:
     global pages
-    return [obj.bbox for obj in pages[idx]]
+    return list(pages[idx].layout)
 
 
 def benchmark_multi(path: Path, ncpu: int):
     with playa.open(path) as pdf:
         npages = len(pdf.pages)
     with ProcessPoolExecutor(
+        mp_context=multiprocessing.get_context("spawn"),
         max_workers=ncpu,
         initializer=open_doc_g,
         initargs=(path,),
     ) as pool:
-        boxes = list(pool.map(process_page_g, range(npages)))
+        _ = list(pool.map(process_page_g, range(npages)))
 
 
 if __name__ == "__main__":
