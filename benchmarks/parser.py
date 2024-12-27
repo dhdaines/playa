@@ -288,19 +288,19 @@ def bench_mmap():
 
     from playa.parser import Lexer
 
-    with tempfile.NamedTemporaryFile() as tf:
+    with tempfile.TemporaryFile(mode="w+b") as tf:
         runs = 100
-        with open(tf.name, "wb") as outfh:
-            outfh.write(DATA * runs)
-        with open(tf.name, "rb") as infh:
-            start = time.time()
-            mapping = mmap.mmap(infh.fileno(), 0, access=mmap.ACCESS_READ)
-            parser = Lexer(mapping)
-            _ = list(parser)
-            print(
-                "PLAYA Lexer (mmap): %fms / run"
-                % ((time.time() - start) / runs * 1000),
-            )
+        tf.write(DATA * runs)
+        tf.flush()
+        tf.seek(0, 0)
+        start = time.time()
+        mapping = mmap.mmap(tf.fileno(), 0, access=mmap.ACCESS_READ)
+        parser = Lexer(mapping)
+        _ = list(parser)
+        print(
+            "PLAYA Lexer (mmap): %fms / run"
+            % ((time.time() - start) / runs * 1000),
+        )
 
 
 def bench_playa():
@@ -341,21 +341,21 @@ def bench_pdfminer():
         "pdfminer.six Lexer (BytesIO): %fms / run"
         % ((time.time() - start) / runs * 1000),
     )
-    with tempfile.NamedTemporaryFile() as tf:
+    with tempfile.TemporaryFile(mode="w+b") as tf:
         runs = 100
-        with open(tf.name, "wb") as outfh:
-            outfh.write(DATA * runs)
-        with open(tf.name, "rb") as infh:
-            parser = PSBaseParser(infh)
-            while True:
-                try:
-                    _ = parser.nexttoken()
-                except PSEOF:
-                    break
-            print(
-                "pdfminer.six Lexer (BinaryIO): %fms / run"
-                % ((time.time() - start) / runs * 1000),
-            )
+        tf.write(DATA * runs)
+        tf.flush()
+        tf.seek(0, 0)
+        parser = PSBaseParser(tf)
+        while True:
+            try:
+                _ = parser.nexttoken()
+            except PSEOF:
+                break
+        print(
+            "pdfminer.six Lexer (BinaryIO): %fms / run"
+            % ((time.time() - start) / runs * 1000),
+        )
     runs = 20
     start = time.time()
     for _ in range(runs):

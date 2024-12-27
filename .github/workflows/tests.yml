@@ -6,7 +6,33 @@ on:
     branches: [ "main" ]
 
 jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+      - name: Install Hatch
+        uses: pypa/hatch@install
+      - name: Check types with mypy
+        run: hatch run mypy --install-types --non-interactive playa
   test:
+    strategy:
+      fail-fast: true
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.9"
+      - name: Install Hatch
+        uses: pypa/hatch@install
+      - name: Run tests
+        run: hatch test --cover -py 3.9
+  thirdparty-test:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -14,18 +40,14 @@ jobs:
           submodules: true
       - name: Set up Python
         uses: actions/setup-python@v5
-        with:
-          python-version: "3.9"
       - name: Install Hatch
         uses: pypa/hatch@install
-      - name: Check types with mypy
-        run: hatch run mypy --install-types --non-interactive playa
-      - name: Run tests
-        run: hatch test --cover -py 3.9
-      - name: Install ghostscript
-        run: sudo apt update && sudo apt install ghostscript
+      - name: Run pdf.js testsuite
+        run: |
+          hatch run pytest -k pdf.js
       - name: Run pdfplumber tests
         run: |
+          sudo apt update && sudo apt install ghostscript
           cd samples/3rdparty/pdfplumber
           python -m venv venv
           SETUPTOOLS_SCM_PRETEND_VERSION=0.2.5 venv/bin/pip install -e ../../..
