@@ -37,7 +37,7 @@ def benchmark_multi(path: Path, ncpu: int):
     batches = []
 
     with ProcessPoolExecutor(max_workers=ncpu) as pool:
-        step = max(1, npages // ncpu)
+        step = max(1, round(npages / ncpu))
         for start in range(0, npages, step):
             end = min(npages, start + step)
             batch = list(range(start, end))
