@@ -20,7 +20,7 @@ if PLUMBERS.exists():
     ALLPDFS.extend(PLUMBERS.glob("*.pdf"))
 PDFJS = TESTDIR / "3rdparty" / "pdf.js" / "test"
 try:
-    with open(PDFJS / "test_manifest.json") as infh:
+    with open(PDFJS / "test_manifest.json", encoding="utf-8") as infh:
         manifest = json.load(infh)
     for entry in manifest:
         path = PDFJS / entry["file"]
