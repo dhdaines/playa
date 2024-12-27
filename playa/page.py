@@ -5,6 +5,7 @@ Classes for looking at pages and their contents.
 import itertools
 import logging
 import re
+import warnings
 import weakref
 from copy import copy
 from dataclasses import dataclass
@@ -243,6 +244,10 @@ class Page:
     @property
     def layout(self) -> Iterator["LayoutDict"]:
         """Iterator over eager layout object dictionaries."""
+        warnings.warn(
+            "The layout property has moved to PAVÉS (https://github.com/dhdaines/paves) and will be removed in PLAYA 0.3",
+            DeprecationWarning,
+        )
         return iter(PageInterpreter(self, self._contents))
 
     @property
@@ -1206,6 +1211,10 @@ class PageInterpreter(BaseInterpreter):
     """
 
     def __iter__(self) -> Iterator[LayoutDict]:
+        warnings.warn(
+            "PageInterpreter is deprecated and will be removed in PLAYA 0.3",
+            DeprecationWarning,
+        )
         log.debug(
             "PageInterpreter: resources=%r, streams=%r, ctm=%r",
             self.resources,
