@@ -48,7 +48,7 @@ def open(
         pdf._pool = ProcessPoolExecutor(
             max_workers=max_workers,
             mp_context=mp_context,
-            initializer=init_worker,
-            initargs=(path, password, space),
+            initializer=init_worker,  # type: ignore[arg-type]
+            initargs=(path, password, space),  # type: ignore[arg-type]
         )
     return pdf

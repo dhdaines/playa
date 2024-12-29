@@ -1380,6 +1380,7 @@ __pdf: Union[Document, None] = None
 
 def call_page(func: Callable, idx: int) -> Any:
     """Call a function on a page in a worker process."""
+    assert __pdf is not None
     return func(__pdf.pages[idx])
 
 
