@@ -1,4 +1,4 @@
-# **P**LAYA-PDF is a **LA**z**Y** **A**nalyzer for **PDF** 🏖️
+# **P**arallel and **LA**z**Y** **A**nalyzer for **PDF** 🏖️
 
 ## About
 
@@ -20,9 +20,13 @@ benchmarks](https://github.com/py-pdf/benchmarks) for a summary (TL;DR
 pypdfium2 is probably what you want, but pdfplumber does a nice job of
 converting PDF to ASCII art).
 
-The purpose of PLAYA is to provide an efficent, pure-Python and
-Pythonic (for its author's definition of the term), lazy interface to
-the internals of PDF files.
+Soon you will also be able to use
+[PAVÉS](https://github.com/dhdaines/paves) for this and other
+higher-level tasks.
+
+The purpose of PLAYA is to provide an efficent, parallel and
+parallelizable, pure-Python and Pythonic (for its author's definition
+of the term), lazy interface to the internals of PDF files.
 
 ## Installation
 
@@ -31,7 +35,10 @@ or newer:
 
     pipx install playa-pdf
 
-Yes it's not just "playa".  Sorry about that.
+Yes it's not just "playa".  Sorry about that.  If you wish to read
+certain encrypted PDFs then you will need the `crypto` add-on:
+
+    pipx install playa-pdf[crypto]
 
 ## Usage
 
@@ -81,16 +88,16 @@ a_particular_object = pdf[42]
 ```
 
 Your PDF document probably has some pages.  How many?  What are their
-numbers/labels?  (they could be things like "xviii", 'a", or "42", for
-instance)
+numbers/labels?  They could be things like "xvi" (pronounced
+"gzvee"), 'a", or "42", for instance!
 
 ```python
 npages = len(pdf.pages)
 page_numbers = [page.label for page in pdf.pages]
 ```
 
-What's in the table of contents?  (NOTE: this API will likely change
-in PLAYA 0.3 as it is not Lazy nor does it properly represent the
+What's in the table of contents?  (NOTE: this API is deprecated and
+will change soon as it is not Lazy nor does it properly represent the
 hierarchy of the document outline)
 
 ```python
@@ -103,8 +110,8 @@ for entry in pdf.outlines:
 
 If you are lucky it has a "logical structure tree".  The elements here
 might even be referenced from the table of contents!  (or, they might
-not... with PDF you never know).  (NOTE: this API will definitely
-change in PLAYA 0.3 as it is not the least bit Lazy)
+not... with PDF you never know).  (NOTE: this API is deprecated and
+will change soon as it is not Lazy at all)
 
 ```python
 structure = pdf.structtree
@@ -152,47 +159,8 @@ involves some more work on the user's part.
 
 ## Dictionary-based API
 
-If, on the other hand, **you** are lazy, then you can just use
-`page.layout`, which will flatten everything for you into a friendly
-dictionary representation (but it is a
-[`TypedDict`](https://typing.readthedocs.io/en/latest/spec/typeddict.html#typeddict))
-which, um, looks a lot like what `pdfplumber` gives you, except possibly in
-a different
-coordinate space, as defined [below](#an-important-note-about-coordinate-spaces).
-
-```python
-for dic in page.layout:
-    print("it is a {dic['object_type']} at ({dic['x0']}", {dic['y0']}))
-    print("    the color is {dic['stroking_color']}")
-    print("    the text is {dic['text']}")
-    print("    it is in MCS {dic['mcid']} which is a {dic['tag']}")
-    print("    it is also in Form XObject {dic['xobjid']}")
-```
-
-This is for instance quite useful for doing "Artificial Intelligence",
-or if you like wasting time and energy for no good reason, but I
-repeat myself.  For instance, you can write `page.layout` to a CSV file:
-
-```python
-writer = DictWriter(outfh, fieldnames=playa.fieldnames)
-writer.writeheader()
-for dic in pdf.layout:
-    writer.writerow(dic)
-```
-
-you can also create a Pandas DataFrame:
-
-```python
-df = pandas.DataFrame.from_records(pdf.layout)
-```
-
-or a Polars DataFrame or LazyFrame:
-
-```python
-df = polars.DataFrame(pdf.layout, schema=playa.schema)
-```
-
-If you have more specific needs or want better performance, then read on.
+There used to be a "dictionary-based" API here.  You can now find it
+it [PAVÉS](https://github.com/dhdaines/paves).)
 
 ## An important note about coordinate spaces
 
@@ -318,7 +286,7 @@ for obj in page:
     other_stuff.append(my_stuff)  # it's safe there
 ```
 
-For compatbility with `pdfminer.six`, PLAYA, even though it is not a
+For compatibility with `pdfminer.six`, PLAYA, even though it is not a
 layout analyzer, can do some basic interpretation of paths.  Again,
 this is lazy.  If you don't care about them, you just get objects with
 `object_type` of `"path"`, which you can ignore.  PLAYA won't even
