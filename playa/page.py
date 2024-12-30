@@ -179,7 +179,7 @@ class Page:
         # PDF 1.7 section 8.4.1: Initial value: a matrix that
         # transforms default user coordinates to device coordinates.
         #
-        # We keep this as `device_ctm` in order to transform layout
+        # We keep this as `self.ctm` in order to transform layout
         # attributes in tagged PDFs which are specified in default
         # user space (PDF 1.7 section 14.8.5.4.3, table 344)
         #
@@ -2170,8 +2170,7 @@ class TextObject(ContentObject):
         self.textstate.reset()
         for item in self.items:
             if item.operator == "TJ":
-                for glyph in self._render_string(item):
-                    yield glyph
+                yield from self._render_string(item)
             else:
                 self.textstate.update(item.operator, *item.args)
 
