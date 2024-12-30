@@ -8,6 +8,8 @@ import logging
 import mmap
 import re
 import struct
+import weakref
+from concurrent.futures import Executor
 from hashlib import md5, sha256, sha384, sha512
 from typing import (
     Any,
@@ -810,6 +812,7 @@ class Document:
 
     _fp: Union[BinaryIO, None] = None
     _pages: Union["PageList", None] = None
+    _pool: Union[Executor, None] = None
 
     def __enter__(self) -> "Document":
         return self
@@ -819,6 +822,9 @@ class Document:
         if self._fp:
             self._fp.close()
             self._fp = None
+        if self._pool:
+            self._pool.shutdown()
+            self._pool = None
 
     def __init__(
         self,
@@ -1369,10 +1375,20 @@ class Document:
             self._read_xref_from(pos, xrefs)
 
 
+__pdf: Union[Document, None] = None
+
+
+def call_page(func: Callable[[Page], Any], idx: int) -> Any:
+    """Call a function on a page in a worker process."""
+    assert __pdf is not None
+    return func(__pdf.pages[idx])
+
+
 class PageList:
     """List of pages indexable by 0-based index or string label."""
 
     def __init__(self, doc: Document):
+        self.doc = weakref.ref(doc)
         try:
             page_labels: Iterable[Optional[str]] = doc.page_labels
         except (KeyError, ValueError):
@@ -1405,6 +1421,17 @@ class PageList:
             return self._pages[key]
         else:
             return self._labels[key]
+
+    def map(self, func: Callable[[Page], Any]) -> Iterator:
+        doc = self.doc()
+        if doc is None:
+            raise RuntimeError("Document no longer exists")
+        if doc._pool is not None:
+            return doc._pool.map(
+                call_page, itertools.repeat(func), (page.page_idx for page in self)
+            )
+        else:
+            return (func(page) for page in self)
 
 
 class PageLabels(NumberTree):
