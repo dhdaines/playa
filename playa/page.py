@@ -478,6 +478,11 @@ class GraphicState:
 class LayoutDict(TypedDict, total=False):
     """Dictionary-based layout objects.
 
+    !!! danger Deprecated
+        This interface is deprecated and has been moved to
+        [PAVÉS](https://github.com/dhdaines/paves).  It will be
+        removed in PLAYA 0.3.
+
     These are somewhat like the `T_obj` dictionaries returned by
     pdfplumber.  The type of coordinates returned are determined by
     the `space` argument passed to `Page`.  By default, `(0, 0)` is
@@ -555,6 +560,7 @@ class LayoutDict(TypedDict, total=False):
         `None` if irrelevant/forbidden,
       srcsize: Source dimensions of image in pixels.
       bits: Number of bits per channel of image.
+
     """
 
     object_type: str
@@ -1207,6 +1213,11 @@ class BaseInterpreter:
 
 class PageInterpreter(BaseInterpreter):
     """Processor for the content of a PDF page
+
+    !!! danger Deprecated
+        This interface is deprecated and has been moved to
+        [PAVÉS](https://github.com/dhdaines/paves).  It will be
+        removed in PLAYA 0.3.
 
     Reference: PDF Reference, Appendix A, Operator Summary
     """

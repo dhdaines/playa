@@ -5,6 +5,8 @@
   - [x] reimplement on top of ContentObject
 
 ## PLAYA 0.2.x
+- [ ] deprecate LayoutDict
+- [ ] add parallel extraction of pages
 - [ ] Fix ToUnicode CMaps for CID fonts (file bug against pdfminer)
 - [ ] `decode_text` is remarkably slow
 - [ ] `render_char` and `render_string` are also quite slow
@@ -12,11 +14,8 @@
       (what do you actually need for heuristic or model-based
       extraction? probably just `adv`?)
 - [ ] remove the rest of the meaningless abuses of `cast`
-- [ ] document how to transform bbox attributes on StructElement,
-      Destination, etc (but you should just use "default" space)
-- [ ] deprecate LayoutDict
 
-## PLAYA 0.3 and beyond
+## PLAYA 1.0
 - [ ] make the structure tree lazy
 - [ ] support ExtGState (submit PR to pdfminer)
 - [ ] better API for document outline, destinations, links, etc
