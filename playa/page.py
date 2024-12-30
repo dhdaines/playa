@@ -129,7 +129,8 @@ class Page:
       rotate: the page rotation (in degree).
       label: the page's label (typically, the logical page number).
       page_number: the "physical" page number, indexed from 1.
-
+      ctm: coordinate transformation matrix from default user space to
+           page's device space
     """
 
     def __init__(
@@ -172,6 +173,46 @@ class Page:
                 log.warning("Invalid CropBox in /Page, defaulting to MediaBox")
 
         self.rotate = (int_value(self.attrs.get("Rotate", 0)) + 360) % 360
+        (x0, y0, x1, y1) = self.mediabox
+        width = x1 - x0
+        height = y1 - y0
+        # PDF 1.7 section 8.4.1: Initial value: a matrix that
+        # transforms default user coordinates to device coordinates.
+        #
+        # We keep this as `device_ctm` in order to transform layout
+        # attributes in tagged PDFs which are specified in default
+        # user space (PDF 1.7 section 14.8.5.4.3, table 344)
+        #
+        # "screen" device space: origin is top left of MediaBox
+        if self.space == "screen":
+            self.ctm = (1.0, 0.0, 0.0, -1.0, -x0, y1)
+        # "page" device space: origin is bottom left of MediaBox
+        elif self.space == "page":
+            self.ctm = (1.0, 0.0, 0.0, 1.0, -x0, -y0)
+        # "default" device space: no transformation or rotation
+        else:
+            if self.space == "user":
+                log.warning('"user" device space is deprecated, use "default" instead')
+            elif self.space != "default":
+                log.warning("Unknown device space: %r", self.space)
+            self.ctm = MATRIX_IDENTITY
+            width = height = 0
+        # If rotation is requested, apply rotation to the initial ctm
+        if self.rotate == 90:
+            # x' = y
+            # y' = width - x
+            self.ctm = mult_matrix((0, -1, 1, 0, 0, width), self.ctm)
+        elif self.rotate == 180:
+            # x' = width - x
+            # y' = height - y
+            self.ctm = mult_matrix((-1, 0, 0, -1, width, height), self.ctm)
+        elif self.rotate == 270:
+            # x' = height - y
+            # y' = x
+            self.ctm = mult_matrix((0, 1, -1, 0, height, 0), self.ctm)
+        elif self.rotate != 0:
+            log.warning("Invalid /Rotate: %r", self.rotate)
+
         self.annots = self.attrs.get("Annots")
         self.beads = self.attrs.get("B")
         contents = resolve1(self.attrs.get("Contents"))
@@ -673,7 +714,6 @@ class BaseInterpreter:
 
     mcs: Union[MarkedContent, None] = None
     ctm: Matrix
-    device_ctm: Matrix
 
     def __init__(
         self,
@@ -695,47 +735,8 @@ class BaseInterpreter:
                 self._dispatch[kwd] = (func, nargs)
         self.page = page
         self.contents = contents
-        (x0, y0, x1, y1) = page.mediabox
-        width = x1 - x0
-        height = y1 - y0
-        # PDF 1.7 section 8.4.1: Initial value: a matrix that
-        # transforms default user coordinates to device coordinates.
-        #
-        # We keep this as `device_ctm` in order to transform layout
-        # attributes in tagged PDFs which are specified in default
-        # user space (PDF 1.7 section 14.8.5.4.3, table 344)
-        #
-        # "screen" device space: origin is top left of MediaBox
-        if page.space == "screen":
-            ctm = self.device_ctm = (1.0, 0.0, 0.0, -1.0, -x0, y1)
-        # "page" device space: origin is bottom left of MediaBox
-        elif page.space == "page":
-            ctm = self.device_ctm = (1.0, 0.0, 0.0, 1.0, -x0, -y0)
-        # "default" device space: no transformation or rotation
-        else:
-            if page.space == "user":
-                log.warning('"user" device space is deprecated, use "default" instead')
-            elif page.space != "default":
-                log.warning("Unknown device space: %r", page.space)
-            ctm = self.device_ctm = MATRIX_IDENTITY
-            width = height = 0
-        # If rotation is requested, apply rotation to the initial ctm
-        if page.rotate == 90:
-            # x' = y
-            # y' = width - x
-            ctm = mult_matrix((0, -1, 1, 0, 0, width), ctm)
-        elif page.rotate == 180:
-            # x' = width - x
-            # y' = height - y
-            ctm = mult_matrix((-1, 0, 0, -1, width, height), ctm)
-        elif page.rotate == 270:
-            # x' = height - y
-            # y' = x
-            ctm = mult_matrix((0, 1, -1, 0, height, 0), ctm)
-        elif page.rotate != 0:
-            log.warning("Invalid /Rotate: %r", page.rotate)
         self.init_resources(page, page.resources if resources is None else resources)
-        self.init_state(ctm)
+        self.init_state(page.ctm)
 
     def init_resources(self, page: Page, resources: Dict) -> None:
         """Prepare the fonts and XObjects listed in the Resource attribute."""
