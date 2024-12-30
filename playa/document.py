@@ -8,6 +8,7 @@ import logging
 import mmap
 import re
 import struct
+import warnings
 import weakref
 from concurrent.futures import Executor
 from hashlib import md5, sha256, sha384, sha512
@@ -971,6 +972,10 @@ class Document:
     @property
     def layout(self) -> Iterator[LayoutDict]:
         """Iterate over `LayoutDict` for all pages."""
+        warnings.warn(
+            "The layout property has moved to PAVÉS (https://github.com/dhdaines/paves) and will be removed in PLAYA 0.3",
+            DeprecationWarning,
+        )
         for idx, page in enumerate(self.pages):
             for dic in page.layout:
                 dic = cast(LayoutDict, dic)  # ugh
