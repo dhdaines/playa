@@ -1378,7 +1378,7 @@ class Document:
 __pdf: Union[Document, None] = None
 
 
-def call_page(func: Callable, idx: int) -> Any:
+def call_page(func: Callable[[Page], Any], idx: int) -> Any:
     """Call a function on a page in a worker process."""
     assert __pdf is not None
     return func(__pdf.pages[idx])
@@ -1422,7 +1422,7 @@ class PageList:
         else:
             return self._labels[key]
 
-    def map(self, func: Callable) -> Iterator:
+    def map(self, func: Callable[[Page], Any]) -> Iterator:
         doc = self.doc()
         if doc is None:
             raise RuntimeError("Document no longer exists")
