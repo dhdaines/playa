@@ -1,6 +1,9 @@
-## PLAYA 0.2.6: Unreleased
+## PLAYA 0.2.6: 2024-12-30
 - Correct some type annotations (these were not really bugs)
 - Handle more CMap and ToUnicode corner cases
+- Add parallel operations
+- Deprecate "eager" API
+- Correct some problems on Windows/MacOS
 
 ## PLAYA 0.2.5: 2024-12-15
 - Fix various bugs in the lazy API
