@@ -160,7 +160,7 @@ involves some more work on the user's part.
 ## Dictionary-based API
 
 There used to be a "dictionary-based" API here.  You can now find it
-it [PAVÉS](https://github.com/dhdaines/paves).)
+in [PAVÉS](https://github.com/dhdaines/paves).
 
 ## An important note about coordinate spaces
 

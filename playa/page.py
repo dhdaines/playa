@@ -284,7 +284,13 @@ class Page:
 
     @property
     def layout(self) -> Iterator["LayoutDict"]:
-        """Iterator over eager layout object dictionaries."""
+        """Iterator over eager layout object dictionaries.
+
+        Danger: Deprecated
+            This interface is deprecated and has been moved to
+            [PAVÉS](https://github.com/dhdaines/paves).  It will be
+            removed in PLAYA 0.3.
+        """
         warnings.warn(
             "The layout property has moved to PAVÉS (https://github.com/dhdaines/paves) and will be removed in PLAYA 0.3",
             DeprecationWarning,
@@ -478,7 +484,7 @@ class GraphicState:
 class LayoutDict(TypedDict, total=False):
     """Dictionary-based layout objects.
 
-    !!! danger Deprecated
+    Danger: Deprecated
         This interface is deprecated and has been moved to
         [PAVÉS](https://github.com/dhdaines/paves).  It will be
         removed in PLAYA 0.3.
@@ -1214,7 +1220,7 @@ class BaseInterpreter:
 class PageInterpreter(BaseInterpreter):
     """Processor for the content of a PDF page
 
-    !!! danger Deprecated
+    Danger: Deprecated
         This interface is deprecated and has been moved to
         [PAVÉS](https://github.com/dhdaines/paves).  It will be
         removed in PLAYA 0.3.

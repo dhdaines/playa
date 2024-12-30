@@ -40,7 +40,20 @@ def open(
     max_workers: int = 1,
     mp_context: Union[BaseContext, None] = None,
 ) -> Document:
-    """Open a PDF document from a path on the filesystem."""
+    """Open a PDF document from a path on the filesystem.
+
+    Args:
+        path: Path to the document to open.
+        space: Device space to use ("screen" for screen-like
+               coordinates, "page" for pdfminer.six-like coordinates, "default" for
+               default user space with no rotation or translation)
+        max_workers: Number of worker processes to use for parallel
+                     processing of pages (if 1, no workers are spawned)
+        mp_context: Multiprocessing context to use for worker
+                    processes, see [Contexts and Start
+                    Methods](https://docs.python.org/3/library/multiprocessing.html#contexts-and-start-methods)
+                    for more information.
+    """
     fp = builtins.open(path, "rb")
     pdf = Document(fp, password=password, space=space)
     pdf._fp = fp

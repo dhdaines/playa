@@ -6,6 +6,7 @@
     options:
         members:
         - Document
+        - PageList
 
 ::: playa.page
     options:

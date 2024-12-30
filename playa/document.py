@@ -971,7 +971,13 @@ class Document:
 
     @property
     def layout(self) -> Iterator[LayoutDict]:
-        """Iterate over `LayoutDict` for all pages."""
+        """Iterate over `LayoutDict` for all pages.
+
+        Danger: Deprecated
+            This interface is deprecated and has been moved to
+            [PAVÉS](https://github.com/dhdaines/paves).  It will be
+            removed in PLAYA 0.3.
+        """
         warnings.warn(
             "The layout property has moved to PAVÉS (https://github.com/dhdaines/paves) and will be removed in PLAYA 0.3",
             DeprecationWarning,
@@ -1261,6 +1267,7 @@ class Document:
 
     @property
     def pages(self) -> "PageList":
+        """Pages of the document as an iterable/addressable `PageList` object."""
         if self._pages is None:
             self._pages = PageList(self)
         return self._pages
@@ -1428,6 +1435,16 @@ class PageList:
             return self._labels[key]
 
     def map(self, func: Callable[[Page], Any]) -> Iterator:
+        """Apply a function over each page, iterating over its results.
+
+        Args:
+            func: The function to apply to each page.
+
+        Note:
+            This possibly runs `func` in a separate process.  If its
+            return value is not serializable (by `pickle`) then you
+            will encounter errors.
+        """
         doc = self.doc()
         if doc is None:
             raise RuntimeError("Document no longer exists")

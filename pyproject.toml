@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "playa-pdf"
 dynamic = ["version"]
-description = "PLAYA ain't a LAYout Analyzer"
+description = "Parallel and LazY Analyzer for PDFs"
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.8"
