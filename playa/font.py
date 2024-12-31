@@ -40,6 +40,7 @@ from playa.parser import (
     PSLiteral,
     Token,
     literal_name,
+    PDFObject,
 )
 from playa.pdftypes import (
     ContentStream,
@@ -64,7 +65,7 @@ from playa.utils import (
 log = logging.getLogger(__name__)
 
 
-def get_widths(seq: Iterable[object]) -> Dict[int, float]:
+def get_widths(seq: Iterable[PDFObject]) -> Dict[int, float]:
     """Build a mapping of character widths for horizontal writing."""
     widths: Dict[int, float] = {}
     r: List[float] = []
@@ -73,19 +74,19 @@ def get_widths(seq: Iterable[object]) -> Dict[int, float]:
             if r:
                 char1 = r[-1]
                 for i, w in enumerate(v):
-                    widths[cast(int, char1) + i] = w
+                    widths[int_value(char1) + i] = w
                 r = []
         elif isinstance(v, (int, float)):  # == utils.isnumber(v)
             r.append(v)
             if len(r) == 3:
                 (char1, char2, w) = r
-                for i in range(cast(int, char1), cast(int, char2) + 1):
+                for i in range(int_value(char1), int_value(char2) + 1):
                     widths[i] = w
                 r = []
     return widths
 
 
-def get_widths2(seq: Iterable[object]) -> Dict[int, Tuple[float, Point]]:
+def get_widths2(seq: Iterable[PDFObject]) -> Dict[int, Tuple[float, Point]]:
     """Build a mapping of character widths for vertical writing."""
     widths: Dict[int, Tuple[float, Point]] = {}
     r: List[float] = []
@@ -94,13 +95,13 @@ def get_widths2(seq: Iterable[object]) -> Dict[int, Tuple[float, Point]]:
             if r:
                 char1 = r[-1]
                 for i, (w, vx, vy) in enumerate(choplist(3, v)):
-                    widths[cast(int, char1) + i] = (w, (vx, vy))
+                    widths[int(char1) + i] = (num_value(w), (int_value(vx), int_value(vy)))
                 r = []
         elif isinstance(v, (int, float)):  # == utils.isnumber(v)
             r.append(v)
             if len(r) == 5:
                 (char1, char2, w, vx, vy) = r
-                for i in range(cast(int, char1), cast(int, char2) + 1):
+                for i in range(int(char1), int(char2) + 1):
                     widths[i] = (w, (vx, vy))
                 r = []
     return widths
@@ -650,13 +651,13 @@ class CFFFont:
         (encoding_pos,) = self.top_dict.get(16, [0])
         (charstring_pos,) = self.top_dict.get(17, [0])
         # CharStrings
-        self.fp.seek(cast(int, charstring_pos))
+        self.fp.seek(int(charstring_pos))
         self.charstring = self.INDEX(self.fp)
         self.nglyphs = len(self.charstring)
         # Encodings
         self.code2gid = {}
         self.gid2code = {}
-        self.fp.seek(cast(int, encoding_pos))
+        self.fp.seek(int(encoding_pos))
         format = self.fp.read(1)
         if format == b"\x00":
             # Format 0
@@ -679,16 +680,12 @@ class CFFFont:
         # Charsets
         self.name2gid = {}
         self.gid2name = {}
-        self.fp.seek(cast(int, charset_pos))
+        self.fp.seek(int(charset_pos))
         format = self.fp.read(1)
         if format == b"\x00":
             # Format 0
             n = self.nglyphs - 1
-            for gid, sid in enumerate(
-                cast(
-                    Tuple[int, ...], struct.unpack(">" + "H" * n, self.fp.read(2 * n))
-                ),
-            ):
+            for gid, sid in enumerate(struct.unpack(">" + "H" * n, self.fp.read(2 * n))):
                 gid += 1
                 sidname = self.getstr(sid)
                 self.name2gid[sidname] = gid
@@ -725,15 +722,9 @@ class TrueTypeFont:
         self.tables: Dict[bytes, Tuple[int, int]] = {}
         self.fonttype = fp.read(4)
         try:
-            (ntables, _1, _2, _3) = cast(
-                Tuple[int, int, int, int],
-                struct.unpack(">HHHH", fp.read(8)),
-            )
+            (ntables, _1, _2, _3) = struct.unpack(">HHHH", fp.read(8))
             for _ in range(ntables):
-                (name_bytes, tsum, offset, length) = cast(
-                    Tuple[bytes, int, int, int],
-                    struct.unpack(">4sLLL", fp.read(16)),
-                )
+                (name_bytes, tsum, offset, length) = struct.unpack(">4sLLL", fp.read(16))
                 self.tables[name_bytes] = (offset, length)
         except struct.error:
             # Do not fail if there are not enough bytes to read. Even for
@@ -745,12 +736,10 @@ class TrueTypeFont:
         (base_offset, length) = self.tables[b"cmap"]
         fp = self.fp
         fp.seek(base_offset)
-        (version, nsubtables) = cast(Tuple[int, int], struct.unpack(">HH", fp.read(4)))
+        (version, nsubtables) = struct.unpack(">HH", fp.read(4))
         subtables: List[Tuple[int, int, int]] = []
         for i in range(nsubtables):
-            subtables.append(
-                cast(Tuple[int, int, int], struct.unpack(">HHL", fp.read(8))),
-            )
+            subtables.append(struct.unpack(">HHL", fp.read(8)))
         char2gid: Dict[int, int] = {}
         # Only supports subtable type 0, 2 and 4.
         for platform_id, encoding_id, st_offset in subtables:
@@ -759,31 +748,18 @@ class TrueTypeFont:
             if not (platform_id == 0 or (platform_id == 3 and encoding_id in [1, 10])):
                 continue
             fp.seek(base_offset + st_offset)
-            (fmttype, fmtlen, fmtlang) = cast(
-                Tuple[int, int, int],
-                struct.unpack(">HHH", fp.read(6)),
-            )
+            (fmttype, fmtlen, fmtlang) = struct.unpack(">HHH", fp.read(6))
             if fmttype == 0:
-                char2gid.update(
-                    enumerate(
-                        cast(Tuple[int, ...], struct.unpack(">256B", fp.read(256))),
-                    ),
-                )
+                char2gid.update(enumerate(struct.unpack(">256B", fp.read(256))))
             elif fmttype == 2:
-                subheaderkeys = cast(
-                    Tuple[int, ...],
-                    struct.unpack(">256H", fp.read(512)),
-                )
+                subheaderkeys = struct.unpack(">256H", fp.read(512))
                 firstbytes = [0] * 8192
                 for i, k in enumerate(subheaderkeys):
                     firstbytes[k // 8] = i
                 nhdrs = max(subheaderkeys) // 8 + 1
                 hdrs: List[Tuple[int, int, int, int, int]] = []
                 for i in range(nhdrs):
-                    (firstcode, entcount, delta, offset) = cast(
-                        Tuple[int, int, int, int],
-                        struct.unpack(">HHhH", fp.read(8)),
-                    )
+                    (firstcode, entcount, delta, offset) = struct.unpack(">HHhH", fp.read(8))
                     hdrs.append((i, firstcode, entcount, delta, fp.tell() - 2 + offset))
                 for i, firstcode, entcount, delta, pos in hdrs:
                     if not entcount:
@@ -791,39 +767,24 @@ class TrueTypeFont:
                     first = firstcode + (firstbytes[i] << 8)
                     fp.seek(pos)
                     for c in range(entcount):
-                        gid = cast(Tuple[int], struct.unpack(">H", fp.read(2)))[0]
+                        gid = struct.unpack(">H", fp.read(2))[0]
                         if gid:
                             gid += delta
                         char2gid[first + c] = gid
             elif fmttype == 4:
-                (segcount, _1, _2, _3) = cast(
-                    Tuple[int, int, int, int],
-                    struct.unpack(">HHHH", fp.read(8)),
-                )
+                (segcount, _1, _2, _3) = struct.unpack(">HHHH", fp.read(8))
                 segcount //= 2
-                ecs = cast(
-                    Tuple[int, ...],
-                    struct.unpack(">%dH" % segcount, fp.read(2 * segcount)),
-                )
+                ecs = struct.unpack(">%dH" % segcount, fp.read(2 * segcount))
                 fp.read(2)
-                scs = cast(
-                    Tuple[int, ...],
-                    struct.unpack(">%dH" % segcount, fp.read(2 * segcount)),
-                )
-                idds = cast(
-                    Tuple[int, ...],
-                    struct.unpack(">%dh" % segcount, fp.read(2 * segcount)),
-                )
+                scs = struct.unpack(">%dH" % segcount, fp.read(2 * segcount))
+                idds = struct.unpack(">%dh" % segcount, fp.read(2 * segcount))
                 pos = fp.tell()
-                idrs = cast(
-                    Tuple[int, ...],
-                    struct.unpack(">%dH" % segcount, fp.read(2 * segcount)),
-                )
+                idrs = struct.unpack(">%dH" % segcount, fp.read(2 * segcount))
                 for ec, sc, idd, idr in zip(ecs, scs, idds, idrs):
                     if idr:
                         fp.seek(pos + idr)
                         for c in range(sc, ec + 1):
-                            b = cast(Tuple[int], struct.unpack(">H", fp.read(2)))[0]
+                            b = struct.unpack(">H", fp.read(2))[0]
                             char2gid[c] = (b + idd) & 0xFFFF
                     else:
                         for c in range(sc, ec + 1):

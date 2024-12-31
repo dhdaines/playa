@@ -30,7 +30,6 @@ from typing import (
     Tuple,
     TypeAlias,
     Union,
-    cast,
 )
 
 from playa.exceptions import PDFSyntaxError
