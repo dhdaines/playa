@@ -1,5 +1,6 @@
 ## PLAYA 0.2.7: Unreleased
-
+- Remove excessive debug logging for a considerable speedup
+- Add rendering matrix to `GlyphObject`
 
 ## PLAYA 0.2.6: 2024-12-30
 - Correct some type annotations (these were not really bugs)
