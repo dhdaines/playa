@@ -28,7 +28,6 @@ from typing import (
     Optional,
     TextIO,
     Tuple,
-    TypeAlias,
     Union,
 )
 
@@ -69,7 +68,7 @@ class CMapBase:
 
 
 # The CID map is a sort of trie
-CodeToCIDMap: TypeAlias = Dict[int, Union[int, "CodeToCIDMap"]]
+CodeToCIDMap = Dict[int, Union[int, "CodeToCIDMap"]]
 
 
 class CMap(CMapBase):
