@@ -260,7 +260,6 @@ class Lexer:
                     # PDF 1.7 sec 7.3.4.2: If the character following
                     # the REVERSE SOLIDUS is not one of those shown in
                     # Table 3, the REVERSE SOLIDUS shall be ignored.
-                    log.debug("Unrecognized escape %r", m[0])
                     parts.append(chr)
                 else:
                     parts.append(bytes((ESC_STRING[chr],)))
@@ -351,7 +350,6 @@ class ObjectParser:
             if self.stack and top is None:
                 return self.stack.pop()
             (pos, token) = self.nexttoken()
-            log.debug("token at %d: %r", pos, token)
             if token is KEYWORD_ARRAY_BEGIN:
                 if top is None:
                     top = pos
@@ -456,10 +454,8 @@ class ObjectParser:
                         # Try again with just plain b"EI"
                         self.seek(idpos + len(KEYWORD_ID.name) + 1)
                         (eipos, data) = self.get_inline_data(target=b"EI")
-                        log.debug("data at %d: %r", eipos, data)
                         data = re.sub(rb"(?:\r\n|[\r\n])$", b"", data[: -len(eos)])
                     else:
-                        log.debug("data at %d: %r", eipos, data)
                         data = re.sub(rb"\r$", b"", data[: -len(eos)])
                 else:
                     # Note absence of + 1 here (the "Unless" above)
@@ -474,7 +470,6 @@ class ObjectParser:
                 if eipos == -1:
                     raise PDFSyntaxError("End of inline stream %r not found" % eos)
                 obj = InlineImage(dic, data)
-                log.debug("InlineImage @ %d: %r", pos, obj)
                 # Inline images must occur at the top level, otherwise
                 # something is wrong (probably a corrupt file)
                 assert (
@@ -575,7 +570,6 @@ class IndirectObjectParser:
         obj: Union[PDFObject, ContentStream]
         while True:
             pos, obj = next(self._parser)
-            log.debug("pos %r obj %r stack %r", pos, obj, self.trailer)
             if obj is KEYWORD_OBJ:
                 pass
             elif isinstance(obj, PSKeyword) and obj.name.startswith(b"endobj"):
@@ -641,7 +635,6 @@ class IndirectObjectParser:
                 # marker after the data and before endstream; this
                 # marker shall not be included in the stream length.
                 linepos, line = self._parser.nextline()
-                log.debug("After stream data: %r %r", linepos, line)
                 if self.strict:
                     # In reality there usually is no end-of-line
                     # marker.  We will nonetheless warn if there's
@@ -660,7 +653,6 @@ class IndirectObjectParser:
                         objlen += len(line)
                         data += line
                         linepos, line = self._parser.nextline()
-                        log.debug("After stream data: %r %r", linepos, line)
                         if line == b"":  # Means EOF
                             log.warning(
                                 "Incorrect length for stream, no 'endstream' found"

@@ -165,7 +165,6 @@ class XRefTable:
                 if use_b != b"n":
                     continue
                 self.offsets[objid] = XRefPos(None, int(pos_b), int(genno_b))
-        log.debug("xref objects: %r", self.offsets)
         self._load_trailer(parser)
 
     def _load_trailer(self, parser: ObjectParser) -> None:
@@ -180,7 +179,6 @@ class XRefTable:
             )
         (_, dic) = next(parser)
         self.trailer.update(dict_value(dic))
-        log.debug("trailer=%r", self.trailer)
 
     def __repr__(self) -> str:
         return "<XRefTable: offsets=%r>" % (self.offsets.keys())
@@ -245,7 +243,6 @@ class XRefFallback:
             if token is KEYWORD_TRAILER:
                 _, dic = s2
                 self.trailer.update(dict_value(dic))
-                log.debug("trailer=%r", self.trailer)
                 return
             s1 = s2
         # If not, then try harder
@@ -258,7 +255,6 @@ class XRefFallback:
                 if not isinstance(trailer, dict):
                     break
                 self.trailer.update(trailer)
-                log.debug("trailer=%r", self.trailer)
                 return
         log.warning("b'trailer' not found in document or invalid")
 
@@ -303,13 +299,6 @@ class XRefStream:
         self.data = stream.buffer
         self.entlen = self.fl1 + self.fl2 + self.fl3
         self.trailer = stream.attrs
-        log.debug(
-            "xref stream: objid=%s, fields=%d,%d,%d",
-            ", ".join(map(repr, self.ranges)),
-            self.fl1,
-            self.fl2,
-            self.fl3,
-        )
 
     @property
     def objids(self) -> Iterator[int]:
@@ -1027,7 +1016,6 @@ class Document:
 
     def _getobj_parse(self, pos: int, objid: int) -> PDFObject:
         assert self.parser is not None
-        log.debug("getobj_parse: seeking to %d for objid %d", pos, objid)
         self.parser.seek(pos)
         try:
             _, obj = next(self.parser)
@@ -1053,7 +1041,6 @@ class Document:
                 raise PDFSyntaxError(
                     f"Indirect object {objid!r} not found in document"
                 ) from e
-            log.debug("found object (%r) seeking to %r", m.group(0), realpos)
             self.parser.seek(realpos)
             (_, obj) = next(self.parser)
         if obj.objid != objid:
@@ -1079,14 +1066,12 @@ class Document:
         if not self.xrefs:
             raise ValueError("Document is not initialized")
         if objid not in self._cached_objs:
-            log.debug("getobj: objid=%r", objid)
             obj = None
             for xref in self.xrefs:
                 try:
                     (strmid, index, genno) = xref.get_pos(objid)
                 except KeyError:
                     continue
-                log.debug("getobj: strmid %r index %r genno %r", strmid, index, genno)
                 try:
                     if strmid is not None:
                         stream = stream_value(self[strmid])
@@ -1103,14 +1088,12 @@ class Document:
                     continue
             if obj is None:
                 raise IndexError(f"Object with ID {objid} not found")
-            log.debug("register: objid=%r: %r", objid, obj)
             self._cached_objs[objid] = obj
         return self._cached_objs[objid]
 
     def get_font(self, objid: object, spec: Mapping[str, object]) -> Font:
         if objid and objid in self._cached_fonts:
             return self._cached_fonts[objid]
-        log.debug("get_font: create: objid=%r, spec=%r", objid, spec)
         if spec.get("Type") is not LITERAL_FONT:
             log.warning("Font specification Type is not /Font: %r", spec)
         # Create a Font object.
@@ -1258,11 +1241,9 @@ class Document:
                 log.warning("Page has no Type, trying type: %r", object_properties)
                 object_type = object_properties.get("type")
             if object_type is LITERAL_PAGES and "Kids" in object_properties:
-                log.debug("Pages: Kids=%r", object_properties["Kids"])
                 for child in reversed(list_value(object_properties["Kids"])):
                     stack.append((child, object_properties))
             elif object_type is LITERAL_PAGE:
-                log.debug("Page: %r", object_properties)
                 yield object_id, object_properties
 
     @property
@@ -1320,9 +1301,7 @@ class Document:
         prev = b""
         for pos, line in reverse_iter_lines(self.buffer):
             line = line.strip()
-            log.debug("find_xref: %r", line)
             if line == b"startxref":
-                log.debug("xref found: pos=%r", prev)
                 if not prev.isdigit():
                     log.warning("Invalid startxref position: %r", prev)
                     continue
@@ -1355,7 +1334,6 @@ class Document:
             (pos, token) = parser.nexttoken()
         except StopIteration:
             raise ValueError("Unexpected EOF at {start}")
-        log.debug("read_xref_from: start=%d, token=%r", start, token)
         if token is KEYWORD_XREF:
             parser.nextline()
             xref: XRef = XRefTable(parser)

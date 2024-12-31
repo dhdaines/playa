@@ -663,10 +663,8 @@ class ContentParser(ObjectParser):
         self.streamiter = iter(streams)
         try:
             stream = stream_value(next(self.streamiter))
-            log.debug("ContentParser starting stream %r", stream)
             super().__init__(stream.buffer)
         except StopIteration:
-            log.debug("ContentParser has no content, returning nothing")
             super().__init__(b"")
 
     def nexttoken(self) -> Tuple[int, Token]:
@@ -682,7 +680,6 @@ class ContentParser(ObjectParser):
                 # Will also raise StopIteration if there are no more,
                 # which is exactly what we want
                 stream = stream_value(next(self.streamiter))
-                log.debug("ContentParser starting new stream %r", stream)
                 self.newstream(stream.buffer)
 
 
@@ -763,7 +760,6 @@ class BaseInterpreter:
             raise RuntimeError("Document no longer exists!")
 
         for k, v in dict_value(self.resources).items():
-            log.debug("Resource: %r: %r", k, v)
             if k == "Font":
                 for fontid, spec in dict_value(v).items():
                     objid = None
@@ -1233,12 +1229,6 @@ class PageInterpreter(BaseInterpreter):
             "PageInterpreter is deprecated and will be removed in PLAYA 0.3",
             DeprecationWarning,
         )
-        log.debug(
-            "PageInterpreter: resources=%r, streams=%r, ctm=%r",
-            self.resources,
-            self.contents,
-            self.ctm,
-        )
         parser = ContentParser(self.contents)
         for _, obj in parser:
             # These are handled inside the parser as they don't obey
@@ -1250,7 +1240,6 @@ class PageInterpreter(BaseInterpreter):
                     method, nargs = self._dispatch[obj]
                     if nargs:
                         args = self.pop(nargs)
-                        log.debug("exec: %r %r", obj, args)
                         if len(args) == nargs:
                             gen = method(*args)
                         else:
@@ -1260,7 +1249,6 @@ class PageInterpreter(BaseInterpreter):
                                 obj,
                             )
                     else:
-                        log.debug("exec: %r", obj)
                         gen = method()
                     if gen is not None:
                         yield from gen
@@ -1372,7 +1360,6 @@ class PageInterpreter(BaseInterpreter):
         except KeyError:
             log.debug("Undefined xobject id: %r", xobjid)
             return
-        log.debug("Processing xobj: %r", xobj)
         subtype = xobj.get("Subtype")
         if subtype is LITERAL_FORM and "BBox" in xobj:
             matrix = cast(Matrix, list_value(xobj.get("Matrix", MATRIX_IDENTITY)))
@@ -2187,12 +2174,6 @@ class LazyInterpreter(BaseInterpreter):
     textobj: List[TextItem] = []
 
     def __iter__(self) -> Iterator[ContentObject]:
-        log.debug(
-            "LazyInterpreter: resources=%r, streams=%r, ctm=%r",
-            self.resources,
-            self.contents,
-            self.ctm,
-        )
         parser = ContentParser(self.contents)
         for _, obj in parser:
             # These are handled inside the parser as they don't obey
@@ -2204,7 +2185,6 @@ class LazyInterpreter(BaseInterpreter):
                     method, nargs = self._dispatch[obj]
                     if nargs:
                         args = self.pop(nargs)
-                        log.debug("exec: %r %r", obj, args)
                         if len(args) == nargs:
                             gen = method(*args)
                         else:
@@ -2214,7 +2194,6 @@ class LazyInterpreter(BaseInterpreter):
                                 obj,
                             )
                     else:
-                        log.debug("exec: %r", obj)
                         gen = method()
                     if gen is not None:
                         yield from gen
@@ -2518,7 +2497,6 @@ class LazyInterpreter(BaseInterpreter):
         except TypeError as e:
             log.debug("Empty or invalid xobject with id %r: %s", xobjid, e)
             return
-        log.debug("Processing xobj: %r", xobj)
         subtype = xobj.get("Subtype")
         if subtype is LITERAL_FORM and "BBox" in xobj:
             matrix = cast(Matrix, list_value(xobj.get("Matrix", MATRIX_IDENTITY)))

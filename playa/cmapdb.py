@@ -91,7 +91,6 @@ class CMap(CMapBase):
         copy(self.code2cid, cmap.code2cid)
 
     def decode(self, code: bytes) -> Iterator[int]:
-        log.debug("decode: %r, %r", self, code)
         d = self.code2cid
         for i in iter(code):
             if i in d:
@@ -148,7 +147,6 @@ class UnicodeMap(CMapBase):
         return "<UnicodeMap: %s>" % self.attrs.get("CMapName")
 
     def get_unichr(self, cid: int) -> str:
-        log.debug("get_unichr: %r, %r", self, cid)
         return self.cid2unichr[cid]
 
     def dump(self, out: TextIO = sys.stdout) -> None:
@@ -159,7 +157,6 @@ class UnicodeMap(CMapBase):
 class IdentityUnicodeMap(UnicodeMap):
     def get_unichr(self, cid: int) -> str:
         """Interpret character id as unicode codepoint"""
-        log.debug("get_unichr: %r, %r", self, cid)
         return chr(cid)
 
 
@@ -189,7 +186,6 @@ class CMapDB:
     def _load_data(cls, name: str) -> Any:
         name = name.replace("\0", "")
         filename = "%s.pickle.gz" % name
-        log.debug("loading: %r", name)
         cmap_paths = (
             os.environ.get("CMAP_PATH", "/usr/share/pdfminer/"),
             os.path.join(os.path.dirname(__file__), "cmap"),
@@ -310,11 +306,10 @@ def parse_tounicode(data: bytes) -> FileUnicodeMap:
     while True:
         try:
             pos, obj = next(parser)
-        except PDFSyntaxError as e:
+        except PDFSyntaxError:
             # CMap syntax is apparently not PDF syntax (e.g. "def"
             # seems to occur within dictionaries, for no apparent
             # reason, perhaps a PostScript thing?)
-            log.debug("Ignoring syntax error: %s", e)
             parser.reset()
             continue
         except StopIteration:
@@ -323,7 +318,6 @@ def parse_tounicode(data: bytes) -> FileUnicodeMap:
         if not isinstance(obj, PSKeyword):
             stack.append(obj)
             continue
-        log.debug("keyword: %r (%r)", obj, stack)
         # Ignore everything outside begincmap / endcmap
         if obj is KEYWORD_BEGINCMAP:
             in_cmap = True
@@ -487,8 +481,7 @@ def parse_encoding(data: bytes) -> EncodingCMap:
     while True:
         try:
             pos, obj = next(parser)
-        except PDFSyntaxError as e:
-            log.debug("Ignoring syntax error: %s", e)
+        except PDFSyntaxError:
             parser.reset()
             continue
         except StopIteration:
@@ -497,7 +490,6 @@ def parse_encoding(data: bytes) -> EncodingCMap:
         if not isinstance(obj, PSKeyword):
             stack.append(obj)
             continue
-        log.debug("keyword: %r (%r)", obj, stack)
 
         if obj is KEYWORD_DEF:
             try:
