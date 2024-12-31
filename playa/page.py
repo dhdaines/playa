@@ -2000,12 +2000,16 @@ class GlyphObject(ContentObject):
       cid: Character ID for this glyph.
       text: Unicode mapping of this glyph, if any.
       adv: glyph displacement in user space units.
+      matrix: rendering matrix for this glyph, which transforms text
+              space (*not glyph space!*) coordinates to device space.
       bbox: glyph bounding box in device space.
+
     """
 
     textstate: TextState
     cid: int
     text: Union[str, None]
+    matrix: Matrix
     adv: float
     _bbox: Rect
 
@@ -2069,7 +2073,15 @@ class TextObject(ContentObject):
             x1, y1 = (adv, descent + rise + fontsize)
         bbox = get_transformed_bound(matrix, (x0, y0, x1, y1))
         return GlyphObject(
-            self.gstate, self.ctm, self.mcs, self.textstate, cid, text, adv, bbox
+            gstate=self.gstate,
+            ctm=self.ctm,
+            mcs=self.mcs,
+            textstate=self.textstate,
+            cid=cid,
+            text=text,
+            matrix=matrix,
+            adv=adv,
+            _bbox=bbox,
         )
 
     def _render_string(self, item: TextItem) -> Iterator[GlyphObject]:
