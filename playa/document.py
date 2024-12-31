@@ -27,7 +27,6 @@ from typing import (
     Sequence,
     Tuple,
     Union,
-    cast,
 )
 
 try:
@@ -293,7 +292,8 @@ class XRefStream:
         index_array = stream.get("Index", (0, size))
         if len(index_array) % 2 != 0:
             raise PDFSyntaxError("Invalid index number")
-        self.ranges.extend(cast(Iterator[Tuple[int, int]], choplist(2, index_array)))
+        for start, end in choplist(2, index_array):
+            self.ranges.append((int_value(start), int_value(end)))
         (self.fl1, self.fl2, self.fl3) = stream["W"]
         assert self.fl1 is not None and self.fl2 is not None and self.fl3 is not None
         self.data = stream.buffer
@@ -416,7 +416,8 @@ class PDFStandardSecurityHandler:
         hash.update(struct.pack("<L", self.p))  # 4
         hash.update(self.docid[0])  # 5
         if self.r >= 4:
-            if not cast(PDFStandardSecurityHandlerV4, self).encrypt_metadata:
+            assert isinstance(self, PDFStandardSecurityHandlerV4)
+            if not self.encrypt_metadata:
                 hash.update(b"\xff\xff\xff\xff")
         result = hash.digest()
         n = 5
@@ -971,6 +972,7 @@ class Document:
             "The layout property has moved to PAVÉS (https://github.com/dhdaines/paves) and will be removed in PLAYA 0.3",
             DeprecationWarning,
         )
+        from typing import cast
         for idx, page in enumerate(self.pages):
             for dic in page.layout:
                 dic = cast(LayoutDict, dic)  # ugh

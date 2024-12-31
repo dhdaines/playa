@@ -22,7 +22,6 @@ from typing import (
     Optional,
     Sequence,
     Union,
-    cast,
 )
 
 
@@ -568,11 +567,12 @@ class CCITTFaxDecoder(CCITTG4Parser):
 
 
 def ccittfaxdecode(data: bytes, params: Dict[str, object]) -> bytes:
+    from playa.pdftypes import int_value
     K = params.get("K")
     if K == -1:
-        cols = cast(int, params.get("Columns"))
-        bytealign = cast(bool, params.get("EncodedByteAlign"))
-        reversed = cast(bool, params.get("BlackIs1"))
+        cols = int_value(params.get("Columns"))
+        bytealign = not not params.get("EncodedByteAlign")
+        reversed = not not params.get("BlackIs1")
         parser = CCITTFaxDecoder(cols, bytealign=bytealign, reversed=reversed)
     else:
         raise ValueError(K)

@@ -1,6 +1,6 @@
 import logging
 import re
-from typing import Dict, Iterable, Optional, cast
+from typing import Dict, Iterable, Optional
 
 from playa.glyphlist import glyphname2unicode
 from playa.latin_enc import ENCODING
@@ -118,7 +118,7 @@ class EncodingDB:
                     cid = x
                 elif isinstance(x, PSLiteral):
                     try:
-                        cid2unicode[cid] = name2unicode(cast(str, x.name))
+                        cid2unicode[cid] = name2unicode(x.name)
                     except (KeyError, ValueError) as e:
                         log.debug("Failed to get char %r: %s", x, e)
                     cid += 1

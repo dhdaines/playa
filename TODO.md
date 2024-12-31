@@ -1,5 +1,4 @@
 ## PLAYA 0.2.x
-- [ ] Add `matrix` to `GlyphObject` as it is often needed
 - [ ] Fix ToUnicode CMaps for CID fonts (file bug against pdfminer)
 - [ ] Optimize text extraction
 - [ ] Support slices and lists in `PageList.__getitem__`

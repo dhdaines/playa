@@ -29,7 +29,6 @@ from typing import (
     TextIO,
     Tuple,
     Union,
-    cast,
 )
 
 from playa.exceptions import PDFSyntaxError
@@ -68,10 +67,14 @@ class CMapBase:
         raise NotImplementedError
 
 
+# The CID map is a sort of trie
+CodeToCIDMap = Dict[int, Union[int, "CodeToCIDMap"]]
+
+
 class CMap(CMapBase):
     def __init__(self, **kwargs: Union[str, int]) -> None:
         CMapBase.__init__(self, **kwargs)
-        self.code2cid: Dict[int, object] = {}
+        self.code2cid: CodeToCIDMap = {}
 
     def __repr__(self) -> str:
         return "<CMap: %s>" % self.attrs.get("CMapName")
@@ -79,14 +82,14 @@ class CMap(CMapBase):
     def use_cmap(self, cmap: CMapBase) -> None:
         assert isinstance(cmap, CMap), str(type(cmap))
 
-        def copy(dst: Dict[int, object], src: Dict[int, object]) -> None:
+        def copy(dst: CodeToCIDMap, src: CodeToCIDMap) -> None:
             for k, v in src.items():
-                if isinstance(v, dict):
-                    d: Dict[int, object] = {}
+                if isinstance(v, int):
+                    dst[k] = v
+                else:
+                    d: CodeToCIDMap = {}
                     dst[k] = d
                     copy(d, v)
-                else:
-                    dst[k] = v
 
         copy(self.code2cid, cmap.code2cid)
 
@@ -99,14 +102,14 @@ class CMap(CMapBase):
                     yield x
                     d = self.code2cid
                 else:
-                    d = cast(Dict[int, object], x)
+                    d = x
             else:
                 d = self.code2cid
 
     def dump(
         self,
         out: TextIO = sys.stdout,
-        code2cid: Optional[Dict[int, object]] = None,
+        code2cid: Optional[CodeToCIDMap] = None,
         code: Tuple[int, ...] = (),
     ) -> None:
         if code2cid is None:
@@ -117,7 +120,7 @@ class CMap(CMapBase):
             if isinstance(v, int):
                 out.write("code %r = cid %d\n" % (c, v))
             else:
-                self.dump(out=out, code2cid=cast(Dict[int, object], v), code=c)
+                self.dump(out=out, code2cid=v, code=c)
 
 
 class IdentityCMap(CMapBase):
