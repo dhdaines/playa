@@ -73,7 +73,7 @@ testpaths = [ "tests" ]
 extra-dependencies = [ "cryptography", "pdfminer.six", "pandas", "polars-lts-cpu" ]
 
 [tool.hatch.envs.default]
-dependencies = [ "cryptography", "pytest", "mypy", "pdfminer.six", "pandas", "polars-lts-cpu" ]
+dependencies = [ "cryptography", "pytest", "pdfminer.six", "pandas", "polars-lts-cpu" ]
 
 [tool.hatch.envs.default.scripts]
 bench = [
@@ -90,3 +90,10 @@ dependencies = [
 [tool.hatch.envs.docs.scripts]
 build = "mkdocs build"
 serve = "mkdocs serve"
+
+[tool.hatch.envs.types]
+extra-dependencies = [
+  "mypy>=1.0.0",
+]
+[tool.hatch.envs.types.scripts]
+check = "mypy --install-types --non-interactive {args:playa tests benchmarks}"

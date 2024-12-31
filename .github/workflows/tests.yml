@@ -15,7 +15,7 @@ jobs:
       - name: Install Hatch
         uses: pypa/hatch@install
       - name: Check types with mypy
-        run: hatch run mypy --install-types --non-interactive playa
+        run: hatch run types:check
   test:
     strategy:
       fail-fast: true
