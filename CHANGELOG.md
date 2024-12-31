@@ -1,3 +1,6 @@
+## PLAYA 0.2.7: Unreleased
+
+
 ## PLAYA 0.2.6: 2024-12-30
 - Correct some type annotations (these were not really bugs)
 - Handle more CMap and ToUnicode corner cases
