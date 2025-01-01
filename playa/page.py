@@ -2011,7 +2011,7 @@ class GlyphObject(ContentObject):
     text: Union[str, None]
     matrix: Matrix
     adv: float
-    _bbox: Rect
+    rotated: bool
 
     def __len__(self) -> int:
         """Fool! You cannot iterate over a GlyphObject!"""
@@ -2019,7 +2019,38 @@ class GlyphObject(ContentObject):
 
     @property
     def bbox(self) -> Rect:
-        return self._bbox
+        tstate = self.textstate
+        font = tstate.font
+        assert font is not None
+        if font.vertical:
+            textdisp = font.char_disp(self.cid)
+            assert isinstance(textdisp, tuple)
+            (vx, vy) = textdisp
+            if vx is None:
+                vx = tstate.fontsize * 0.5
+            else:
+                vx = vx * tstate.fontsize * 0.001
+            vy = (1000 - vy) * tstate.fontsize * 0.001
+            x0, y0 = (-vx, vy + tstate.rise + self.adv)
+            x1, y1 = (-vx + tstate.fontsize, vy + tstate.rise)
+        else:
+            descent = font.get_descent() * tstate.fontsize
+            x0, y0 = (0, descent + tstate.rise)
+            x1, y1 = (self.adv, descent + tstate.rise + tstate.fontsize)
+
+        if self.rotated:
+            return get_bound((apply_matrix_pt(self.matrix, (x0, y0)),
+                              apply_matrix_pt(self.matrix, (x0, y1)),
+                              apply_matrix_pt(self.matrix, (x1, y1)),
+                              apply_matrix_pt(self.matrix, (x1, y0)),))
+        else:
+            x0, y0 = apply_matrix_pt(self.matrix, (x0, y0))
+            x1, y1 = apply_matrix_pt(self.matrix, (x1, y1))
+            if x1 < x0:
+                x0, x1 = x1, x0
+            if y1 < y0:
+                y0, y1 = y1, y0
+            return (x0, y0, x1, y1)
 
 
 @dataclass
@@ -2036,53 +2067,6 @@ class TextObject(ContentObject):
     textstate: TextState
     items: List[TextItem]
     _chars: Union[List[str], None] = None
-
-    def _render_char(
-        self,
-        *,
-        cid: int,
-        matrix: Matrix,
-        scaling: float,
-    ) -> GlyphObject:
-        font = self.textstate.font
-        assert font is not None
-        fontsize = self.textstate.fontsize
-        rise = self.textstate.rise
-        try:
-            text = font.to_unichr(cid)
-            assert isinstance(text, str), f"Text {text!r} is not a str"
-        except PDFUnicodeNotDefined:
-            log.debug("undefined char: %r, %r", font, cid)
-            text = None
-        textwidth = font.char_width(cid)
-        adv = textwidth * fontsize * scaling
-        if font.vertical:
-            textdisp = font.char_disp(cid)
-            assert isinstance(textdisp, tuple)
-            (vx, vy) = textdisp
-            if vx is None:
-                vx = fontsize * 0.5
-            else:
-                vx = vx * fontsize * 0.001
-            vy = (1000 - vy) * fontsize * 0.001
-            x0, y0 = (-vx, vy + rise + adv)
-            x1, y1 = (-vx + fontsize, vy + rise)
-        else:
-            descent = font.get_descent() * fontsize
-            x0, y0 = (0, descent + rise)
-            x1, y1 = (adv, descent + rise + fontsize)
-        bbox = get_transformed_bound(matrix, (x0, y0, x1, y1))
-        return GlyphObject(
-            gstate=self.gstate,
-            ctm=self.ctm,
-            mcs=self.mcs,
-            textstate=self.textstate,
-            cid=cid,
-            text=text,
-            matrix=matrix,
-            adv=adv,
-            _bbox=bbox,
-        )
 
     def _render_string(self, item: TextItem) -> Iterator[GlyphObject]:
         tstate = self.textstate
@@ -2103,9 +2087,9 @@ class TextObject(ContentObject):
         (x, y) = tstate.glyph_offset
         pos = y if vert else x
         needcharspace = False
-        dxscale = 0.001 * tstate.fontsize * scaling
         for obj in item.args:
             if isinstance(obj, (int, float)):
+                dxscale = 0.001 * tstate.fontsize * scaling
                 pos -= obj * dxscale
                 needcharspace = True
             else:
@@ -2124,37 +2108,7 @@ class TextObject(ContentObject):
                         text = None
                     textwidth = font.char_width(cid)
                     adv = textwidth * tstate.fontsize * scaling
-                    if font.vertical:
-                        textdisp = font.char_disp(cid)
-                        assert isinstance(textdisp, tuple)
-                        (vx, vy) = textdisp
-                        if vx is None:
-                            vx = tstate.fontsize * 0.5
-                        else:
-                            vx = vx * tstate.fontsize * 0.001
-                        vy = (1000 - vy) * tstate.fontsize * 0.001
-                        x0, y0 = (-vx, vy + tstate.rise + adv)
-                        x1, y1 = (-vx + tstate.fontsize, vy + tstate.rise)
-                    else:
-                        descent = font.get_descent() * tstate.fontsize
-                        x0, y0 = (0, descent + tstate.rise)
-                        x1, y1 = (adv, descent + tstate.rise + tstate.fontsize)
-                    # Do pre-translation internally (taking rotation into account)
                     x, y = tstate.glyph_offset
-                    render_matrix = (a, b, c, d, x * a + y * c + e, x * b + y * d + f)
-                    if rotated:
-                        bbox = get_bound((apply_matrix_pt(render_matrix, (x0, y0)),
-                                          apply_matrix_pt(render_matrix, (x0, y1)),
-                                          apply_matrix_pt(render_matrix, (x1, y1)),
-                                          apply_matrix_pt(render_matrix, (x1, y0)),))
-                    else:
-                        x0, y0 = apply_matrix_pt(render_matrix, (x0, y0))
-                        x1, y1 = apply_matrix_pt(render_matrix, (x1, y1))
-                        if x1 < x0:
-                            x0, x1 = x1, x0
-                        if y1 < y0:
-                            y0, y1 = y1, y0
-                        bbox = (x0, y0, x1, y1)
                     glyph = GlyphObject(
                         gstate=self.gstate,
                         ctm=self.ctm,
@@ -2162,12 +2116,13 @@ class TextObject(ContentObject):
                         textstate=tstate,
                         cid=cid,
                         text=text,
-                        matrix=render_matrix,
+                        # Do pre-translation internally (taking rotation into account)
+                        matrix=(a, b, c, d, x * a + y * c + e, x * b + y * d + f),
                         adv=adv,
-                        _bbox=bbox,
+                        rotated=rotated,
                     )
-                    pos += glyph.adv
                     yield glyph
+                    pos += adv
                     if cid == 32 and wordspace:
                         pos += wordspace
                     needcharspace = True
