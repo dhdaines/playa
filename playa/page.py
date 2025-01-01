@@ -2003,8 +2003,9 @@ class GlyphObject(ContentObject):
       matrix: rendering matrix for this glyph, which transforms text
               space (*not glyph space!*) coordinates to device space.
       bbox: glyph bounding box in device space.
-      rotated: is this glyph rotated (derived from matrix but pre-
-               calculated over text objects for speed)
+      corners: Is the transformed bounding box rotated or skewed such
+               that all four corners need to be calculated (derived
+               from matrix but precomputed for speed)
 
     """
 
@@ -2013,7 +2014,7 @@ class GlyphObject(ContentObject):
     text: Union[str, None]
     matrix: Matrix
     adv: float
-    rotated: bool
+    corners: bool
 
     def __len__(self) -> int:
         """Fool! You cannot iterate over a GlyphObject!"""
@@ -2040,7 +2041,7 @@ class GlyphObject(ContentObject):
             x0, y0 = (0, descent + tstate.rise)
             x1, y1 = (self.adv, descent + tstate.rise + tstate.fontsize)
 
-        if self.rotated:
+        if self.corners:
             return get_bound((apply_matrix_pt(self.matrix, (x0, y0)),
                               apply_matrix_pt(self.matrix, (x0, y1)),
                               apply_matrix_pt(self.matrix, (x1, y1)),
@@ -2079,7 +2080,7 @@ class TextObject(ContentObject):
         # Extract all the elements so we can translate efficiently
         a, b, c, d, e, f = mult_matrix(tstate.line_matrix, self.ctm)
         # Pre-determine if we need to recompute the bound for rotated glyphs
-        rotated = b < 0 and c < 0
+        corners = a * b < 0 or d * c < 0
         # Apply horizontal scaling
         scaling = tstate.scaling * 0.01
         charspace = tstate.charspace * scaling
@@ -2121,7 +2122,7 @@ class TextObject(ContentObject):
                         # Do pre-translation internally (taking rotation into account)
                         matrix=(a, b, c, d, x * a + y * c + e, x * b + y * d + f),
                         adv=adv,
-                        rotated=rotated,
+                        corners=corners,
                     )
                     yield glyph
                     pos += adv
