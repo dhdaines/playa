@@ -2003,6 +2003,8 @@ class GlyphObject(ContentObject):
       matrix: rendering matrix for this glyph, which transforms text
               space (*not glyph space!*) coordinates to device space.
       bbox: glyph bounding box in device space.
+      rotated: is this glyph rotated (derived from matrix but pre-
+               calculated over text objects for speed)
 
     """
 
