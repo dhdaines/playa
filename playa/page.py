@@ -2079,7 +2079,7 @@ class TextObject(ContentObject):
         # Extract all the elements so we can translate efficiently
         a, b, c, d, e, f = mult_matrix(tstate.line_matrix, self.ctm)
         # Pre-determine if we need to recompute the bound for rotated glyphs
-        corners = a * b < 0 or d * c < 0
+        corners = b * d < 0 or a * c < 0
         # Apply horizontal scaling
         scaling = tstate.scaling * 0.01
         charspace = tstate.charspace * scaling

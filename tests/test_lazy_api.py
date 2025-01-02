@@ -2,6 +2,7 @@
 Test the ContentObject API for pages.
 """
 
+import itertools
 from pathlib import Path
 
 import pytest
@@ -9,6 +10,7 @@ import pytest
 import playa
 from playa.color import PREDEFINED_COLORSPACE, Color
 from playa.exceptions import PDFEncryptionError
+from playa.utils import get_transformed_bound, get_bound, apply_matrix_pt
 
 from .data import TESTDIR, ALLPDFS, PASSWORDS, XFAILS, CONTRIB
 
@@ -104,3 +106,16 @@ def test_rotated_glyphs() -> None:
                     width = x1 - x0
                     assert width > 6
         assert "".join(chars) == "R18,00"
+
+
+def test_rotated_bboxes() -> None:
+    """Verify that rotated bboxes are correctly calculated."""
+    points = ((0, 0), (0, 100), (100, 100), (100, 0))
+    bbox = (0, 0, 100, 100)
+    # Test all possible sorts of CTM
+    vals = (-1, -0.5, 0, 0.5, 1)
+    for matrix in itertools.product(vals, repeat=4):
+        ctm = (*matrix, 0, 0)
+        gtb = get_transformed_bound(ctm, bbox)
+        bound = get_bound((apply_matrix_pt(ctm, p) for p in points))
+        assert gtb == bound

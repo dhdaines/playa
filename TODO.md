@@ -1,8 +1,8 @@
 ## PLAYA 0.2.x
 - [ ] Fix ToUnicode CMaps for CID fonts (file bug against pdfminer)
-- [ ] Optimize text extraction
+- [x] Optimize text extraction
 - [ ] Support slices and lists in `PageList.__getitem__`
-- [ ] Remove remaining dangerous `cast` usage
+- [x] Remove remaining dangerous `cast` usage
 
 ## PLAYA 0.3.x
 - [ ] remove `LayoutDict`
