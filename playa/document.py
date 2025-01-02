@@ -973,6 +973,7 @@ class Document:
             DeprecationWarning,
         )
         from typing import cast
+
         for idx, page in enumerate(self.pages):
             for dic in page.layout:
                 dic = cast(LayoutDict, dic)  # ugh

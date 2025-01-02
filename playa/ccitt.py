@@ -568,6 +568,7 @@ class CCITTFaxDecoder(CCITTG4Parser):
 
 def ccittfaxdecode(data: bytes, params: Dict[str, object]) -> bytes:
     from playa.pdftypes import int_value
+
     K = params.get("K")
     if K == -1:
         cols = int_value(params.get("Columns"))

@@ -1623,12 +1623,11 @@ class PageInterpreter(BaseInterpreter):
             x1, y1 = (adv, descent + rise + fontsize)
         (a, b, c, d, e, f) = matrix
         upright = a * d * scaling > 0 and b * c <= 0
-        x0, y0, x1, y1 = get_transformed_bound(matrix, (x0, y0, x1, y1))
-        # NOTE: This is not right at all for rotated text, but we'll live with it
         if font.vertical:
-            size = x1 - x0
+            size = abs(fontsize * a)
         else:
-            size = y1 - y0
+            size = abs(fontsize * d)
+        x0, y0, x1, y1 = get_transformed_bound(matrix, (x0, y0, x1, y1))
         glyph_x, glyph_y = apply_matrix_norm(self.ctm, self.textstate.glyph_offset)
         item = LayoutDict(
             object_type="char",
@@ -2042,10 +2041,14 @@ class GlyphObject(ContentObject):
             x1, y1 = (self.adv, descent + tstate.rise + tstate.fontsize)
 
         if self.corners:
-            return get_bound((apply_matrix_pt(self.matrix, (x0, y0)),
-                              apply_matrix_pt(self.matrix, (x0, y1)),
-                              apply_matrix_pt(self.matrix, (x1, y1)),
-                              apply_matrix_pt(self.matrix, (x1, y0)),))
+            return get_bound(
+                (
+                    apply_matrix_pt(self.matrix, (x0, y0)),
+                    apply_matrix_pt(self.matrix, (x0, y1)),
+                    apply_matrix_pt(self.matrix, (x1, y1)),
+                    apply_matrix_pt(self.matrix, (x1, y0)),
+                )
+            )
         else:
             x0, y0 = apply_matrix_pt(self.matrix, (x0, y0))
             x1, y1 = apply_matrix_pt(self.matrix, (x1, y1))
@@ -2080,7 +2083,7 @@ class TextObject(ContentObject):
         # Extract all the elements so we can translate efficiently
         a, b, c, d, e, f = mult_matrix(tstate.line_matrix, self.ctm)
         # Pre-determine if we need to recompute the bound for rotated glyphs
-        corners = a * b < 0 or d * c < 0
+        corners = b * d < 0 or a * c < 0
         # Apply horizontal scaling
         scaling = tstate.scaling * 0.01
         charspace = tstate.charspace * scaling
