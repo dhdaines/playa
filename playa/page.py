@@ -2041,10 +2041,14 @@ class GlyphObject(ContentObject):
             x1, y1 = (self.adv, descent + tstate.rise + tstate.fontsize)
 
         if self.corners:
-            return get_bound((apply_matrix_pt(self.matrix, (x0, y0)),
-                              apply_matrix_pt(self.matrix, (x0, y1)),
-                              apply_matrix_pt(self.matrix, (x1, y1)),
-                              apply_matrix_pt(self.matrix, (x1, y0)),))
+            return get_bound(
+                (
+                    apply_matrix_pt(self.matrix, (x0, y0)),
+                    apply_matrix_pt(self.matrix, (x0, y1)),
+                    apply_matrix_pt(self.matrix, (x1, y1)),
+                    apply_matrix_pt(self.matrix, (x1, y0)),
+                )
+            )
         else:
             x0, y0 = apply_matrix_pt(self.matrix, (x0, y0))
             x1, y1 = apply_matrix_pt(self.matrix, (x1, y1))

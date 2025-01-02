@@ -95,7 +95,10 @@ def get_widths2(seq: Iterable[PDFObject]) -> Dict[int, Tuple[float, Point]]:
             if r:
                 char1 = r[-1]
                 for i, (w, vx, vy) in enumerate(choplist(3, v)):
-                    widths[int(char1) + i] = (num_value(w), (int_value(vx), int_value(vy)))
+                    widths[int(char1) + i] = (
+                        num_value(w),
+                        (int_value(vx), int_value(vy)),
+                    )
                 r = []
         elif isinstance(v, (int, float)):  # == utils.isnumber(v)
             r.append(v)
@@ -685,7 +688,9 @@ class CFFFont:
         if format == b"\x00":
             # Format 0
             n = self.nglyphs - 1
-            for gid, sid in enumerate(struct.unpack(">" + "H" * n, self.fp.read(2 * n))):
+            for gid, sid in enumerate(
+                struct.unpack(">" + "H" * n, self.fp.read(2 * n))
+            ):
                 gid += 1
                 sidname = self.getstr(sid)
                 self.name2gid[sidname] = gid
@@ -724,7 +729,9 @@ class TrueTypeFont:
         try:
             (ntables, _1, _2, _3) = struct.unpack(">HHHH", fp.read(8))
             for _ in range(ntables):
-                (name_bytes, tsum, offset, length) = struct.unpack(">4sLLL", fp.read(16))
+                (name_bytes, tsum, offset, length) = struct.unpack(
+                    ">4sLLL", fp.read(16)
+                )
                 self.tables[name_bytes] = (offset, length)
         except struct.error:
             # Do not fail if there are not enough bytes to read. Even for
@@ -759,7 +766,9 @@ class TrueTypeFont:
                 nhdrs = max(subheaderkeys) // 8 + 1
                 hdrs: List[Tuple[int, int, int, int, int]] = []
                 for i in range(nhdrs):
-                    (firstcode, entcount, delta, offset) = struct.unpack(">HHhH", fp.read(8))
+                    (firstcode, entcount, delta, offset) = struct.unpack(
+                        ">HHhH", fp.read(8)
+                    )
                     hdrs.append((i, firstcode, entcount, delta, fp.tell() - 2 + offset))
                 for i, firstcode, entcount, delta, pos in hdrs:
                     if not entcount:
