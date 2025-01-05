@@ -361,6 +361,9 @@ class TextState:
         want to use this to detect invisible text.
       rise: The text rise (superscript or subscript position), in text
         space units.
+      descent: The font's descent (scaled by the font size), in text
+        space units (this is not really part of the text state but is
+        kept here to avoid recomputing it on every glyph)
     """
 
     line_matrix: Matrix = MATRIX_IDENTITY
@@ -373,6 +376,7 @@ class TextState:
     leading: float = 0
     render_mode: int = 0
     rise: float = 0
+    descent: float = 0
 
     def reset(self) -> None:
         """Reset the text state"""
@@ -394,6 +398,7 @@ class TextState:
         elif operator == "Tf":
             self.font = cast(Font, args[0])
             self.fontsize = cast(float, args[1])
+            self.descent = self.font.get_descent() * self.fontsize
         elif operator == "Tr":
             self.render_mode = cast(int, args[0])
         elif operator == "Ts":
@@ -1087,6 +1092,7 @@ class BaseInterpreter:
                 raise RuntimeError("Document no longer exists!")
             self.textstate.font = doc.get_font(None, {})
         self.textstate.fontsize = num_value(fontsize)
+        self.textstate.descent = self.textstate.font.get_descent() * self.textstate.fontsize
 
     def do_Tr(self, render: PDFObject) -> None:
         """Set the text rendering mode"""
@@ -1618,9 +1624,8 @@ class PageInterpreter(BaseInterpreter):
             x0, y0 = (-vx, vy + rise + adv)
             x1, y1 = (-vx + fontsize, vy + rise)
         else:
-            descent = font.get_descent() * fontsize
-            x0, y0 = (0, descent + rise)
-            x1, y1 = (adv, descent + rise + fontsize)
+            x0, y0 = (0, self.textstate.descent + rise)
+            x1, y1 = (adv, self.textstate.descent + rise + fontsize)
         (a, b, c, d, e, f) = matrix
         upright = a * d * scaling > 0 and b * c <= 0
         if font.vertical:
@@ -1998,7 +2003,8 @@ class GlyphObject(ContentObject):
         context of iteration over the parent `TextObject`.
       cid: Character ID for this glyph.
       text: Unicode mapping of this glyph, if any.
-      adv: glyph displacement in user space units.
+      adv: glyph displacement in text space units (horizontal or vertical,
+           depending on the writing direction).
       matrix: rendering matrix for this glyph, which transforms text
               space (*not glyph space!*) coordinates to device space.
       bbox: glyph bounding box in device space.
@@ -2036,9 +2042,8 @@ class GlyphObject(ContentObject):
             x0, y0 = (-vx, vy + tstate.rise + self.adv)
             x1, y1 = (-vx + tstate.fontsize, vy + tstate.rise)
         else:
-            descent = font.get_descent() * tstate.fontsize
-            x0, y0 = (0, descent + tstate.rise)
-            x1, y1 = (self.adv, descent + tstate.rise + tstate.fontsize)
+            x0, y0 = (0, tstate.descent + tstate.rise)
+            x1, y1 = (self.adv, tstate.descent + tstate.rise + tstate.fontsize)
 
         if self.corners:
             return get_bound(
