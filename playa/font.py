@@ -927,9 +927,8 @@ class SimpleFont(Font):
             log.debug("decode with ToUnicodeMap: %r", data)
             return zip(data, self.tounicode.decode(data))
         else:
-            # Default to an Identity map
-            log.debug("decode with identity: %r", data)
-            return ((cid, chr(cid)) for cid in data)
+            log.debug("decode with BaseEncoding: %r", data)
+            return ((cid, self.cid2unicode.get(cid, "")) for cid in data)
 
 
 class Type1Font(SimpleFont):
