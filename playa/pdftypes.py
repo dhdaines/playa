@@ -231,14 +231,14 @@ def resolve_all(x: object, default: object = None) -> Any:
     create circular references if they exist, so beware.
     """
 
-    def resolver(x: object, default: object, seen: Dict[ObjRef, object]) -> Any:
-        while isinstance(x, ObjRef):
-            if x.objid in seen:
-                return seen[x.objid]
-            seen[x.objid] = x.resolve(default=default)
-            x = seen[x.objid]
-        k: Any
-        v: Any
+    def resolver(x: object, default: object, seen: Dict[int, object]) -> Any:
+        if isinstance(x, ObjRef):
+            ref = x
+            while isinstance(x, ObjRef):
+                if x.objid in seen:
+                    return seen[x.objid]
+                x = x.resolve(default=default)
+            seen[ref.objid] = x
         if isinstance(x, list):
             return [resolver(v, default, seen) for v in x]
         elif isinstance(x, dict):
