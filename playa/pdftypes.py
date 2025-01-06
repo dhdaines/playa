@@ -194,6 +194,9 @@ class ObjRef:
             otherdoc = other.doc()
             return selfdoc is otherdoc and self.objid == other.objid
 
+    def __hash__(self) -> int:
+        return self.objid
+
     def __repr__(self) -> str:
         return "<ObjRef:%d>" % (self.objid)
 
@@ -221,19 +224,30 @@ def resolve1(x: object, default: object = None) -> Any:
 
 
 def resolve_all(x: object, default: object = None) -> Any:
-    """Recursively resolves the given object and all the internals.
+    """Resolves all indirect object references inside the given object.
 
-    Make sure there is no indirect reference within the nested object.
-    This procedure might be slow.
+    This will happily create circular references, so beware.
     """
-    while isinstance(x, ObjRef):
-        x = x.resolve(default=default)
-    if isinstance(x, list):
-        x = [resolve_all(v, default=default) for v in x]
-    elif isinstance(x, dict):
-        for k, v in x.items():
-            x[k] = resolve_all(v, default=default)
-    return x
+
+    def resolver(x: object, default: object, seen: Dict[ObjRef, object]) -> Any:
+        if isinstance(x, ObjRef):
+            if x in seen:
+                return seen[x]
+            ref = x
+            while isinstance(x, ObjRef):
+                x = x.resolve(default=default)
+            seen[ref] = x
+        if isinstance(x, list):
+            x = [resolver(v, default, seen) for v in x]
+        elif isinstance(x, dict):
+            for k, v in x.items():
+                x[k] = resolver(v, default, seen)
+        elif isinstance(x, ContentStream):
+            for k, v in x.attrs.items():
+                x.attrs[k] = resolver(v, default, seen)
+        return x
+
+    return resolver(x, default, {})
 
 
 def decipher_all(decipher: DecipherCallable, objid: int, genno: int, x: object) -> Any:

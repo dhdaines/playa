@@ -128,7 +128,7 @@ class Page:
       cropbox: the crop rectangle of the page.
       rotate: the page rotation (in degree).
       label: the page's label (typically, the logical page number).
-      page_number: the "physical" page number, indexed from 1.
+      page_idx: 0-based index of the page in the document.
       ctm: coordinate transformation matrix from default user space to
            page's device space
     """

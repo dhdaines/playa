@@ -942,8 +942,10 @@ class Document:
 
     @property
     def objects(self) -> Iterator[IndirectObject]:
-        """Iterate over all indirect objects (expanding object streams)"""
+        """Iterate over all indirect objects (including, then expanding object
+        streams)"""
         for pos, obj in IndirectObjectParser(self.buffer, self):
+            yield obj
             if (
                 isinstance(obj.obj, ContentStream)
                 and obj.obj.get("Type") is LITERAL_OBJSTM
@@ -951,8 +953,6 @@ class Document:
                 parser = ObjectStreamParser(obj.obj, self)
                 for spos, sobj in parser:
                     yield sobj
-            else:
-                yield (obj)
 
     @property
     def tokens(self) -> Iterator[Token]:

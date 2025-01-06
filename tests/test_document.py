@@ -69,7 +69,7 @@ def test_object_streams():
     """Test iterating inside object streams."""
     with playa.open(TESTDIR / "simple5.pdf") as doc:
         objs = list(doc.objects)
-        assert len(objs) == 52
+        assert len(objs) == 53
 
 
 @pytest.mark.skipif(not CONTRIB.exists(), reason="contrib samples not present")
