@@ -799,7 +799,7 @@ class TrueTypeFontProgram:
         tounicode = ToUnicodeMap()
         tounicode.add_code_range(b"\x00\x00", b"\xff\xff")
         for char, gid in char2gid.items():
-            tounicode.add_cid2code(gid, char, 2)
+            tounicode.add_code2code(gid, char, 2)
         return tounicode
 
 

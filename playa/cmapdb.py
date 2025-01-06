@@ -39,7 +39,7 @@ from playa.parser import (
     PSKeyword,
     literal_name,
 )
-from playa.utils import choplist, nunpack
+from playa.utils import choplist
 
 log = logging.getLogger(__name__)
 
@@ -309,19 +309,16 @@ class ToUnicodeMap:
                 yield chr(code[idx])
                 idx += 1
 
-    def add_cid2bytes(self, cid: int, utf16: bytes, codelen: int) -> None:
-        self.add_cid2unichr(cid, decode_utf16_char(utf16), codelen)
+    def add_code2bytes(self, code: int, utf16: bytes, codelen: int) -> None:
+        self.bytes2unicode[code.to_bytes(codelen, "big")] = decode_utf16_char(utf16)
 
-    def add_cid2code(self, cid: int, code: int, codelen: int) -> None:
-        uni = chr(code)
-        self.add_cid2unichr(cid, uni, codelen)
-
-    def add_cid2unichr(self, cid: int, uni: str, codelen: int) -> None:
-        self.bytes2unicode[cid.to_bytes(codelen, "big")] = uni
+    def add_code2code(self, code: int, outcode: int, codelen: int) -> None:
+        uni = chr(outcode)
+        self.bytes2unicode[code.to_bytes(codelen, "big")] = uni
 
     def add_bf_range(self, start_byte: bytes, end_byte: bytes, code: PDFObject) -> None:
-        start = nunpack(start_byte)
-        end = nunpack(end_byte)
+        start = int.from_bytes(start_byte, "big")
+        end = int.from_bytes(end_byte, "big")
         codelen = len(start_byte)
         if isinstance(code, list):
             if len(code) != end - start + 1:
@@ -331,18 +328,17 @@ class ToUnicodeMap:
                 )
             for cid, unicode_value in zip(range(start, end + 1), code):
                 assert isinstance(unicode_value, bytes)
-                self.add_cid2bytes(cid, unicode_value, codelen)
+                self.add_code2bytes(cid, unicode_value, codelen)
         elif isinstance(code, bytes):
-            var = code[-4:]
-            base = nunpack(var)
-            prefix = code[:-4]
-            vlen = len(var)
+            unibase = int.from_bytes(code, "big")
+            unilen = len(code)
             for i in range(end - start + 1):
-                x = prefix + struct.pack(">L", base + i)[-vlen:]
-                self.add_cid2bytes(start + i, x, codelen)
+                self.add_code2bytes(
+                    start + i, (unibase + i).to_bytes(unilen, "big"), codelen
+                )
         elif isinstance(code, int):
             for i in range(end - start + 1):
-                self.add_cid2code(start + i, code + i, codelen)
+                self.add_code2code(start + i, code + i, codelen)
         else:
             raise ValueError("Unuspported character code %r", code)
 
@@ -432,7 +428,7 @@ def parse_tounicode(data: bytes) -> ToUnicodeMap:
         elif obj is KEYWORD_ENDCIDCHAR:
             for cid, code in choplist(2, stack):
                 if isinstance(cid, bytes) and isinstance(code, int):
-                    cmap.add_cid2code(nunpack(cid), code, len(cid))
+                    cmap.add_code2code(int.from_bytes(cid, "big"), code, len(cid))
             del stack[:]
         elif obj is KEYWORD_BEGINBFRANGE:
             del stack[:]
@@ -454,7 +450,7 @@ def parse_tounicode(data: bytes) -> ToUnicodeMap:
         elif obj is KEYWORD_ENDBFCHAR:
             for cid, code in choplist(2, stack):
                 if isinstance(cid, bytes) and isinstance(code, bytes):
-                    cmap.add_cid2bytes(nunpack(cid), code, len(cid))
+                    cmap.add_code2bytes(int.from_bytes(cid, "big"), code, len(cid))
             del stack[:]
         elif obj is KEYWORD_BEGINNOTDEFRANGE:
             del stack[:]
@@ -518,25 +514,15 @@ class EncodingCMap(CMap):
                 yield code[idx : idx + 1], 0
                 idx += 1
 
-    def add_bytes2cid(self, utf16: bytes, cid: int) -> None:
-        self.bytes2cid[utf16] = cid
+    def add_bytes2cid(self, code: bytes, cid: int) -> None:
+        self.bytes2cid[code] = cid
 
     def add_cid_range(self, start_byte: bytes, end_byte: bytes, cid: int) -> None:
-        start_prefix = start_byte[:-4]
-        end_prefix = end_byte[:-4]
-        if start_prefix != end_prefix:
-            log.warning(
-                "The prefix of the start and end byte of "
-                "begincidrange are not the same.",
-            )
-            return
-        svar = start_byte[-4:]
-        evar = end_byte[-4:]
-        start = nunpack(svar)
-        end = nunpack(evar)
-        vlen = len(svar)
+        start = int.from_bytes(start_byte, "big")
+        end = int.from_bytes(end_byte, "big")
+        codelen = len(start_byte)
         for i in range(end - start + 1):
-            x = start_prefix + struct.pack(">L", start + i)[-vlen:]
+            x = (start + i).to_bytes(codelen, "big")
             self.add_bytes2cid(x, cid + i)
 
 
