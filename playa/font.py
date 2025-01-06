@@ -734,7 +734,10 @@ class TrueTypeFontProgram:
             # possible, so continue.
             pass
 
-    def create_unicode_map(self) -> FileUnicodeMap:
+    def create_unicode_map(self) -> Union[FileUnicodeMap, None]:
+        if b"cmap" not in self.tables:
+            log.debug("TrueType font program has no character mapping")
+            return None
         (base_offset, length) = self.tables[b"cmap"]
         fp = self.fp
         fp.seek(base_offset)
@@ -796,7 +799,8 @@ class TrueTypeFontProgram:
             else:
                 assert False, str(("Unhandled", fmttype))
         if not char2gid:
-            raise ValueError("unicode mapping is empty")
+            log.debug("unicode mapping is empty")
+            return None
         # create unicode map
         unicode_map = FileUnicodeMap()
         for char, gid in char2gid.items():
@@ -1039,15 +1043,11 @@ class CIDFont(Font):
         if (
             self.unicode_map is None
             and "FontFile2" in descriptor
-            and self.cidcoding in ("Adobe-Identity", "Adobe-UCS")
         ):
-            try:
-                self.fontfile = stream_value(descriptor.get("FontFile2"))
-                # FIXME: Utterly gratuitous use of BytesIO
-                ttf = TrueTypeFontProgram(self.basefont, BytesIO(self.fontfile.buffer))
-                self.unicode_map = ttf.create_unicode_map()
-            except (KeyError, ValueError):
-                pass
+            self.fontfile = stream_value(descriptor.get("FontFile2"))
+            # FIXME: Utterly gratuitous use of BytesIO
+            ttf = TrueTypeFontProgram(self.basefont, BytesIO(self.fontfile.buffer))
+            self.unicode_map = ttf.create_unicode_map()
         # Or create a (possibly incorrect) identity map if instructed
         if self.unicode_map is None and "Identity" in cid_ordering:
             self.unicode_map = IdentityUnicodeMap()
@@ -1062,7 +1062,7 @@ class CIDFont(Font):
             except KeyError:
                 pass
         if self.unicode_map is None:
-            log.warning("Unable to create unicode mapping for CIDFont: %r")
+            log.warning("Unable to create unicode mapping for CIDFont: %r", spec)
 
         self.multibyte = True
         self.vertical = self.cmap.is_vertical()
