@@ -258,23 +258,58 @@ def decode_utf16_char(utf16: bytes) -> str:
 class FileUnicodeMap(UnicodeMap):
     """ToUnicode map loaded from a PDF stream"""
 
-    def add_cid2bytes(self, cid: int, utf16: bytes) -> None:
-        self.add_cid2unichr(cid, decode_utf16_char(utf16))
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.bytes2unicode: Dict[bytes, str] = {}
+        self.code_lengths: List[int] = []
+        self.code_space: List[Tuple[bytes, bytes]] = []
 
-    def add_cid2code(self, cid: int, code: int) -> None:
-        unichr = chr(code)
-        self.add_cid2unichr(cid, unichr)
-
-    def add_cid2unichr(self, cid: int, unichr: str) -> None:
-        # A0 = non-breaking space, some weird fonts can have a collision on a cid here.
-        assert isinstance(unichr, str)
-        if unichr == "\u00a0" and self.cid2unichr.get(cid) == " ":
+    def add_code_range(self, start: bytes, end: bytes):
+        """Add a code-space range"""
+        if len(start) != len(end):
+            log.warning(
+                "Ignoring inconsistent code lengths in code space: %r / %r", start, end
+            )
             return
-        self.cid2unichr[cid] = unichr
+        codelen = len(start)
+        pos = bisect_left(self.code_lengths, codelen)
+        self.code_lengths.insert(pos, codelen)
+        self.code_space.insert(pos, (start, end))
+
+    def decode(self, code: bytes) -> Iterator[str]:
+        """Decode a multi-byte string to Unicode"""
+        idx = 0
+        codelen = 1
+        while idx < len(code):
+            # Match code space ranges
+            for codelen, (start, end) in zip(self.code_lengths, self.code_space):
+                substr = code[idx : idx + codelen]
+                # NOTE: lexicographical ordering is the same as
+                # big-endian numerical ordering so this works
+                if substr >= start and substr <= end:
+                    # FIXME: Do something else if not found
+                    yield self.bytes2unicode.get(substr, "")
+                    idx += codelen
+                    break
+            else:
+                log.warning("No code space found for %r", code[idx:])
+                idx += 1
+
+    def add_cid2bytes(self, cid: int, utf16: bytes, codelen: int) -> None:
+        self.add_cid2unichr(cid, decode_utf16_char(utf16), codelen)
+
+    def add_cid2code(self, cid: int, code: int, codelen: int) -> None:
+        uni = chr(code)
+        self.add_cid2unichr(cid, uni, codelen)
+
+    def add_cid2unichr(self, cid: int, uni: str, codelen: int) -> None:
+        self.cid2unichr[cid] = uni
+        self.bytes2unicode[cid.to_bytes(codelen, "big")] = uni
 
     def add_bf_range(self, start_byte: bytes, end_byte: bytes, code: PDFObject) -> None:
         start = nunpack(start_byte)
         end = nunpack(end_byte)
+        codelen = len(start_byte)
         if isinstance(code, list):
             if len(code) != end - start + 1:
                 log.warning(
@@ -283,7 +318,7 @@ class FileUnicodeMap(UnicodeMap):
                 )
             for cid, unicode_value in zip(range(start, end + 1), code):
                 assert isinstance(unicode_value, bytes)
-                self.add_cid2bytes(cid, unicode_value)
+                self.add_cid2bytes(cid, unicode_value, codelen)
         elif isinstance(code, bytes):
             var = code[-4:]
             base = nunpack(var)
@@ -291,10 +326,10 @@ class FileUnicodeMap(UnicodeMap):
             vlen = len(var)
             for i in range(end - start + 1):
                 x = prefix + struct.pack(">L", base + i)[-vlen:]
-                self.add_cid2bytes(start + i, x)
+                self.add_cid2bytes(start + i, x, codelen)
         elif isinstance(code, int):
             for i in range(end - start + 1):
-                self.add_cid2code(start + i, code + i)
+                self.add_cid2code(start + i, code + i, codelen)
         else:
             raise ValueError("Unuspported character code %r", code)
 
@@ -341,12 +376,29 @@ def parse_tounicode(data: bytes) -> FileUnicodeMap:
         elif obj is KEYWORD_USECMAP:
             try:
                 cmapname = stack.pop()
+                # FIXME: This most likely does nothing
                 cmap.use_cmap(CMapDB.get_cmap(literal_name(cmapname)))
             except (IndexError, TypeError, KeyError):
                 pass
         elif obj is KEYWORD_BEGINCODESPACERANGE:
             del stack[:]
         elif obj is KEYWORD_ENDCODESPACERANGE:
+            for start_code, end_code in choplist(2, stack):
+                if not isinstance(start_code, bytes):
+                    log.warning(
+                        "Start of code space range %r %r is not bytes.",
+                        start_code,
+                        end_code,
+                    )
+                    return cmap
+                if not isinstance(end_code, bytes):
+                    log.warning(
+                        "End of code space range %r %r is not bytes.",
+                        start_code,
+                        end_code,
+                    )
+                    return cmap
+                cmap.add_code_range(start_code, end_code)
             del stack[:]
         elif obj is KEYWORD_BEGINCIDRANGE:
             del stack[:]
@@ -368,7 +420,7 @@ def parse_tounicode(data: bytes) -> FileUnicodeMap:
         elif obj is KEYWORD_ENDCIDCHAR:
             for cid, code in choplist(2, stack):
                 if isinstance(cid, bytes) and isinstance(code, int):
-                    cmap.add_cid2code(nunpack(cid), code)
+                    cmap.add_cid2code(nunpack(cid), code, len(cid))
             del stack[:]
         elif obj is KEYWORD_BEGINBFRANGE:
             del stack[:]
@@ -390,7 +442,7 @@ def parse_tounicode(data: bytes) -> FileUnicodeMap:
         elif obj is KEYWORD_ENDBFCHAR:
             for cid, code in choplist(2, stack):
                 if isinstance(cid, bytes) and isinstance(code, bytes):
-                    cmap.add_cid2bytes(nunpack(cid), code)
+                    cmap.add_cid2bytes(nunpack(cid), code, len(cid))
             del stack[:]
         elif obj is KEYWORD_BEGINNOTDEFRANGE:
             del stack[:]

@@ -790,14 +790,19 @@ class TrueTypeFontProgram:
                         for c in range(sc, ec + 1):
                             char2gid[c] = (c + idd) & 0xFFFF
             else:
+                # FIXME: support at least format 12 for non-BMP chars
+                # (probably rare in real life since there should be a
+                # ToUnicode mapping already)
                 assert False, str(("Unhandled", fmttype))
         if not char2gid:
             log.debug("unicode mapping is empty")
             return None
-        # create unicode map
+        # Create unicode map - as noted above we don't yet support
+        # Unicode outside the BMP, so this is 16-bit only.
         unicode_map = FileUnicodeMap()
+        unicode_map.add_code_range(b"\x00\x00", b"\xff\xff")
         for char, gid in char2gid.items():
-            unicode_map.add_cid2code(gid, char)
+            unicode_map.add_cid2code(gid, char, 2)
         return unicode_map
 
 

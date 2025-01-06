@@ -12,7 +12,7 @@ begincmap
 <00> <FF>
 endcodespacerange
 1 beginbfrange
-<006F> <0072> [<00E7> <00E9> <00E8> <00EA>]
+<6F> <72> [<00E7> <00E9> <00E8> <00EA>]
 endbfrange
 3 beginbfchar
 <01> <0078>
