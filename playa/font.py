@@ -802,7 +802,6 @@ class TrueTypeFontProgram:
 
 
 LITERAL_STANDARD_ENCODING = LIT("StandardEncoding")
-LITERAL_TYPE1C = LIT("Type1C")
 
 
 class Font:
