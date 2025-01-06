@@ -63,7 +63,7 @@ class CMapBase:
     def use_cmap(self, cmap: "CMapBase") -> None:
         pass
 
-    def decode(self, code: bytes) -> Iterable[int]:
+    def decode(self, code: bytes) -> Iterable[Tuple[bytes, int]]:
         raise NotImplementedError
 
 
@@ -93,18 +93,22 @@ class CMap(CMapBase):
 
         copy(self.code2cid, cmap.code2cid)
 
-    def decode(self, code: bytes) -> Iterator[int]:
+    def decode(self, code: bytes) -> Iterator[Tuple[bytes, int]]:
         d = self.code2cid
+        substr = []
         for i in iter(code):
             if i in d:
                 x = d[i]
+                substr.append(i)
                 if isinstance(x, int):
-                    yield x
+                    yield bytes(substr), x
                     d = self.code2cid
+                    del substr[:]
                 else:
                     d = x
             else:
                 d = self.code2cid
+                del substr[:]
 
     def dump(
         self,
@@ -124,19 +128,23 @@ class CMap(CMapBase):
 
 
 class IdentityCMap(CMapBase):
-    def decode(self, code: bytes) -> Tuple[int, ...]:
+    def decode(self, code: bytes) -> Iterable[Tuple[bytes, int]]:
         n = len(code) // 2
         if n:
-            return struct.unpack(">%dH" % n, code)
+            codes = (code[x : x + 2] for x in range(0, len(code), 2))
+            cids = struct.unpack(">%dH" % n, code)
+            return zip(codes, cids)
         else:
             return ()
 
 
 class IdentityCMapByte(IdentityCMap):
-    def decode(self, code: bytes) -> Tuple[int, ...]:
+    def decode(self, code: bytes) -> Iterable[Tuple[bytes, int]]:
         n = len(code)
         if n:
-            return struct.unpack(">%dB" % n, code)
+            codes = (code[x : x + 1] for x in range(n))
+            cids = struct.unpack(">%dB" % n, code)
+            return zip(codes, cids)
         else:
             return ()
 
@@ -290,7 +298,12 @@ class ToUnicodeMap:
                 # NOTE: lexicographical ordering is the same as
                 # big-endian numerical ordering so this works
                 if substr >= start and substr <= end:
-                    yield self.bytes2unicode.get(substr, substr.decode("iso-8859-1"))
+                    if substr in self.bytes2unicode:
+                        yield self.bytes2unicode[substr]
+                    else:
+                        # FIXME: This is probably much too verbose
+                        log.warning("Undefined character code %r", substr)
+                        yield chr(int.from_bytes(substr, "big"))
                     idx += codelen
                     break
             else:
@@ -477,7 +490,7 @@ class EncodingCMap(CMap):
         self.code_lengths.insert(pos, codelen)
         self.code_space.insert(pos, (start, end))
 
-    def decode(self, code: bytes) -> Iterator[int]:
+    def decode(self, code: bytes) -> Iterator[Tuple[bytes, int]]:
         """Decode a multi-byte string according to the CMap"""
         idx = 0
         codelen = 1
@@ -493,9 +506,9 @@ class EncodingCMap(CMap):
                         # no such glyph exists in the descendant
                         # CIDFont...
                         # FIXME: Implement notdef mappings
-                        yield 0
+                        yield substr, 0
                     else:
-                        yield self.bytes2cid[substr]
+                        yield substr, self.bytes2cid[substr]
                     idx += codelen
                     break
             else:
@@ -505,6 +518,7 @@ class EncodingCMap(CMap):
                 log.warning("No code space found for %r", code[idx:])
                 # FIXME: Implement the somewhat obscure partial
                 # matching algorithm (might consume more than 1 byte)
+                yield code[idx : idx + 1], 0
                 idx += 1
 
     def add_bytes2cid(self, utf16: bytes, cid: int) -> None:

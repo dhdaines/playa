@@ -1045,7 +1045,14 @@ class CIDFont(Font):
         identity_map = False
         # First try to use an explicit ToUnicode Map
         if "ToUnicode" in spec:
-            if isinstance(spec["ToUnicode"], ContentStream):
+            if "Encoding" in spec and spec["ToUnicode"] == spec["Encoding"]:
+                log.warning(
+                    "ToUnicode and Encoding point to the same object, using an "
+                    "identity mapping for Unicode instead of this nonsense: %r",
+                    spec["ToUnicode"],
+                )
+                identity_map = True
+            elif isinstance(spec["ToUnicode"], ContentStream):
                 strm = stream_value(spec["ToUnicode"])
                 log.debug("Parsing ToUnicode from stream %r", strm)
                 self.tounicode = parse_tounicode(strm.buffer)
@@ -1082,11 +1089,9 @@ class CIDFont(Font):
                 spec,
             )
 
-        # FIXME: Verify that self.tounicode's code space corresponds to self.cmap
-        if self.cmap:
-            log.debug("CMap: %r", vars(self.cmap))
-        if self.tounicode:
-            log.debug("ToUnicode: %r", vars(self.tounicode))
+        # FIXME: Verify that self.tounicode's code space corresponds
+        # to self.cmap (this is actually quite hard because the code
+        # spaces have been lost in the precompiled CMaps...)
 
         self.multibyte = True
         self.vertical = self.cmap.is_vertical()
@@ -1145,17 +1150,23 @@ class CIDFont(Font):
     def decode(self, data: bytes) -> Iterable[Tuple[int, str]]:
         if self.tounicode is not None:
             log.debug("decode with ToUnicodeMap: %r", data)
-            return zip(self.cmap.decode(data), self.tounicode.decode(data))
+            # FIXME: Should verify that the codes are actually the
+            # same (or just trust the codes that come from the cmap)
+            return zip(
+                (cid for _, cid in self.cmap.decode(data)), self.tounicode.decode(data)
+            )
         elif self.unicode_map is not None:
             log.debug("decode with UnicodeMap: %r", data)
             return (
                 (cid, self.unicode_map.get_unichr(cid))
-                for cid in self.cmap.decode(data)
+                for (_, cid) in self.cmap.decode(data)
             )
         else:
-            # Default to an Identity map
-            log.debug("decode with identity: %r", data)
-            return ((cid, chr(cid)) for cid in self.cmap.decode(data))
+            log.debug("decode with identity unicode map: %r", data)
+            return (
+                (cid, chr(int.from_bytes(substr, "big")))
+                for substr, cid in self.cmap.decode(data)
+            )
 
     def __repr__(self) -> str:
         return f"<CIDFont: basefont={self.basefont!r}, cidcoding={self.cidcoding!r}>"

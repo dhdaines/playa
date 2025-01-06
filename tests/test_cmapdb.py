@@ -4,8 +4,12 @@ Inadequately test CMap parsing and such.
 
 from pathlib import Path
 
+import pytest
+
+import playa
 from playa.cmapdb import parse_tounicode, parse_encoding
 from playa.font import Type1FontHeaderParser
+from .data import TESTDIR
 
 THISDIR = Path(__file__).parent
 
@@ -65,9 +69,9 @@ def test_parse_encoding():
     with open(THISDIR / "cmap-encoding.txt", "rb") as infh:
         data = infh.read()
     cmap = parse_encoding(data)
-    cids = list(cmap.decode("hello world".encode("UTF-16-BE")))
+    cids = [cid for _, cid in cmap.decode("hello world".encode("UTF-16-BE"))]
     assert cids == [ord(x) for x in "hello world"]
-    cids = list(cmap.decode(b"\x00W \x00T \x00F"))
+    cids = [cid for _, cid in cmap.decode(b"\x00W \x00T \x00F")]
     assert cids == [87, 229, 84, 229, 70]
 
     # A rather complex (but valid) Encoding map for UTF-8
@@ -76,7 +80,7 @@ def test_parse_encoding():
     cmap = parse_encoding(data)
     uni = "abc\u3001" + bytes.fromhex("d862df46").decode("utf-16be")
     txt = uni.encode("utf-8")
-    assert list(cmap.decode(txt)) == [12, 13, 14, 38, 41]
+    assert [cid for _, cid in cmap.decode(txt)] == [12, 13, 14, 38, 41]
 
 
 # Basically the sort of stuff we try to find in a Type 1 font
@@ -97,3 +101,21 @@ def test_t1header_parser():
         48: "0",
         49: "1",
     }
+
+
+TOUNICODES = [
+    ("utf8_tounicode.pdf", "abc defghijklmno pqrstuvw xyz0123456789 𨧀、𨭎、𨨏、𨭆"),
+    ("utf16_tounicode.pdf", "Cina, il Grande"),
+    ("ascii_tounicode.pdf", "Lorem ipsum"),
+    ("duplicate_encoding_tounicode.pdf", " ISSUE 9915 "),
+    ("simple3.pdf", "HelloHelloあいうえおあいうえおWorldWorld"),
+    ("pdf_structure.pdf", "Titre du document"),
+    ("sampleOneByteIdentityEncode.pdf", "abc"),
+]
+
+
+@pytest.mark.parametrize("name,text", TOUNICODES, ids=str)
+def test_various_tounicode(name, text):
+    """Test complex ToUnicode cases, mostly taken from pdf.js"""
+    with playa.open(TESTDIR / name) as pdf:
+        assert next(pdf.pages[0].texts).chars == text

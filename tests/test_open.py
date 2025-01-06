@@ -31,6 +31,10 @@ PDFMINER_BUGS = {
     "issue-1114-dedupe-chars.pdf",
     "malformed-from-issue-932.pdf",
     "mcid_example.pdf",
+    "utf8_tounicode.pdf",
+    "utf16_tounicode.pdf",
+    "ascii_tounicode.pdf",
+    "duplicate_encoding_tounicode.pdf",
 }
 
 
