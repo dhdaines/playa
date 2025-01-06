@@ -26,8 +26,7 @@ The following data were extracted from the AFM files:
 
 ###  END Verbatim copy of the license part
 
-# flake8: noqa
-from typing import Dict
+from typing import Dict, Tuple, Any
 
 
 def convert_font_metrics(path: str) -> None:
@@ -64,13 +63,14 @@ def convert_font_metrics(path: str) -> None:
             elif k == "FontBBox":
                 props[k] = tuple(map(float, f[1:5]))
         print("# -*- python -*-")
-        print("FONT_METRICS = {")
+        print("from typing import Any, Dict, Tuple")
+        print("FONT_METRICS: Dict[str, Tuple[Dict[str, Any], Dict[str, float]]] = {")
         for fontname, (props, chars) in fonts.items():
             print(f" {fontname!r}: {(props, chars)!r},")
         print("}")
 
 
-FONT_METRICS = {
+FONT_METRICS: Dict[str, Tuple[Dict[str, Any], Dict[str, float]]] = {
     "Courier": (
         {
             "FontName": "Courier",

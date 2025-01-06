@@ -110,12 +110,6 @@ def get_widths2(seq: Iterable[PDFObject]) -> Dict[int, Tuple[float, Point]]:
     return widths
 
 
-class FontMetricsDB:
-    @classmethod
-    def get_metrics(cls, fontname: str) -> Tuple[Dict[str, object], Dict[str, int]]:
-        return FONT_METRICS[fontname]
-
-
 KEYWORD_BEGIN = KWD(b"begin")
 KEYWORD_END = KWD(b"end")
 KEYWORD_DEF = KWD(b"def")
@@ -951,10 +945,9 @@ class Type1Font(SimpleFont):
             self.basefont = "unknown"
 
         widths: FontWidthDict
-        try:
-            (descriptor, int_widths) = FontMetricsDB.get_metrics(self.basefont)
-            widths = cast(Dict[str, float], int_widths)  # implicit int->float
-        except KeyError:
+        if self.basefont in FONT_METRICS:
+            (descriptor, widths) = FONT_METRICS[self.basefont]
+        else:
             descriptor = dict_value(spec.get("FontDescriptor", {}))
             firstchar = int_value(spec.get("FirstChar", 0))
             # lastchar = int_value(spec.get('LastChar', 255))
@@ -1040,10 +1033,7 @@ class CIDFont(Font):
             strm = stream_value(spec["ToUnicode"])
             self.unicode_map = parse_tounicode(strm.buffer)
         # Or a TrueType font program if one exists
-        if (
-            self.unicode_map is None
-            and "FontFile2" in descriptor
-        ):
+        if self.unicode_map is None and "FontFile2" in descriptor:
             self.fontfile = stream_value(descriptor.get("FontFile2"))
             # FIXME: Utterly gratuitous use of BytesIO
             ttf = TrueTypeFontProgram(self.basefont, BytesIO(self.fontfile.buffer))
