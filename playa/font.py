@@ -23,14 +23,10 @@ from playa.cmapdb import (
     CMapDB,
     parse_tounicode,
     parse_encoding,
-    FileUnicodeMap,
-    IdentityUnicodeMap,
     UnicodeMap,
+    ToUnicodeMap,
 )
 from playa.encodingdb import EncodingDB, name2unicode
-from playa.exceptions import (
-    PDFUnicodeNotDefined,
-)
 from playa.fontmetrics import FONT_METRICS
 from playa.parser import (
     KWD,
@@ -727,7 +723,8 @@ class TrueTypeFontProgram:
             # possible, so continue.
             pass
 
-    def create_unicode_map(self) -> Union[FileUnicodeMap, None]:
+    def create_tounicode(self) -> Union[ToUnicodeMap, None]:
+        """Recreate a ToUnicode mapping from a TrueType font program."""
         if b"cmap" not in self.tables:
             log.debug("TrueType font program has no character mapping")
             return None
@@ -799,11 +796,11 @@ class TrueTypeFontProgram:
             return None
         # Create unicode map - as noted above we don't yet support
         # Unicode outside the BMP, so this is 16-bit only.
-        unicode_map = FileUnicodeMap()
-        unicode_map.add_code_range(b"\x00\x00", b"\xff\xff")
+        tounicode = ToUnicodeMap()
+        tounicode.add_code_range(b"\x00\x00", b"\xff\xff")
         for char, gid in char2gid.items():
-            unicode_map.add_cid2code(gid, char, 2)
-        return unicode_map
+            tounicode.add_cid2code(gid, char, 2)
+        return tounicode
 
 
 LITERAL_STANDARD_ENCODING = LIT("StandardEncoding")
@@ -850,8 +847,10 @@ class Font:
     def __repr__(self) -> str:
         return "<Font>"
 
-    def decode(self, data: bytes) -> Iterable[int]:
-        return data
+    def decode(self, data: bytes) -> Iterable[Tuple[int, str]]:
+        # Default to an Identity map
+        log.debug("decode with identity: %r", data)
+        return ((cid, chr(cid)) for cid in data)
 
     def get_ascent(self) -> float:
         """Ascent above the baseline, in text space units"""
@@ -884,10 +883,7 @@ class Font:
         return 0
 
     def string_width(self, s: bytes) -> float:
-        return sum(self.char_width(cid) for cid in self.decode(s))
-
-    def to_unichr(self, cid: int) -> str:
-        raise PDFUnicodeNotDefined(None, cid)
+        return sum(self.char_width(cid) for cid, _ in self.decode(s))
 
 
 class SimpleFont(Font):
@@ -910,22 +906,30 @@ class SimpleFont(Font):
             self.cid2unicode = EncodingDB.get_encoding(name, diff)
         else:
             self.cid2unicode = EncodingDB.get_encoding(literal_name(encoding))
-        self.unicode_map: Optional[UnicodeMap] = None
+        self.tounicode: Optional[ToUnicodeMap] = None
         if "ToUnicode" in spec:
             strm = stream_value(spec["ToUnicode"])
-            self.unicode_map = parse_tounicode(strm.buffer)
+            self.tounicode = parse_tounicode(strm.buffer)
+            if self.tounicode.code_lengths != [1]:
+                log.warning(
+                    "Technical Note #5144 Considered Harmful: A simple font's "
+                    "code space must be single-byte, not %r",
+                    self.tounicode.code_space,
+                )
+                self.tounicode.code_lengths = [1]
+                self.tounicode.code_space = [(b"\x00", b"\xff")]
+        if self.tounicode:
+            log.debug("ToUnicode: %r", vars(self.tounicode))
         Font.__init__(self, descriptor, widths)
 
-    def to_unichr(self, cid: int) -> str:
-        if self.unicode_map:
-            try:
-                return self.unicode_map.get_unichr(cid)
-            except KeyError:
-                pass
-        try:
-            return self.cid2unicode[cid]
-        except KeyError:
-            raise PDFUnicodeNotDefined(None, cid)
+    def decode(self, data: bytes) -> Iterable[Tuple[int, str]]:
+        if self.tounicode is not None:
+            log.debug("decode with ToUnicodeMap: %r", data)
+            return zip(data, self.tounicode.decode(data))
+        else:
+            # Default to an Identity map
+            log.debug("decode with identity: %r", data)
+            return ((cid, chr(cid)) for cid in data)
 
 
 class Type1Font(SimpleFont):
@@ -1033,23 +1037,37 @@ class CIDFont(Font):
         except KeyError:
             log.warning("Font spec is missing FontDescriptor: %r", spec)
             descriptor = {}
+        self.tounicode: Optional[ToUnicodeMap] = None
         self.unicode_map: Optional[UnicodeMap] = None
+        # Since None is equivalent to an identity map, avoid warning
+        # in the case where there was some kind of explicit Identity
+        # mapping (even though this is absolutely not standards compliant)
+        identity_map = False
         # First try to use an explicit ToUnicode Map
-        if "ToUnicode" in spec and isinstance(spec["ToUnicode"], ContentStream):
-            strm = stream_value(spec["ToUnicode"])
-            self.unicode_map = parse_tounicode(strm.buffer)
-        # Or a TrueType font program if one exists
-        if self.unicode_map is None and "FontFile2" in descriptor:
+        if "ToUnicode" in spec:
+            if isinstance(spec["ToUnicode"], ContentStream):
+                strm = stream_value(spec["ToUnicode"])
+                log.debug("Parsing ToUnicode from stream %r", strm)
+                self.tounicode = parse_tounicode(strm.buffer)
+            # If there is no stream, consider it an Identity mapping
+            elif (
+                isinstance(spec["ToUnicode"], PSLiteral)
+                and "Identity" in spec["ToUnicode"].name
+            ):
+                log.debug("Using identity mapping for ToUnicode %r", spec["ToUnicode"])
+                identity_map = True
+            else:
+                log.warning("Unparseable ToUnicode %r", spec["ToUnicode"])
+        # If there is no ToUnicode, then try TrueType font tables
+        elif "FontFile2" in descriptor:
             self.fontfile = stream_value(descriptor.get("FontFile2"))
+            log.debug("Parsing ToUnicode from TrueType font %r", self.fontfile)
             # FIXME: Utterly gratuitous use of BytesIO
             ttf = TrueTypeFontProgram(self.basefont, BytesIO(self.fontfile.buffer))
-            self.unicode_map = ttf.create_unicode_map()
-        # Or create a (possibly incorrect) identity map if instructed
-        if self.unicode_map is None and "Identity" in cid_ordering:
-            self.unicode_map = IdentityUnicodeMap()
-        # Or try to get a predefined unicode CMap (not to be confused
-        # with a ToUnicode map)
-        if self.unicode_map is None:
+            self.tounicode = ttf.create_tounicode()
+        # Or try to get a predefined UnicodeMap (not to be confused
+        # with a ToUnicodeMap)
+        if self.tounicode is None:
             try:
                 self.unicode_map = CMapDB.get_unicode_map(
                     self.cidcoding,
@@ -1057,8 +1075,18 @@ class CIDFont(Font):
                 )
             except KeyError:
                 pass
-        if self.unicode_map is None:
-            log.warning("Unable to create unicode mapping for CIDFont: %r", spec)
+        if self.unicode_map is None and self.tounicode is None and not identity_map:
+            log.warning(
+                "Unable to find/create/guess unicode mapping for CIDFont, "
+                "using identity mapping: %r",
+                spec,
+            )
+
+        # FIXME: Verify that self.tounicode's code space corresponds to self.cmap
+        if self.cmap:
+            log.debug("CMap: %r", vars(self.cmap))
+        if self.tounicode:
+            log.debug("ToUnicode: %r", vars(self.tounicode))
 
         self.multibyte = True
         self.vertical = self.cmap.is_vertical()
@@ -1114,20 +1142,24 @@ class CIDFont(Font):
             log.warning("Font spec is missing Encoding: %r", spec)
         return IDENTITY_ENCODER.get(cmap_name, cmap_name)
 
+    def decode(self, data: bytes) -> Iterable[Tuple[int, str]]:
+        if self.tounicode is not None:
+            log.debug("decode with ToUnicodeMap: %r", data)
+            return zip(self.cmap.decode(data), self.tounicode.decode(data))
+        elif self.unicode_map is not None:
+            log.debug("decode with UnicodeMap: %r", data)
+            return (
+                (cid, self.unicode_map.get_unichr(cid))
+                for cid in self.cmap.decode(data)
+            )
+        else:
+            # Default to an Identity map
+            log.debug("decode with identity: %r", data)
+            return ((cid, chr(cid)) for cid in self.cmap.decode(data))
+
     def __repr__(self) -> str:
         return f"<CIDFont: basefont={self.basefont!r}, cidcoding={self.cidcoding!r}>"
-
-    def decode(self, data: bytes) -> Iterable[int]:
-        return self.cmap.decode(data)
 
     def char_disp(self, cid: int) -> Union[float, Tuple[Optional[float], float]]:
         """Returns 0 for horizontal fonts, a tuple for vertical fonts."""
         return self.disps.get(cid, self.default_disp)
-
-    def to_unichr(self, cid: int) -> str:
-        try:
-            if not self.unicode_map:
-                raise KeyError(cid)
-            return self.unicode_map.get_unichr(cid)
-        except KeyError:
-            raise PDFUnicodeNotDefined(self.cidcoding, cid)

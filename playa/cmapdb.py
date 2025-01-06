@@ -157,12 +157,6 @@ class UnicodeMap(CMapBase):
             out.write("cid %d = unicode %r\n" % (k, v))
 
 
-class IdentityUnicodeMap(UnicodeMap):
-    def get_unichr(self, cid: int) -> str:
-        """Interpret character id as unicode codepoint"""
-        return chr(cid)
-
-
 class PyCMap(CMap):
     def __init__(self, name: str, module: Any) -> None:
         super().__init__(CMapName=name)
@@ -255,14 +249,23 @@ def decode_utf16_char(utf16: bytes) -> str:
     return utf16.decode("UTF-16BE", "ignore")
 
 
-class FileUnicodeMap(UnicodeMap):
-    """ToUnicode map loaded from a PDF stream"""
+class ToUnicodeMap:
+    """ToUnicode map loaded from a PDF stream.  Not a CMap!"""
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+    def __init__(self) -> None:
+        self.attrs: Dict[str, Any] = {}
         self.bytes2unicode: Dict[bytes, str] = {}
         self.code_lengths: List[int] = []
         self.code_space: List[Tuple[bytes, bytes]] = []
+        # FIXME: will go away!
+        self.cid2unichr: Dict[int, str] = {}
+
+    def set_attr(self, k: str, v: Any) -> None:
+        self.attrs[k] = v
+
+    def use_cmap(self, cmap: "CMapBase") -> None:
+        # FIXME: This should probably do ... something?
+        pass
 
     def add_code_range(self, start: bytes, end: bytes):
         """Add a code-space range"""
@@ -277,7 +280,7 @@ class FileUnicodeMap(UnicodeMap):
         self.code_space.insert(pos, (start, end))
 
     def decode(self, code: bytes) -> Iterator[str]:
-        """Decode a multi-byte string to Unicode"""
+        """Decode a multi-byte string to Unicode sequences"""
         idx = 0
         codelen = 1
         while idx < len(code):
@@ -287,12 +290,12 @@ class FileUnicodeMap(UnicodeMap):
                 # NOTE: lexicographical ordering is the same as
                 # big-endian numerical ordering so this works
                 if substr >= start and substr <= end:
-                    # FIXME: Do something else if not found
-                    yield self.bytes2unicode.get(substr, "")
+                    yield self.bytes2unicode.get(substr, substr.decode("iso-8859-1"))
                     idx += codelen
                     break
             else:
                 log.warning("No code space found for %r", code[idx:])
+                yield chr(code[idx])
                 idx += 1
 
     def add_cid2bytes(self, cid: int, utf16: bytes, codelen: int) -> None:
@@ -334,8 +337,8 @@ class FileUnicodeMap(UnicodeMap):
             raise ValueError("Unuspported character code %r", code)
 
 
-def parse_tounicode(data: bytes) -> FileUnicodeMap:
-    cmap = FileUnicodeMap()
+def parse_tounicode(data: bytes) -> ToUnicodeMap:
+    cmap = ToUnicodeMap()
     stack: List[PDFObject] = []
     parser = ObjectParser(data)
     # some ToUnicode maps don't have "begincmap" keyword.
@@ -376,7 +379,6 @@ def parse_tounicode(data: bytes) -> FileUnicodeMap:
         elif obj is KEYWORD_USECMAP:
             try:
                 cmapname = stack.pop()
-                # FIXME: This most likely does nothing
                 cmap.use_cmap(CMapDB.get_cmap(literal_name(cmapname)))
             except (IndexError, TypeError, KeyError):
                 pass

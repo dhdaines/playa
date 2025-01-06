@@ -35,7 +35,6 @@ from playa.color import (
     get_colorspace,
 )
 from playa.exceptions import (
-    PDFUnicodeNotDefined,
     PDFSyntaxError,
 )
 from playa.font import Font
@@ -1601,6 +1600,7 @@ class PageInterpreter(BaseInterpreter):
         self,
         *,
         cid: int,
+        text: str,
         matrix: Matrix,
         scaling: float,
     ) -> Tuple[LayoutDict, float]:
@@ -1608,12 +1608,6 @@ class PageInterpreter(BaseInterpreter):
         assert font is not None
         fontsize = self.textstate.fontsize
         rise = self.textstate.rise
-        try:
-            text = font.to_unichr(cid)
-            assert isinstance(text, str), f"Text {text!r} is not a str"
-        except PDFUnicodeNotDefined:
-            log.debug("undefined char: %r, %r", font, cid)
-            text = None
         textwidth = font.char_width(cid)
         adv = textwidth * fontsize * scaling
         if font.vertical:
@@ -1692,12 +1686,13 @@ class PageInterpreter(BaseInterpreter):
                 if not isinstance(obj, bytes):
                     log.warning("Found non-string %r in text object", obj)
                     continue
-                for cid in self.textstate.font.decode(obj):
+                for cid, text in self.textstate.font.decode(obj):
                     if needcharspace:
                         pos += charspace
                     self.textstate.glyph_offset = (x, pos) if vert else (pos, y)
                     item, adv = self.render_char(
                         cid=cid,
+                        text=text,
                         matrix=translate_matrix(matrix, self.textstate.glyph_offset),
                         scaling=scaling,
                     )
@@ -2111,16 +2106,10 @@ class TextObject(ContentObject):
                 if not isinstance(obj, bytes):
                     log.warning("Found non-string %r in text object", obj)
                     continue
-                for cid in font.decode(obj):
+                for cid, text in font.decode(obj):
                     if needcharspace:
                         pos += charspace
                     tstate.glyph_offset = (x, pos) if vert else (pos, y)
-                    try:
-                        text = font.to_unichr(cid)
-                        assert isinstance(text, str), f"Text {text!r} is not a str"
-                    except PDFUnicodeNotDefined:
-                        log.debug("undefined char: %r, %r", font, cid)
-                        text = None
                     textwidth = font.char_width(cid)
                     adv = textwidth * tstate.fontsize * scaling
                     x, y = tstate.glyph_offset
@@ -2158,13 +2147,8 @@ class TextObject(ContentObject):
                 for obj in item.args:
                     if not isinstance(obj, bytes):
                         continue
-                    for cid in font.decode(obj):
-                        try:
-                            text = font.to_unichr(cid)
-                            assert isinstance(text, str), f"Text {text!r} is not a str"
-                            self._chars.append(text)
-                        except PDFUnicodeNotDefined:
-                            log.debug("undefined char: %r, %r", font, cid)
+                    for cid, text in font.decode(obj):
+                        self._chars.append(text)
             elif item.operator == "Tf":
                 self.textstate.update(item.operator, *item.args)
         return "".join(self._chars)
@@ -2346,7 +2330,6 @@ class LazyInterpreter(BaseInterpreter):
         to get the initial textstate.  Next, we collect any subsequent
         operators until ET, and then execute them lazily.
         """
-        log.debug("executing ops before BT: %r", self.textobj)
         for item in self.textobj:
             self.textstate.update(item.operator, *item.args)
         self.textobj = []
