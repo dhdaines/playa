@@ -292,7 +292,8 @@ class Page:
             removed in PLAYA 0.3.
         """
         warnings.warn(
-            "The layout property has moved to PAVÉS (https://github.com/dhdaines/paves) and will be removed in PLAYA 0.3",
+            "The layout property has moved to PAVÉS (https://github.com/dhdaines/paves)"
+            " and will be removed in PLAYA 0.3",
             DeprecationWarning,
         )
         return iter(PageInterpreter(self, self._contents))
@@ -1092,7 +1093,9 @@ class BaseInterpreter:
                 raise RuntimeError("Document no longer exists!")
             self.textstate.font = doc.get_font(None, {})
         self.textstate.fontsize = num_value(fontsize)
-        self.textstate.descent = self.textstate.font.get_descent() * self.textstate.fontsize
+        self.textstate.descent = (
+            self.textstate.font.get_descent() * self.textstate.fontsize
+        )
 
     def do_Tr(self, render: PDFObject) -> None:
         """Set the text rendering mode"""

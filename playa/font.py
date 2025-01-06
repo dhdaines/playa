@@ -720,7 +720,8 @@ class CFFFont:
         return self.string_index[sid - len(self.STANDARD_STRINGS)]
 
 
-class TrueTypeFont:
+class TrueTypeFontProgram:
+    """Read TrueType font programs to get Unicode mappings."""
     def __init__(self, name: str, fp: BinaryIO) -> None:
         self.name = name
         self.fp = fp
@@ -974,9 +975,9 @@ class Type1Font(SimpleFont):
         return "<Type1Font: basefont=%r>" % self.basefont
 
 
-class PDFTrueTypeFont(Type1Font):  # FIXME: WTF???
+class TrueTypeFont(Type1Font):
     def __repr__(self) -> str:
-        return "<PDFTrueTypeFont: basefont=%r>" % self.basefont
+        return "<TrueTypeFont: basefont=%r>" % self.basefont
 
 
 class Type3Font(SimpleFont):
@@ -1030,7 +1031,7 @@ class CIDFont(Font):
         ttf = None
         if "FontFile2" in descriptor:
             self.fontfile = stream_value(descriptor.get("FontFile2"))
-            ttf = TrueTypeFont(self.basefont, BytesIO(self.fontfile.buffer))
+            ttf = TrueTypeFontProgram(self.basefont, BytesIO(self.fontfile.buffer))
         self.unicode_map: Optional[UnicodeMap] = None
         # FIXME: This is magical and means that we are not actually a
         # CIDFont but really a Type0 font.
