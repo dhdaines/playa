@@ -351,6 +351,12 @@ for glyph in item:
     print("Glyph has CID {glyph.cid} and Unicode {glyph.text}")
 ```
 
+Note that the actual positioning of the glyphs is only done once you
+actually look at their `bbox` property, so for instance, if you wish
+to ignore glyphs with `textstate.render_mode == 3` (which means
+"invisible") or `gstate.scolor.values == (1.0,)` (which means "written
+in white ink") then you could do that.
+
 By default PLAYA, following the PDF specification, considers the
 grouping of glyphs into strings irrelevant by default.  I *might*
 consider separating the strings in the future.
