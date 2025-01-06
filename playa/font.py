@@ -162,13 +162,6 @@ class Type1FontHeaderParser:
 
 NIBBLES = ("0", "1", "2", "3", "4", "5", "6", "7", "8", "9", ".", "e", "e-", None, "-")
 
-# Mapping of cmap names. Original cmap name is kept if not in the mapping.
-# (missing reference for why DLIdent is mapped to Identity)
-IDENTITY_ENCODER = {
-    "DLIdent-H": "Identity-H",
-    "DLIdent-V": "Identity-V",
-}
-
 
 def getdict(data: bytes) -> Dict[int, List[Union[float, int]]]:
     d: Dict[int, List[Union[float, int]]] = {}
@@ -1000,6 +993,14 @@ class Type3Font(SimpleFont):
         return "<Type3Font>"
 
 
+# Mapping of cmap names. Original cmap name is kept if not in the mapping.
+# (missing reference for why DLIdent is mapped to Identity)
+IDENTITY_ENCODER = {
+    "DLIdent-H": "Identity-H",
+    "DLIdent-V": "Identity-V",
+}
+
+
 class CIDFont(Font):
     default_disp: Union[float, Tuple[Optional[float], float]]
 
@@ -1029,42 +1030,30 @@ class CIDFont(Font):
         except KeyError:
             log.warning("Font spec is missing FontDescriptor: %r", spec)
             descriptor = {}
-        ttf = None
-        if "FontFile2" in descriptor:
-            self.fontfile = stream_value(descriptor.get("FontFile2"))
-            ttf = TrueTypeFontProgram(self.basefont, BytesIO(self.fontfile.buffer))
         self.unicode_map: Optional[UnicodeMap] = None
-        # FIXME: This is magical and means that we are not actually a
-        # CIDFont but really a Type0 font.
-        if "ToUnicode" in spec:
-            if isinstance(spec["ToUnicode"], ContentStream):
-                strm = stream_value(spec["ToUnicode"])
-                self.unicode_map = parse_tounicode(strm.buffer)
-            # FIXME: For the moment only replace the cmap if we don't
-            # have a predefined one (this may or may not be correct)
-            # FIXME: self.cmap should just be None here, WTF pdfminer.six!
-            if self.cmap.attrs.get("CMapName") is None and isinstance(
-                spec["Encoding"], ContentStream
-            ):
-                strm = stream_value(spec["Encoding"])
-                self.cmap = parse_encoding(strm.buffer)
-
-            if self.unicode_map is None:
-                cmap_name = literal_name(spec["ToUnicode"])
-                encoding = literal_name(spec["Encoding"])
-                if (
-                    "Identity" in cid_ordering
-                    or "Identity" in cmap_name
-                    or "Identity" in encoding
-                ):
-                    self.unicode_map = IdentityUnicodeMap()
-        elif self.cidcoding in ("Adobe-Identity", "Adobe-UCS"):
-            if ttf:
-                try:
-                    self.unicode_map = ttf.create_unicode_map()
-                except (KeyError, ValueError):
-                    pass
-        else:
+        # First try to use an explicit ToUnicode Map
+        if "ToUnicode" in spec and isinstance(spec["ToUnicode"], ContentStream):
+            strm = stream_value(spec["ToUnicode"])
+            self.unicode_map = parse_tounicode(strm.buffer)
+        # Or a TrueType font program if one exists
+        if (
+            self.unicode_map is None
+            and "FontFile2" in descriptor
+            and self.cidcoding in ("Adobe-Identity", "Adobe-UCS")
+        ):
+            try:
+                self.fontfile = stream_value(descriptor.get("FontFile2"))
+                # FIXME: Utterly gratuitous use of BytesIO
+                ttf = TrueTypeFontProgram(self.basefont, BytesIO(self.fontfile.buffer))
+                self.unicode_map = ttf.create_unicode_map()
+            except (KeyError, ValueError):
+                pass
+        # Or create a (possibly incorrect) identity map if instructed
+        if self.unicode_map is None and "Identity" in cid_ordering:
+            self.unicode_map = IdentityUnicodeMap()
+        # Or try to get a predefined unicode CMap (not to be confused
+        # with a ToUnicode map)
+        if self.unicode_map is None:
             try:
                 self.unicode_map = CMapDB.get_unicode_map(
                     self.cidcoding,
@@ -1072,6 +1061,8 @@ class CIDFont(Font):
                 )
             except KeyError:
                 pass
+        if self.unicode_map is None:
+            log.warning("Unable to create unicode mapping for CIDFont: %r")
 
         self.multibyte = True
         self.vertical = self.cmap.is_vertical()
@@ -1105,14 +1096,18 @@ class CIDFont(Font):
         try:
             return CMapDB.get_cmap(cmap_name)
         except KeyError as e:
-            log.warning("Failed to get cmap %s: %s", cmap_name, e)
-            return CMap()
+            # Parse an embedded CMap if necessary
+            if isinstance(spec["Encoding"], ContentStream):
+                strm = stream_value(spec["Encoding"])
+                return parse_encoding(strm.buffer)
+            else:
+                log.warning("Failed to get cmap %s: %s", cmap_name, e)
+                return CMap()
 
     @staticmethod
     def _get_cmap_name(spec: Mapping[str, Any]) -> str:
         """Get cmap name from font specification"""
         cmap_name = "unknown"  # default value
-
         try:
             spec_encoding = spec["Encoding"]
             if hasattr(spec_encoding, "name"):
