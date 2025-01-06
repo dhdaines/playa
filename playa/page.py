@@ -2151,7 +2151,9 @@ class TextObject(ContentObject):
         self._chars = []
         self.textstate.reset()
         for item in self.items:
-            # Only TJ and Tf are relevant to Unicode output
+            # Only TJ and Tf are relevant to Unicode output (FIXME:
+            # unless you want to use the /ActualText in which case you
+            # need BMC/EMC)
             if item.operator == "TJ":
                 font = self.textstate.font
                 assert font is not None, "No font was selected"
@@ -2200,6 +2202,7 @@ class LazyInterpreter(BaseInterpreter):
     """Interpret the page yielding lazy objects."""
 
     textobj: List[TextItem] = []
+    in_text: bool = False
 
     def __iter__(self) -> Iterator[ContentObject]:
         parser = ContentParser(self.contents)
@@ -2213,14 +2216,14 @@ class LazyInterpreter(BaseInterpreter):
                     method, nargs = self._dispatch[obj]
                     if nargs:
                         args = self.pop(nargs)
-                        if len(args) == nargs:
-                            gen = method(*args)
-                        else:
+                        if len(args) != nargs:
                             log.warning(
                                 "Insufficient arguments (%d) for operator: %r",
                                 len(args),
                                 obj,
                             )
+                        else:
+                            gen = method(*args)
                     else:
                         gen = method()
                     if gen is not None:
@@ -2330,20 +2333,26 @@ class LazyInterpreter(BaseInterpreter):
     # default values at the beginning of each page.
     #
     # Concretely, this means that we simply have to execute anything
-    # in self.textobj when we see BT.
+    # in self.textobj when we see BT (there are no dependencies
+    # between text state and graphics state so they don't have to go
+    # in the same order as other graphics operators).
     #
     # FIXME: It appears that we're supposed to reset it between content
     # streams?! That seems very bogus, pdfminer does not do it.
     def do_BT(self) -> None:
         """Update text state and begin text object.
 
-        First we handle any operarors that were seen before BT, so as
-        to get the initial textstate.  Next, we collect any subsequent
-        operators until ET, and then execute them lazily.
+        First we handle any text operators that were seen before BT,
+        so as to get the initial textstate.  Next, we collect any
+        subsequent operators until ET, and then execute them lazily.
         """
         for item in self.textobj:
             self.textstate.update(item.operator, *item.args)
         self.textobj = []
+        # Since various other operators can also go inside a text
+        # object, we need to know so they can be collected (BT/ET do
+        # not nest, so we don't need a stack)
+        self.in_text = True
 
     def do_ET(self) -> Iterator[ContentObject]:
         """End a text object"""
@@ -2364,6 +2373,7 @@ class LazyInterpreter(BaseInterpreter):
                 self.textstate.update(item.operator, *item.args)
         # Make sure to clear textobj!!!
         self.textobj = []
+        self.in_text = False
 
     def do_Tc(self, space: PDFObject) -> None:
         """Set character spacing.
