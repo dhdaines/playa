@@ -1128,11 +1128,10 @@ class Document:
                     subspec[k] = resolve1(spec[k])
             font = CIDFont(subspec)
         else:
-            log.warning("Invalid Font spec: %r" % spec)
-            # This isn't really all that wrong, we need a dummy font
-            # object to be able to do *something* (even if it's the
-            # wrong thing) with text objects.
-            font = Type1Font(spec)  # FIXME: this is so wrong!
+            log.warning("Invalid Font spec, creating dummy font: %r" % spec)
+            # We need a dummy font object to be able to do *something*
+            # (even if it's the wrong thing) with text objects.
+            font = Font({}, {})
         if objid:
             self._cached_fonts[objid] = font
         return font

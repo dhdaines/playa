@@ -904,7 +904,7 @@ class Font:
         return sum(self.char_width(cid) for cid in self.decode(s))
 
     def to_unichr(self, cid: int) -> str:
-        raise NotImplementedError
+        raise PDFUnicodeNotDefined(None, cid)
 
 
 class SimpleFont(Font):
