@@ -775,8 +775,9 @@ class BaseInterpreter:
                         spec = dict_value(spec)
                         self.fontmap[fontid] = doc.get_font(objid, spec)
                     except TypeError:
-                        # FIXME: This is very very wrong! DO NOT WANT!
-                        log.warning("Broken/missing font spec for %r", fontid)
+                        log.warning(
+                            "Broken/missing font spec for Font ID %r: %r", fontid, spec
+                        )
                         self.fontmap[fontid] = doc.get_font(objid, {})
             elif k == "ColorSpace":
                 for csid, spec in dict_value(v).items():

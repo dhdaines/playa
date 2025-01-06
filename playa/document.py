@@ -1115,21 +1115,23 @@ class Document:
         elif subtype == "Type3":
             # Type3 Font
             font = Type3Font(spec)
-        elif subtype in ("CIDFontType0", "CIDFontType2"):
-            # CID Font
-            font = CIDFont(spec)
         elif subtype == "Type0":
             # Type0 Font
             dfonts = list_value(spec["DescendantFonts"])
             assert dfonts
+            if len(dfonts) != 1:
+                log.debug("Type 0 font should have 1 descendant, has more: %r", dfonts)
             subspec = dict_value(dfonts[0]).copy()
-            # FIXME: Bad tightly coupled with internals of CIDFont
+            # Merge the root and descendant font dictionaries
             for k in ("Encoding", "ToUnicode"):
                 if k in spec:
                     subspec[k] = resolve1(spec[k])
-            font = self.get_font(None, subspec)
+            font = CIDFont(subspec)
         else:
             log.warning("Invalid Font spec: %r" % spec)
+            # This isn't really all that wrong, we need a dummy font
+            # object to be able to do *something* (even if it's the
+            # wrong thing) with text objects.
             font = Type1Font(spec)  # FIXME: this is so wrong!
         if objid:
             self._cached_fonts[objid] = font

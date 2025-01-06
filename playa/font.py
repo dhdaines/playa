@@ -722,6 +722,7 @@ class CFFFont:
 
 class TrueTypeFontProgram:
     """Read TrueType font programs to get Unicode mappings."""
+
     def __init__(self, name: str, fp: BinaryIO) -> None:
         self.name = name
         self.fp = fp
