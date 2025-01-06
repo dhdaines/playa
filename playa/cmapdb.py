@@ -299,13 +299,12 @@ class ToUnicodeMap:
                     if substr in self.bytes2unicode:
                         yield self.bytes2unicode[substr]
                     else:
-                        # FIXME: This is probably much too verbose
-                        log.warning("Undefined character code %r", substr)
+                        log.debug("Undefined character code %r", substr)
                         yield chr(int.from_bytes(substr, "big"))
                     idx += codelen
                     break
             else:
-                log.warning("No code space found for %r", code[idx:])
+                log.debug("No code space found for %r", code[idx:])
                 yield chr(code[idx])
                 idx += 1
 
@@ -508,7 +507,7 @@ class EncodingCMap(CMap):
                 # 9.7.6.3 If the code is invalid—that is, the bytes
                 # extracted from the string to be shown do not match
                 # any codespace range in the CMap...
-                log.warning("No code space found for %r", code[idx:])
+                log.debug("No code space found for %r", code[idx:])
                 # FIXME: Implement the somewhat obscure partial
                 # matching algorithm (might consume more than 1 byte)
                 yield code[idx : idx + 1], 0

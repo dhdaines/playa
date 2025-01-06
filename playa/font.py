@@ -911,7 +911,7 @@ class SimpleFont(Font):
             strm = stream_value(spec["ToUnicode"])
             self.tounicode = parse_tounicode(strm.buffer)
             if self.tounicode.code_lengths != [1]:
-                log.warning(
+                log.debug(
                     "Technical Note #5144 Considered Harmful: A simple font's "
                     "code space must be single-byte, not %r",
                     self.tounicode.code_space,
@@ -1045,7 +1045,7 @@ class CIDFont(Font):
         # First try to use an explicit ToUnicode Map
         if "ToUnicode" in spec:
             if "Encoding" in spec and spec["ToUnicode"] == spec["Encoding"]:
-                log.warning(
+                log.debug(
                     "ToUnicode and Encoding point to the same object, using an "
                     "identity mapping for Unicode instead of this nonsense: %r",
                     spec["ToUnicode"],
@@ -1063,7 +1063,7 @@ class CIDFont(Font):
                 log.debug("Using identity mapping for ToUnicode %r", spec["ToUnicode"])
                 identity_map = True
             else:
-                log.warning("Unparseable ToUnicode %r", spec["ToUnicode"])
+                log.warning("Unparseable ToUnicode in %r", spec)
         # If there is no ToUnicode, then try TrueType font tables
         elif "FontFile2" in descriptor:
             self.fontfile = stream_value(descriptor.get("FontFile2"))
@@ -1082,7 +1082,7 @@ class CIDFont(Font):
             except KeyError:
                 pass
         if self.unicode_map is None and self.tounicode is None and not identity_map:
-            log.warning(
+            log.debug(
                 "Unable to find/create/guess unicode mapping for CIDFont, "
                 "using identity mapping: %r",
                 spec,
