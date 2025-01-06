@@ -31,10 +31,16 @@ PDFMINER_BUGS = {
     "issue-1114-dedupe-chars.pdf",
     "malformed-from-issue-932.pdf",
     "mcid_example.pdf",
+    "utf8_tounicode.pdf",
+    "utf16_tounicode.pdf",
+    "ascii_tounicode.pdf",
+    "duplicate_encoding_tounicode.pdf",
 }
 
 
 # Only do "base" PDFs as we know pdfminer has issues with others
+# warnings.capture_warnings does not work in pytest because Reasons
+@pytest.mark.filterwarnings("ignore::DeprecationWarning")
 @pytest.mark.skipif(pdfminer is None, reason="pdfminer.six is not installed")
 @pytest.mark.parametrize("path", BASEPDFS, ids=str)
 def test_open(path: Path) -> None:
@@ -88,6 +94,7 @@ def test_open(path: Path) -> None:
         assert beach == miner
 
 
+@pytest.mark.filterwarnings("ignore::DeprecationWarning")
 @pytest.mark.skipif(not CONTRIB.exists(), reason="contrib samples not present")
 def test_inline_data() -> None:
     with playa.open(CONTRIB / "issue-1008-inline-ascii85.pdf") as doc:
@@ -96,6 +103,7 @@ def test_inline_data() -> None:
         assert len(items) == 456
 
 
+@pytest.mark.filterwarnings("ignore::DeprecationWarning")
 @pytest.mark.skipif(not CONTRIB.exists(), reason="contrib samples not present")
 def test_redundant_h() -> None:
     with playa.open(CONTRIB / "issue-1008-inline-ascii85.pdf") as doc:
@@ -104,6 +112,7 @@ def test_redundant_h() -> None:
         assert len(rects) == 6
 
 
+@pytest.mark.filterwarnings("ignore::DeprecationWarning")
 def test_multiple_contents() -> None:
     with playa.open(TESTDIR / "jo.pdf") as doc:
         page = doc.pages[0]
@@ -112,6 +121,7 @@ def test_multiple_contents() -> None:
         assert len(items) == 898
 
 
+@pytest.mark.filterwarnings("ignore::DeprecationWarning")
 @pytest.mark.skipif(not CONTRIB.exists(), reason="contrib samples not present")
 def test_xobjects() -> None:
     with playa.open(CONTRIB / "basicapi.pdf") as doc:
@@ -130,6 +140,7 @@ def test_weakrefs() -> None:
         _ = ref.resolve()
 
 
+@pytest.mark.filterwarnings("ignore::DeprecationWarning")
 def test_write_csv() -> None:
     """Verify that we can easily write to a CSV file."""
     with playa.open(TESTDIR / "simple1.pdf") as doc:
@@ -159,6 +170,7 @@ def test_spaces() -> None:
     assert screen_box[3] == pytest.approx(page.height - page_box[1])
 
 
+@pytest.mark.filterwarnings("ignore::DeprecationWarning")
 def test_glyph_offsets() -> None:
     """Verify that glyph_offset is what we say it is."""
     # screen space

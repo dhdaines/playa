@@ -1,0 +1,64 @@
+/CIDInit /ProcSet findresource begin
+12 dict begin
+begincmap
+/CIDSystemInfo
+<< /Registry (Adobe)
+/Ordering (CNS)
+/Supplement 7
+>> def
+/CMapName /Uni-Utf8-H
+/CMapType 2 def
+4 begincodespacerange
+<00> <7F>
+<C080> <DFBF>
+<E08080> <EFBFBF>
+<F0808080> <F7BFBFBF>
+endcodespacerange
+42 beginbfchar
+<20> <0020>
+<30> <0030>
+<31> <0031>
+<32> <0032>
+<33> <0033>
+<34> <0034>
+<35> <0035>
+<36> <0036>
+<37> <0037>
+<38> <0038>
+<39> <0039>
+<61> <0061>
+<62> <0062>
+<63> <0063>
+<64> <0064>
+<65> <0065>
+<66> <0066>
+<67> <0067>
+<68> <0068>
+<69> <0069>
+<6a> <006a>
+<6b> <006b>
+<6c> <006c>
+<6d> <006d>
+<6e> <006e>
+<6f> <006f>
+<70> <0070>
+<71> <0071>
+<72> <0072>
+<73> <0073>
+<74> <0074>
+<75> <0075>
+<76> <0076>
+<77> <0077>
+<78> <0078>
+<79> <0079>
+<7a> <007a>
+<e38081> <3001>
+<f0a8a780> <d862ddc0>
+<f0a8a88f> <d862de0f>
+<f0a8ad86> <d862df46>
+<f0a8ad8e> <d862df4e>
+endbfchar
+endcmap
+CMapName currentdict /CMap defineresource pop
+end
+end

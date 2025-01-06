@@ -42,7 +42,7 @@ from playa.exceptions import (
     PDFPasswordIncorrect,
     PDFSyntaxError,
 )
-from playa.font import CIDFont, Font, PDFTrueTypeFont, Type1Font, Type3Font
+from playa.font import CIDFont, Font, TrueTypeFont, Type1Font, Type3Font
 from playa.page import (
     Page,
     LayoutDict as PageLayoutDict,
@@ -969,7 +969,8 @@ class Document:
             removed in PLAYA 0.3.
         """
         warnings.warn(
-            "The layout property has moved to PAVÉS (https://github.com/dhdaines/paves) and will be removed in PLAYA 0.3",
+            "The layout property has moved to PAVÉS (https://github.com/dhdaines/paves)"
+            " and will be removed in PLAYA 0.3",
             DeprecationWarning,
         )
         from typing import cast
@@ -1110,26 +1111,27 @@ class Document:
             font: Font = Type1Font(spec)
         elif subtype == "TrueType":
             # TrueType Font
-            font = PDFTrueTypeFont(spec)
+            font = TrueTypeFont(spec)
         elif subtype == "Type3":
             # Type3 Font
             font = Type3Font(spec)
-        elif subtype in ("CIDFontType0", "CIDFontType2"):
-            # CID Font
-            font = CIDFont(spec)
         elif subtype == "Type0":
             # Type0 Font
             dfonts = list_value(spec["DescendantFonts"])
             assert dfonts
+            if len(dfonts) != 1:
+                log.debug("Type 0 font should have 1 descendant, has more: %r", dfonts)
             subspec = dict_value(dfonts[0]).copy()
-            # FIXME: Bad tightly coupled with internals of CIDFont
+            # Merge the root and descendant font dictionaries
             for k in ("Encoding", "ToUnicode"):
                 if k in spec:
                     subspec[k] = resolve1(spec[k])
-            font = self.get_font(None, subspec)
+            font = CIDFont(subspec)
         else:
-            log.warning("Invalid Font spec: %r" % spec)
-            font = Type1Font(spec)  # FIXME: this is so wrong!
+            log.warning("Invalid Font spec, creating dummy font: %r" % spec)
+            # We need a dummy font object to be able to do *something*
+            # (even if it's the wrong thing) with text objects.
+            font = Font({}, {})
         if objid:
             self._cached_fonts[objid] = font
         return font

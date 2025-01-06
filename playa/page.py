@@ -35,7 +35,6 @@ from playa.color import (
     get_colorspace,
 )
 from playa.exceptions import (
-    PDFUnicodeNotDefined,
     PDFSyntaxError,
 )
 from playa.font import Font
@@ -292,7 +291,8 @@ class Page:
             removed in PLAYA 0.3.
         """
         warnings.warn(
-            "The layout property has moved to PAVÉS (https://github.com/dhdaines/paves) and will be removed in PLAYA 0.3",
+            "The layout property has moved to PAVÉS (https://github.com/dhdaines/paves)"
+            " and will be removed in PLAYA 0.3",
             DeprecationWarning,
         )
         return iter(PageInterpreter(self, self._contents))
@@ -361,6 +361,9 @@ class TextState:
         want to use this to detect invisible text.
       rise: The text rise (superscript or subscript position), in text
         space units.
+      descent: The font's descent (scaled by the font size), in text
+        space units (this is not really part of the text state but is
+        kept here to avoid recomputing it on every glyph)
     """
 
     line_matrix: Matrix = MATRIX_IDENTITY
@@ -373,6 +376,7 @@ class TextState:
     leading: float = 0
     render_mode: int = 0
     rise: float = 0
+    descent: float = 0
 
     def reset(self) -> None:
         """Reset the text state"""
@@ -394,6 +398,7 @@ class TextState:
         elif operator == "Tf":
             self.font = cast(Font, args[0])
             self.fontsize = cast(float, args[1])
+            self.descent = self.font.get_descent() * self.fontsize
         elif operator == "Tr":
             self.render_mode = cast(int, args[0])
         elif operator == "Ts":
@@ -769,8 +774,9 @@ class BaseInterpreter:
                         spec = dict_value(spec)
                         self.fontmap[fontid] = doc.get_font(objid, spec)
                     except TypeError:
-                        # FIXME: This is very very wrong! DO NOT WANT!
-                        log.warning("Broken/missing font spec for %r", fontid)
+                        log.warning(
+                            "Broken/missing font spec for Font ID %r: %r", fontid, spec
+                        )
                         self.fontmap[fontid] = doc.get_font(objid, {})
             elif k == "ColorSpace":
                 for csid, spec in dict_value(v).items():
@@ -1087,6 +1093,9 @@ class BaseInterpreter:
                 raise RuntimeError("Document no longer exists!")
             self.textstate.font = doc.get_font(None, {})
         self.textstate.fontsize = num_value(fontsize)
+        self.textstate.descent = (
+            self.textstate.font.get_descent() * self.textstate.fontsize
+        )
 
     def do_Tr(self, render: PDFObject) -> None:
         """Set the text rendering mode"""
@@ -1591,6 +1600,7 @@ class PageInterpreter(BaseInterpreter):
         self,
         *,
         cid: int,
+        text: str,
         matrix: Matrix,
         scaling: float,
     ) -> Tuple[LayoutDict, float]:
@@ -1598,12 +1608,6 @@ class PageInterpreter(BaseInterpreter):
         assert font is not None
         fontsize = self.textstate.fontsize
         rise = self.textstate.rise
-        try:
-            text = font.to_unichr(cid)
-            assert isinstance(text, str), f"Text {text!r} is not a str"
-        except PDFUnicodeNotDefined:
-            log.debug("undefined char: %r, %r", font, cid)
-            text = None
         textwidth = font.char_width(cid)
         adv = textwidth * fontsize * scaling
         if font.vertical:
@@ -1618,9 +1622,8 @@ class PageInterpreter(BaseInterpreter):
             x0, y0 = (-vx, vy + rise + adv)
             x1, y1 = (-vx + fontsize, vy + rise)
         else:
-            descent = font.get_descent() * fontsize
-            x0, y0 = (0, descent + rise)
-            x1, y1 = (adv, descent + rise + fontsize)
+            x0, y0 = (0, self.textstate.descent + rise)
+            x1, y1 = (adv, self.textstate.descent + rise + fontsize)
         (a, b, c, d, e, f) = matrix
         upright = a * d * scaling > 0 and b * c <= 0
         if font.vertical:
@@ -1683,12 +1686,13 @@ class PageInterpreter(BaseInterpreter):
                 if not isinstance(obj, bytes):
                     log.warning("Found non-string %r in text object", obj)
                     continue
-                for cid in self.textstate.font.decode(obj):
+                for cid, text in self.textstate.font.decode(obj):
                     if needcharspace:
                         pos += charspace
                     self.textstate.glyph_offset = (x, pos) if vert else (pos, y)
                     item, adv = self.render_char(
                         cid=cid,
+                        text=text,
                         matrix=translate_matrix(matrix, self.textstate.glyph_offset),
                         scaling=scaling,
                     )
@@ -1998,7 +2002,8 @@ class GlyphObject(ContentObject):
         context of iteration over the parent `TextObject`.
       cid: Character ID for this glyph.
       text: Unicode mapping of this glyph, if any.
-      adv: glyph displacement in user space units.
+      adv: glyph displacement in text space units (horizontal or vertical,
+           depending on the writing direction).
       matrix: rendering matrix for this glyph, which transforms text
               space (*not glyph space!*) coordinates to device space.
       bbox: glyph bounding box in device space.
@@ -2036,9 +2041,8 @@ class GlyphObject(ContentObject):
             x0, y0 = (-vx, vy + tstate.rise + self.adv)
             x1, y1 = (-vx + tstate.fontsize, vy + tstate.rise)
         else:
-            descent = font.get_descent() * tstate.fontsize
-            x0, y0 = (0, descent + tstate.rise)
-            x1, y1 = (self.adv, descent + tstate.rise + tstate.fontsize)
+            x0, y0 = (0, tstate.descent + tstate.rise)
+            x1, y1 = (self.adv, tstate.descent + tstate.rise + tstate.fontsize)
 
         if self.corners:
             return get_bound(
@@ -2102,16 +2106,10 @@ class TextObject(ContentObject):
                 if not isinstance(obj, bytes):
                     log.warning("Found non-string %r in text object", obj)
                     continue
-                for cid in font.decode(obj):
+                for cid, text in font.decode(obj):
                     if needcharspace:
                         pos += charspace
                     tstate.glyph_offset = (x, pos) if vert else (pos, y)
-                    try:
-                        text = font.to_unichr(cid)
-                        assert isinstance(text, str), f"Text {text!r} is not a str"
-                    except PDFUnicodeNotDefined:
-                        log.debug("undefined char: %r, %r", font, cid)
-                        text = None
                     textwidth = font.char_width(cid)
                     adv = textwidth * tstate.fontsize * scaling
                     x, y = tstate.glyph_offset
@@ -2149,13 +2147,8 @@ class TextObject(ContentObject):
                 for obj in item.args:
                     if not isinstance(obj, bytes):
                         continue
-                    for cid in font.decode(obj):
-                        try:
-                            text = font.to_unichr(cid)
-                            assert isinstance(text, str), f"Text {text!r} is not a str"
-                            self._chars.append(text)
-                        except PDFUnicodeNotDefined:
-                            log.debug("undefined char: %r, %r", font, cid)
+                    for cid, text in font.decode(obj):
+                        self._chars.append(text)
             elif item.operator == "Tf":
                 self.textstate.update(item.operator, *item.args)
         return "".join(self._chars)
@@ -2337,7 +2330,6 @@ class LazyInterpreter(BaseInterpreter):
         to get the initial textstate.  Next, we collect any subsequent
         operators until ET, and then execute them lazily.
         """
-        log.debug("executing ops before BT: %r", self.textobj)
         for item in self.textobj:
             self.textstate.update(item.operator, *item.args)
         self.textobj = []

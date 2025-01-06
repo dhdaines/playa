@@ -63,7 +63,7 @@ class CMapBase:
     def use_cmap(self, cmap: "CMapBase") -> None:
         pass
 
-    def decode(self, code: bytes) -> Iterable[int]:
+    def decode(self, code: bytes) -> Iterable[Tuple[bytes, int]]:
         raise NotImplementedError
 
 
@@ -93,18 +93,22 @@ class CMap(CMapBase):
 
         copy(self.code2cid, cmap.code2cid)
 
-    def decode(self, code: bytes) -> Iterator[int]:
+    def decode(self, code: bytes) -> Iterator[Tuple[bytes, int]]:
         d = self.code2cid
+        substr = []
         for i in iter(code):
             if i in d:
                 x = d[i]
+                substr.append(i)
                 if isinstance(x, int):
-                    yield x
+                    yield bytes(substr), x
                     d = self.code2cid
+                    del substr[:]
                 else:
                     d = x
             else:
                 d = self.code2cid
+                del substr[:]
 
     def dump(
         self,
@@ -124,19 +128,23 @@ class CMap(CMapBase):
 
 
 class IdentityCMap(CMapBase):
-    def decode(self, code: bytes) -> Tuple[int, ...]:
+    def decode(self, code: bytes) -> Iterable[Tuple[bytes, int]]:
         n = len(code) // 2
         if n:
-            return struct.unpack(">%dH" % n, code)
+            codes = (code[x : x + 2] for x in range(0, len(code), 2))
+            cids = struct.unpack(">%dH" % n, code)
+            return zip(codes, cids)
         else:
             return ()
 
 
 class IdentityCMapByte(IdentityCMap):
-    def decode(self, code: bytes) -> Tuple[int, ...]:
+    def decode(self, code: bytes) -> Iterable[Tuple[bytes, int]]:
         n = len(code)
         if n:
-            return struct.unpack(">%dB" % n, code)
+            codes = (code[x : x + 1] for x in range(n))
+            cids = struct.unpack(">%dB" % n, code)
+            return zip(codes, cids)
         else:
             return ()
 
@@ -155,12 +163,6 @@ class UnicodeMap(CMapBase):
     def dump(self, out: TextIO = sys.stdout) -> None:
         for k, v in sorted(self.cid2unichr.items()):
             out.write("cid %d = unicode %r\n" % (k, v))
-
-
-class IdentityUnicodeMap(UnicodeMap):
-    def get_unichr(self, cid: int) -> str:
-        """Interpret character id as unicode codepoint"""
-        return chr(cid)
 
 
 class PyCMap(CMap):
@@ -255,26 +257,72 @@ def decode_utf16_char(utf16: bytes) -> str:
     return utf16.decode("UTF-16BE", "ignore")
 
 
-class FileUnicodeMap(UnicodeMap):
-    """ToUnicode map loaded from a PDF stream"""
+class ToUnicodeMap:
+    """ToUnicode map loaded from a PDF stream.  Not a CMap!"""
 
-    def add_cid2bytes(self, cid: int, utf16: bytes) -> None:
-        self.add_cid2unichr(cid, decode_utf16_char(utf16))
+    def __init__(self) -> None:
+        self.attrs: Dict[str, Any] = {}
+        self.bytes2unicode: Dict[bytes, str] = {}
+        self.code_lengths: List[int] = []
+        self.code_space: List[Tuple[bytes, bytes]] = []
 
-    def add_cid2code(self, cid: int, code: int) -> None:
-        unichr = chr(code)
-        self.add_cid2unichr(cid, unichr)
+    def set_attr(self, k: str, v: Any) -> None:
+        self.attrs[k] = v
 
-    def add_cid2unichr(self, cid: int, unichr: str) -> None:
-        # A0 = non-breaking space, some weird fonts can have a collision on a cid here.
-        assert isinstance(unichr, str)
-        if unichr == "\u00a0" and self.cid2unichr.get(cid) == " ":
+    def use_cmap(self, cmap: "CMapBase") -> None:
+        # FIXME: This should probably do ... something?
+        pass
+
+    def add_code_range(self, start: bytes, end: bytes):
+        """Add a code-space range"""
+        if len(start) != len(end):
+            log.warning(
+                "Ignoring inconsistent code lengths in code space: %r / %r", start, end
+            )
             return
-        self.cid2unichr[cid] = unichr
+        codelen = len(start)
+        pos = bisect_left(self.code_lengths, codelen)
+        self.code_lengths.insert(pos, codelen)
+        self.code_space.insert(pos, (start, end))
+
+    def decode(self, code: bytes) -> Iterator[str]:
+        """Decode a multi-byte string to Unicode sequences"""
+        idx = 0
+        codelen = 1
+        while idx < len(code):
+            # Match code space ranges
+            for codelen, (start, end) in zip(self.code_lengths, self.code_space):
+                substr = code[idx : idx + codelen]
+                # NOTE: lexicographical ordering is the same as
+                # big-endian numerical ordering so this works
+                if substr >= start and substr <= end:
+                    if substr in self.bytes2unicode:
+                        yield self.bytes2unicode[substr]
+                    else:
+                        # FIXME: This is probably much too verbose
+                        log.warning("Undefined character code %r", substr)
+                        yield chr(int.from_bytes(substr, "big"))
+                    idx += codelen
+                    break
+            else:
+                log.warning("No code space found for %r", code[idx:])
+                yield chr(code[idx])
+                idx += 1
+
+    def add_cid2bytes(self, cid: int, utf16: bytes, codelen: int) -> None:
+        self.add_cid2unichr(cid, decode_utf16_char(utf16), codelen)
+
+    def add_cid2code(self, cid: int, code: int, codelen: int) -> None:
+        uni = chr(code)
+        self.add_cid2unichr(cid, uni, codelen)
+
+    def add_cid2unichr(self, cid: int, uni: str, codelen: int) -> None:
+        self.bytes2unicode[cid.to_bytes(codelen, "big")] = uni
 
     def add_bf_range(self, start_byte: bytes, end_byte: bytes, code: PDFObject) -> None:
         start = nunpack(start_byte)
         end = nunpack(end_byte)
+        codelen = len(start_byte)
         if isinstance(code, list):
             if len(code) != end - start + 1:
                 log.warning(
@@ -283,7 +331,7 @@ class FileUnicodeMap(UnicodeMap):
                 )
             for cid, unicode_value in zip(range(start, end + 1), code):
                 assert isinstance(unicode_value, bytes)
-                self.add_cid2bytes(cid, unicode_value)
+                self.add_cid2bytes(cid, unicode_value, codelen)
         elif isinstance(code, bytes):
             var = code[-4:]
             base = nunpack(var)
@@ -291,16 +339,16 @@ class FileUnicodeMap(UnicodeMap):
             vlen = len(var)
             for i in range(end - start + 1):
                 x = prefix + struct.pack(">L", base + i)[-vlen:]
-                self.add_cid2bytes(start + i, x)
+                self.add_cid2bytes(start + i, x, codelen)
         elif isinstance(code, int):
             for i in range(end - start + 1):
-                self.add_cid2code(start + i, code + i)
+                self.add_cid2code(start + i, code + i, codelen)
         else:
             raise ValueError("Unuspported character code %r", code)
 
 
-def parse_tounicode(data: bytes) -> FileUnicodeMap:
-    cmap = FileUnicodeMap()
+def parse_tounicode(data: bytes) -> ToUnicodeMap:
+    cmap = ToUnicodeMap()
     stack: List[PDFObject] = []
     parser = ObjectParser(data)
     # some ToUnicode maps don't have "begincmap" keyword.
@@ -347,6 +395,22 @@ def parse_tounicode(data: bytes) -> FileUnicodeMap:
         elif obj is KEYWORD_BEGINCODESPACERANGE:
             del stack[:]
         elif obj is KEYWORD_ENDCODESPACERANGE:
+            for start_code, end_code in choplist(2, stack):
+                if not isinstance(start_code, bytes):
+                    log.warning(
+                        "Start of code space range %r %r is not bytes.",
+                        start_code,
+                        end_code,
+                    )
+                    return cmap
+                if not isinstance(end_code, bytes):
+                    log.warning(
+                        "End of code space range %r %r is not bytes.",
+                        start_code,
+                        end_code,
+                    )
+                    return cmap
+                cmap.add_code_range(start_code, end_code)
             del stack[:]
         elif obj is KEYWORD_BEGINCIDRANGE:
             del stack[:]
@@ -368,7 +432,7 @@ def parse_tounicode(data: bytes) -> FileUnicodeMap:
         elif obj is KEYWORD_ENDCIDCHAR:
             for cid, code in choplist(2, stack):
                 if isinstance(cid, bytes) and isinstance(code, int):
-                    cmap.add_cid2code(nunpack(cid), code)
+                    cmap.add_cid2code(nunpack(cid), code, len(cid))
             del stack[:]
         elif obj is KEYWORD_BEGINBFRANGE:
             del stack[:]
@@ -390,7 +454,7 @@ def parse_tounicode(data: bytes) -> FileUnicodeMap:
         elif obj is KEYWORD_ENDBFCHAR:
             for cid, code in choplist(2, stack):
                 if isinstance(cid, bytes) and isinstance(code, bytes):
-                    cmap.add_cid2bytes(nunpack(cid), code)
+                    cmap.add_cid2bytes(nunpack(cid), code, len(cid))
             del stack[:]
         elif obj is KEYWORD_BEGINNOTDEFRANGE:
             del stack[:]
@@ -423,7 +487,7 @@ class EncodingCMap(CMap):
         self.code_lengths.insert(pos, codelen)
         self.code_space.insert(pos, (start, end))
 
-    def decode(self, code: bytes) -> Iterator[int]:
+    def decode(self, code: bytes) -> Iterator[Tuple[bytes, int]]:
         """Decode a multi-byte string according to the CMap"""
         idx = 0
         codelen = 1
@@ -439,9 +503,9 @@ class EncodingCMap(CMap):
                         # no such glyph exists in the descendant
                         # CIDFont...
                         # FIXME: Implement notdef mappings
-                        yield 0
+                        yield substr, 0
                     else:
-                        yield self.bytes2cid[substr]
+                        yield substr, self.bytes2cid[substr]
                     idx += codelen
                     break
             else:
@@ -451,6 +515,7 @@ class EncodingCMap(CMap):
                 log.warning("No code space found for %r", code[idx:])
                 # FIXME: Implement the somewhat obscure partial
                 # matching algorithm (might consume more than 1 byte)
+                yield code[idx : idx + 1], 0
                 idx += 1
 
     def add_bytes2cid(self, utf16: bytes, cid: int) -> None:

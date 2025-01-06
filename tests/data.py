@@ -46,13 +46,4 @@ XFAILS = {
     # really rather broken.
     "issue9418.pdf",
     "bug1250079.pdf",
-    # pdf.js doesn't extract text correctly here but it is possible
-    # "issue9915_reduced.pdf",  # ToUnicode points to the same place as Encoding
-    # We "accept" these but our handling of ToUnicode mappings is very
-    # incorrect, so no text is produced for the glyphs.  Leaving them
-    # here as the tests should be updated to verify text extraction
-    # works once we figure out how to support them
-    # "issue2931.pdf",  # ToUnicode maps input characters not CIDs (ASCII)
-    # "issue9534_reduced.pdf",  # ToUnicode maps input characters not CIDs (UTF-16BE)
-    # "issue18117.pdf",  # ToUnicode maps input characters not CIDs (UTF-8)
 }

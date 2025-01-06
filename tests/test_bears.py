@@ -20,6 +20,7 @@ import playa
 TESTDIR = Path(__file__).parent.parent / "samples"
 
 
+@pytest.mark.filterwarnings("ignore::DeprecationWarning")
 @pytest.mark.skipif(pd is None, reason="Pandas is not installed")
 def test_pandas_dataframe():
     """Load from PLAYA to Pandas"""
@@ -28,6 +29,7 @@ def test_pandas_dataframe():
         assert len(df) == 1093
 
 
+@pytest.mark.filterwarnings("ignore::DeprecationWarning")
 @pytest.mark.skipif(pl is None, reason="Polars is not instaled")
 def test_polars_dataframe():
     """Load from PLAYA to Pandas"""

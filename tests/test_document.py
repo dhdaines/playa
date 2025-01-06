@@ -135,6 +135,7 @@ def test_outlines():
         ]
 
 
+@pytest.mark.filterwarnings("ignore::DeprecationWarning")
 @pytest.mark.skipif(not CONTRIB.exists(), reason="contrib samples not present")
 def test_xobjects() -> None:
     with playa.open(CONTRIB / "basicapi.pdf") as doc:
