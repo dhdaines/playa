@@ -44,8 +44,9 @@ as a CSV, but for that you want PAVÉS now.
 import argparse
 import json
 import logging
+from collections import deque
 from pathlib import Path
-from typing import Any
+from typing import Any, Deque, Tuple
 
 import playa
 from playa.document import Document
@@ -66,6 +67,12 @@ def make_argparse() -> argparse.ArgumentParser:
         "--catalog",
         action="store_true",
         help="Recursively expand the document catalog as JSON",
+    )
+    parser.add_argument(
+        "-x",
+        "--text",
+        action="store_true",
+        help="Extract ",
     )
     parser.add_argument(
         "-o",
@@ -99,26 +106,25 @@ def resolve_many(x: object, default: object = None) -> Any:
     print a nice JSON object.  For the moment we simply resolve them
     all *once*, though better solutions are possible.
 
-    This means, for instance, that your `/ParentTree` will just be a
-    big list of `ObjRef`.
+    We resolve stuff in breadth-first order to avoid severely
+    unbalanced catalogs, but this is not entirely optimal.
 
     """
-
-    def resolver(x: object, default: object, danger: set) -> Any:
-        while isinstance(x, ObjRef) and x not in danger:
-            danger.add(x)
-            x = x.resolve(default=default)
-        if isinstance(x, list):
-            x = [resolver(v, default, danger) for v in x]
-        elif isinstance(x, dict):
-            for k, v in x.items():
-                x[k] = resolver(v, default, danger)
-        elif isinstance(x, ContentStream):
-            for k, v in x.attrs.items():
-                x.attrs[k] = resolver(v, default, danger)
-        return x
-
-    return resolver(x, default, set())
+    danger = set()
+    to_visit: Deque[Tuple[Any, Any, Any]] = deque([([x], 0, x)])
+    while to_visit:
+        (parent, key, obj) = to_visit.popleft()
+        while isinstance(obj, ObjRef) and obj not in danger:
+            danger.add(obj)
+            obj = obj.resolve(default=default)
+        parent[key] = obj
+        if isinstance(obj, list):
+            to_visit.extend((obj, idx, v) for idx, v in enumerate(obj))
+        elif isinstance(obj, dict):
+            to_visit.extend((obj, k, v) for k, v in obj.items())
+        elif isinstance(obj, ContentStream):
+            to_visit.extend((obj.attrs, k, v) for k, v in obj.attrs.items())
+    return x
 
 
 def extract_catalog(doc: Document, args: argparse.Namespace) -> None:
