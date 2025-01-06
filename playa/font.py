@@ -1121,14 +1121,6 @@ class CIDFont(Font):
                 cmap_name = literal_name(spec_encoding["CMapName"])
         except KeyError:
             log.warning("Font spec is missing Encoding: %r", spec)
-
-        if type(cmap_name) is ContentStream:  # type: ignore[comparison-overlap]
-            cmap_name_stream: ContentStream = cast(ContentStream, cmap_name)
-            if "CMapName" in cmap_name_stream:
-                cmap_name = cmap_name_stream.get("CMapName").name
-            else:
-                log.warning("No CMap found for encoding %s", spec_encoding)
-
         return IDENTITY_ENCODER.get(cmap_name, cmap_name)
 
     def __repr__(self) -> str:
