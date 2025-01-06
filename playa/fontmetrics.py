@@ -64,13 +64,13 @@ def convert_font_metrics(path: str) -> None:
                 props[k] = tuple(map(float, f[1:5]))
         print("# -*- python -*-")
         print("from typing import Any, Dict, Tuple")
-        print("FONT_METRICS: Dict[str, Tuple[Dict[str, Any], Dict[str, float]]] = {")
+        print("FONT_METRICS: Dict[str, Tuple[Dict[str, Any], Dict[str, int]]] = {")
         for fontname, (props, chars) in fonts.items():
             print(f" {fontname!r}: {(props, chars)!r},")
         print("}")
 
 
-FONT_METRICS: Dict[str, Tuple[Dict[str, Any], Dict[str, float]]] = {
+FONT_METRICS: Dict[str, Tuple[Dict[str, Any], Dict[str, int]]] = {
     "Courier": (
         {
             "FontName": "Courier",

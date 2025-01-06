@@ -1,7 +1,6 @@
 import logging
 import struct
 from collections import deque
-from functools import cache
 from io import BytesIO
 from typing import (
     Any,
@@ -805,10 +804,6 @@ class TrueTypeFontProgram:
 LITERAL_STANDARD_ENCODING = LIT("StandardEncoding")
 LITERAL_TYPE1C = LIT("Type1C")
 
-# Font widths are maintained in a dict type that maps from *either* unicode
-# chars or integer character IDs.
-FontWidthDict = Union[Dict[int, float], Dict[str, float]]
-
 
 class Font:
     vertical = False
@@ -817,11 +812,11 @@ class Font:
     def __init__(
         self,
         descriptor: Mapping[str, Any],
-        widths: FontWidthDict,
+        widths: Dict[int, float],
         default_width: Optional[float] = None,
     ) -> None:
         self.descriptor = descriptor
-        self.widths: FontWidthDict = resolve_all(widths)
+        self.widths = resolve_all(widths)
         self.fontname = resolve1(descriptor.get("FontName", "unknown"))
         if isinstance(self.fontname, PSLiteral):
             self.fontname = literal_name(self.fontname)
@@ -874,18 +869,11 @@ class Font:
             h = self.ascent - self.descent
         return h * self.vscale
 
-    @cache
     def char_width(self, cid: int) -> float:
-        # Because character widths may be mapping either IDs or strings,
-        # we try to lookup the character ID first, then its str equivalent.
-        try:
-            return cast(Dict[int, float], self.widths)[cid] * self.hscale
-        except KeyError:
-            str_widths = cast(Dict[str, float], self.widths)
-            try:
-                return str_widths[self.to_unichr(cid)] * self.hscale
-            except (KeyError, PDFUnicodeNotDefined):
-                return self.default_width * self.hscale
+        """Get the width of a character from its CID."""
+        if cid not in self.widths:
+            return self.default_width * self.hscale
+        return self.widths[cid] * self.hscale
 
     def char_disp(self, cid: int) -> Union[float, Tuple[Optional[float], float]]:
         """Returns an integer for horizontal fonts, a tuple for vertical fonts."""
@@ -902,7 +890,7 @@ class SimpleFont(Font):
     def __init__(
         self,
         descriptor: Mapping[str, Any],
-        widths: FontWidthDict,
+        widths: Dict[int, float],
         spec: Mapping[str, Any],
     ) -> None:
         # Font encoding is specified either by a name of
@@ -937,6 +925,8 @@ class SimpleFont(Font):
 
 
 class Type1Font(SimpleFont):
+    char_widths: Union[Dict[str, int], None] = None
+
     def __init__(self, spec: Mapping[str, Any]) -> None:
         try:
             self.basefont = literal_name(resolve1(spec["BaseFont"]))
@@ -944,9 +934,10 @@ class Type1Font(SimpleFont):
             log.warning("Font spec is missing BaseFont: %r", spec)
             self.basefont = "unknown"
 
-        widths: FontWidthDict
+        widths: Dict[int, float]
         if self.basefont in FONT_METRICS:
-            (descriptor, widths) = FONT_METRICS[self.basefont]
+            (descriptor, self.char_widths) = FONT_METRICS[self.basefont]
+            widths = {}
         else:
             descriptor = dict_value(spec.get("FontDescriptor", {}))
             firstchar = int_value(spec.get("FirstChar", 0))
@@ -961,6 +952,17 @@ class Type1Font(SimpleFont):
             data = self.fontfile.buffer[:length1]
             parser = Type1FontHeaderParser(data)
             self.cid2unicode = parser.get_encoding()
+
+    def char_width(self, cid: int) -> float:
+        """Get the width of a character from its CID."""
+        if self.char_widths is not None:
+            if cid not in self.cid2unicode:
+                width = self.default_width
+            else:
+                width = self.char_widths.get(self.cid2unicode[cid], self.default_width)
+        else:
+            width = self.widths.get(cid, self.default_width)
+        return width * self.hscale
 
     def __repr__(self) -> str:
         return "<Type1Font: basefont=%r>" % self.basefont
