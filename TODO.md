@@ -1,5 +1,8 @@
 ## PLAYA 0.2.x
-- [ ] Fix ToUnicode CMaps for CID fonts (file bug against pdfminer)
+- [ ] Fix ToUnicode CMaps for CID fonts
+  - [ ] Determine how to deal with bogus ToUnicode (add_cid2code)
+  - [ ] Understand how/if TrueType unicode mapping works
+  - [ ] Understand uses of ToUnicode outside CIDFont
 - [x] Optimize text extraction
 - [ ] Support slices and lists in `PageList.__getitem__`
 - [x] Remove remaining dangerous `cast` usage
