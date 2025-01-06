@@ -1,7 +1,7 @@
 ## PLAYA 0.2.x
-- [ ] Fix ToUnicode CMaps for CID fonts
+- [x] Fix ToUnicode CMaps for CID fonts
 - [x] Optimize text extraction
-- [ ] Support slices and lists in `PageList.__getitem__`
+- [x] Support slices and lists in `PageList.__getitem__`
 - [x] Remove remaining dangerous `cast` usage
 
 ## PLAYA 0.3.x
