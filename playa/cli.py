@@ -72,7 +72,7 @@ def make_argparse() -> argparse.ArgumentParser:
         "-x",
         "--text",
         action="store_true",
-        help="Extract ",
+        help="Extract text, badly",
     )
     parser.add_argument(
         "-o",
@@ -172,6 +172,13 @@ def extract_metadata(doc: Document, args: argparse.Namespace) -> None:
     json.dump(stuff, args.outfile, indent=2, ensure_ascii=False)
 
 
+def extract_text_badly(doc: Document, args: argparse.Namespace) -> None:
+    """Extract text, badly."""
+    for page in doc.pages:
+        for text in page.texts:
+            print(text.chars, file=args.outfile)
+
+
 def main() -> None:
     parser = make_argparse()
     args = parser.parse_args()
@@ -182,6 +189,8 @@ def main() -> None:
                 extract_stream(doc, args)
             elif args.catalog:
                 extract_catalog(doc, args)
+            elif args.text:
+                extract_text_badly(doc, args)
             else:
                 extract_metadata(doc, args)
     except RuntimeError as e:
