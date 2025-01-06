@@ -226,25 +226,23 @@ def resolve1(x: object, default: object = None) -> Any:
 def resolve_all(x: object, default: object = None) -> Any:
     """Resolves all indirect object references inside the given object.
 
-    This will happily create circular references, so beware.
+    This creates new copies of any lists or dictionaries, so the
+    original object is not modified.  However, it will ultimately
+    create circular references if they exist, so beware.
     """
 
     def resolver(x: object, default: object, seen: Dict[ObjRef, object]) -> Any:
-        if isinstance(x, ObjRef):
-            if x in seen:
-                return seen[x]
-            ref = x
-            while isinstance(x, ObjRef):
-                x = x.resolve(default=default)
-            seen[ref] = x
+        while isinstance(x, ObjRef):
+            if x.objid in seen:
+                return seen[x.objid]
+            seen[x.objid] = x.resolve(default=default)
+            x = seen[x.objid]
+        k: Any
+        v: Any
         if isinstance(x, list):
-            x = [resolver(v, default, seen) for v in x]
+            return [resolver(v, default, seen) for v in x]
         elif isinstance(x, dict):
-            for k, v in x.items():
-                x[k] = resolver(v, default, seen)
-        elif isinstance(x, ContentStream):
-            for k, v in x.attrs.items():
-                x.attrs[k] = resolver(v, default, seen)
+            return {k: resolver(v, default, seen) for k, v in x.items()}
         return x
 
     return resolver(x, default, {})
@@ -259,8 +257,7 @@ def decipher_all(decipher: DecipherCallable, objid: int, genno: int, x: object) 
     if isinstance(x, list):
         x = [decipher_all(decipher, objid, genno, v) for v in x]
     elif isinstance(x, dict):
-        for k, v in x.items():
-            x[k] = decipher_all(decipher, objid, genno, v)
+        return {k: decipher_all(decipher, objid, genno, v) for k, v in x.items()}
     return x
 
 
