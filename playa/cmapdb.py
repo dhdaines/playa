@@ -265,8 +265,6 @@ class ToUnicodeMap:
         self.bytes2unicode: Dict[bytes, str] = {}
         self.code_lengths: List[int] = []
         self.code_space: List[Tuple[bytes, bytes]] = []
-        # FIXME: will go away!
-        self.cid2unichr: Dict[int, str] = {}
 
     def set_attr(self, k: str, v: Any) -> None:
         self.attrs[k] = v
@@ -319,7 +317,6 @@ class ToUnicodeMap:
         self.add_cid2unichr(cid, uni, codelen)
 
     def add_cid2unichr(self, cid: int, uni: str, codelen: int) -> None:
-        self.cid2unichr[cid] = uni
         self.bytes2unicode[cid.to_bytes(codelen, "big")] = uni
 
     def add_bf_range(self, start_byte: bytes, end_byte: bytes, code: PDFObject) -> None:
