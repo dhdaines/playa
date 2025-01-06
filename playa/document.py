@@ -1412,8 +1412,10 @@ class PageList:
         return iter(self._pages)
 
     def __getitem__(self, key: Union[int, str]) -> Page:
-        if isinstance(key, int):
+        if isinstance(key, int) or isinstance(key, slice):
             return self._pages[key]
+        elif isinstance(key, tuple):
+            return [self[k] for k in key]
         else:
             return self._labels[key]
 

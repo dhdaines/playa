@@ -97,6 +97,11 @@ def test_pages():
         assert LIT("Artifact") in objects
         tokens = list(page_objects[2].tokens)
         assert b"diversit\xe9 " in tokens
+        twopages = doc.pages[2:4]
+        assert len(twopages) == 2
+        assert [p.label for p in twopages] == ["3", "4"]
+        threepages = doc.pages["2", 2, 3]
+        assert [p.label for p in threepages] == ["2", "3", "4"]
 
 
 @pytest.mark.skipif(not CONTRIB.exists(), reason="contrib samples not present")
