@@ -1,10 +1,14 @@
-## PLAYA 0.2.7: 2025-01-06
+## PLAYA 0.2.7: 2025-01-07
 - Remove excessive debug logging
 - Add rendering matrix to `GlyphObject`
 - Fix ToUnicode CMaps for CID fonts
 - Optimize text extraction
 - Support slices and lists in `PageList.__getitem__`
 - Remove remaining dangerous `cast` usage
+- Make text extraction less Lazy so that we get graphics state correct
+  (slightly breaking change)
+- Correct the handling of marked content sections\
+- Be robust to junk before the header
 - Deliberately break the CLI (ZeroVer FTW YOLO ROTFL)
 
 ## PLAYA 0.2.6: 2024-12-30

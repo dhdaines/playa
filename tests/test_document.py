@@ -30,10 +30,11 @@ def test_read_header():
     with pytest.raises(PDFSyntaxError) as e:
         read_header(BytesIO(b"%PDF-OMG"))
     assert "invalid" in str(e)
-    assert read_header(BytesIO(b"%PDF-1.7")) == "1.7"
+    assert read_header(BytesIO(b"%PDF-1.7")) == ("1.7", 0)
     with open(TESTDIR / "junk_before_header.pdf", "rb") as infh:
-        assert read_header(infh) == "1.4"
-        assert infh.tell() == 74
+        version, pos = read_header(infh)
+        assert version == "1.4"
+        assert pos == 74
 
 
 def test_read_xref():

@@ -713,29 +713,29 @@ SECURITY_HANDLERS = {
 }
 
 
-def read_header(fp: BinaryIO) -> str:
-    """Read the PDF header and return the (initial) version string.
+def read_header(fp: BinaryIO) -> Tuple[str, int]:
+    """Read the PDF header and return the (initial) version string and
+    its position.
 
-    Sets the position in the file to the beginning of the header (if
-    it isn't at the start of the document).
+    Sets the file pointer to after the header (this is not reliable).
 
     Note that this version can be overridden in the document catalog.
 
     """
     try:
         hdr = fp.read(8)
-        fp.seek(0)
+        start = 0
     except IOError as err:
         raise PDFSyntaxError("Failed to read PDF header") from err
     if not hdr.startswith(b"%PDF-"):
         # Try harder... there might be some extra junk before it
-        fp.seek(0)
-        hdr = fp.read(4096)
+        fp.seek(0, 0)
+        hdr = fp.read(4096)  # FIXME: this is arbitrary...
         start = hdr.find(b"%PDF-")
         if start == -1:
             raise PDFSyntaxError("Could not find b'%%PDF-', is this a PDF?")
         hdr = hdr[start : start + 8]
-        fp.seek(start)
+        fp.seek(start + 8)
     try:
         version = hdr[5:].decode("ascii")
     except UnicodeDecodeError as err:
@@ -744,7 +744,7 @@ def read_header(fp: BinaryIO) -> str:
         ) from err
     if not re.match(r"\d\.\d", version):
         raise PDFSyntaxError("Version number in  %r is invalid" % hdr)
-    return version
+    return version, start
 
 
 class OutlineItem(NamedTuple):
@@ -844,19 +844,19 @@ class Document:
         # The header is frequently mangled, in which case we will try to read the
         # file anyway.
         try:
-            self.pdf_version = read_header(fp)
+            self.pdf_version, self.offset = read_header(fp)
             log.debug("Found header at position %d", fp.tell())
         except PDFSyntaxError:
             log.warning("PDF header not found, will try to read the file anyway")
             self.pdf_version = "UNKNOWN"
+            self.offset = 0
         try:
-            self.offset = fp.tell()
             self.buffer: Union[bytes, mmap.mmap] = mmap.mmap(
                 fp.fileno(), 0, access=mmap.ACCESS_READ
             )
         except io.UnsupportedOperation:
             log.warning("mmap not supported on %r, reading document into memory", fp)
-            self.offset = 0
+            fp.seek(0, 0)
             self.buffer = fp.read()
         except ValueError:
             raise
