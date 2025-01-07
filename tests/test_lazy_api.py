@@ -142,3 +142,15 @@ def test_operators_in_text() -> None:
         # Text isn't lazy anymore, the gstate was reset
         assert text.ctm[0] == 1.0
         assert text.chars == "Hello World"
+    # Also verify that calling TJ with no actual text still does something
+    with playa.open(TESTDIR / "text_side_effects.pdf") as pdf:
+        boxes = [[g.bbox for g in t] for t in pdf.pages[0].texts]
+        # there was a -5000 that moved it right
+        assert boxes[0][0][0] >= 170
+        # and a -1000 that moved it right some more
+        assert boxes[1][0][0] >= 210
+    # Also verify that we get the right ActualText
+    with playa.open(TESTDIR / "actualtext.pdf") as pdf:
+        for t in pdf.pages[0].texts:
+            if "ActualText" in t.mcs.props:
+                assert t.mcs.props["ActualText"].decode("utf-16") == "x̌"
