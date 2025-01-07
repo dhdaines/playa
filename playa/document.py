@@ -126,12 +126,12 @@ class XRefTable:
     plain text at the end of the file.
     """
 
-    def __init__(self, parser: ObjectParser) -> None:
+    def __init__(self, parser: ObjectParser, offset: int = 0) -> None:
         self.offsets: Dict[int, XRefPos] = {}
         self.trailer: Dict[str, Any] = {}
-        self._load(parser)
+        self._load(parser, offset)
 
-    def _load(self, parser: ObjectParser) -> None:
+    def _load(self, parser: ObjectParser, offset: int) -> None:
         while True:
             pos, line = parser.nextline()
             if line == b"":
@@ -163,7 +163,7 @@ class XRefTable:
                 (pos_b, genno_b, use_b) = f
                 if use_b != b"n":
                     continue
-                self.offsets[objid] = XRefPos(None, int(pos_b), int(genno_b))
+                self.offsets[objid] = XRefPos(None, int(pos_b) + offset, int(genno_b))
         self._load_trailer(parser)
 
     def _load_trailer(self, parser: ObjectParser) -> None:
@@ -268,7 +268,8 @@ class XRefFallback:
 class XRefStream:
     """Cross-reference stream (as of PDF 1.5)"""
 
-    def __init__(self, parser: IndirectObjectParser) -> None:
+    def __init__(self, parser: IndirectObjectParser, offset: int = 0) -> None:
+        self.offset = offset
         self.data: Optional[bytes] = None
         self.entlen: Optional[int] = None
         self.fl1: Optional[int] = None
@@ -330,9 +331,9 @@ class XRefStream:
         f1 = nunpack(ent[: self.fl1], 1)
         f2 = nunpack(ent[self.fl1 : self.fl1 + self.fl2])
         f3 = nunpack(ent[self.fl1 + self.fl2 :])
-        if f1 == 1:
-            return XRefPos(None, f2, f3)
-        elif f1 == 2:
+        if f1 == 1:  # not in an object stream
+            return XRefPos(None, f2 + self.offset, f3)
+        elif f1 == 2:  # in an object stream
             return XRefPos(f2, f3, 0)
         else:
             # this is a free object
@@ -712,23 +713,30 @@ SECURITY_HANDLERS = {
 }
 
 
-def read_header(fp: BinaryIO) -> str:
-    """Read the PDF header and return the (initial) version string.
+def read_header(fp: BinaryIO) -> Tuple[str, int]:
+    """Read the PDF header and return the (initial) version string and
+    its position.
 
-    Note that this version can be overridden in the document catalog."""
+    Sets the file pointer to after the header (this is not reliable).
+
+    Note that this version can be overridden in the document catalog.
+
+    """
     try:
         hdr = fp.read(8)
+        start = 0
     except IOError as err:
         raise PDFSyntaxError("Failed to read PDF header") from err
     if not hdr.startswith(b"%PDF-"):
         # Try harder... there might be some extra junk before it
-        fp.seek(0)
-        hdr += fp.read(4096)
+        fp.seek(0, 0)
+        hdr = fp.read(4096)  # FIXME: this is arbitrary...
         start = hdr.find(b"%PDF-")
         if start == -1:
             raise PDFSyntaxError("Could not find b'%%PDF-', is this a PDF?")
         hdr = hdr[start : start + 8]
-        fp.seek(start)
+        fp.seek(start + 8)
+        log.debug("Found header at position %d: %r", start, hdr)
     try:
         version = hdr[5:].decode("ascii")
     except UnicodeDecodeError as err:
@@ -737,7 +745,7 @@ def read_header(fp: BinaryIO) -> str:
         ) from err
     if not re.match(r"\d\.\d", version):
         raise PDFSyntaxError("Version number in  %r is invalid" % hdr)
-    return version
+    return version, start
 
 
 class OutlineItem(NamedTuple):
@@ -837,18 +845,18 @@ class Document:
         # The header is frequently mangled, in which case we will try to read the
         # file anyway.
         try:
-            self.pdf_version = read_header(fp)
+            self.pdf_version, self.offset = read_header(fp)
         except PDFSyntaxError:
             log.warning("PDF header not found, will try to read the file anyway")
             self.pdf_version = "UNKNOWN"
-        # Make sure we read the whole file if we need to read the file!
-        fp.seek(0, 0)
+            self.offset = 0
         try:
             self.buffer: Union[bytes, mmap.mmap] = mmap.mmap(
                 fp.fileno(), 0, access=mmap.ACCESS_READ
             )
         except io.UnsupportedOperation:
             log.warning("mmap not supported on %r, reading document into memory", fp)
+            fp.seek(0, 0)
             self.buffer = fp.read()
         except ValueError:
             raise
@@ -859,8 +867,10 @@ class Document:
         # page cross-reference table (for linearized PDFs) after the
         # header, it will instead be loaded with all the rest.
         self.parser = IndirectObjectParser(self.buffer, self)
+        self.parser.seek(self.offset)
         try:
             pos = self._find_xref()
+            log.debug("Found xref at %d", pos)
             self._read_xref_from(pos, self.xrefs)
         except (ValueError, IndexError, StopIteration, PDFSyntaxError) as e:
             log.debug("Using fallback XRef parsing: %s", e)
@@ -1317,7 +1327,7 @@ class Document:
                 elif start > pos:
                     log.warning("Invalid startxref position (> %d): %d", pos, start)
                     continue
-                return start
+                return start + self.offset
             elif line == b"xref":
                 return pos
             elif line == b"endobj":
@@ -1341,7 +1351,7 @@ class Document:
             raise ValueError("Unexpected EOF at {start}")
         if token is KEYWORD_XREF:
             parser.nextline()
-            xref: XRef = XRefTable(parser)
+            xref: XRef = XRefTable(parser, self.offset)
         else:
             # It might be an XRefStream, if this is an indirect object...
             _, token = parser.nexttoken()
@@ -1350,24 +1360,24 @@ class Document:
                 # XRefStream: PDF-1.5
                 self.parser.seek(pos)
                 self.parser.reset()
-                xref = XRefStream(self.parser)
+                xref = XRefStream(self.parser, self.offset)
             else:
                 # Well, maybe it's an XRef table without "xref" (but
                 # probably not)
                 parser.seek(pos)
-                xref = XRefTable(parser)
+                xref = XRefTable(parser, self.offset)
         xrefs.append(xref)
         trailer = xref.trailer
         # For hybrid-reference files, an additional set of xrefs as a
         # stream.
         if "XRefStm" in trailer:
             pos = int_value(trailer["XRefStm"])
-            self._read_xref_from(pos, xrefs)
+            self._read_xref_from(pos + self.offset, xrefs)
         # Recurse into any previous xref tables or streams
         if "Prev" in trailer:
             # find previous xref
             pos = int_value(trailer["Prev"])
-            self._read_xref_from(pos, xrefs)
+            self._read_xref_from(pos + self.offset, xrefs)
 
 
 __pdf: Union[Document, None] = None
