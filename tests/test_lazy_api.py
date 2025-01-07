@@ -44,18 +44,10 @@ def test_content_objects():
             boxes.append(ibbox)
             texts.append(obj.chars)
             assert len(obj) == sum(1 for glyph in obj)
-        assert boxes == [
-            [358, 896, 360, 905],
-            [71, 681, 490, 895],
-            [71, 667, 214, 679],
-            [71, 615, 240, 653],
-            [71, 601, 232, 613],
-            [71, 549, 289, 587],
-            [71, 535, 248, 547],
-            [71, 469, 451, 521],
-            [451, 470, 454, 481],
-            [71, 79, 499, 467],
-        ]
+        # Now there are ... a lot of text objects
+        assert boxes[0] == [358, 896, 360, 905]
+        assert boxes[-1] == [99, 79, 102, 90]
+        assert len(boxes) == 204
 
 
 @pytest.mark.parametrize("path", ALLPDFS, ids=str)
@@ -120,3 +112,47 @@ def test_rotated_bboxes() -> None:
         gtb = get_transformed_bound(ctm, bbox)
         bound = get_bound((apply_matrix_pt(ctm, p) for p in points))
         assert gtb == bound
+
+
+def test_operators_in_text() -> None:
+    """Verify that other operators are properly ordered in text objects."""
+    with playa.open(TESTDIR / "graphics_state_in_text_object.pdf") as pdf:
+        page = pdf.pages[0]
+        itor = iter(page.texts)
+        text = next(itor)
+        # Initial CTM
+        assert text.ctm[0] == 1.0
+        gitor = iter(text)
+        a = next(gitor)
+        assert a.text == "A"
+        assert a.ctm[0] == 1.0
+        text = next(itor)
+        gitor = iter(text)
+        b = next(gitor)
+        assert b.text == "B"
+        assert b.ctm[0] == 1.5
+        assert b.gstate.ncs.name == "DeviceRGB"
+        assert b.gstate.ncolor.values == (0.75, 0.25, 0.25)
+        text = next(itor)
+        gitor = iter(text)
+        c = next(gitor)
+        assert c.text == "C"
+
+        text = next(itor)
+        # Text isn't lazy anymore, the gstate was reset
+        assert text.ctm[0] == 1.0
+        assert text.chars == "Hello World"
+    # Also verify that calling TJ with no actual text still does something
+    with playa.open(TESTDIR / "text_side_effects.pdf") as pdf:
+        boxes = [[g.bbox for g in t] for t in pdf.pages[0].texts]
+        # there was a -5000 that moved it right
+        assert boxes[0][0][0] >= 170
+        # and a -1000 that moved it right some more
+        assert boxes[1][0][0] >= 210
+    # Also verify that we get the right ActualText and MCID
+    with playa.open(TESTDIR / "actualtext.pdf") as pdf:
+        for t in pdf.pages[0].texts:
+            if t.mcs and "ActualText" in t.mcs.props:
+                assert isinstance(t.mcs.props["ActualText"], bytes)
+                assert t.mcs.props["ActualText"].decode("utf-16") == "x̌"
+            assert t.mcid == 0

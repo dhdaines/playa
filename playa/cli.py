@@ -12,18 +12,18 @@ following keys (but will probably contain more in the future):
 - `is_extractable`: whether you should be allowed to extract text from
     this PDF (LOL)
 - `pages`: list of descriptions of pages, containing:
-  - `objid`: the indirect object ID of the page descriptor
-  - `label`: a (possibly made up) page label
-  - `mediabox`: the boundaries of the page in default user space
-  - `cropbox`: the cropping box in default user space
-  - `rotate`: the rotation of the page in degrees (no radians for you)
+    - `objid`: the indirect object ID of the page descriptor
+    - `label`: a (possibly made up) page label
+    - `mediabox`: the boundaries of the page in default user space
+    - `cropbox`: the cropping box in default user space
+    - `rotate`: the rotation of the page in degrees (no radians for you)
 - `objects`: list of all indirect objects (including those in object
     streams, as well as the object streams themselves), containing:
-  - `objid`: the object number
-  - `genno`: the generation number
-  - `type`: the type of object this is
-  - `repr`: an arbitrary string representation of the object, **do not
-      depend too closely on the contents of this as it will change**
+    - `objid`: the object number
+    - `genno`: the generation number
+    - `type`: the type of object this is
+    - `repr`: an arbitrary string representation of the object, **do not
+        depend too closely on the contents of this as it will change**
 
 Bucking the trend of the last 20 years towards horribly slow
 Click-addled CLIs with deeply nested subcommands, anything else is
@@ -46,7 +46,7 @@ import json
 import logging
 from collections import deque
 from pathlib import Path
-from typing import Any, Deque, Tuple
+from typing import Any, Deque, Iterable, Tuple
 
 import playa
 from playa.document import Document
@@ -54,7 +54,9 @@ from playa.pdftypes import ContentStream, ObjRef
 
 
 def make_argparse() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = argparse.ArgumentParser(
+        description="PLAYA's CLI, which can get stuff out of a PDF for you."
+    )
     parser.add_argument("pdf", type=Path)
     parser.add_argument(
         "-t",
@@ -67,6 +69,13 @@ def make_argparse() -> argparse.ArgumentParser:
         "--catalog",
         action="store_true",
         help="Recursively expand the document catalog as JSON",
+    )
+    parser.add_argument(
+        "-p",
+        "--page-contents",
+        type=str,
+        help="Decode the content streams for a page "
+        "(or range, or 'all') into raw bytes",
     )
     parser.add_argument(
         "-x",
@@ -179,6 +188,21 @@ def extract_text_badly(doc: Document, args: argparse.Namespace) -> None:
             print(text.chars, file=args.outfile)
 
 
+def extract_page_contents(doc: Document, args: argparse.Namespace) -> None:
+    """Extract text, badly."""
+    for page_spec in args.page_contents.split(","):
+        start, _, end = page_spec.partition("-")
+        if end:
+            pages: Iterable[int] = range(int(start) - 1, int(end))
+        elif start == "all":
+            pages = range(len(doc.pages))
+        else:
+            pages = (int(start) - 1,)
+        for page_idx in pages:
+            for stream in doc.pages[page_idx].streams:
+                args.outfile.buffer.write(stream.buffer)
+
+
 def main() -> None:
     parser = make_argparse()
     args = parser.parse_args()
@@ -187,6 +211,8 @@ def main() -> None:
         with playa.open(args.pdf, space="default") as doc:
             if args.stream is not None:  # it can't be zero either though
                 extract_stream(doc, args)
+            elif args.page_contents:
+                extract_page_contents(doc, args)
             elif args.catalog:
                 extract_catalog(doc, args)
             elif args.text:

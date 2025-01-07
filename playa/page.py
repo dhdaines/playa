@@ -320,10 +320,6 @@ class Page:
         return f"<Page: Resources={self.resources!r}, MediaBox={self.mediabox!r}>"
 
 
-TextOperator = Literal["Tc", "Tw", "Tz", "TL", "Tf", "Tr", "Ts", "Td", "Tm", "T*", "TJ"]
-TextArgument = Union[float, bytes, Font]
-
-
 @dataclass
 class TextState:
     """PDF Text State (PDF 1.7 section 9.3.1).
@@ -382,53 +378,6 @@ class TextState:
         """Reset the text state"""
         self.line_matrix = MATRIX_IDENTITY
         self.glyph_offset = (0, 0)
-
-    def update(self, operator: TextOperator, *args: TextArgument):
-        """Apply a text state operator"""
-        if operator == "Tc":
-            # FIXME: these casts are not evil like the other ones,
-            # but it would be nice to be able to avoid them.
-            self.charspace = cast(float, args[0])
-        elif operator == "Tw":
-            self.wordspace = cast(float, args[0])
-        elif operator == "Tz":
-            self.scaling = cast(float, args[0])
-        elif operator == "TL":
-            self.leading = cast(float, args[0])
-        elif operator == "Tf":
-            self.font = cast(Font, args[0])
-            self.fontsize = cast(float, args[1])
-            self.descent = self.font.get_descent() * self.fontsize
-        elif operator == "Tr":
-            self.render_mode = cast(int, args[0])
-        elif operator == "Ts":
-            self.rise = cast(float, args[0])
-        elif operator == "Td":
-            tx = cast(float, args[0])
-            ty = cast(float, args[1])
-            (a, b, c, d, e, f) = self.line_matrix
-            e_new = tx * a + ty * c + e
-            f_new = tx * b + ty * d + f
-            self.line_matrix = (a, b, c, d, e_new, f_new)
-            self.glyph_offset = (0, 0)
-        elif operator == "Tm":
-            a, b, c, d, e, f = (cast(float, x) for x in args)
-            self.line_matrix = (a, b, c, d, e, f)
-            self.glyph_offset = (0, 0)
-        elif operator == "T*":
-            # PDF 1.7 table 108: equivalent to 0 -leading Td - but
-            # because we are lazy we don't know the leading until
-            # we get here, so we can't expand it in advance.
-            (a, b, c, d, e, f) = self.line_matrix
-            self.line_matrix = (
-                a,
-                b,
-                c,
-                d,
-                -self.leading * c + e,
-                -self.leading * d + f,
-            )
-            self.glyph_offset = (0, 0)
 
 
 class DashPattern(NamedTuple):
@@ -726,7 +675,6 @@ def point_value(x: PDFObject, y: PDFObject) -> Point:
 class BaseInterpreter:
     """Core state for the PDF interpreter."""
 
-    mcs: Union[MarkedContent, None] = None
     ctm: Matrix
 
     def __init__(
@@ -800,6 +748,8 @@ class BaseInterpreter:
         self.curpath: List[PathSegment] = []
         # argstack: stack for command arguments.
         self.argstack: List[PDFObject] = []
+        # mcstack: stack for marked content sections.
+        self.mcstack: List[MarkedContent] = []
 
     def push(self, obj: PDFObject) -> None:
         self.argstack.append(obj)
@@ -1129,19 +1079,13 @@ class BaseInterpreter:
 
         offset from the start of the current line by (tx , ty). As a side effect, this
         operator sets the leading parameter in the text state.
+
+        (PDF 1.7 Table 108) This operator shall have the same effect as this code:
+            −ty TL
+            tx ty Td
         """
-        try:
-            tx = num_value(tx)
-            ty = num_value(ty)
-            (a, b, c, d, e, f) = self.textstate.line_matrix
-            e_new = tx * a + ty * c + e
-            f_new = tx * b + ty * d + f
-            self.textstate.line_matrix = (a, b, c, d, e_new, f_new)
-            if ty is not None:
-                self.textstate.leading = -ty
-        except TypeError:
-            log.warning("Invalid offset (%r, %r) for TD", tx, ty)
-        self.textstate.glyph_offset = (0, 0)
+        self.do_TL(-num_value(ty))
+        self.do_Td(tx, ty)
 
     def do_Tm(
         self,
@@ -1153,7 +1097,14 @@ class BaseInterpreter:
         f: PDFObject,
     ) -> None:
         """Set text matrix and text line matrix"""
-        self.textstate.line_matrix = cast(Matrix, (a, b, c, d, e, f))
+        self.textstate.line_matrix = (
+            num_value(a),
+            num_value(b),
+            num_value(c),
+            num_value(d),
+            num_value(e),
+            num_value(f),
+        )
         self.textstate.glyph_offset = (0, 0)
 
     def do_T_a(self) -> None:
@@ -1209,7 +1160,7 @@ class BaseInterpreter:
 
     def do_EMC(self) -> None:
         """End marked-content sequence"""
-        self.mcs = None
+        self.mcstack.pop()
 
     def begin_tag(self, tag: PDFObject, props: Dict[str, PDFObject]) -> None:
         """Handle beginning of tag, setting current MCID if any."""
@@ -1219,7 +1170,7 @@ class BaseInterpreter:
             mcid = int_value(props["MCID"])
         else:
             mcid = None
-        self.mcs = MarkedContent(mcid=mcid, tag=tag, props=props)
+        self.mcstack.append(MarkedContent(mcid=mcid, tag=tag, props=props))
 
 
 class PageInterpreter(BaseInterpreter):
@@ -1425,8 +1376,8 @@ class PageInterpreter(BaseInterpreter):
             x1=x1,
             y1=y1,
             xobjid=xobjid,
-            mcid=None if self.mcs is None else self.mcs.mcid,
-            tag=None if self.mcs is None else self.mcs.tag,
+            mcid=self.mcstack[-1].mcid if self.mcstack else None,
+            tag=self.mcstack[-1].tag if self.mcstack else None,
             srcsize=(stream.get_any(("W", "Width")), stream.get_any(("H", "Height"))),
             imagemask=stream.get_any(("IM", "ImageMask")),
             bits=stream.get_any(("BPC", "BitsPerComponent"), 1),
@@ -1459,8 +1410,8 @@ class PageInterpreter(BaseInterpreter):
             y0=y0,
             x1=x1,
             y1=y1,
-            mcid=None if self.mcs is None else self.mcs.mcid,
-            tag=None if self.mcs is None else self.mcs.tag,
+            mcid=self.mcstack[-1].mcid if self.mcstack else None,
+            tag=self.mcstack[-1].tag if self.mcstack else None,
             path_ops=path_ops,
             pts_x=[x for x, y in pts],
             pts_y=[y for x, y in pts],
@@ -1654,8 +1605,8 @@ class PageInterpreter(BaseInterpreter):
             non_stroking_colorspace=self.graphicstate.ncs.name,
             non_stroking_color=self.graphicstate.ncolor.values,
             non_stroking_pattern=self.graphicstate.ncolor.pattern,
-            mcid=None if self.mcs is None else self.mcs.mcid,
-            tag=None if self.mcs is None else self.mcs.tag,
+            mcid=self.mcstack[-1].mcid if self.mcstack else None,
+            tag=self.mcstack[-1].tag if self.mcstack else None,
         )
         return item, adv
 
@@ -1711,12 +1662,12 @@ class ContentObject:
     Attributes:
       gstate: Graphics state.
       ctm: Coordinate transformation matrix (PDF 1.7 section 8.3.2).
-      mcs: Marked content (point or section).
+      mcstack: Stack of enclosing marked content sections.
     """
 
     gstate: GraphicState
     ctm: Matrix
-    mcs: Union[MarkedContent, None]
+    mcstack: List[MarkedContent]
 
     def __iter__(self) -> Iterator["ContentObject"]:
         yield from ()
@@ -1733,6 +1684,7 @@ class ContentObject:
 
     @property
     def bbox(self) -> Rect:
+        """The bounding box in device space of this object."""
         # These bboxes have already been computed in device space so
         # we don't need all 4 corners!
         points = itertools.chain.from_iterable(
@@ -1740,17 +1692,46 @@ class ContentObject:
         )
         return get_bound(points)
 
+    @property
+    def mcs(self) -> Union[MarkedContent, None]:
+        """The immediately enclosing marked content section."""
+        return self.mcstack[-1] if self.mcstack else None
+
+    @property
+    def mcid(self) -> Union[int, None]:
+        """The marked content ID of the nearest enclosing marked
+        content section with an ID."""
+        for mcs in self.mcstack[::-1]:
+            if mcs.mcid is not None:
+                return mcs.mcid
+        return None
+
 
 BBOX_NONE = (-1, -1, -1, -1)
 
 
 @dataclass
 class TagObject(ContentObject):
-    """A marked content point with no content."""
+    """A marked content tag.."""
+
+    _mcs: MarkedContent
 
     def __len__(self) -> int:
         """A tag has no contents, iterating over it returns nothing."""
         return 0
+
+    @property
+    def mcs(self) -> Union[MarkedContent, None]:
+        """The marked content tag for this object."""
+        return self._mcs
+
+    @property
+    def mcid(self) -> Union[int, None]:
+        """The marked content ID of the nearest enclosing marked
+        content section with an ID."""
+        if self._mcs.mcid is not None:
+            return self._mcs.mcid
+        return super().mcid
 
     @property
     def bbox(self) -> Rect:
@@ -1867,7 +1848,18 @@ class XObjectObject(ContentObject):
 
     @property
     def layout(self) -> Iterator["LayoutDict"]:
-        """Iterator over eager layout object dictionaries."""
+        """Iterator over eager layout object dictionaries.
+
+        Danger: Deprecated
+            This interface is deprecated and has been moved to
+            [PAVÉS](https://github.com/dhdaines/paves).  It will be
+            removed in PLAYA 0.3.
+        """
+        warnings.warn(
+            "The layout property has moved to PAVÉS (https://github.com/dhdaines/paves)"
+            " and will be removed in PLAYA 0.3",
+            DeprecationWarning,
+        )
         page = self.page()
         if page is None:
             raise RuntimeError("Page no longer exists!")
@@ -1930,25 +1922,25 @@ class PathObject(ContentObject):
         for seg in self.raw_segments:
             if seg.operator == "m" and segs:
                 yield PathObject(
-                    self.gstate,
-                    self.ctm,
-                    self.mcs,
-                    segs,
-                    self.stroke,
-                    self.fill,
-                    self.evenodd,
+                    gstate=self.gstate,
+                    ctm=self.ctm,
+                    mcstack=self.mcstack,
+                    raw_segments=segs,
+                    stroke=self.stroke,
+                    fill=self.fill,
+                    evenodd=self.evenodd,
                 )
                 segs = []
             segs.append(seg)
         if segs:
             yield PathObject(
-                self.gstate,
-                self.ctm,
-                self.mcs,
-                segs,
-                self.stroke,
-                self.fill,
-                self.evenodd,
+                gstate=self.gstate,
+                ctm=self.ctm,
+                mcstack=self.mcstack,
+                raw_segments=segs,
+                stroke=self.stroke,
+                fill=self.fill,
+                evenodd=self.evenodd,
             )
 
     @property
@@ -1972,24 +1964,6 @@ class PathObject(ContentObject):
         )
         # Transform it and get the new bounding box
         return get_transformed_bound(self.ctm, bbox)
-
-
-class TextItem(NamedTuple):
-    """Semi-parsed item in a text object.  Actual "rendering" is
-    deferred, just like with paths.
-
-    Attributes:
-      operator: Text operator for this item. Many operators simply
-        modify the `TextState` and do not actually output any text.
-      args: Arguments for the operator.
-    """
-
-    operator: TextOperator
-    args: Tuple[TextArgument, ...]
-
-
-def make_txt(operator: TextOperator, *args: TextArgument) -> TextItem:
-    return TextItem(operator, args)
 
 
 @dataclass
@@ -2071,18 +2045,26 @@ class TextObject(ContentObject):
       textstate: Text state for this object.  This is a **mutable**
         object and you should not expect it to be valid outside the
         context of iteration over the parent `TextObject`.
-      items: Raw text items (strings and operators) for this object.
+      args: Strings or position adjustments
     """
 
     textstate: TextState
-    items: List[TextItem]
+    args: List[Union[bytes, float]]
     _chars: Union[List[str], None] = None
 
-    def _render_string(self, item: TextItem) -> Iterator[GlyphObject]:
+    def __iter__(self) -> Iterator[GlyphObject]:
+        """Generate glyphs for this text object"""
         tstate = self.textstate
         font = tstate.font
-        assert font is not None
-        vert = font.vertical
+        # If no font is set, we cannot do anything, since even calling
+        # TJ with a displacement and no text effects requires us at
+        # least to know the fontsize.
+        if font is None:
+            log.warning(
+                "No font is set, will not update text state or output text: %r TJ",
+                self.args,
+            )
+            return
         assert self.ctm is not None
         # Extract all the elements so we can translate efficiently
         a, b, c, d, e, f = mult_matrix(tstate.line_matrix, self.ctm)
@@ -2092,20 +2074,18 @@ class TextObject(ContentObject):
         scaling = tstate.scaling * 0.01
         charspace = tstate.charspace * scaling
         wordspace = tstate.wordspace * scaling
+        vert = font.vertical
         if font.multibyte:
             wordspace = 0
         (x, y) = tstate.glyph_offset
         pos = y if vert else x
         needcharspace = False
-        for obj in item.args:
+        for obj in self.args:
             if isinstance(obj, (int, float)):
                 dxscale = 0.001 * tstate.fontsize * scaling
                 pos -= obj * dxscale
                 needcharspace = True
             else:
-                if not isinstance(obj, bytes):
-                    log.warning("Found non-string %r in text object", obj)
-                    continue
                 for cid, text in font.decode(obj):
                     if needcharspace:
                         pos += charspace
@@ -2116,7 +2096,7 @@ class TextObject(ContentObject):
                     glyph = GlyphObject(
                         gstate=self.gstate,
                         ctm=self.ctm,
-                        mcs=self.mcs,
+                        mcstack=self.mcstack,
                         textstate=tstate,
                         cid=cid,
                         text=text,
@@ -2138,19 +2118,13 @@ class TextObject(ContentObject):
         if self._chars is not None:
             return "".join(self._chars)
         self._chars = []
-        self.textstate.reset()
-        for item in self.items:
-            # Only TJ and Tf are relevant to Unicode output
-            if item.operator == "TJ":
-                font = self.textstate.font
-                assert font is not None, "No font was selected"
-                for obj in item.args:
-                    if not isinstance(obj, bytes):
-                        continue
-                    for cid, text in font.decode(obj):
-                        self._chars.append(text)
-            elif item.operator == "Tf":
-                self.textstate.update(item.operator, *item.args)
+        font = self.textstate.font
+        assert font is not None, "No font was selected"
+        for obj in self.args:
+            if not isinstance(obj, bytes):
+                continue
+            for cid, text in font.decode(obj):
+                self._chars.append(text)
         return "".join(self._chars)
 
     def __len__(self) -> int:
@@ -2161,34 +2135,17 @@ class TextObject(ContentObject):
         Unicode characters.
         """
         nglyphs = 0
-        for item in self.items:
-            # Only TJ and Tf are relevant to Unicode output
-            if item.operator == "TJ":
-                font = self.textstate.font
-                assert font is not None, "No font was selected"
-                for obj in item.args:
-                    if not isinstance(obj, bytes):
-                        continue
-                    nglyphs += sum(1 for _ in font.decode(obj))
-            elif item.operator == "Tf":
-                self.textstate.update(item.operator, *item.args)
+        font = self.textstate.font
+        assert font is not None, "No font was selected"
+        for obj in self.args:
+            if not isinstance(obj, bytes):
+                continue
+            nglyphs += sum(1 for _ in font.decode(obj))
         return nglyphs
-
-    def __iter__(self) -> Iterator[GlyphObject]:
-        """Generate glyphs for this text object"""
-        # This corresponds to a BT operator so reset the textstate
-        self.textstate.reset()
-        for item in self.items:
-            if item.operator == "TJ":
-                yield from self._render_string(item)
-            else:
-                self.textstate.update(item.operator, *item.args)
 
 
 class LazyInterpreter(BaseInterpreter):
     """Interpret the page yielding lazy objects."""
-
-    textobj: List[TextItem] = []
 
     def __iter__(self) -> Iterator[ContentObject]:
         parser = ContentParser(self.contents)
@@ -2202,14 +2159,14 @@ class LazyInterpreter(BaseInterpreter):
                     method, nargs = self._dispatch[obj]
                     if nargs:
                         args = self.pop(nargs)
-                        if len(args) == nargs:
-                            gen = method(*args)
-                        else:
+                        if len(args) != nargs:
                             log.warning(
                                 "Insufficient arguments (%d) for operator: %r",
                                 len(args),
                                 obj,
                             )
+                        else:
+                            gen = method(*args)
                     else:
                         gen = method()
                     if gen is not None:
@@ -2223,7 +2180,7 @@ class LazyInterpreter(BaseInterpreter):
     def create(self, object_class, **kwargs) -> ContentObject:
         return object_class(
             ctm=self.ctm,
-            mcs=self.mcs,
+            mcstack=self.mcstack,
             gstate=self.graphicstate,
             **kwargs,
         )
@@ -2312,169 +2269,33 @@ class LazyInterpreter(BaseInterpreter):
         self.do_h()
         yield from self.do_B_a()
 
-    # PDF 1.7 sec 9.3.1: The text state operators may appear outside
-    # text objects, and the values they set are retained across text
-    # objects in a single content stream. Like other graphics state
-    # parameters, these parameters shall be initialized to their
-    # default values at the beginning of each page.
-    #
-    # Concretely, this means that we simply have to execute anything
-    # in self.textobj when we see BT.
-    #
-    # FIXME: It appears that we're supposed to reset it between content
-    # streams?! That seems very bogus, pdfminer does not do it.
-    def do_BT(self) -> None:
-        """Update text state and begin text object.
-
-        First we handle any operarors that were seen before BT, so as
-        to get the initial textstate.  Next, we collect any subsequent
-        operators until ET, and then execute them lazily.
-        """
-        for item in self.textobj:
-            self.textstate.update(item.operator, *item.args)
-        self.textobj = []
-
-    def do_ET(self) -> Iterator[ContentObject]:
-        """End a text object"""
-        # Only output text if... there is text to output (we rewrite
-        # all text operators to TJ)
-        has_text = False
-        for item in self.textobj:
-            if item.operator == "TJ":
-                if any(b for b in item.args if isinstance(b, bytes)):
-                    has_text = True
-        if has_text:
-            yield self.create(TextObject, textstate=self.textstate, items=self.textobj)
-        else:
-            # We will not create a text object, so make sure to update
-            # the text/graphics state with anything we saw inside BT/ET
-            self.textstate.reset()
-            for item in self.textobj:
-                self.textstate.update(item.operator, *item.args)
-        # Make sure to clear textobj!!!
-        self.textobj = []
-
-    def do_Tc(self, space: PDFObject) -> None:
-        """Set character spacing.
-
-        Character spacing is used by the Tj, TJ, and ' operators.
-
-        :param space: a number expressed in unscaled text space units.
-        """
-        self.textobj.append(make_txt("Tc", num_value(space)))
-
-    def do_Tw(self, space: PDFObject) -> None:
-        """Set the word spacing.
-
-        Word spacing is used by the Tj, TJ, and ' operators.
-
-        :param space: a number expressed in unscaled text space units
-        """
-        self.textobj.append(make_txt("Tw", num_value(space)))
-
-    def do_Tz(self, scale: PDFObject) -> None:
-        """Set the horizontal scaling.
-
-        :param scale: is a number specifying the percentage of the normal width
-        """
-        self.textobj.append(make_txt("Tz", num_value(scale)))
-
-    def do_TL(self, leading: PDFObject) -> None:
-        """Set the text leading.
-
-        Text leading is used only by the T*, ', and " operators.
-
-        :param leading: a number expressed in unscaled text space units
-        """
-        self.textobj.append(make_txt("TL", num_value(leading)))
-
-    def do_Tf(self, fontid: PDFObject, fontsize: PDFObject) -> None:
-        """Set the text font
-
-        :param fontid: the name of a font resource in the Font subdictionary
-            of the current resource dictionary
-        :param fontsize: size is a number representing a scale factor.
-        """
-        try:
-            font = self.fontmap[literal_name(fontid)]
-        except KeyError:
-            log.warning("Undefined Font id: %r", fontid)
-            doc = self.page.doc()
-            if doc is None:
-                raise RuntimeError("Document no longer exists!")
-            # FIXME: as in document.py, "this is so wrong!"
-            font = doc.get_font(None, {})
-        self.textobj.append(make_txt("Tf", font, num_value(fontsize)))
-
-    def do_Tr(self, render: PDFObject) -> None:
-        """Set the text rendering mode"""
-        self.textobj.append(make_txt("Tr", int_value(render)))
-
-    def do_Ts(self, rise: PDFObject) -> None:
-        """Set the text rise
-
-        :param rise: a number expressed in unscaled text space units
-        """
-        self.textobj.append(make_txt("Ts", num_value(rise)))
-
-    def do_Td(self, tx: PDFObject, ty: PDFObject) -> None:
-        """Move to the start of the next line
-
-        Offset from the start of the current line by (tx , ty).
-        """
-        self.textobj.append(make_txt("Td", num_value(tx), num_value(ty)))
-
-    def do_TD(self, tx: PDFObject, ty: PDFObject) -> None:
-        """Move to the start of the next line.
-
-        offset from the start of the current line by (tx , ty). As a side effect, this
-        operator sets the leading parameter in the text state.
-
-        (PDF 1.7 Table 108) This operator shall have the same effect as this code:
-            −ty TL
-            tx ty Td
-        """
-        self.textobj.append(make_txt("TL", -num_value(ty)))
-        self.textobj.append(make_txt("Td", num_value(tx), num_value(ty)))
-
-    def do_Tm(
-        self,
-        a: PDFObject,
-        b: PDFObject,
-        c: PDFObject,
-        d: PDFObject,
-        e: PDFObject,
-        f: PDFObject,
-    ) -> None:
-        """Set text matrix and text line matrix"""
-        self.textobj.append(
-            make_txt(
-                "Tm",
-                num_value(a),
-                num_value(b),
-                num_value(c),
-                num_value(d),
-                num_value(e),
-                num_value(f),
-            )
-        )
-
-    def do_T_a(self) -> None:
-        """Move to start of next text line"""
-        self.textobj.append(make_txt("T*"))
-
-    def do_TJ(self, strings: PDFObject) -> None:
+    def do_TJ(self, strings: PDFObject) -> Iterator[ContentObject]:
         """Show one or more text strings, allowing individual glyph
         positioning"""
-        args = list_value(strings)
-        if not all(isinstance(s, (int, float, bytes)) for s in args):
-            log.warning("Found non-string in text object %r", args)
-            return
-        self.textobj.append(make_txt("TJ", *args))
+        args: List[Union[bytes, float]] = []
+        has_text = False
+        for s in list_value(strings):
+            if isinstance(s, (int, float)):
+                args.append(s)
+            elif isinstance(s, bytes):
+                if s:
+                    has_text = True
+                args.append(s)
+            else:
+                log.warning(
+                    "Ignoring non-string/number %r in text object %r", s, strings
+                )
+        obj = self.create(TextObject, textstate=self.textstate, args=args)
+        if has_text:
+            yield obj
+        else:
+            # Even without text, TJ can still update the line matrix (ugh!)
+            for _ in obj:
+                pass
 
-    def do_Tj(self, s: PDFObject) -> None:
+    def do_Tj(self, s: PDFObject) -> Iterator[ContentObject]:
         """Show a text string"""
-        self.do_TJ([s])
+        yield from self.do_TJ([s])
 
     def do__q(self, s: PDFObject) -> None:
         """Move to next line and show text
@@ -2523,7 +2344,7 @@ class LazyInterpreter(BaseInterpreter):
             resources = None if xobjres is None else dict_value(xobjres)
             xobjobj = XObjectObject(
                 ctm=mult_matrix(matrix, self.ctm),
-                mcs=self.mcs,
+                mcstack=self.mcstack,
                 gstate=self.graphicstate,
                 page=weakref.ref(self.page),
                 xobjid=xobjid,
@@ -2567,6 +2388,7 @@ class LazyInterpreter(BaseInterpreter):
         rprops = {} if props is None else dict_value(props)
         yield TagObject(
             ctm=self.ctm,
-            mcs=MarkedContent(mcid=None, tag=literal_name(tag), props=rprops),
+            mcstack=self.mcstack,
             gstate=self.graphicstate,
+            _mcs=MarkedContent(mcid=None, tag=literal_name(tag), props=rprops),
         )

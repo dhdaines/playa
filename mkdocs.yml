@@ -19,6 +19,7 @@ plugins:
             show_root_heading: true
 nav:
   - Home: index.md
+  - CLI: cli.md
   - Reference: reference.md
 watch:
 - playa
