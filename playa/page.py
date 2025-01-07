@@ -320,10 +320,6 @@ class Page:
         return f"<Page: Resources={self.resources!r}, MediaBox={self.mediabox!r}>"
 
 
-TextOperator = Literal["Tc", "Tw", "Tz", "TL", "Tf", "Tr", "Ts", "Td", "Tm", "T*", "TJ"]
-TextArgument = Union[float, bytes, Font]
-
-
 @dataclass
 class TextState:
     """PDF Text State (PDF 1.7 section 9.3.1).
@@ -382,53 +378,6 @@ class TextState:
         """Reset the text state"""
         self.line_matrix = MATRIX_IDENTITY
         self.glyph_offset = (0, 0)
-
-    def update(self, operator: TextOperator, *args: TextArgument):
-        """Apply a text state operator"""
-        if operator == "Tc":
-            # FIXME: these casts are not evil like the other ones,
-            # but it would be nice to be able to avoid them.
-            self.charspace = cast(float, args[0])
-        elif operator == "Tw":
-            self.wordspace = cast(float, args[0])
-        elif operator == "Tz":
-            self.scaling = cast(float, args[0])
-        elif operator == "TL":
-            self.leading = cast(float, args[0])
-        elif operator == "Tf":
-            self.font = cast(Font, args[0])
-            self.fontsize = cast(float, args[1])
-            self.descent = self.font.get_descent() * self.fontsize
-        elif operator == "Tr":
-            self.render_mode = cast(int, args[0])
-        elif operator == "Ts":
-            self.rise = cast(float, args[0])
-        elif operator == "Td":
-            tx = cast(float, args[0])
-            ty = cast(float, args[1])
-            (a, b, c, d, e, f) = self.line_matrix
-            e_new = tx * a + ty * c + e
-            f_new = tx * b + ty * d + f
-            self.line_matrix = (a, b, c, d, e_new, f_new)
-            self.glyph_offset = (0, 0)
-        elif operator == "Tm":
-            a, b, c, d, e, f = (cast(float, x) for x in args)
-            self.line_matrix = (a, b, c, d, e, f)
-            self.glyph_offset = (0, 0)
-        elif operator == "T*":
-            # PDF 1.7 table 108: equivalent to 0 -leading Td - but
-            # because we are lazy we don't know the leading until
-            # we get here, so we can't expand it in advance.
-            (a, b, c, d, e, f) = self.line_matrix
-            self.line_matrix = (
-                a,
-                b,
-                c,
-                d,
-                -self.leading * c + e,
-                -self.leading * d + f,
-            )
-            self.glyph_offset = (0, 0)
 
 
 class DashPattern(NamedTuple):
@@ -1987,24 +1936,6 @@ class PathObject(ContentObject):
         return get_transformed_bound(self.ctm, bbox)
 
 
-class TextItem(NamedTuple):
-    """Semi-parsed item in a text object.  Actual "rendering" is
-    deferred, just like with paths.
-
-    Attributes:
-      operator: Text operator for this item. Many operators simply
-        modify the `TextState` and do not actually output any text.
-      args: Arguments for the operator.
-    """
-
-    operator: TextOperator
-    args: Tuple[TextArgument, ...]
-
-
-def make_txt(operator: TextOperator, *args: TextArgument) -> TextItem:
-    return TextItem(operator, args)
-
-
 @dataclass
 class GlyphObject(ContentObject):
     """Individual glyph on the page.
@@ -2095,8 +2026,12 @@ class TextObject(ContentObject):
         """Generate glyphs for this text object"""
         tstate = self.textstate
         font = tstate.font
-        assert font is not None
-        vert = font.vertical
+        # If no font is set, we cannot do anything, since even calling
+        # TJ with a displacement and no text effects requires us at
+        # least to know the fontsize.
+        if font is None:
+            log.warning("No font is set, will not update text state or output text: %r TJ", self.args)
+            return
         assert self.ctm is not None
         # Extract all the elements so we can translate efficiently
         a, b, c, d, e, f = mult_matrix(tstate.line_matrix, self.ctm)
@@ -2106,6 +2041,7 @@ class TextObject(ContentObject):
         scaling = tstate.scaling * 0.01
         charspace = tstate.charspace * scaling
         wordspace = tstate.wordspace * scaling
+        vert = font.vertical
         if font.multibyte:
             wordspace = 0
         (x, y) = tstate.glyph_offset
@@ -2117,9 +2053,6 @@ class TextObject(ContentObject):
                 pos -= obj * dxscale
                 needcharspace = True
             else:
-                if not isinstance(obj, bytes):
-                    log.warning("Found non-string %r in text object", obj)
-                    continue
                 for cid, text in font.decode(obj):
                     if needcharspace:
                         pos += charspace
@@ -2306,13 +2239,14 @@ class LazyInterpreter(BaseInterpreter):
     def do_TJ(self, strings: PDFObject) -> Iterator[ContentObject]:
         """Show one or more text strings, allowing individual glyph
         positioning"""
-        args = []
+        args: List[Union[bytes, float]] = []
         has_text = False
         for s in list_value(strings):
             if isinstance(s, (int, float)):
                 args.append(s)
             elif isinstance(s, bytes):
-                has_text = True
+                if s:
+                    has_text = True
                 args.append(s)
             else:
                 log.warning("Ignoring non-string/number %r in text object %r", s, strings)
