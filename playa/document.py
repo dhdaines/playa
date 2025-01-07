@@ -736,6 +736,7 @@ def read_header(fp: BinaryIO) -> Tuple[str, int]:
             raise PDFSyntaxError("Could not find b'%%PDF-', is this a PDF?")
         hdr = hdr[start : start + 8]
         fp.seek(start + 8)
+        log.debug("Found header at position %d: %r", start, hdr)
     try:
         version = hdr[5:].decode("ascii")
     except UnicodeDecodeError as err:
@@ -845,7 +846,6 @@ class Document:
         # file anyway.
         try:
             self.pdf_version, self.offset = read_header(fp)
-            log.debug("Found header at position %d", fp.tell())
         except PDFSyntaxError:
             log.warning("PDF header not found, will try to read the file anyway")
             self.pdf_version = "UNKNOWN"

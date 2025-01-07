@@ -34,7 +34,7 @@ def test_read_header():
     with open(TESTDIR / "junk_before_header.pdf", "rb") as infh:
         version, pos = read_header(infh)
         assert version == "1.4"
-        assert pos == 74
+        assert pos == 86
 
 
 def test_read_xref():
