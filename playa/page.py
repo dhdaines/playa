@@ -726,7 +726,6 @@ def point_value(x: PDFObject, y: PDFObject) -> Point:
 class BaseInterpreter:
     """Core state for the PDF interpreter."""
 
-    mcs: Union[MarkedContent, None] = None
     ctm: Matrix
 
     def __init__(
@@ -800,6 +799,8 @@ class BaseInterpreter:
         self.curpath: List[PathSegment] = []
         # argstack: stack for command arguments.
         self.argstack: List[PDFObject] = []
+        # mcstack: stack for marked content sections.
+        self.mcstack: List[MarkedContent] = []
 
     def push(self, obj: PDFObject) -> None:
         self.argstack.append(obj)
@@ -1209,7 +1210,7 @@ class BaseInterpreter:
 
     def do_EMC(self) -> None:
         """End marked-content sequence"""
-        self.mcs = None
+        self.mcstack.pop()
 
     def begin_tag(self, tag: PDFObject, props: Dict[str, PDFObject]) -> None:
         """Handle beginning of tag, setting current MCID if any."""
@@ -1219,7 +1220,7 @@ class BaseInterpreter:
             mcid = int_value(props["MCID"])
         else:
             mcid = None
-        self.mcs = MarkedContent(mcid=mcid, tag=tag, props=props)
+        self.mcstack.append(MarkedContent(mcid=mcid, tag=tag, props=props))
 
 
 class PageInterpreter(BaseInterpreter):
@@ -1425,8 +1426,8 @@ class PageInterpreter(BaseInterpreter):
             x1=x1,
             y1=y1,
             xobjid=xobjid,
-            mcid=None if self.mcs is None else self.mcs.mcid,
-            tag=None if self.mcs is None else self.mcs.tag,
+            mcid=self.mcstack[-1].mcid if self.mcstack else None,
+            tag=self.mcstack[-1].tag if self.mcstack else None,
             srcsize=(stream.get_any(("W", "Width")), stream.get_any(("H", "Height"))),
             imagemask=stream.get_any(("IM", "ImageMask")),
             bits=stream.get_any(("BPC", "BitsPerComponent"), 1),
@@ -1459,8 +1460,8 @@ class PageInterpreter(BaseInterpreter):
             y0=y0,
             x1=x1,
             y1=y1,
-            mcid=None if self.mcs is None else self.mcs.mcid,
-            tag=None if self.mcs is None else self.mcs.tag,
+            mcid=self.mcstack[-1].mcid if self.mcstack else None,
+            tag=self.mcstack[-1].tag if self.mcstack else None,
             path_ops=path_ops,
             pts_x=[x for x, y in pts],
             pts_y=[y for x, y in pts],
@@ -1654,8 +1655,8 @@ class PageInterpreter(BaseInterpreter):
             non_stroking_colorspace=self.graphicstate.ncs.name,
             non_stroking_color=self.graphicstate.ncolor.values,
             non_stroking_pattern=self.graphicstate.ncolor.pattern,
-            mcid=None if self.mcs is None else self.mcs.mcid,
-            tag=None if self.mcs is None else self.mcs.tag,
+            mcid=self.mcstack[-1].mcid if self.mcstack else None,
+            tag=self.mcstack[-1].tag if self.mcstack else None,
         )
         return item, adv
 
@@ -2237,7 +2238,7 @@ class LazyInterpreter(BaseInterpreter):
     def create(self, object_class, **kwargs) -> ContentObject:
         return object_class(
             ctm=self.ctm,
-            mcs=self.mcs,
+            mcs=self.mcstack[-1] if self.mcstack else None,
             gstate=self.graphicstate,
             **kwargs,
         )
@@ -2544,7 +2545,7 @@ class LazyInterpreter(BaseInterpreter):
             resources = None if xobjres is None else dict_value(xobjres)
             xobjobj = XObjectObject(
                 ctm=mult_matrix(matrix, self.ctm),
-                mcs=self.mcs,
+                mcs=self.mcstack[-1] if self.mcstack else None,
                 gstate=self.graphicstate,
                 page=weakref.ref(self.page),
                 xobjid=xobjid,
