@@ -2306,11 +2306,23 @@ class LazyInterpreter(BaseInterpreter):
     def do_TJ(self, strings: PDFObject) -> Iterator[ContentObject]:
         """Show one or more text strings, allowing individual glyph
         positioning"""
-        args = list_value(strings)
-        if not all(isinstance(s, (int, float, bytes)) for s in args):
-            log.warning("Found non-string in text object %r", args)
-            return
-        yield self.create(TextObject, textstate=self.textstate, args=strings)
+        args = []
+        has_text = False
+        for s in list_value(strings):
+            if isinstance(s, (int, float)):
+                args.append(s)
+            elif isinstance(s, bytes):
+                has_text = True
+                args.append(s)
+            else:
+                log.warning("Ignoring non-string/number %r in text object %r", s, strings)
+        obj = self.create(TextObject, textstate=self.textstate, args=args)
+        if has_text:
+            yield obj
+        else:
+            # Even without text, TJ can still update the line matrix (ugh!)
+            for _ in obj:
+                pass
 
     def do_Tj(self, s: PDFObject) -> Iterator[ContentObject]:
         """Show a text string"""
