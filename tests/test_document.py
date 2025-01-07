@@ -9,7 +9,7 @@ import pytest
 
 import playa
 from playa.data_structures import NameTree
-from playa.document import read_header
+from playa.document import read_header, XRefTable
 from playa.exceptions import PDFSyntaxError
 from playa.parser import LIT
 from playa.utils import decode_text
@@ -31,6 +31,16 @@ def test_read_header():
         read_header(BytesIO(b"%PDF-OMG"))
     assert "invalid" in str(e)
     assert read_header(BytesIO(b"%PDF-1.7")) == "1.7"
+    with open(TESTDIR / "junk_before_header.pdf", "rb") as infh:
+        assert read_header(infh) == "1.4"
+        assert infh.tell() == 74
+
+
+def test_read_xref():
+    """Verify we can read the xref table if there is junk before the header."""
+    with playa.open(TESTDIR / "junk_before_header.pdf") as pdf:
+        # Not a fallback, we got the right one
+        assert isinstance(pdf.xrefs[0], XRefTable)
 
 
 def test_tokens():
