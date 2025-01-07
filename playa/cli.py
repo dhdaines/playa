@@ -54,7 +54,9 @@ from playa.pdftypes import ContentStream, ObjRef
 
 
 def make_argparse() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = argparse.ArgumentParser(
+        description="PLAYA's CLI, which can get stuff out of a PDF for you."
+    )
     parser.add_argument("pdf", type=Path)
     parser.add_argument(
         "-t",

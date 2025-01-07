@@ -2030,7 +2030,10 @@ class TextObject(ContentObject):
         # TJ with a displacement and no text effects requires us at
         # least to know the fontsize.
         if font is None:
-            log.warning("No font is set, will not update text state or output text: %r TJ", self.args)
+            log.warning(
+                "No font is set, will not update text state or output text: %r TJ",
+                self.args,
+            )
             return
         assert self.ctm is not None
         # Extract all the elements so we can translate efficiently
@@ -2249,7 +2252,9 @@ class LazyInterpreter(BaseInterpreter):
                     has_text = True
                 args.append(s)
             else:
-                log.warning("Ignoring non-string/number %r in text object %r", s, strings)
+                log.warning(
+                    "Ignoring non-string/number %r in text object %r", s, strings
+                )
         obj = self.create(TextObject, textstate=self.textstate, args=args)
         if has_text:
             yield obj
