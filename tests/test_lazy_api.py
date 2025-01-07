@@ -44,18 +44,10 @@ def test_content_objects():
             boxes.append(ibbox)
             texts.append(obj.chars)
             assert len(obj) == sum(1 for glyph in obj)
-        assert boxes == [
-            [358, 896, 360, 905],
-            [71, 681, 490, 895],
-            [71, 667, 214, 679],
-            [71, 615, 240, 653],
-            [71, 601, 232, 613],
-            [71, 549, 289, 587],
-            [71, 535, 248, 547],
-            [71, 469, 451, 521],
-            [451, 470, 454, 481],
-            [71, 79, 499, 467],
-        ]
+        # Now there are ... a lot of text objects
+        assert boxes[0] == [358, 896, 360, 905]
+        assert boxes[-1] == [99, 79, 102, 90]
+        assert len(boxes) == 204
 
 
 @pytest.mark.parametrize("path", ALLPDFS, ids=str)
