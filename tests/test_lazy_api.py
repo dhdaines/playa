@@ -120,3 +120,33 @@ def test_rotated_bboxes() -> None:
         gtb = get_transformed_bound(ctm, bbox)
         bound = get_bound((apply_matrix_pt(ctm, p) for p in points))
         assert gtb == bound
+
+
+def test_operators_in_text() -> None:
+    """Verify that other operators are properly ordered in text objects."""
+    with playa.open(TESTDIR / "graphics_state_in_text_object.pdf") as pdf:
+        page = pdf.pages[0]
+        itor = iter(page.texts)
+        text = next(itor)
+        # Initial CTM
+        assert text.ctm[0] == 1.0
+        gitor = iter(text)
+        a = next(gitor)
+        assert a.text == "A"
+        assert a.ctm[0] == 1.0
+        text = next(itor)
+        gitor = iter(text)
+        b = next(gitor)
+        assert b.text == "B"
+        assert b.ctm[0] == 1.5
+        assert b.gstate.ncs.name == "DeviceRGB"
+        assert b.gstate.ncolor.values == (0.75, 0.25, 0.25)
+        text = next(itor)
+        gitor = iter(text)
+        c = next(gitor)
+        assert c.text == "C"
+
+        text = next(itor)
+        # Text isn't lazy anymore, the gstate was reset
+        assert text.ctm[0] == 1.0
+        assert text.chars == "Hello World"

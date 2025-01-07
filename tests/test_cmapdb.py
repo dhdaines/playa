@@ -108,7 +108,6 @@ TOUNICODES = [
     ("utf16_tounicode.pdf", "Cina, il Grande"),
     ("ascii_tounicode.pdf", "Lorem ipsum"),
     ("duplicate_encoding_tounicode.pdf", " ISSUE 9915 "),
-    ("simple3.pdf", "HelloHelloあいうえおあいうえおWorldWorld"),
     ("pdf_structure.pdf", "Titre du document"),
     ("sampleOneByteIdentityEncode.pdf", "abc"),
 ]
@@ -119,3 +118,6 @@ def test_various_tounicode(name, text):
     """Test complex ToUnicode cases, mostly taken from pdf.js"""
     with playa.open(TESTDIR / name) as pdf:
         assert next(pdf.pages[0].texts).chars == text
+    with playa.open(TESTDIR / "simple3.pdf") as pdf:
+        text = "".join(x.chars for x in pdf.pages[0].texts)
+        assert text == "HelloHelloあいうえおあいうえおWorldWorld"
