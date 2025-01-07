@@ -46,7 +46,7 @@ import json
 import logging
 from collections import deque
 from pathlib import Path
-from typing import Any, Deque, Tuple
+from typing import Any, Deque, Iterable, Tuple
 
 import playa
 from playa.document import Document
@@ -191,7 +191,7 @@ def extract_page_contents(doc: Document, args: argparse.Namespace) -> None:
     for page_spec in args.page_contents.split(","):
         start, _, end = page_spec.partition("-")
         if end:
-            pages = range(int(start) - 1, int(end))
+            pages: Iterable[int] = range(int(start) - 1, int(end))
         elif start == "all":
             pages = range(len(doc.pages))
         else:
