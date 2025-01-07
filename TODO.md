@@ -1,3 +1,8 @@
+## PLAYA 0.2.x
+- [ ] eliminate weak references in workers
+- [ ] correct graphics state in text objects
+- [ ] correct current MCS with nested BMC
+
 ## PLAYA 0.3.x
 - [ ] remove `LayoutDict`
 - [ ] add optimized serialization/deserialization
