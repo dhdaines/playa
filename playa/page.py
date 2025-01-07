@@ -1662,12 +1662,12 @@ class ContentObject:
     Attributes:
       gstate: Graphics state.
       ctm: Coordinate transformation matrix (PDF 1.7 section 8.3.2).
-      mcs: Marked content (point or section).
+      mcstack: Stack of enclosing marked content sections.
     """
 
     gstate: GraphicState
     ctm: Matrix
-    mcs: Union[MarkedContent, None]
+    mcstack: List[MarkedContent]
 
     def __iter__(self) -> Iterator["ContentObject"]:
         yield from ()
@@ -1684,6 +1684,7 @@ class ContentObject:
 
     @property
     def bbox(self) -> Rect:
+        """The bounding box in device space of this object."""
         # These bboxes have already been computed in device space so
         # we don't need all 4 corners!
         points = itertools.chain.from_iterable(
@@ -1691,17 +1692,46 @@ class ContentObject:
         )
         return get_bound(points)
 
+    @property
+    def mcs(self) -> Union[MarkedContent, None]:
+        """The immediately enclosing marked content section."""
+        return self.mcstack[-1] if self.mcstack else None
+
+    @property
+    def mcid(self) -> Union[int, None]:
+        """The marked content ID of the nearest enclosing marked
+        content section with an ID."""
+        for mcs in self.mcstack[::-1]:
+            if mcs.mcid is not None:
+                return mcs.mcid
+        return None
+
 
 BBOX_NONE = (-1, -1, -1, -1)
 
 
 @dataclass
 class TagObject(ContentObject):
-    """A marked content point with no content."""
+    """A marked content tag.."""
+
+    _mcs: MarkedContent
 
     def __len__(self) -> int:
         """A tag has no contents, iterating over it returns nothing."""
         return 0
+
+    @property
+    def mcs(self) -> Union[MarkedContent, None]:
+        """The marked content tag for this object."""
+        return self._mcs
+
+    @property
+    def mcid(self) -> Union[int, None]:
+        """The marked content ID of the nearest enclosing marked
+        content section with an ID."""
+        if self._mcs.mcid is not None:
+            return self._mcs.mcid
+        return super().mcid
 
     @property
     def bbox(self) -> Rect:
@@ -1892,25 +1922,25 @@ class PathObject(ContentObject):
         for seg in self.raw_segments:
             if seg.operator == "m" and segs:
                 yield PathObject(
-                    self.gstate,
-                    self.ctm,
-                    self.mcs,
-                    segs,
-                    self.stroke,
-                    self.fill,
-                    self.evenodd,
+                    gstate=self.gstate,
+                    ctm=self.ctm,
+                    mcstack=self.mcstack,
+                    raw_segments=segs,
+                    stroke=self.stroke,
+                    fill=self.fill,
+                    evenodd=self.evenodd,
                 )
                 segs = []
             segs.append(seg)
         if segs:
             yield PathObject(
-                self.gstate,
-                self.ctm,
-                self.mcs,
-                segs,
-                self.stroke,
-                self.fill,
-                self.evenodd,
+                gstate=self.gstate,
+                ctm=self.ctm,
+                mcstack=self.mcstack,
+                raw_segments=segs,
+                stroke=self.stroke,
+                fill=self.fill,
+                evenodd=self.evenodd,
             )
 
     @property
@@ -2066,7 +2096,7 @@ class TextObject(ContentObject):
                     glyph = GlyphObject(
                         gstate=self.gstate,
                         ctm=self.ctm,
-                        mcs=self.mcs,
+                        mcstack=self.mcstack,
                         textstate=tstate,
                         cid=cid,
                         text=text,
@@ -2150,7 +2180,7 @@ class LazyInterpreter(BaseInterpreter):
     def create(self, object_class, **kwargs) -> ContentObject:
         return object_class(
             ctm=self.ctm,
-            mcs=self.mcstack[-1] if self.mcstack else None,
+            mcstack=self.mcstack,
             gstate=self.graphicstate,
             **kwargs,
         )
@@ -2314,7 +2344,7 @@ class LazyInterpreter(BaseInterpreter):
             resources = None if xobjres is None else dict_value(xobjres)
             xobjobj = XObjectObject(
                 ctm=mult_matrix(matrix, self.ctm),
-                mcs=self.mcstack[-1] if self.mcstack else None,
+                mcstack=self.mcstack,
                 gstate=self.graphicstate,
                 page=weakref.ref(self.page),
                 xobjid=xobjid,
@@ -2358,6 +2388,7 @@ class LazyInterpreter(BaseInterpreter):
         rprops = {} if props is None else dict_value(props)
         yield TagObject(
             ctm=self.ctm,
-            mcs=MarkedContent(mcid=None, tag=literal_name(tag), props=rprops),
+            mcstack=self.mcstack,
             gstate=self.graphicstate,
+            _mcs=MarkedContent(mcid=None, tag=literal_name(tag), props=rprops),
         )

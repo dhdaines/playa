@@ -149,8 +149,10 @@ def test_operators_in_text() -> None:
         assert boxes[0][0][0] >= 170
         # and a -1000 that moved it right some more
         assert boxes[1][0][0] >= 210
-    # Also verify that we get the right ActualText
+    # Also verify that we get the right ActualText and MCID
     with playa.open(TESTDIR / "actualtext.pdf") as pdf:
         for t in pdf.pages[0].texts:
-            if "ActualText" in t.mcs.props:
+            if t.mcs and "ActualText" in t.mcs.props:
+                assert isinstance(t.mcs.props["ActualText"], bytes)
                 assert t.mcs.props["ActualText"].decode("utf-16") == "x̌"
+            assert t.mcid == 0
