@@ -393,7 +393,7 @@ also appear in a text object (PDF 1.7, sec 8.2, table 9):
 
 In other words, as usual:
 
-![Adobe is Spiderman](./adobe-spiderman.jpg)
+![Adobe is Spiderman](./docs/adobe-spiderman.jpg)
 
 In particular, we care **a lot** about marked content operators, because
 of the abovementioned `ActualText` property.  For this reason a
