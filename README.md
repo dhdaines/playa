@@ -335,10 +335,10 @@ don't access `obj.bbox` and it won't be computed.  If you don't need
 to know the position of each glyph but simply want the Unicode
 characters, then just look at `obj.chars`.
 
-It is important to understand that `obj.chars` may or may not correspond
-to the actual text that a human will read on the page.  To
-actually extract *text* from a PDF necessarily involves Heuristics
-or Machine Learning (yes, capitalized, like that) and PLAYA does not do
+It is also important to understand that `obj.chars` may or may not
+correspond to the actual text that a human will read on the page.  To
+actually extract *text* from a PDF necessarily involves Heuristics or
+Machine Learning (yes, capitalized, like that) and PLAYA does not do
 either of those things.
 
 This is because PDFs, especially ones produced by OCR, don't organize
@@ -357,10 +357,6 @@ to ignore glyphs with `textstate.render_mode == 3` (which means
 "invisible") or `gstate.scolor.values == (1.0,)` (which means "written
 in white ink") then you could do that.
 
-By default PLAYA, following the PDF specification, considers the
-grouping of glyphs into strings irrelevant by default.  I *might*
-consider separating the strings in the future.
-
 PDF has the concept of a *text state* which determines some aspects of
 how text is rendered.  You can obviously access this though
 `glyph.textstate` - note that the text state, like the graphics state,
@@ -371,13 +367,41 @@ PLAYA doesn't guarantee that text objects come at you in anything
 other than the order they occur in the file (but it does guarantee
 that).
 
-In some cases might want to look at the abovementioned `ActualText`
-attribute to reliably extract text, particularly if the PDF was
-created by certain versions of LibreOffice, but in their infinite
-wisdom, Adobe made `ActualText` a property of *marked content
-sections* and not *text objects*, so you may be out of luck if you
-want to actually match these characters to glyphs.  Sorry, I don't
-write the standards.
+#### An important note about text objects
+
+But wait!  What do we mean by "Text Objects"?  What is "text", anyway?
+While philosophers have debated this question for millenia, PDF has a
+rather precise definition of this (PDF 1.7, sec 9.4.1):
+
+> A PDF text object consists of operators that may show text strings,
+move the text position, and set text state and certain other
+parameters ... A text object begins with the `BT` operator and ends with
+the `ET` operator ... specific categories of text-related operators may
+appear in a text object ...
+
+Except that this is not entirely true!  Many *other* operators may
+also appear in a text object (PDF 1.7, sec 8.2, table 9):
+
+> Text object: Allowed operators:
+>
+> - General graphics state
+> - Color
+> - Text state
+> - Text-showing
+> - Text-positioning
+> - Marked-content
+
+In other words, as usual:
+
+![Adobe is Spiderman](./adobe-spiderman.jpg)
+
+In particular, we care *a lot* about marked content operators, because
+of the abovementioned `ActualText` property.  For this reason a
+`TextObject` in PLAYA **does not** and **will never** correspond to a
+PDF text object as defined by the `BT` and `ET` operators.  For the
+moment, every text-showing operator triggers a new `TextObject`.  It
+is possible (though unlikely) that in the only changes in marked
+content or graphics state will do this.
 
 ## Conclusion
 
