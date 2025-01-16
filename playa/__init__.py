@@ -37,7 +37,7 @@ def open(
     *,
     password: str = "",
     space: DeviceSpace = "screen",
-    max_workers: int = 1,
+    max_workers: Union[int, None] = 1,
     mp_context: Union[BaseContext, None] = None,
 ) -> Document:
     """Open a PDF document from a path on the filesystem.
@@ -57,7 +57,7 @@ def open(
     fp = builtins.open(path, "rb")
     pdf = Document(fp, password=password, space=space)
     pdf._fp = fp
-    if max_workers > 1:
+    if max_workers is None or max_workers > 1:
         pdf._pool = ProcessPoolExecutor(
             max_workers=max_workers,
             mp_context=mp_context,

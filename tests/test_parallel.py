@@ -20,6 +20,11 @@ def test_open_parallel():
     ) as pdf:
         future = pdf._pool.submit(has_one_true_pdf)
         assert future.result() == 1
+    with playa.open(
+        TESTDIR / "pdf_structure.pdf", space="default", max_workers=None
+    ) as pdf:
+        future = pdf._pool.submit(has_one_true_pdf)
+        assert future.result() == 1
 
 
 def get_text(page: Page) -> str:
