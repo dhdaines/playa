@@ -1,3 +1,6 @@
+## Unreleased
+- Accept `None` for `max_workers`
+
 ## PLAYA 0.2.7: 2025-01-07
 - Remove excessive debug logging
 - Add rendering matrix to `GlyphObject`
