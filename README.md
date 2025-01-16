@@ -395,12 +395,12 @@ In other words, as usual:
 
 ![Adobe is Spiderman](./adobe-spiderman.jpg)
 
-In particular, we care *a lot* about marked content operators, because
+In particular, we care **a lot** about marked content operators, because
 of the abovementioned `ActualText` property.  For this reason a
 `TextObject` in PLAYA **does not** and **will never** correspond to a
 PDF text object as defined by the `BT` and `ET` operators.  For the
 moment, every text-showing operator triggers a new `TextObject`.  It
-is possible (though unlikely) that in the only changes in marked
+is possible (though unlikely) that in the future, only changes in marked
 content or graphics state will do this.
 
 ## Conclusion
