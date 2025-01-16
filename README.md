@@ -370,7 +370,7 @@ that).
 ### An important note about text objects
 
 But wait!  What do we mean by "Text Objects"?  What is "text", anyway?
-While philosophers have debated this question for millenia, PDF has a
+While philosophers have debated this question for millennia, PDF has a
 somewhat more precise definition (PDF 1.7, sec 9.4.1):
 
 > A PDF text object consists of operators that may show text strings,
