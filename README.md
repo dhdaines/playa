@@ -367,11 +367,11 @@ PLAYA doesn't guarantee that text objects come at you in anything
 other than the order they occur in the file (but it does guarantee
 that).
 
-#### An important note about text objects
+### An important note about text objects
 
 But wait!  What do we mean by "Text Objects"?  What is "text", anyway?
 While philosophers have debated this question for millenia, PDF has a
-rather precise definition of this (PDF 1.7, sec 9.4.1):
+somewhat more precise definition (PDF 1.7, sec 9.4.1):
 
 > A PDF text object consists of operators that may show text strings,
 move the text position, and set text state and certain other
