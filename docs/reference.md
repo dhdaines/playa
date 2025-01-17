@@ -21,3 +21,5 @@
         - StructElement
         - StructTree
         inherited_members: true
+
+::: playa.worker
