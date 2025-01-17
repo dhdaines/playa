@@ -6,7 +6,6 @@ import itertools
 import logging
 import re
 import warnings
-import weakref
 from copy import copy
 from dataclasses import dataclass
 from typing import (
@@ -71,6 +70,7 @@ from playa.utils import (
     translate_matrix,
 )
 from playa.structtree import StructTree
+from playa.worker import _deref_document, _ref_document, _ref_page, _deref_page, PageRef
 
 if TYPE_CHECKING:
     from playa.document import Document
@@ -141,7 +141,7 @@ class Page:
         page_idx: int = 0,
         space: DeviceSpace = "screen",
     ) -> None:
-        self.doc = weakref.ref(doc)
+        self.docref = _ref_document(doc)
         self.pageid = pageid
         self.attrs = attrs
         self.label = label
@@ -222,6 +222,13 @@ class Page:
                 self._contents = contents
             else:
                 self._contents = [contents]
+
+    @property
+    def doc(self) -> Union["Document", None]:
+        """Get associated document if it exists."""
+        if self.docref is None:
+            return None
+        return _deref_document(self.docref)
 
     @property
     def streams(self) -> Iterator[ContentStream]:
@@ -311,9 +318,7 @@ class Page:
     @property
     def structtree(self) -> StructTree:
         """Return the PDF structure tree."""
-        doc = self.doc()
-        if doc is None:
-            raise RuntimeError("Document no longer exists!")
+        doc = _deref_document(self.docref)
         return StructTree(doc, (self,))
 
     def __repr__(self) -> str:
@@ -708,9 +713,7 @@ class BaseInterpreter:
         self.csmap: Dict[str, ColorSpace] = copy(PREDEFINED_COLORSPACE)
         if not self.resources:
             return
-        doc = page.doc()
-        if doc is None:
-            raise RuntimeError("Document no longer exists!")
+        doc = _deref_document(page.docref)
 
         for k, v in dict_value(self.resources).items():
             if k == "Font":
@@ -1038,9 +1041,7 @@ class BaseInterpreter:
             self.textstate.font = self.fontmap[literal_name(fontid)]
         except KeyError:
             log.warning("Undefined Font id: %r", fontid)
-            doc = self.page.doc()
-            if doc is None:
-                raise RuntimeError("Document no longer exists!")
+            doc = _deref_document(self.page.docref)
             self.textstate.font = doc.get_font(None, {})
         self.textstate.fontsize = num_value(fontsize)
         self.textstate.descent = (
@@ -1814,15 +1815,20 @@ class XObjectObject(ContentObject):
     """
 
     xobjid: str
-    page: weakref.ReferenceType
     stream: ContentStream
     resources: Union[None, Dict[str, PDFObject]]
+    _pageref: PageRef
 
     def __contains__(self, name: object) -> bool:
         return name in self.stream
 
     def __getitem__(self, name: str) -> PDFObject:
         return self.stream[name]
+
+    @property
+    def page(self) -> Page:
+        """Get the page (if it exists, raising RuntimeError if not)."""
+        return _deref_page(self._pageref)
 
     @property
     def bbox(self) -> Rect:
@@ -1860,25 +1866,16 @@ class XObjectObject(ContentObject):
             " and will be removed in PLAYA 0.3",
             DeprecationWarning,
         )
-        page = self.page()
-        if page is None:
-            raise RuntimeError("Page no longer exists!")
-        return iter(PageInterpreter(page, [self.stream], self.resources))
+        return iter(PageInterpreter(self.page, [self.stream], self.resources))
 
     @property
     def contents(self) -> Iterator[PDFObject]:
         """Iterator over PDF objects in the content stream."""
-        page = self.page()
-        if page is None:
-            raise RuntimeError("Page no longer exists!")
         for pos, obj in ContentParser([self.stream]):
             yield obj
 
     def __iter__(self) -> Iterator["ContentObject"]:
-        page = self.page()
-        if page is None:
-            raise RuntimeError("Page no longer exists!")
-        return iter(LazyInterpreter(page, [self.stream], self.resources))
+        return iter(LazyInterpreter(self.page, [self.stream], self.resources))
 
 
 @dataclass
@@ -2346,10 +2343,10 @@ class LazyInterpreter(BaseInterpreter):
                 ctm=mult_matrix(matrix, self.ctm),
                 mcstack=self.mcstack,
                 gstate=self.graphicstate,
-                page=weakref.ref(self.page),
                 xobjid=xobjid,
                 stream=xobj,
                 resources=resources,
+                _pageref=_ref_page(self.page),
             )
             # We are *lazy*, so just yield the XObject itself not its contents
             yield xobjobj

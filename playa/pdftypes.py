@@ -1,9 +1,7 @@
 import io
 import logging
-import weakref
 import zlib
 from typing import (
-    TYPE_CHECKING,
     Any,
     Dict,
     Generic,
@@ -23,9 +21,7 @@ from playa.ccitt import ccittfaxdecode
 from playa.lzw import lzwdecode
 from playa.runlength import rldecode
 from playa.utils import apply_png_predictor, apply_tiff_predictor
-
-if TYPE_CHECKING:
-    from playa.document import Document
+from playa.worker import DocumentRef, _deref_document
 
 logger = logging.getLogger(__name__)
 
@@ -168,7 +164,7 @@ _DEFAULT = object()
 class ObjRef:
     def __init__(
         self,
-        doc: Union[weakref.ReferenceType["Document"], None],
+        doc: Union[DocumentRef, None],
         objid: int,
     ) -> None:
         """Reference to a PDF object.
@@ -190,8 +186,8 @@ class ObjRef:
         elif self.doc is None or other.doc is None:
             return False
         else:
-            selfdoc = self.doc()
-            otherdoc = other.doc()
+            selfdoc = _deref_document(self.doc)
+            otherdoc = _deref_document(other.doc)
             return selfdoc is otherdoc and self.objid == other.objid
 
     def __hash__(self) -> int:
@@ -203,9 +199,7 @@ class ObjRef:
     def resolve(self, default: object = None) -> Any:
         if self.doc is None:
             return default
-        doc = self.doc()
-        if doc is None:
-            raise RuntimeError("Document no longer exists")
+        doc = _deref_document(self.doc)
         try:
             return doc[self.objid]
         except IndexError:

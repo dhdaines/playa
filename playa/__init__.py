@@ -20,7 +20,7 @@ from multiprocessing.context import BaseContext
 from pathlib import Path
 from typing import Union
 
-import playa.document
+from playa.worker import _set_document
 from playa.document import Document, LayoutDict, schema as schema  # noqa: F401
 from playa.page import DeviceSpace
 from playa._version import __version__  # noqa: F401
@@ -28,8 +28,9 @@ from playa._version import __version__  # noqa: F401
 fieldnames = LayoutDict.__annotations__.keys()
 
 
-def init_worker(path: Path, password: str = "", space: DeviceSpace = "screen") -> None:
-    playa.document.__pdf = open(path, password=password, space=space)
+def _init_worker(path: Path, password: str = "", space: DeviceSpace = "screen") -> None:
+    fp = builtins.open(path, "rb")
+    _set_document(Document(fp, password=password, space=space, init_worker=True))
 
 
 def open(
@@ -61,7 +62,7 @@ def open(
         pdf._pool = ProcessPoolExecutor(
             max_workers=max_workers,
             mp_context=mp_context,
-            initializer=init_worker,  # type: ignore[arg-type]
+            initializer=_init_worker,  # type: ignore[arg-type]
             initargs=(path, password, space),  # type: ignore[arg-type]
         )
     return pdf

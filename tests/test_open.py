@@ -136,6 +136,7 @@ def test_weakrefs() -> None:
     with playa.open(TESTDIR / "simple5.pdf") as doc:
         ref = doc.catalog["Pages"]
     del doc
+    assert ref.doc() is None
     with pytest.raises(RuntimeError):
         _ = ref.resolve()
 

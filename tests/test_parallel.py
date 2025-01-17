@@ -9,9 +9,10 @@ from tests.data import TESTDIR, CONTRIB
 
 
 def has_one_true_pdf() -> int:
-    assert playa.document.__pdf is not None
-    assert playa.document.__pdf.space == "default"
-    return len(playa.document.__pdf.pages)
+    doc = playa.worker._get_document()
+    assert doc is not None
+    assert doc.space == "default"
+    return len(doc.pages)
 
 
 def test_open_parallel():

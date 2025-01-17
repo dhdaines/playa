@@ -1,7 +1,6 @@
 import logging
 import mmap
 import re
-import weakref
 from binascii import unhexlify
 from collections import deque
 from typing import (
@@ -16,6 +15,7 @@ from typing import (
     Union,
 )
 
+from playa.worker import _ref_document, _deref_document
 from playa.exceptions import PDFSyntaxError
 from playa.pdftypes import (
     KWD,
@@ -328,7 +328,14 @@ class ObjectParser:
     ) -> None:
         self._lexer = Lexer(data, pos)
         self.stack: List[StackEntry] = []
-        self.doc = None if doc is None else weakref.ref(doc)
+        self.docref = None if doc is None else _ref_document(doc)
+
+    @property
+    def doc(self) -> Union["Document", None]:
+        """Get associated document if it exists."""
+        if self.docref is None:
+            return None
+        return _deref_document(self.docref)
 
     def newstream(self, data: Union[bytes, mmap.mmap]) -> None:
         """Continue parsing from a new data stream."""
@@ -415,7 +422,7 @@ class ObjectParser:
                             "Expected generation and object id in indirect object reference"
                         )
                     objid = int_value(objid)
-                    obj = ObjRef(self.doc, objid)
+                    obj = ObjRef(self.docref, objid)
                     self.stack.append((pos, obj))
             elif token is KEYWORD_BI:
                 if top is None:
@@ -560,8 +567,15 @@ class IndirectObjectParser:
         self._parser = ObjectParser(data, doc)
         self.buffer = data
         self.trailer: List[Tuple[int, Union[PDFObject, ContentStream]]] = []
-        self.doc = None if doc is None else weakref.ref(doc)
+        self.docref = None if doc is None else _ref_document(doc)
         self.strict = strict
+
+    @property
+    def doc(self) -> Union["Document", None]:
+        """Get associated document if it exists."""
+        if self.docref is None:
+            return None
+        return _deref_document(self.docref)
 
     def __iter__(self) -> Iterator[Tuple[int, IndirectObject]]:
         return self
@@ -658,7 +672,7 @@ class IndirectObjectParser:
                                 "Incorrect length for stream, no 'endstream' found"
                             )
                             break
-                doc = None if self.doc is None else self.doc()
+                doc = self.doc
                 stream = ContentStream(
                     dic, bytes(data), None if doc is None else doc.decipher
                 )
@@ -691,7 +705,6 @@ class ObjectStreamParser:
     ) -> None:
         self._parser = ObjectParser(stream.buffer, doc)
         self.buffer = stream.buffer
-        self.doc = None if doc is None else weakref.ref(doc)
         self.nobj = int_value(stream["N"])
         self.first = int_value(stream["First"])
         self.offsets = []
