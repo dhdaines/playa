@@ -9,7 +9,6 @@ import mmap
 import re
 import struct
 import warnings
-import weakref
 from concurrent.futures import Executor
 from hashlib import md5, sha256, sha384, sha512
 from typing import (
@@ -86,6 +85,7 @@ from playa.utils import (
     nunpack,
 )
 from playa.structtree import StructTree
+from playa.worker import _set_document, _ref_document, _deref_document, _deref_page
 
 log = logging.getLogger(__name__)
 
@@ -210,9 +210,8 @@ class XRefFallback:
     def _load(self, parser: IndirectObjectParser) -> None:
         parser.seek(0)
         parser.reset()
-        doc = None if parser.doc is None else parser.doc()
-        if doc is None:
-            raise RuntimeError("Document no longer exists!")
+        doc = parser.doc
+        assert doc is not None
         # Get all the objects
         for pos, obj in parser:
             self.offsets[obj.objid] = XRefPos(None, pos, obj.genno)
@@ -830,7 +829,10 @@ class Document:
         fp: BinaryIO,
         password: str = "",
         space: DeviceSpace = "screen",
+        init_worker: bool = False,
     ) -> None:
+        if init_worker:
+            _set_document(self)
         self.xrefs: List[XRef] = []
         self.space = space
         self.info = []
@@ -1380,20 +1382,16 @@ class Document:
             self._read_xref_from(pos + self.offset, xrefs)
 
 
-__pdf: Union[Document, None] = None
-
-
 def call_page(func: Callable[[Page], Any], idx: int) -> Any:
     """Call a function on a page in a worker process."""
-    assert __pdf is not None
-    return func(__pdf.pages[idx])
+    return func(_deref_page(idx))
 
 
 class PageList:
     """List of pages indexable by 0-based index or string label."""
 
     def __init__(self, doc: Document):
-        self.doc = weakref.ref(doc)
+        self.docref = _ref_document(doc)
         try:
             page_labels: Iterable[Optional[str]] = doc.page_labels
         except (KeyError, ValueError):
@@ -1440,9 +1438,7 @@ class PageList:
             return value is not serializable (by `pickle`) then you
             will encounter errors.
         """
-        doc = self.doc()
-        if doc is None:
-            raise RuntimeError("Document no longer exists")
+        doc = _deref_document(self.docref)
         if doc._pool is not None:
             return doc._pool.map(
                 call_page, itertools.repeat(func), (page.page_idx for page in self)

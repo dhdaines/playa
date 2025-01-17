@@ -71,6 +71,7 @@ from playa.utils import (
     translate_matrix,
 )
 from playa.structtree import StructTree
+from playa.worker import _deref_document, _ref_document
 
 if TYPE_CHECKING:
     from playa.document import Document
@@ -141,7 +142,7 @@ class Page:
         page_idx: int = 0,
         space: DeviceSpace = "screen",
     ) -> None:
-        self.doc = weakref.ref(doc)
+        self.docref = _ref_document(doc)
         self.pageid = pageid
         self.attrs = attrs
         self.label = label
@@ -311,9 +312,7 @@ class Page:
     @property
     def structtree(self) -> StructTree:
         """Return the PDF structure tree."""
-        doc = self.doc()
-        if doc is None:
-            raise RuntimeError("Document no longer exists!")
+        doc = _deref_document(self.docref)
         return StructTree(doc, (self,))
 
     def __repr__(self) -> str:
@@ -708,9 +707,7 @@ class BaseInterpreter:
         self.csmap: Dict[str, ColorSpace] = copy(PREDEFINED_COLORSPACE)
         if not self.resources:
             return
-        doc = page.doc()
-        if doc is None:
-            raise RuntimeError("Document no longer exists!")
+        doc = _deref_document(page.docref)
 
         for k, v in dict_value(self.resources).items():
             if k == "Font":
@@ -1038,9 +1035,7 @@ class BaseInterpreter:
             self.textstate.font = self.fontmap[literal_name(fontid)]
         except KeyError:
             log.warning("Undefined Font id: %r", fontid)
-            doc = self.page.doc()
-            if doc is None:
-                raise RuntimeError("Document no longer exists!")
+            doc = _deref_document(self.page.docref)
             self.textstate.font = doc.get_font(None, {})
         self.textstate.fontsize = num_value(fontsize)
         self.textstate.descent = (
