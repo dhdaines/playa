@@ -833,6 +833,8 @@ class Document:
         init_worker: bool = False,
     ) -> None:
         if init_worker:
+            # Set this **right away** because it is needed to get
+            # indirect object references right.
             _set_document(self)
         self.xrefs: List[XRef] = []
         self.space = space
