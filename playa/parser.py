@@ -15,7 +15,7 @@ from typing import (
     Union,
 )
 
-from playa.worker import _ref_document
+from playa.worker import _ref_document, _deref_document
 from playa.exceptions import PDFSyntaxError
 from playa.pdftypes import (
     KWD,
@@ -328,8 +328,14 @@ class ObjectParser:
     ) -> None:
         self._lexer = Lexer(data, pos)
         self.stack: List[StackEntry] = []
-        self.doc = doc
         self.docref = None if doc is None else _ref_document(doc)
+
+    @property
+    def doc(self) -> Union["Document", None]:
+        """Get associated document if it exists."""
+        if self.docref is None:
+            return None
+        return _deref_document(self.docref)
 
     def newstream(self, data: Union[bytes, mmap.mmap]) -> None:
         """Continue parsing from a new data stream."""
@@ -561,8 +567,15 @@ class IndirectObjectParser:
         self._parser = ObjectParser(data, doc)
         self.buffer = data
         self.trailer: List[Tuple[int, Union[PDFObject, ContentStream]]] = []
-        self.doc = doc
+        self.docref = None if doc is None else _ref_document(doc)
         self.strict = strict
+
+    @property
+    def doc(self) -> Union["Document", None]:
+        """Get associated document if it exists."""
+        if self.docref is None:
+            return None
+        return _deref_document(self.docref)
 
     def __iter__(self) -> Iterator[Tuple[int, IndirectObject]]:
         return self
@@ -659,8 +672,9 @@ class IndirectObjectParser:
                                 "Incorrect length for stream, no 'endstream' found"
                             )
                             break
+                doc = self.doc
                 stream = ContentStream(
-                    dic, bytes(data), None if self.doc is None else self.doc.decipher
+                    dic, bytes(data), None if doc is None else doc.decipher
                 )
                 self.trailer.append((pos, stream))
             elif obj is KEYWORD_ENDSTREAM:

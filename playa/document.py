@@ -820,6 +820,7 @@ class Document:
         if self._fp:
             self._fp.close()
             self._fp = None
+        # Shutdown process pool
         if self._pool:
             self._pool.shutdown()
             self._pool = None
