@@ -1446,8 +1446,8 @@ class PageList:
             return self._pages[key]
         elif isinstance(key, slice):
             return PageList(_deref_document(self.docref), self._pages[key])
-        elif isinstance(key, tuple):
-            return PageList(_deref_document(self.docref), [self[k] for k in key])
+        elif isinstance(key, (tuple, list)):
+            return PageList(_deref_document(self.docref), (self[k] for k in key))
         else:
             return self._labels[key]
 
