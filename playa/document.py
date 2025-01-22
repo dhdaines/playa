@@ -85,7 +85,7 @@ from playa.utils import (
     nunpack,
 )
 from playa.structtree import StructTree
-from playa.worker import _set_document, _ref_document, _deref_document, _deref_page
+from playa.worker import _set_document, _ref_document, _deref_document, _deref_page, in_worker
 
 log = logging.getLogger(__name__)
 
@@ -830,12 +830,13 @@ class Document:
         fp: BinaryIO,
         password: str = "",
         space: DeviceSpace = "screen",
-        init_worker: bool = False,
+        _boss_id: int = 0,
     ) -> None:
-        if init_worker:
+        if _boss_id:
             # Set this **right away** because it is needed to get
             # indirect object references right.
-            _set_document(self)
+            _set_document(self, _boss_id)
+            assert in_worker()
         self.xrefs: List[XRef] = []
         self.space = space
         self.info = []

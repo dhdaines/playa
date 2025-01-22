@@ -21,7 +21,7 @@ from playa.ccitt import ccittfaxdecode
 from playa.lzw import lzwdecode
 from playa.runlength import rldecode
 from playa.utils import apply_png_predictor, apply_tiff_predictor
-from playa.worker import DocumentRef, _deref_document
+from playa.worker import DocumentRef, _deref_document, in_worker
 
 logger = logging.getLogger(__name__)
 
