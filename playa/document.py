@@ -1406,8 +1406,10 @@ class PageList:
     ) -> None:
         self.docref = _ref_document(doc)
         if pages is not None:
-            self._pages = pages
-            self._labels: Dict[str, Page] = {page.label: page for page in pages}
+            self._pages = list(pages)
+            self._labels: Dict[str, Page] = {
+                page.label: page for page in pages if page.label is not None
+            }
         else:
             self._init_pages(doc)
 

@@ -9,7 +9,7 @@ if TYPE_CHECKING:
     from playa.page import Page
 
 # Type signature of document reference
-DocumentRef = Union[weakref.ReferenceType["Document"], int]
+DocumentRef = int
 # Type signature of page reference
 PageRef = Tuple[DocumentRef, int]
 
