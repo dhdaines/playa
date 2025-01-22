@@ -1,10 +1,13 @@
 """Test parallel analysis."""
 
+import operator
+from typing import List
+
 import pytest
 
 import playa
 import playa.document
-from playa.page import Page
+from playa.page import Page, XObjectObject
 from playa.worker import in_worker, _get_document
 from tests.data import TESTDIR, CONTRIB
 
@@ -30,20 +33,31 @@ def test_open_parallel():
         assert future.result() == 1
 
 
-def get_resources(page: Page) -> dict:
-    assert in_worker()
-    return page.resources
-
-
 def test_parallel_references():
     with playa.open(
         TESTDIR / "pdf_structure.pdf", space="default", max_workers=2
     ) as pdf:
-        (resources,) = list(pdf.pages.map(get_resources))
+        (resources,) = pdf.pages.map(operator.attrgetter("resources"))
         desc = resources["Font"].resolve()  # should succeed!
         assert "F1" in desc  # should exist!
         assert "F2" in desc
         assert desc["F1"].resolve()["LastChar"] == 17
+
+
+def get_xobjs(page: Page) -> List[XObjectObject]:
+    return list(page.xobjects)
+
+
+@pytest.mark.skipif(not CONTRIB.exists(), reason="contrib samples not present")
+def test_parallel_xobjects():
+    # Verify that page references (used in XObjects) also work
+    with playa.open(CONTRIB / "basicapi.pdf", space="default", max_workers=2) as pdf:
+        for page in pdf.pages:
+            for xobj in page.xobjects:
+                assert xobj.page.page_idx == page.page_idx
+        for idx, xobjs in enumerate(pdf.pages.map(get_xobjs)):
+            for xobj in xobjs:
+                assert xobj.page.page_idx == idx
 
 
 def get_text(page: Page) -> str:
@@ -60,4 +74,4 @@ def test_map_parallel():
 
 
 if __name__ == "__main__":
-    test_parallel_references()
+    test_parallel_xobjects()

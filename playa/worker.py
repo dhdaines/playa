@@ -81,7 +81,7 @@ def _deref_document(ref: DocumentRef) -> "Document":
 
 
 def _ref_page(page: "Page") -> PageRef:
-    return page.doc, page.page_idx
+    return _ref_document(page.doc), page.page_idx
 
 
 def _deref_page(ref: PageRef) -> "Page":
