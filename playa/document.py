@@ -1395,6 +1395,8 @@ class Document:
 def call_page(func: Callable[[Page], Any], idx: int) -> Any:
     """Call a function on a page in a worker process."""
     doc = _get_document()
+    if doc is None:
+        raise RuntimeError("Document no longer exists (or never existed)!")
     return func(doc.pages[idx])
 
 

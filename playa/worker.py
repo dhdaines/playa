@@ -68,20 +68,20 @@ def _ref_document(doc: "Document") -> DocumentRef:
 
 def _deref_document(ref: DocumentRef) -> "Document":
     if in_worker():
-        return __pdf
-    if isinstance(ref, int):
+        doc = __pdf
+    elif isinstance(ref, int):
         if ref not in __bosses:
             raise RuntimeError(f"Unknown or deleted document with ID {ref}!")
-        return __bosses[ref]
+        doc = __bosses[ref]
     else:
         doc = ref()
-        if doc is None:
-            raise RuntimeError("Document no longer exists (or never existed)!")
-        return doc
+    if doc is None:
+        raise RuntimeError("Document no longer exists (or never existed)!")
+    return doc
 
 
 def _ref_page(page: "Page") -> PageRef:
-    return _ref_document(page.doc), page.page_idx
+    return page.docref, page.page_idx
 
 
 def _deref_page(ref: PageRef) -> "Page":
