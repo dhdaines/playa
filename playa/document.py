@@ -89,8 +89,9 @@ from playa.worker import (
     _set_document,
     _ref_document,
     _deref_document,
-    _get_document,
+    _deref_page,
     in_worker,
+    PageRef,
 )
 
 log = logging.getLogger(__name__)
@@ -1392,12 +1393,9 @@ class Document:
             self._read_xref_from(pos + self.offset, xrefs)
 
 
-def call_page(func: Callable[[Page], Any], idx: int) -> Any:
+def call_page(func: Callable[[Page], Any], pageref: PageRef) -> Any:
     """Call a function on a page in a worker process."""
-    doc = _get_document()
-    if doc is None:
-        raise RuntimeError("Document no longer exists (or never existed)!")
-    return func(doc.pages[idx])
+    return func(_deref_page(pageref))
 
 
 class PageList:
@@ -1454,7 +1452,9 @@ class PageList:
         doc = _deref_document(self.docref)
         if doc._pool is not None:
             return doc._pool.map(
-                call_page, itertools.repeat(func), (page.page_idx for page in self)
+                call_page,
+                itertools.repeat(func),
+                ((id(doc), page.page_idx) for page in self),
             )
         else:
             return (func(page) for page in self)
