@@ -1,5 +1,7 @@
-## Unreleased
+## PLAYA 0.2.8: 2025-01-22
 - Accept `None` for `max_workers`
+- Update documentation with a meme for the younger generation
+- Allow returning indirect object references from worker processes
 
 ## PLAYA 0.2.7: 2025-01-07
 - Remove excessive debug logging
