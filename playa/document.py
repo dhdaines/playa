@@ -1401,14 +1401,23 @@ def call_page(func: Callable[[Page], Any], pageref: PageRef) -> Any:
 class PageList:
     """List of pages indexable by 0-based index or string label."""
 
-    def __init__(self, doc: Document):
+    def __init__(
+        self, doc: Document, pages: Union[Iterable[Page], None] = None
+    ) -> None:
         self.docref = _ref_document(doc)
+        if pages is not None:
+            self._pages = pages
+            self._labels: Dict[str, Page] = {page.label: page for page in pages}
+        else:
+            self._init_pages(doc)
+
+    def _init_pages(self, doc: Document) -> None:
         try:
-            page_labels: Iterable[Optional[str]] = doc.page_labels
+            page_labels: Iterable[Union[str, None]] = doc.page_labels
         except (KeyError, ValueError):
             page_labels = (str(idx) for idx in itertools.count(1))
         self._pages = []
-        self._labels: Dict[str, Page] = {}
+        self._labels = {}
         try:
             page_objects = list(doc._get_page_objects())
         except (KeyError, IndexError, TypeError):
@@ -1431,10 +1440,12 @@ class PageList:
         return iter(self._pages)
 
     def __getitem__(self, key: Union[int, str]) -> Page:
-        if isinstance(key, int) or isinstance(key, slice):
+        if isinstance(key, int):
             return self._pages[key]
+        elif isinstance(key, slice):
+            return PageList(_deref_document(self.docref), self._pages[key])
         elif isinstance(key, tuple):
-            return [self[k] for k in key]
+            return PageList(_deref_document(self.docref), [self[k] for k in key])
         else:
             return self._labels[key]
 

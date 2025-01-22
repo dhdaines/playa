@@ -157,6 +157,38 @@ possible piece of information, PLAYA gives you some options here.
 Wherever possible this information can be computed lazily, but this
 involves some more work on the user's part.
 
+## Using multiple CPUs
+
+You may be wondering, what does "Parallel and Lazy" really mean?
+PLAYA allows you to take advantage of multiple CPUs, which can greatly
+speed up some operations on large documents.  This parallelism
+currently operates at the page level since this is the most logical
+way to split up a PDF.  To enable it, pass the `max_workers` argument
+to `playa.open` with the number of cores you wish to use (you can also
+explicitly pass `None` to use the maximum):
+
+```python
+with playa.open(path, max_workers=4) as pdf:
+    ...
+```
+
+Now, you can apply a function across the pages of the PDF in parallel
+using the `map` method of `pdf.pages`, for example:
+
+```python
+def get_page_size(page: Page) -> Tuple[int, int]:
+    return page.width, page.height
+
+page_sizes = pdf.pages.map(get_page_size)
+```
+
+You could also just do this for certain pages by subscripting
+`pdf.pages`:
+
+```python
+some_page_sizes = pdf.pages[2:5].map(get_page_size)
+```
+
 ## Dictionary-based API
 
 There used to be a "dictionary-based" API here.  You can now find it

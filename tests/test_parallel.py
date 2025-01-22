@@ -71,6 +71,10 @@ def test_map_parallel():
     with playa.open(CONTRIB / "PSC_Station.pdf", space="default") as pdf:
         texts = list(pdf.pages.map(get_text))
     assert texts == parallel_texts
+    with playa.open(CONTRIB / "PSC_Station.pdf", space="default", max_workers=2) as pdf:
+        parallel_texts = list(pdf.pages[3:8].map(get_text))
+        print(parallel_texts)
+        assert parallel_texts != texts
 
 
 if __name__ == "__main__":
