@@ -19,7 +19,7 @@ from os import PathLike
 from multiprocessing.context import BaseContext
 from typing import Union
 
-from playa.worker import _init_worker, _add_boss
+from playa.worker import _init_worker
 from playa.document import Document, LayoutDict, schema as schema  # noqa: F401
 from playa.page import DeviceSpace
 from playa._version import __version__  # noqa: F401
@@ -59,5 +59,4 @@ def open(
             initializer=_init_worker,  # type: ignore[arg-type]
             initargs=(id(pdf), path, password, space),  # type: ignore[arg-type]
         )
-        _add_boss(pdf)
     return pdf

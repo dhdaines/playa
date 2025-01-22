@@ -38,13 +38,6 @@ def _init_worker(
     GLOBAL_DOC = boss
 
 
-def _add_boss(doc: "Document") -> None:
-    """Call this in the parent process."""
-    global __bosses
-    assert not in_worker()
-    __bosses[id(doc)] = doc
-
-
 def _set_document(doc: "Document", boss: int) -> None:
     """Call this in the worker process."""
     global __pdf, GLOBAL_DOC
@@ -63,18 +56,19 @@ def _ref_document(doc: "Document") -> DocumentRef:
         assert GLOBAL_DOC != 0
         return GLOBAL_DOC
     else:
-        return weakref.ref(doc)
+        docid = id(doc)
+        if docid not in __bosses:
+            __bosses[docid] = doc
+        return docid
 
 
 def _deref_document(ref: DocumentRef) -> "Document":
     if in_worker():
         doc = __pdf
-    elif isinstance(ref, int):
+    else:
         if ref not in __bosses:
             raise RuntimeError(f"Unknown or deleted document with ID {ref}!")
         doc = __bosses[ref]
-    else:
-        doc = ref()
     if doc is None:
         raise RuntimeError("Document no longer exists (or never existed)!")
     return doc
