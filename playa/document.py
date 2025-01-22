@@ -85,7 +85,14 @@ from playa.utils import (
     nunpack,
 )
 from playa.structtree import StructTree
-from playa.worker import _set_document, _ref_document, _deref_document, _deref_page
+from playa.worker import (
+    _set_document,
+    _ref_document,
+    _deref_document,
+    _deref_page,
+    in_worker,
+    PageRef,
+)
 
 log = logging.getLogger(__name__)
 
@@ -830,12 +837,13 @@ class Document:
         fp: BinaryIO,
         password: str = "",
         space: DeviceSpace = "screen",
-        init_worker: bool = False,
+        _boss_id: int = 0,
     ) -> None:
-        if init_worker:
+        if _boss_id:
             # Set this **right away** because it is needed to get
             # indirect object references right.
-            _set_document(self)
+            _set_document(self, _boss_id)
+            assert in_worker()
         self.xrefs: List[XRef] = []
         self.space = space
         self.info = []
@@ -1385,22 +1393,33 @@ class Document:
             self._read_xref_from(pos + self.offset, xrefs)
 
 
-def call_page(func: Callable[[Page], Any], idx: int) -> Any:
+def call_page(func: Callable[[Page], Any], pageref: PageRef) -> Any:
     """Call a function on a page in a worker process."""
-    return func(_deref_page(idx))
+    return func(_deref_page(pageref))
 
 
 class PageList:
     """List of pages indexable by 0-based index or string label."""
 
-    def __init__(self, doc: Document):
+    def __init__(
+        self, doc: Document, pages: Union[Iterable[Page], None] = None
+    ) -> None:
         self.docref = _ref_document(doc)
+        if pages is not None:
+            self._pages = list(pages)
+            self._labels: Dict[str, Page] = {
+                page.label: page for page in pages if page.label is not None
+            }
+        else:
+            self._init_pages(doc)
+
+    def _init_pages(self, doc: Document) -> None:
         try:
-            page_labels: Iterable[Optional[str]] = doc.page_labels
+            page_labels: Iterable[Union[str, None]] = doc.page_labels
         except (KeyError, ValueError):
             page_labels = (str(idx) for idx in itertools.count(1))
         self._pages = []
-        self._labels: Dict[str, Page] = {}
+        self._labels = {}
         try:
             page_objects = list(doc._get_page_objects())
         except (KeyError, IndexError, TypeError):
@@ -1423,10 +1442,12 @@ class PageList:
         return iter(self._pages)
 
     def __getitem__(self, key: Union[int, str]) -> Page:
-        if isinstance(key, int) or isinstance(key, slice):
+        if isinstance(key, int):
             return self._pages[key]
-        elif isinstance(key, tuple):
-            return [self[k] for k in key]
+        elif isinstance(key, slice):
+            return PageList(_deref_document(self.docref), self._pages[key])
+        elif isinstance(key, (tuple, list)):
+            return PageList(_deref_document(self.docref), (self[k] for k in key))
         else:
             return self._labels[key]
 
@@ -1444,7 +1465,9 @@ class PageList:
         doc = _deref_document(self.docref)
         if doc._pool is not None:
             return doc._pool.map(
-                call_page, itertools.repeat(func), (page.page_idx for page in self)
+                call_page,
+                itertools.repeat(func),
+                ((id(doc), page.page_idx) for page in self),
             )
         else:
             return (func(page) for page in self)

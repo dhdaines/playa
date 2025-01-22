@@ -113,6 +113,8 @@ def test_pages():
         assert [p.label for p in twopages] == ["3", "4"]
         threepages = doc.pages["2", 2, 3]
         assert [p.label for p in threepages] == ["2", "3", "4"]
+        threepages = doc.pages[["2", 2, 3]]
+        assert [p.label for p in threepages] == ["2", "3", "4"]
 
 
 @pytest.mark.skipif(not CONTRIB.exists(), reason="contrib samples not present")
