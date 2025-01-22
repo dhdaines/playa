@@ -189,6 +189,25 @@ You could also just do this for certain pages by subscripting
 some_page_sizes = pdf.pages[2:5].map(get_page_size)
 ```
 
+There are some limitations to this, because it uses `multiprocessing`.
+The function you pass to `map` must be serializable by `pickle`, which
+in practice means that an inner function or lambda generally doesn't
+work.  You can get around this in a very Java-like way by passing a
+callable object that encapsulates the necessary state.  If you wish to
+avoid traumatising readers of your code, then use `functools.partial`
+instead:
+
+```python
+pdf.pages.map(partial(myfunc, arg1=value1, arg2=value2))
+```
+
+Also, any value returned by your function must also be serializable.
+There is a bit of magic that enables this to work for PDF objects
+containing indirect object references, so you should be able to, for
+instance, get the `dests` or `annots` from every page without any
+trouble.  But if you have your own complex objects that you return you
+may encounter problems (or slowness).
+
 ## Dictionary-based API
 
 There used to be a "dictionary-based" API here.  You can now find it
