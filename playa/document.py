@@ -85,7 +85,13 @@ from playa.utils import (
     nunpack,
 )
 from playa.structtree import StructTree
-from playa.worker import _set_document, _ref_document, _deref_document, _deref_page, in_worker
+from playa.worker import (
+    _set_document,
+    _ref_document,
+    _deref_document,
+    _get_document,
+    in_worker,
+)
 
 log = logging.getLogger(__name__)
 
@@ -1388,7 +1394,8 @@ class Document:
 
 def call_page(func: Callable[[Page], Any], idx: int) -> Any:
     """Call a function on a page in a worker process."""
-    return func(_deref_page(idx))
+    doc = _get_document()
+    return func(doc.pages[idx])
 
 
 class PageList:

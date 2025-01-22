@@ -39,7 +39,7 @@ def test_parallel_references():
     with playa.open(
         TESTDIR / "pdf_structure.pdf", space="default", max_workers=2
     ) as pdf:
-        resources, = list(pdf.pages.map(get_resources))
+        (resources,) = list(pdf.pages.map(get_resources))
         desc = resources["Font"].resolve()  # should succeed!
         assert "F1" in desc  # should exist!
         assert "F2" in desc
@@ -59,5 +59,5 @@ def test_map_parallel():
     assert texts == parallel_texts
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     test_parallel_references()
