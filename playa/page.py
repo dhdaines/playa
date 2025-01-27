@@ -224,10 +224,8 @@ class Page:
                 self._contents = [contents]
 
     @property
-    def doc(self) -> Union["Document", None]:
+    def doc(self) -> "Document":
         """Get associated document if it exists."""
-        if self.docref is None:
-            return None
         return _deref_document(self.docref)
 
     @property
