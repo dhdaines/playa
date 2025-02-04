@@ -20,11 +20,11 @@ from multiprocessing.context import BaseContext
 from typing import Union
 
 from playa.worker import _init_worker
-from playa.document import Document, LayoutDict, schema as schema  # noqa: F401
-from playa.page import DeviceSpace
-from playa._version import __version__  # noqa: F401
+from playa.document import Document
+from playa.page import Page, DeviceSpace
+from playa._version import __version__
 
-fieldnames = LayoutDict.__annotations__.keys()
+__all__ = ["Document", "Page", "DeviceSpace", "__version__"]
 
 
 def open(

@@ -70,15 +70,16 @@ exclude = ["samples/3rdparty"] # why no leading slash?
 testpaths = [ "tests" ]
 
 [tool.hatch.envs.hatch-test]
-extra-dependencies = [ "cryptography", "pdfminer.six", "pandas", "polars-lts-cpu" ]
+extra-dependencies = [ "cryptography", "pdfminer.six" ]
 
 [tool.hatch.envs.default]
-dependencies = [ "cryptography", "pytest", "pdfminer.six", "pandas", "polars-lts-cpu" ]
+dependencies = [ "cryptography", "pytest", "pdfminer.six" ]
 
 [tool.hatch.envs.default.scripts]
 bench = [
     "python benchmarks/parser.py",
     "python benchmarks/converter.py",
+    "python benchmarks/text.py",
 ]
 
 [tool.hatch.envs.docs]

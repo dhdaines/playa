@@ -5,7 +5,6 @@ Classes for looking at pages and their contents.
 import itertools
 import logging
 import re
-import warnings
 from copy import copy
 from dataclasses import dataclass
 from typing import (
@@ -18,9 +17,7 @@ from typing import (
     Literal,
     NamedTuple,
     Optional,
-    Sequence,
     Tuple,
-    TypedDict,
     Union,
     cast,
 )
@@ -60,31 +57,17 @@ from playa.utils import (
     Point,
     Rect,
     apply_matrix_pt,
-    apply_matrix_norm,
     decode_text,
     get_bound,
     get_transformed_bound,
-    make_compat_bytes,
     mult_matrix,
     normalize_rect,
-    translate_matrix,
 )
 from playa.structtree import StructTree
 from playa.worker import _deref_document, _ref_document, _ref_page, _deref_page, PageRef
 
 if TYPE_CHECKING:
     from playa.document import Document
-
-# Stub out Polars if not present
-try:
-    import polars as pl
-except ImportError:
-
-    class pl:  # type: ignore
-        def Array(*args, **kwargs): ...
-        def List(*args, **kwargs): ...
-        def Object(*args, **kwargs): ...
-
 
 log = logging.getLogger(__name__)
 
@@ -224,10 +207,8 @@ class Page:
                 self._contents = [contents]
 
     @property
-    def doc(self) -> Union["Document", None]:
+    def doc(self) -> "Document":
         """Get associated document if it exists."""
-        if self.docref is None:
-            return None
         return _deref_document(self.docref)
 
     @property
@@ -287,22 +268,6 @@ class Page:
         `page.resources`.
         """
         return (obj for obj in self if isinstance(obj, XObjectObject))
-
-    @property
-    def layout(self) -> Iterator["LayoutDict"]:
-        """Iterator over eager layout object dictionaries.
-
-        Danger: Deprecated
-            This interface is deprecated and has been moved to
-            [PAVÉS](https://github.com/dhdaines/paves).  It will be
-            removed in PLAYA 0.3.
-        """
-        warnings.warn(
-            "The layout property has moved to PAVÉS (https://github.com/dhdaines/paves)"
-            " and will be removed in PLAYA 0.3",
-            DeprecationWarning,
-        )
-        return iter(PageInterpreter(self, self._contents))
 
     @property
     def tokens(self) -> Iterator[Token]:
@@ -440,171 +405,6 @@ class GraphicState:
     ncs: ColorSpace = PREDEFINED_COLORSPACE["DeviceGray"]
 
 
-class LayoutDict(TypedDict, total=False):
-    """Dictionary-based layout objects.
-
-    Danger: Deprecated
-        This interface is deprecated and has been moved to
-        [PAVÉS](https://github.com/dhdaines/paves).  It will be
-        removed in PLAYA 0.3.
-
-    These are somewhat like the `T_obj` dictionaries returned by
-    pdfplumber.  The type of coordinates returned are determined by
-    the `space` argument passed to `Page`.  By default, `(0, 0)` is
-    the top-left corner of the page, with 72 units per inch.
-
-    All values can be converted to strings in some meaningful fashion,
-    such that you can simply write one of these to a CSV.  You can access
-    the field names through the `__annotations__` property:
-
-        writer = DictWriter(fieldnames=LayoutDict.__annotations__.keys())
-        dictwriter.write_rows(writer)
-
-    Attributes:
-      object_type: Type of object as a string.
-      mcid: Containing marked content section ID (or None if marked
-        content has no ID, such as artifacts or if there is no logical
-        structure).
-      tag: Containing marked content tag name (or None if not in a marked
-        content section).
-      xobjid: String name of containing Form XObject, if any.
-      cid: Integer character ID of glyph, if `object_type == "char"`.
-      text: Unicode mapping for glyph, if any.
-      fontname: str
-      size: Font size in device space.
-      glyph_offset_x: Horizontal offset (in device space) of glyph
-        from start of line.
-      glyph_offset_y: Vertical offset (in device space) of glyph from
-        start of line.
-      render_mode: Text rendering mode.
-      upright: FIXME: Not really sure what this means.  pdfminer.six?
-      x0: Minimum x coordinate of bounding box (top or bottom
-        depending on device space).
-      x1: Maximum x coordinate of bounding box (top or bottom
-        depending on device space).
-      y0: Minimum y coordinate of bounding box (left or right
-        depending on device space).
-      x1: Minimum x coordinate of bounding box (left or right
-        depending on device space).
-      stroking_colorspace: String name of colour space for stroking
-        operations.
-      stroking_color: Numeric parameters for stroking color.
-      stroking_pattern: Name of stroking pattern, if any.
-      non_stroking_colorspace: String name of colour space for non-stroking
-        operations.
-      non_stroking_color: Numeric parameters for non-stroking color.
-      non_stroking_pattern: Name of stroking pattern, if any.
-      path_ops: Sequence of path operations (e.g. `"mllh"` for a
-        triangle or `"mlllh"` for a quadrilateral)
-      dash_pattern: Sequence of user space units for alternating
-        stroke and non-stroke segments of dash pattern, `()` for solid
-        line. (Cannot be in device space because this would depend on
-        which direction the line or curve is drawn).
-      dash_phase: Initial position in `dash_pattern` in user space
-        units.  (see above for why it's in user space)
-      evenodd: Was this path filled with Even-Odd (if `True`) or
-        Nonzero-Winding-Number rule (if `False`)?  Note that this is
-        **meaningless** for determining if a path is actually filled
-        since subpaths have already been decomposed.  If you really
-        care then use the lazy API instead.
-      stroke: Is this path stroked?
-      fill: Is this path filled?
-      linewidth: Line width in user space units (again, not possible
-        to transform to device space).
-      pts_x: X coordinates of path endpoints, one for each character
-        in `path_ops`.  This is optimized for CSV/DataFrame output, if
-        you care about the control points then use the lazy API.
-      pts_y: Y coordinates of path endpoints, one for each character
-        in `path_ops`.  This is optimized for CSV/DataFrame output, if
-        you care about the control points then use the lazy API.
-      stream: Object number and generation number for the content
-        stream associated with an image, or `None` for inline images.
-        If you want image data then use the lazy API.
-      imagemask: Is this image a mask?
-      image_colorspace: String description of image colour space, or
-        `None` if irrelevant/forbidden,
-      srcsize: Source dimensions of image in pixels.
-      bits: Number of bits per channel of image.
-
-    """
-
-    object_type: str
-    mcid: Union[int, None]
-    tag: Union[str, None]
-    xobjid: Union[str, None]
-    cid: int
-    text: Union[str, None]
-    fontname: str
-    size: float
-    glyph_offset_x: float
-    glyph_offset_y: float
-    render_mode: int
-    upright: bool
-    x0: float
-    y0: float
-    x1: float
-    y1: float
-    stroking_colorspace: str
-    stroking_color: Tuple[float, ...]
-    stroking_pattern: Union[str, None]
-    non_stroking_colorspace: str
-    non_stroking_color: Tuple[float, ...]
-    non_stroking_pattern: Union[str, None]
-    path_ops: str
-    dash_pattern: Tuple[float, ...]
-    dash_phase: float
-    evenodd: bool
-    stroke: bool
-    fill: bool
-    linewidth: float
-    pts_x: List[float]
-    pts_y: List[float]
-    stream: Union[Tuple[int, int], None]
-    imagemask: bool
-    image_colorspace: Union[ColorSpace, None]
-    srcsize: Tuple[int, int]
-    bits: int
-
-
-fieldnames = LayoutDict.__annotations__.keys()
-schema = {
-    "object_type": str,
-    "mcid": int,
-    "tag": str,
-    "xobjid": str,
-    "text": str,
-    "cid": int,
-    "fontname": str,
-    "size": float,
-    "glyph_offset_x": float,
-    "glyph_offset_y": float,
-    "render_mode": int,
-    "upright": bool,
-    "x0": float,
-    "x1": float,
-    "y0": float,
-    "y1": float,
-    "stroking_colorspace": str,
-    "non_stroking_colorspace": str,
-    "stroking_color": pl.List(float),
-    "non_stroking_color": pl.List(float),
-    "path_ops": str,
-    "dash_pattern": pl.List(float),
-    "dash_phase": float,
-    "evenodd": bool,
-    "stroke": bool,
-    "fill": bool,
-    "linewidth": float,
-    "pts_x": pl.List(float),
-    "pts_y": pl.List(float),
-    "stream": pl.Array(int, 2),
-    "imagemask": bool,
-    "image_colorspace": str,
-    "srcsize": pl.Array(int, 2),
-    "bits": int,
-}
-
-
 class ContentParser(ObjectParser):
     """Parse the concatenation of multiple content streams, as
     described in the spec (PDF 1.7, p.86):
@@ -669,6 +469,475 @@ class PathSegment(NamedTuple):
     points: Tuple[Point, ...]
 
 
+@dataclass
+class ContentObject:
+    """Any sort of content object.
+
+    Attributes:
+      gstate: Graphics state.
+      ctm: Coordinate transformation matrix (PDF 1.7 section 8.3.2).
+      mcstack: Stack of enclosing marked content sections.
+    """
+
+    gstate: GraphicState
+    ctm: Matrix
+    mcstack: List[MarkedContent]
+
+    def __iter__(self) -> Iterator["ContentObject"]:
+        yield from ()
+
+    def __len__(self) -> int:
+        """Return the number of children of this object (generic implementation)."""
+        return sum(1 for _ in self)
+
+    @property
+    def object_type(self):
+        """Type of this object as a string, e.g. "text", "path", "image"."""
+        name = self.__class__.__name__
+        return name[: -len("Object")].lower()
+
+    @property
+    def bbox(self) -> Rect:
+        """The bounding box in device space of this object."""
+        # These bboxes have already been computed in device space so
+        # we don't need all 4 corners!
+        points = itertools.chain.from_iterable(
+            ((x0, y0), (x1, y1)) for x0, y0, x1, y1 in (item.bbox for item in self)
+        )
+        return get_bound(points)
+
+    @property
+    def mcs(self) -> Union[MarkedContent, None]:
+        """The immediately enclosing marked content section."""
+        return self.mcstack[-1] if self.mcstack else None
+
+    @property
+    def mcid(self) -> Union[int, None]:
+        """The marked content ID of the nearest enclosing marked
+        content section with an ID."""
+        for mcs in self.mcstack[::-1]:
+            if mcs.mcid is not None:
+                return mcs.mcid
+        return None
+
+
+BBOX_NONE = (-1, -1, -1, -1)
+
+
+@dataclass
+class TagObject(ContentObject):
+    """A marked content tag.."""
+
+    _mcs: MarkedContent
+
+    def __len__(self) -> int:
+        """A tag has no contents, iterating over it returns nothing."""
+        return 0
+
+    @property
+    def mcs(self) -> Union[MarkedContent, None]:
+        """The marked content tag for this object."""
+        return self._mcs
+
+    @property
+    def mcid(self) -> Union[int, None]:
+        """The marked content ID of the nearest enclosing marked
+        content section with an ID."""
+        if self._mcs.mcid is not None:
+            return self._mcs.mcid
+        return super().mcid
+
+    @property
+    def bbox(self) -> Rect:
+        """A tag has no content and thus no bounding box.
+
+        To avoid needlessly complicating user code this returns
+        `BBOX_NONE` instead of `None` or throwing a exception.
+        Because that is a specific object, you can reliably check for
+        it with:
+
+            if obj.bbox is BBOX_NONE:
+                ...
+        """
+        return BBOX_NONE
+
+
+@dataclass
+class ImageObject(ContentObject):
+    """An image (either inline or XObject).
+
+    Attributes:
+      xobjid: Name of XObject (or None for inline images).
+      srcsize: Size of source image in pixels.
+      bits: Number of bits per component, if required (otherwise 1).
+      imagemask: True if the image is a mask.
+      stream: Content stream with image data.
+      colorspace: Colour space for this image, if required (otherwise
+        None).
+    """
+
+    xobjid: Union[str, None]
+    srcsize: Tuple[int, int]
+    bits: int
+    imagemask: bool
+    stream: ContentStream
+    colorspace: Union[ColorSpace, None]
+
+    def __contains__(self, name: object) -> bool:
+        return name in self.stream
+
+    def __getitem__(self, name: str) -> PDFObject:
+        return self.stream[name]
+
+    def __len__(self) -> int:
+        """Even though you can __getitem__ from an image you cannot iterate
+        over its keys, sorry about that.  Returns zero."""
+        return 0
+
+    @property
+    def buffer(self) -> bytes:
+        """Binary stream content for this image"""
+        return self.stream.buffer
+
+    @property
+    def bbox(self) -> Rect:
+        # PDF 1.7 sec 8.3.24: All images shall be 1 unit wide by 1
+        # unit high in user space, regardless of the number of samples
+        # in the image. To be painted, an image shall be mapped to a
+        # region of the page by temporarily altering the CTM.
+        return get_transformed_bound(self.ctm, (0, 0, 1, 1))
+
+
+@dataclass
+class XObjectObject(ContentObject):
+    """An eXternal Object, in the context of a page.
+
+    There are a couple of kinds of XObjects.  Here we are only
+    concerned with "Form XObjects" which, despite their name, have
+    nothing at all to do with fillable forms.  Instead they are like
+    little embeddable PDF pages, possibly with their own resources,
+    definitely with their own definition of "user space".
+
+    Image XObjects are handled by `ImageObject`.
+
+    Attributes:
+      xobjid: Name of this XObject (in the page resources).
+      page: Weak reference to containing page.
+      stream: Content stream with PDF operators.
+      resources: Resources specific to this XObject, if any.
+    """
+
+    xobjid: str
+    stream: ContentStream
+    resources: Union[None, Dict[str, PDFObject]]
+    _pageref: PageRef
+
+    def __contains__(self, name: object) -> bool:
+        return name in self.stream
+
+    def __getitem__(self, name: str) -> PDFObject:
+        return self.stream[name]
+
+    @property
+    def page(self) -> Page:
+        """Get the page (if it exists, raising RuntimeError if not)."""
+        return _deref_page(self._pageref)
+
+    @property
+    def bbox(self) -> Rect:
+        """Get the bounding box of this XObject in device space."""
+        # It is a required attribute!
+        return get_transformed_bound(self.ctm, parse_rect(self.stream["BBox"]))
+
+    @property
+    def buffer(self) -> bytes:
+        """Raw stream content for this XObject"""
+        return self.stream.buffer
+
+    @property
+    def tokens(self) -> Iterator[Token]:
+        """Iterate over tokens in the XObject's content stream."""
+        parser = ContentParser([self.stream])
+        while True:
+            try:
+                pos, tok = parser.nexttoken()
+            except StopIteration:
+                return
+            yield tok
+
+    @property
+    def contents(self) -> Iterator[PDFObject]:
+        """Iterator over PDF objects in the content stream."""
+        for pos, obj in ContentParser([self.stream]):
+            yield obj
+
+    def __iter__(self) -> Iterator["ContentObject"]:
+        return iter(LazyInterpreter(self.page, [self.stream], self.resources))
+
+
+@dataclass
+class PathObject(ContentObject):
+    """A path object.
+
+    Attributes:
+      raw_segments: Segments in path (in user space).
+      stroke: True if the outline of the path is stroked.
+      fill: True if the path is filled.
+      evenodd: True if the filling of complex paths uses the even-odd
+        winding rule, False if the non-zero winding number rule is
+        used (PDF 1.7 section 8.5.3.3)
+    """
+
+    raw_segments: List[PathSegment]
+    stroke: bool
+    fill: bool
+    evenodd: bool
+
+    def __len__(self):
+        """Number of subpaths."""
+        return min(1, sum(1 for seg in self.raw_segments if seg.operator == "m"))
+
+    def __iter__(self):
+        """Iterate over subpaths.
+
+        If there is only a single subpath, it will still be iterated
+        over.  This means that some care must be taken (for example,
+        checking if `len(path) == 1`) to avoid endless recursion.
+
+        Note: subpaths inherit the values of `fill` and `evenodd` from
+        the parent path, but these values are no longer meaningful
+        since the winding rules must be applied to the composite path
+        as a whole (this is not a bug, just don't rely on them to know
+        which regions are filled or not).
+
+        """
+        # FIXME: Is there an itertool or a more_itertool for this?
+        segs = []
+        for seg in self.raw_segments:
+            if seg.operator == "m" and segs:
+                yield PathObject(
+                    gstate=self.gstate,
+                    ctm=self.ctm,
+                    mcstack=self.mcstack,
+                    raw_segments=segs,
+                    stroke=self.stroke,
+                    fill=self.fill,
+                    evenodd=self.evenodd,
+                )
+                segs = []
+            segs.append(seg)
+        if segs:
+            yield PathObject(
+                gstate=self.gstate,
+                ctm=self.ctm,
+                mcstack=self.mcstack,
+                raw_segments=segs,
+                stroke=self.stroke,
+                fill=self.fill,
+                evenodd=self.evenodd,
+            )
+
+    @property
+    def segments(self) -> Iterator[PathSegment]:
+        """Get path segments in device space."""
+        return (
+            PathSegment(
+                p.operator,
+                tuple(apply_matrix_pt(self.ctm, point) for point in p.points),
+            )
+            for p in self.raw_segments
+        )
+
+    @property
+    def bbox(self) -> Rect:
+        """Get bounding box of path in device space as defined by its
+        points and control points."""
+        # First get the bounding box in user space (fast)
+        bbox = get_bound(
+            itertools.chain.from_iterable(seg.points for seg in self.raw_segments)
+        )
+        # Transform it and get the new bounding box
+        return get_transformed_bound(self.ctm, bbox)
+
+
+@dataclass
+class GlyphObject(ContentObject):
+    """Individual glyph on the page.
+
+    Attributes:
+      textstate: Text state for this glyph.  This is a **mutable**
+        object and you should not expect it to be valid outside the
+        context of iteration over the parent `TextObject`.
+      cid: Character ID for this glyph.
+      text: Unicode mapping of this glyph, if any.
+      adv: glyph displacement in text space units (horizontal or vertical,
+           depending on the writing direction).
+      matrix: rendering matrix for this glyph, which transforms text
+              space (*not glyph space!*) coordinates to device space.
+      bbox: glyph bounding box in device space.
+      corners: Is the transformed bounding box rotated or skewed such
+               that all four corners need to be calculated (derived
+               from matrix but precomputed for speed)
+
+    """
+
+    textstate: TextState
+    cid: int
+    text: Union[str, None]
+    matrix: Matrix
+    adv: float
+    corners: bool
+
+    def __len__(self) -> int:
+        """Fool! You cannot iterate over a GlyphObject!"""
+        return 0
+
+    @property
+    def bbox(self) -> Rect:
+        tstate = self.textstate
+        font = tstate.font
+        assert font is not None
+        if font.vertical:
+            textdisp = font.char_disp(self.cid)
+            assert isinstance(textdisp, tuple)
+            (vx, vy) = textdisp
+            if vx is None:
+                vx = tstate.fontsize * 0.5
+            else:
+                vx = vx * tstate.fontsize * 0.001
+            vy = (1000 - vy) * tstate.fontsize * 0.001
+            x0, y0 = (-vx, vy + tstate.rise + self.adv)
+            x1, y1 = (-vx + tstate.fontsize, vy + tstate.rise)
+        else:
+            x0, y0 = (0, tstate.descent + tstate.rise)
+            x1, y1 = (self.adv, tstate.descent + tstate.rise + tstate.fontsize)
+
+        if self.corners:
+            return get_bound(
+                (
+                    apply_matrix_pt(self.matrix, (x0, y0)),
+                    apply_matrix_pt(self.matrix, (x0, y1)),
+                    apply_matrix_pt(self.matrix, (x1, y1)),
+                    apply_matrix_pt(self.matrix, (x1, y0)),
+                )
+            )
+        else:
+            x0, y0 = apply_matrix_pt(self.matrix, (x0, y0))
+            x1, y1 = apply_matrix_pt(self.matrix, (x1, y1))
+            if x1 < x0:
+                x0, x1 = x1, x0
+            if y1 < y0:
+                y0, y1 = y1, y0
+            return (x0, y0, x1, y1)
+
+
+@dataclass
+class TextObject(ContentObject):
+    """Text object (contains one or more glyphs).
+
+    Attributes:
+      textstate: Text state for this object.  This is a **mutable**
+        object and you should not expect it to be valid outside the
+        context of iteration over the parent `TextObject`.
+      args: Strings or position adjustments
+    """
+
+    textstate: TextState
+    args: List[Union[bytes, float]]
+    _chars: Union[List[str], None] = None
+
+    def __iter__(self) -> Iterator[GlyphObject]:
+        """Generate glyphs for this text object"""
+        tstate = self.textstate
+        font = tstate.font
+        # If no font is set, we cannot do anything, since even calling
+        # TJ with a displacement and no text effects requires us at
+        # least to know the fontsize.
+        if font is None:
+            log.warning(
+                "No font is set, will not update text state or output text: %r TJ",
+                self.args,
+            )
+            return
+        assert self.ctm is not None
+        # Extract all the elements so we can translate efficiently
+        a, b, c, d, e, f = mult_matrix(tstate.line_matrix, self.ctm)
+        # Pre-determine if we need to recompute the bound for rotated glyphs
+        corners = b * d < 0 or a * c < 0
+        # Apply horizontal scaling
+        scaling = tstate.scaling * 0.01
+        charspace = tstate.charspace * scaling
+        wordspace = tstate.wordspace * scaling
+        vert = font.vertical
+        if font.multibyte:
+            wordspace = 0
+        (x, y) = tstate.glyph_offset
+        pos = y if vert else x
+        needcharspace = False
+        for obj in self.args:
+            if isinstance(obj, (int, float)):
+                dxscale = 0.001 * tstate.fontsize * scaling
+                pos -= obj * dxscale
+                needcharspace = True
+            else:
+                for cid, text in font.decode(obj):
+                    if needcharspace:
+                        pos += charspace
+                    tstate.glyph_offset = (x, pos) if vert else (pos, y)
+                    textwidth = font.char_width(cid)
+                    adv = textwidth * tstate.fontsize * scaling
+                    x, y = tstate.glyph_offset
+                    glyph = GlyphObject(
+                        gstate=self.gstate,
+                        ctm=self.ctm,
+                        mcstack=self.mcstack,
+                        textstate=tstate,
+                        cid=cid,
+                        text=text,
+                        # Do pre-translation internally (taking rotation into account)
+                        matrix=(a, b, c, d, x * a + y * c + e, x * b + y * d + f),
+                        adv=adv,
+                        corners=corners,
+                    )
+                    yield glyph
+                    pos += adv
+                    if cid == 32 and wordspace:
+                        pos += wordspace
+                    needcharspace = True
+        tstate.glyph_offset = (x, pos) if vert else (pos, y)
+
+    @property
+    def chars(self) -> str:
+        """Get the Unicode characters (in stream order) for this object."""
+        if self._chars is not None:
+            return "".join(self._chars)
+        self._chars = []
+        font = self.textstate.font
+        assert font is not None, "No font was selected"
+        for obj in self.args:
+            if not isinstance(obj, bytes):
+                continue
+            for cid, text in font.decode(obj):
+                self._chars.append(text)
+        return "".join(self._chars)
+
+    def __len__(self) -> int:
+        """Return the number of glyphs that would result from iterating over
+        this object.
+
+        Important: this is the number of glyphs, *not* the number of
+        Unicode characters.
+        """
+        nglyphs = 0
+        font = self.textstate.font
+        assert font is not None, "No font was selected"
+        for obj in self.args:
+            if not isinstance(obj, bytes):
+                continue
+            nglyphs += sum(1 for _ in font.decode(obj))
+        return nglyphs
+
+
 def make_seg(operator: PathOperator, *points: Point):
     return PathSegment(operator, points)
 
@@ -677,8 +946,8 @@ def point_value(x: PDFObject, y: PDFObject) -> Point:
     return (num_value(x), num_value(y))
 
 
-class BaseInterpreter:
-    """Core state for the PDF interpreter."""
+class LazyInterpreter:
+    """Interpret the page yielding lazy objects."""
 
     ctm: Matrix
 
@@ -772,6 +1041,252 @@ class BaseInterpreter:
         state: Tuple[Matrix, TextState, GraphicState],
     ) -> None:
         (self.ctm, self.textstate, self.graphicstate) = state
+
+    def __iter__(self) -> Iterator[ContentObject]:
+        parser = ContentParser(self.contents)
+        for _, obj in parser:
+            # These are handled inside the parser as they don't obey
+            # the normal syntax rules (PDF 1.7 sec 8.9.7)
+            if isinstance(obj, InlineImage):
+                yield from self.do_EI(obj)
+            elif isinstance(obj, PSKeyword):
+                if obj in self._dispatch:
+                    method, nargs = self._dispatch[obj]
+                    if nargs:
+                        args = self.pop(nargs)
+                        if len(args) != nargs:
+                            log.warning(
+                                "Insufficient arguments (%d) for operator: %r",
+                                len(args),
+                                obj,
+                            )
+                        else:
+                            gen = method(*args)
+                    else:
+                        gen = method()
+                    if gen is not None:
+                        yield from gen
+                else:
+                    # TODO: This can get very verbose
+                    log.warning("Unknown operator: %r", obj)
+            else:
+                self.push(obj)
+
+    def create(self, object_class, **kwargs) -> ContentObject:
+        return object_class(
+            ctm=self.ctm,
+            mcstack=self.mcstack,
+            gstate=self.graphicstate,
+            **kwargs,
+        )
+
+    def do_S(self) -> Iterator[ContentObject]:
+        """Stroke path"""
+        if not self.curpath:
+            return
+        yield self.create(
+            PathObject,
+            stroke=True,
+            fill=False,
+            evenodd=False,
+            raw_segments=self.curpath,
+        )
+        self.curpath = []
+
+    def do_s(self) -> Iterator[ContentObject]:
+        """Close and stroke path"""
+        self.do_h()
+        yield from self.do_S()
+
+    def do_f(self) -> Iterator[ContentObject]:
+        """Fill path using nonzero winding number rule"""
+        if not self.curpath:
+            return
+        yield self.create(
+            PathObject,
+            stroke=False,
+            fill=True,
+            evenodd=False,
+            raw_segments=self.curpath,
+        )
+        self.curpath = []
+
+    def do_F(self) -> Iterator[ContentObject]:
+        """Fill path using nonzero winding number rule (obsolete)"""
+        yield from self.do_f()
+
+    def do_f_a(self) -> Iterator[ContentObject]:
+        """Fill path using even-odd rule"""
+        if not self.curpath:
+            return
+        yield self.create(
+            PathObject,
+            stroke=False,
+            fill=True,
+            evenodd=True,
+            raw_segments=self.curpath,
+        )
+        self.curpath = []
+
+    def do_B(self) -> Iterator[ContentObject]:
+        """Fill and stroke path using nonzero winding number rule"""
+        if not self.curpath:
+            return
+        yield self.create(
+            PathObject,
+            stroke=True,
+            fill=True,
+            evenodd=False,
+            raw_segments=self.curpath,
+        )
+        self.curpath = []
+
+    def do_B_a(self) -> Iterator[ContentObject]:
+        """Fill and stroke path using even-odd rule"""
+        if not self.curpath:
+            return
+        yield self.create(
+            PathObject,
+            stroke=True,
+            fill=True,
+            evenodd=True,
+            raw_segments=self.curpath,
+        )
+        self.curpath = []
+
+    def do_b(self) -> Iterator[ContentObject]:
+        """Close, fill, and stroke path using nonzero winding number rule"""
+        self.do_h()
+        yield from self.do_B()
+
+    def do_b_a(self) -> Iterator[ContentObject]:
+        """Close, fill, and stroke path using even-odd rule"""
+        self.do_h()
+        yield from self.do_B_a()
+
+    def do_TJ(self, strings: PDFObject) -> Iterator[ContentObject]:
+        """Show one or more text strings, allowing individual glyph
+        positioning"""
+        args: List[Union[bytes, float]] = []
+        has_text = False
+        for s in list_value(strings):
+            if isinstance(s, (int, float)):
+                args.append(s)
+            elif isinstance(s, bytes):
+                if s:
+                    has_text = True
+                args.append(s)
+            else:
+                log.warning(
+                    "Ignoring non-string/number %r in text object %r", s, strings
+                )
+        obj = self.create(TextObject, textstate=self.textstate, args=args)
+        if has_text:
+            yield obj
+        else:
+            # Even without text, TJ can still update the line matrix (ugh!)
+            for _ in obj:
+                pass
+
+    def do_Tj(self, s: PDFObject) -> Iterator[ContentObject]:
+        """Show a text string"""
+        yield from self.do_TJ([s])
+
+    def do__q(self, s: PDFObject) -> None:
+        """Move to next line and show text
+
+        The ' (single quote) operator.
+        """
+        self.do_T_a()
+        self.do_TJ([s])
+
+    def do__w(self, aw: PDFObject, ac: PDFObject, s: PDFObject) -> None:
+        """Set word and character spacing, move to next line, and show text
+
+        The " (double quote) operator.
+        """
+        self.do_Tw(aw)
+        self.do_Tc(ac)
+        self.do_TJ([s])
+
+    def do_EI(self, obj: PDFObject) -> Iterator[ContentObject]:
+        """End inline image object"""
+        if isinstance(obj, InlineImage):
+            # Inline images are not XObjects, have no xobjid
+            yield self.render_image(None, obj)
+        else:
+            # FIXME: Do... something?
+            pass
+
+    def do_Do(self, xobjid_arg: PDFObject) -> Iterator[ContentObject]:
+        """Invoke named XObject"""
+        xobjid = literal_name(xobjid_arg)
+        try:
+            xobj = stream_value(self.xobjmap[xobjid])
+        except KeyError:
+            log.debug("Undefined xobject id: %r", xobjid)
+            return
+        except TypeError as e:
+            log.debug("Empty or invalid xobject with id %r: %s", xobjid, e)
+            return
+        subtype = xobj.get("Subtype")
+        if subtype is LITERAL_FORM and "BBox" in xobj:
+            matrix = cast(Matrix, list_value(xobj.get("Matrix", MATRIX_IDENTITY)))
+            # According to PDF reference 1.7 section 4.9.1, XObjects in
+            # earlier PDFs (prior to v1.2) use the page's Resources entry
+            # instead of having their own Resources entry.
+            xobjres = xobj.get("Resources")
+            resources = None if xobjres is None else dict_value(xobjres)
+            xobjobj = XObjectObject(
+                ctm=mult_matrix(matrix, self.ctm),
+                mcstack=self.mcstack,
+                gstate=self.graphicstate,
+                xobjid=xobjid,
+                stream=xobj,
+                resources=resources,
+                _pageref=_ref_page(self.page),
+            )
+            # We are *lazy*, so just yield the XObject itself not its contents
+            yield xobjobj
+        elif subtype is LITERAL_IMAGE and "Width" in xobj and "Height" in xobj:
+            yield self.render_image(xobjid, xobj)
+        else:
+            # unsupported xobject type.
+            pass
+
+    def render_image(
+        self, xobjid: Union[str, None], stream: ContentStream
+    ) -> ContentObject:
+        colorspace = stream.get_any(("CS", "ColorSpace"))
+        colorspace = (
+            None if colorspace is None else get_colorspace(resolve1(colorspace))
+        )
+        return self.create(
+            ImageObject,
+            stream=stream,
+            xobjid=xobjid,
+            srcsize=(stream.get_any(("W", "Width")), stream.get_any(("H", "Height"))),
+            imagemask=stream.get_any(("IM", "ImageMask")),
+            bits=stream.get_any(("BPC", "BitsPerComponent"), 1),
+            colorspace=colorspace,
+        )
+
+    def do_MP(self, tag: PDFObject) -> Iterator[ContentObject]:
+        """Define marked-content point"""
+        yield from self.do_DP(tag, None)
+
+    def do_DP(self, tag: PDFObject, props: PDFObject = None) -> Iterator[ContentObject]:
+        """Define marked-content point with property list"""
+        # See above
+        if isinstance(props, PSLiteral):
+            props = self.get_property(props)
+        rprops = {} if props is None else dict_value(props)
+        yield TagObject(
+            ctm=self.ctm,
+            mcstack=self.mcstack,
+            gstate=self.graphicstate,
+            _mcs=MarkedContent(mcid=None, tag=literal_name(tag), props=rprops),
+        )
 
     def do_q(self) -> None:
         """Save graphics state"""
@@ -1172,1220 +1687,3 @@ class BaseInterpreter:
         else:
             mcid = None
         self.mcstack.append(MarkedContent(mcid=mcid, tag=tag, props=props))
-
-
-class PageInterpreter(BaseInterpreter):
-    """Processor for the content of a PDF page
-
-    Danger: Deprecated
-        This interface is deprecated and has been moved to
-        [PAVÉS](https://github.com/dhdaines/paves).  It will be
-        removed in PLAYA 0.3.
-
-    Reference: PDF Reference, Appendix A, Operator Summary
-    """
-
-    def __iter__(self) -> Iterator[LayoutDict]:
-        warnings.warn(
-            "PageInterpreter is deprecated and will be removed in PLAYA 0.3",
-            DeprecationWarning,
-        )
-        parser = ContentParser(self.contents)
-        for _, obj in parser:
-            # These are handled inside the parser as they don't obey
-            # the normal syntax rules (PDF 1.7 sec 8.9.7)
-            if isinstance(obj, InlineImage):
-                yield from self.do_EI(obj)
-            elif isinstance(obj, PSKeyword):
-                if obj in self._dispatch:
-                    method, nargs = self._dispatch[obj]
-                    if nargs:
-                        args = self.pop(nargs)
-                        if len(args) == nargs:
-                            gen = method(*args)
-                        else:
-                            log.warning(
-                                "Insufficient arguments (%d) for operator: %r",
-                                len(args),
-                                obj,
-                            )
-                    else:
-                        gen = method()
-                    if gen is not None:
-                        yield from gen
-                else:
-                    log.warning("Unknown operator: %r", obj)
-            else:
-                self.push(obj)
-
-    def do_S(self) -> Iterator[LayoutDict]:
-        """Stroke path"""
-        yield from self.paint_path(
-            stroke=True, fill=False, evenodd=False, path=self.curpath
-        )
-        self.curpath = []
-
-    def do_s(self) -> Iterator[LayoutDict]:
-        """Close and stroke path"""
-        self.do_h()
-        yield from self.do_S()
-
-    def do_f(self) -> Iterator[LayoutDict]:
-        """Fill path using nonzero winding number rule"""
-        yield from self.paint_path(
-            stroke=False, fill=True, evenodd=False, path=self.curpath
-        )
-        self.curpath = []
-
-    def do_F(self) -> Iterator[LayoutDict]:
-        """Fill path using nonzero winding number rule (obsolete)"""
-        yield from self.do_f()
-
-    def do_f_a(self) -> Iterator[LayoutDict]:
-        """Fill path using even-odd rule"""
-        yield from self.paint_path(
-            stroke=False, fill=True, evenodd=True, path=self.curpath
-        )
-        self.curpath = []
-
-    def do_B(self) -> Iterator[LayoutDict]:
-        """Fill and stroke path using nonzero winding number rule"""
-        yield from self.paint_path(
-            stroke=True, fill=True, evenodd=False, path=self.curpath
-        )
-        self.curpath = []
-
-    def do_B_a(self) -> Iterator[LayoutDict]:
-        """Fill and stroke path using even-odd rule"""
-        yield from self.paint_path(
-            stroke=True, fill=True, evenodd=True, path=self.curpath
-        )
-        self.curpath = []
-
-    def do_b(self) -> Iterator[LayoutDict]:
-        """Close, fill, and stroke path using nonzero winding number rule"""
-        self.do_h()
-        yield from self.do_B()
-
-    def do_b_a(self) -> Iterator[LayoutDict]:
-        """Close, fill, and stroke path using even-odd rule"""
-        self.do_h()
-        yield from self.do_B_a()
-
-    def do_TJ(self, seq: PDFObject) -> Iterator[LayoutDict]:
-        """Show text, allowing individual glyph positioning"""
-        if self.textstate.font is None:
-            log.warning("No font specified in text state!")
-            return
-        yield from self.render_string(
-            cast(TextSeq, seq),
-        )
-
-    def do_Tj(self, s: PDFObject) -> Iterator[LayoutDict]:
-        """Show text"""
-        yield from self.do_TJ([s])
-
-    def do__q(self, s: PDFObject) -> Iterator[LayoutDict]:
-        """Move to next line and show text
-
-        The ' (single quote) operator.
-        """
-        self.do_T_a()
-        yield from self.do_TJ([s])
-
-    def do__w(self, aw: PDFObject, ac: PDFObject, s: PDFObject) -> Iterator[LayoutDict]:
-        """Set word and character spacing, move to next line, and show text
-
-        The " (double quote) operator.
-        """
-        self.do_Tw(aw)
-        self.do_Tc(ac)
-        yield from self.do_TJ([s])
-
-    def do_EI(self, obj: PDFObject) -> Iterator[LayoutDict]:
-        """End inline image object"""
-        if isinstance(obj, InlineImage):
-            # Inline images obviously are not indirect objects, so
-            # have no object ID, so... make something up?
-            iobjid = "inline_image_%d" % id(obj)
-            yield self.render_image(iobjid, obj)
-        else:
-            # FIXME: Do... something?
-            pass
-
-    def do_Do(self, xobjid_arg: PDFObject) -> Iterator[LayoutDict]:
-        """Invoke named XObject"""
-        xobjid = literal_name(xobjid_arg)
-        try:
-            xobj = stream_value(self.xobjmap[xobjid])
-        except KeyError:
-            log.debug("Undefined xobject id: %r", xobjid)
-            return
-        subtype = xobj.get("Subtype")
-        if subtype is LITERAL_FORM and "BBox" in xobj:
-            matrix = cast(Matrix, list_value(xobj.get("Matrix", MATRIX_IDENTITY)))
-            # According to PDF reference 1.7 section 4.9.1, XObjects in
-            # earlier PDFs (prior to v1.2) use the page's Resources entry
-            # instead of having their own Resources entry.
-            xobjres = xobj.get("Resources")
-            resources = None if xobjres is None else dict_value(xobjres)
-            interpreter = PageInterpreter(
-                self.page, resources=resources, contents=[xobj]
-            )
-            interpreter.ctm = mult_matrix(matrix, self.ctm)
-            for obj in interpreter:
-                if obj.get("xobjid") is None:
-                    obj["xobjid"] = xobjid
-                yield obj
-        elif subtype is LITERAL_IMAGE and "Width" in xobj and "Height" in xobj:
-            yield self.render_image(xobjid, xobj)
-        else:
-            # unsupported xobject type.
-            pass
-
-    def do_MP(self, tag: PDFObject) -> None:
-        """Define marked-content point"""
-        pass
-
-    def do_DP(self, tag: PDFObject, props: PDFObject) -> None:
-        """Define marked-content point with property list"""
-        pass
-
-    def render_image(self, xobjid: str, stream: ContentStream) -> LayoutDict:
-        # PDF 1.7 sec 8.6.3: Outside a content stream, certain
-        # objects, such as image XObjects, shall specify a colour
-        # space as an explicit parameter, often associated with the
-        # key ColorSpace. In this case, the colour space array or name
-        # shall always be defined directly as a PDF object.
-        colorspace = stream.get_any(("CS", "ColorSpace"))
-        colorspace = (
-            None if colorspace is None else get_colorspace(resolve1(colorspace))
-        )
-        # PDF 1.7 sec 8.3.24: All images shall be 1 unit wide by 1
-        # unit high in user space, regardless of the number of samples
-        # in the image. To be painted, an image shall be mapped to a
-        # region of the page by temporarily altering the CTM.
-        x0, y0, x1, y1 = get_transformed_bound(self.ctm, (0, 0, 1, 1))
-        if stream.objid is not None and stream.genno is not None:
-            stream_id = (stream.objid, stream.genno)
-        else:
-            stream_id = None
-        return LayoutDict(
-            object_type="image",
-            x0=x0,
-            y0=y0,
-            x1=x1,
-            y1=y1,
-            xobjid=xobjid,
-            mcid=self.mcstack[-1].mcid if self.mcstack else None,
-            tag=self.mcstack[-1].tag if self.mcstack else None,
-            srcsize=(stream.get_any(("W", "Width")), stream.get_any(("H", "Height"))),
-            imagemask=stream.get_any(("IM", "ImageMask")),
-            bits=stream.get_any(("BPC", "BitsPerComponent"), 1),
-            # PDF 1.7 Tabe 89: Required for images, except those that
-            # use the JPXDecode filter; not allowed forbidden for
-            # image masks.
-            image_colorspace=colorspace,
-            stream=stream_id,
-        )
-
-    def make_path(
-        self,
-        *,
-        object_type: str,
-        x0: float,
-        y0: float,
-        x1: float,
-        y1: float,
-        path_ops: str,
-        pts: List[Point],
-        stroke: bool,
-        fill: bool,
-        evenodd: bool,
-    ) -> LayoutDict:
-        """Make a `LayoutDict` for a path."""
-        gstate = self.graphicstate
-        return LayoutDict(
-            object_type=object_type,
-            x0=x0,
-            y0=y0,
-            x1=x1,
-            y1=y1,
-            mcid=self.mcstack[-1].mcid if self.mcstack else None,
-            tag=self.mcstack[-1].tag if self.mcstack else None,
-            path_ops=path_ops,
-            pts_x=[x for x, y in pts],
-            pts_y=[y for x, y in pts],
-            stroke=stroke,
-            fill=fill,
-            evenodd=evenodd,
-            linewidth=gstate.linewidth,
-            dash_pattern=gstate.dash.dash,
-            dash_phase=gstate.dash.phase,
-            stroking_colorspace=gstate.scs.name,
-            stroking_color=gstate.scolor.values,
-            stroking_pattern=gstate.scolor.pattern,
-            non_stroking_colorspace=gstate.ncs.name,
-            non_stroking_color=gstate.ncolor.values,
-            non_stroking_pattern=gstate.ncolor.pattern,
-        )
-
-    def paint_path(
-        self,
-        *,
-        stroke: bool,
-        fill: bool,
-        evenodd: bool,
-        path: Sequence[PathSegment],
-    ) -> Iterator[LayoutDict]:
-        """Paint paths described in section 4.4 of the PDF reference manual"""
-        shape = "".join(x[0] for x in path)
-
-        if shape[:1] != "m":
-            # Per PDF Reference Section 4.4.1, "path construction operators may
-            # be invoked in any sequence, but the first one invoked must be m
-            # or re to begin a new subpath." Since pdfminer.six already
-            # converts all `re` (rectangle) operators to their equivelent
-            # `mlllh` representation, paths ingested by `.paint_path(...)` that
-            # do not begin with the `m` operator are invalid.
-            pass
-
-        elif shape.count("m") > 1:
-            # recurse if there are multiple m's in this shape
-            for m in re.finditer(r"m[^m]+", shape):
-                subpath = path[m.start(0) : m.end(0)]
-                yield from self.paint_path(
-                    stroke=stroke, fill=fill, evenodd=evenodd, path=subpath
-                )
-
-        else:
-            # Although the 'h' command does not not literally provide a
-            # point-position, its position is (by definition) equal to the
-            # subpath's starting point.
-            #
-            # And, per Section 4.4's Table 4.9, all other path commands place
-            # their point-position in their final two arguments. (Any preceding
-            # arguments represent control points on Bézier curves.)
-            raw_pts = [
-                path[0].points[-1] if p[0] == "h" else p.points[-1] for p in path
-            ]
-            pts = [apply_matrix_pt(self.ctm, pt) for pt in raw_pts]
-
-            # Drop a redundant "l" on a path closed with "h"
-            if len(shape) > 3 and shape[-2:] == "lh" and pts[-2] == pts[0]:
-                shape = shape[:-2] + "h"
-                pts.pop()
-            if shape in {"mlh", "ml"}:
-                # single line segment ("ml" is a frequent anomaly)
-                (x0, y0), (x1, y1) = pts[0:2]
-                if x0 > x1:
-                    (x1, x0) = (x0, x1)
-                if y0 > y1:
-                    (y1, y0) = (y0, y1)
-                yield self.make_path(
-                    object_type="line",
-                    x0=x0,
-                    y0=y0,
-                    x1=x1,
-                    y1=y1,
-                    path_ops=shape,
-                    pts=pts,
-                    stroke=stroke,
-                    fill=fill,
-                    evenodd=evenodd,
-                )
-
-            elif shape in {"mlllh", "mllll"}:
-                (x0, y0), (x1, y1), (x2, y2), (x3, y3), _ = pts
-
-                is_closed_loop = pts[0] == pts[4]
-                has_square_coordinates = (
-                    x0 == x1 and y1 == y2 and x2 == x3 and y3 == y0
-                ) or (y0 == y1 and x1 == x2 and y2 == y3 and x3 == x0)
-                if is_closed_loop and has_square_coordinates:
-                    if x0 > x2:
-                        (x2, x0) = (x0, x2)
-                    if y0 > y2:
-                        (y2, y0) = (y0, y2)
-                    yield self.make_path(
-                        object_type="rect",
-                        x0=x0,
-                        y0=y0,
-                        x1=x2,
-                        y1=y2,
-                        path_ops=shape,
-                        pts=pts,
-                        stroke=stroke,
-                        fill=fill,
-                        evenodd=evenodd,
-                    )
-                else:
-                    x0, y0, x1, y1 = get_bound(pts)
-                    yield self.make_path(
-                        object_type="curve",
-                        x0=x0,
-                        y0=y0,
-                        x1=x1,
-                        y1=y1,
-                        path_ops=shape,
-                        pts=pts,
-                        stroke=stroke,
-                        fill=fill,
-                        evenodd=evenodd,
-                    )
-            else:
-                x0, y0, x1, y1 = get_bound(pts)
-                yield self.make_path(
-                    object_type="curve",
-                    x0=x0,
-                    y0=y0,
-                    x1=x1,
-                    y1=y1,
-                    path_ops=shape,
-                    pts=pts,
-                    stroke=stroke,
-                    fill=fill,
-                    evenodd=evenodd,
-                )
-
-    def render_char(
-        self,
-        *,
-        cid: int,
-        text: str,
-        matrix: Matrix,
-        scaling: float,
-    ) -> Tuple[LayoutDict, float]:
-        font = self.textstate.font
-        assert font is not None
-        fontsize = self.textstate.fontsize
-        rise = self.textstate.rise
-        textwidth = font.char_width(cid)
-        adv = textwidth * fontsize * scaling
-        if font.vertical:
-            textdisp = font.char_disp(cid)
-            assert isinstance(textdisp, tuple)
-            (vx, vy) = textdisp
-            if vx is None:
-                vx = fontsize * 0.5
-            else:
-                vx = vx * fontsize * 0.001
-            vy = (1000 - vy) * fontsize * 0.001
-            x0, y0 = (-vx, vy + rise + adv)
-            x1, y1 = (-vx + fontsize, vy + rise)
-        else:
-            x0, y0 = (0, self.textstate.descent + rise)
-            x1, y1 = (adv, self.textstate.descent + rise + fontsize)
-        (a, b, c, d, e, f) = matrix
-        upright = a * d * scaling > 0 and b * c <= 0
-        if font.vertical:
-            size = abs(fontsize * a)
-        else:
-            size = abs(fontsize * d)
-        x0, y0, x1, y1 = get_transformed_bound(matrix, (x0, y0, x1, y1))
-        glyph_x, glyph_y = apply_matrix_norm(self.ctm, self.textstate.glyph_offset)
-        item = LayoutDict(
-            object_type="char",
-            x0=x0,
-            y0=y0,
-            x1=x1,
-            y1=y1,
-            size=size,
-            upright=upright,
-            text=text,
-            cid=cid,
-            fontname=font.fontname,
-            glyph_offset_x=glyph_x,
-            glyph_offset_y=glyph_y,
-            render_mode=self.textstate.render_mode,
-            dash_pattern=self.graphicstate.dash.dash,
-            dash_phase=self.graphicstate.dash.phase,
-            stroking_colorspace=self.graphicstate.scs.name,
-            stroking_color=self.graphicstate.scolor.values,
-            stroking_pattern=self.graphicstate.scolor.pattern,
-            non_stroking_colorspace=self.graphicstate.ncs.name,
-            non_stroking_color=self.graphicstate.ncolor.values,
-            non_stroking_pattern=self.graphicstate.ncolor.pattern,
-            mcid=self.mcstack[-1].mcid if self.mcstack else None,
-            tag=self.mcstack[-1].tag if self.mcstack else None,
-        )
-        return item, adv
-
-    def render_string(
-        self,
-        seq: TextSeq,
-    ) -> Iterator[LayoutDict]:
-        assert self.textstate.font is not None
-        vert = self.textstate.font.vertical
-        assert self.ctm is not None
-        matrix = mult_matrix(self.textstate.line_matrix, self.ctm)
-        scaling = self.textstate.scaling * 0.01
-        charspace = self.textstate.charspace * scaling
-        wordspace = self.textstate.wordspace * scaling
-        if self.textstate.font.multibyte:
-            wordspace = 0
-        (x, y) = self.textstate.glyph_offset
-        pos = y if vert else x
-        needcharspace = False
-        dxscale = 0.001 * self.textstate.fontsize * scaling
-        for obj in seq:
-            if isinstance(obj, (int, float)):
-                pos -= obj * dxscale
-                needcharspace = True
-            else:
-                if isinstance(obj, str):
-                    obj = make_compat_bytes(obj)
-                if not isinstance(obj, bytes):
-                    log.warning("Found non-string %r in text object", obj)
-                    continue
-                for cid, text in self.textstate.font.decode(obj):
-                    if needcharspace:
-                        pos += charspace
-                    self.textstate.glyph_offset = (x, pos) if vert else (pos, y)
-                    item, adv = self.render_char(
-                        cid=cid,
-                        text=text,
-                        matrix=translate_matrix(matrix, self.textstate.glyph_offset),
-                        scaling=scaling,
-                    )
-                    pos += adv
-                    yield item
-                    if cid == 32 and wordspace:
-                        pos += wordspace
-                    needcharspace = True
-        self.textstate.glyph_offset = (x, pos) if vert else (pos, y)
-
-
-@dataclass
-class ContentObject:
-    """Any sort of content object.
-
-    Attributes:
-      gstate: Graphics state.
-      ctm: Coordinate transformation matrix (PDF 1.7 section 8.3.2).
-      mcstack: Stack of enclosing marked content sections.
-    """
-
-    gstate: GraphicState
-    ctm: Matrix
-    mcstack: List[MarkedContent]
-
-    def __iter__(self) -> Iterator["ContentObject"]:
-        yield from ()
-
-    def __len__(self) -> int:
-        """Return the number of children of this object (generic implementation)."""
-        return sum(1 for _ in self)
-
-    @property
-    def object_type(self):
-        """Type of this object as a string, e.g. "text", "path", "image"."""
-        name = self.__class__.__name__
-        return name[: -len("Object")].lower()
-
-    @property
-    def bbox(self) -> Rect:
-        """The bounding box in device space of this object."""
-        # These bboxes have already been computed in device space so
-        # we don't need all 4 corners!
-        points = itertools.chain.from_iterable(
-            ((x0, y0), (x1, y1)) for x0, y0, x1, y1 in (item.bbox for item in self)
-        )
-        return get_bound(points)
-
-    @property
-    def mcs(self) -> Union[MarkedContent, None]:
-        """The immediately enclosing marked content section."""
-        return self.mcstack[-1] if self.mcstack else None
-
-    @property
-    def mcid(self) -> Union[int, None]:
-        """The marked content ID of the nearest enclosing marked
-        content section with an ID."""
-        for mcs in self.mcstack[::-1]:
-            if mcs.mcid is not None:
-                return mcs.mcid
-        return None
-
-
-BBOX_NONE = (-1, -1, -1, -1)
-
-
-@dataclass
-class TagObject(ContentObject):
-    """A marked content tag.."""
-
-    _mcs: MarkedContent
-
-    def __len__(self) -> int:
-        """A tag has no contents, iterating over it returns nothing."""
-        return 0
-
-    @property
-    def mcs(self) -> Union[MarkedContent, None]:
-        """The marked content tag for this object."""
-        return self._mcs
-
-    @property
-    def mcid(self) -> Union[int, None]:
-        """The marked content ID of the nearest enclosing marked
-        content section with an ID."""
-        if self._mcs.mcid is not None:
-            return self._mcs.mcid
-        return super().mcid
-
-    @property
-    def bbox(self) -> Rect:
-        """A tag has no content and thus no bounding box.
-
-        To avoid needlessly complicating user code this returns
-        `BBOX_NONE` instead of `None` or throwing a exception.
-        Because that is a specific object, you can reliably check for
-        it with:
-
-            if obj.bbox is BBOX_NONE:
-                ...
-        """
-        return BBOX_NONE
-
-
-@dataclass
-class ImageObject(ContentObject):
-    """An image (either inline or XObject).
-
-    Attributes:
-      xobjid: Name of XObject (or None for inline images).
-      srcsize: Size of source image in pixels.
-      bits: Number of bits per component, if required (otherwise 1).
-      imagemask: True if the image is a mask.
-      stream: Content stream with image data.
-      colorspace: Colour space for this image, if required (otherwise
-        None).
-    """
-
-    xobjid: Union[str, None]
-    srcsize: Tuple[int, int]
-    bits: int
-    imagemask: bool
-    stream: ContentStream
-    colorspace: Union[ColorSpace, None]
-
-    def __contains__(self, name: object) -> bool:
-        return name in self.stream
-
-    def __getitem__(self, name: str) -> PDFObject:
-        return self.stream[name]
-
-    def __len__(self) -> int:
-        """Even though you can __getitem__ from an image you cannot iterate
-        over its keys, sorry about that.  Returns zero."""
-        return 0
-
-    @property
-    def buffer(self) -> bytes:
-        """Binary stream content for this image"""
-        return self.stream.buffer
-
-    @property
-    def bbox(self) -> Rect:
-        # PDF 1.7 sec 8.3.24: All images shall be 1 unit wide by 1
-        # unit high in user space, regardless of the number of samples
-        # in the image. To be painted, an image shall be mapped to a
-        # region of the page by temporarily altering the CTM.
-        return get_transformed_bound(self.ctm, (0, 0, 1, 1))
-
-
-@dataclass
-class XObjectObject(ContentObject):
-    """An eXternal Object, in the context of a page.
-
-    There are a couple of kinds of XObjects.  Here we are only
-    concerned with "Form XObjects" which, despite their name, have
-    nothing at all to do with fillable forms.  Instead they are like
-    little embeddable PDF pages, possibly with their own resources,
-    definitely with their own definition of "user space".
-
-    Image XObjects are handled by `ImageObject`.
-
-    Attributes:
-      xobjid: Name of this XObject (in the page resources).
-      page: Weak reference to containing page.
-      stream: Content stream with PDF operators.
-      resources: Resources specific to this XObject, if any.
-    """
-
-    xobjid: str
-    stream: ContentStream
-    resources: Union[None, Dict[str, PDFObject]]
-    _pageref: PageRef
-
-    def __contains__(self, name: object) -> bool:
-        return name in self.stream
-
-    def __getitem__(self, name: str) -> PDFObject:
-        return self.stream[name]
-
-    @property
-    def page(self) -> Page:
-        """Get the page (if it exists, raising RuntimeError if not)."""
-        return _deref_page(self._pageref)
-
-    @property
-    def bbox(self) -> Rect:
-        """Get the bounding box of this XObject in device space."""
-        # It is a required attribute!
-        return get_transformed_bound(self.ctm, parse_rect(self.stream["BBox"]))
-
-    @property
-    def buffer(self) -> bytes:
-        """Raw stream content for this XObject"""
-        return self.stream.buffer
-
-    @property
-    def tokens(self) -> Iterator[Token]:
-        """Iterate over tokens in the XObject's content stream."""
-        parser = ContentParser([self.stream])
-        while True:
-            try:
-                pos, tok = parser.nexttoken()
-            except StopIteration:
-                return
-            yield tok
-
-    @property
-    def layout(self) -> Iterator["LayoutDict"]:
-        """Iterator over eager layout object dictionaries.
-
-        Danger: Deprecated
-            This interface is deprecated and has been moved to
-            [PAVÉS](https://github.com/dhdaines/paves).  It will be
-            removed in PLAYA 0.3.
-        """
-        warnings.warn(
-            "The layout property has moved to PAVÉS (https://github.com/dhdaines/paves)"
-            " and will be removed in PLAYA 0.3",
-            DeprecationWarning,
-        )
-        return iter(PageInterpreter(self.page, [self.stream], self.resources))
-
-    @property
-    def contents(self) -> Iterator[PDFObject]:
-        """Iterator over PDF objects in the content stream."""
-        for pos, obj in ContentParser([self.stream]):
-            yield obj
-
-    def __iter__(self) -> Iterator["ContentObject"]:
-        return iter(LazyInterpreter(self.page, [self.stream], self.resources))
-
-
-@dataclass
-class PathObject(ContentObject):
-    """A path object.
-
-    Attributes:
-      raw_segments: Segments in path (in user space).
-      stroke: True if the outline of the path is stroked.
-      fill: True if the path is filled.
-      evenodd: True if the filling of complex paths uses the even-odd
-        winding rule, False if the non-zero winding number rule is
-        used (PDF 1.7 section 8.5.3.3)
-    """
-
-    raw_segments: List[PathSegment]
-    stroke: bool
-    fill: bool
-    evenodd: bool
-
-    def __len__(self):
-        """Number of subpaths."""
-        return min(1, sum(1 for seg in self.raw_segments if seg.operator == "m"))
-
-    def __iter__(self):
-        """Iterate over subpaths.
-
-        If there is only a single subpath, it will still be iterated
-        over.  This means that some care must be taken (for example,
-        checking if `len(path) == 1`) to avoid endless recursion.
-
-        Note: subpaths inherit the values of `fill` and `evenodd` from
-        the parent path, but these values are no longer meaningful
-        since the winding rules must be applied to the composite path
-        as a whole (this is not a bug, just don't rely on them to know
-        which regions are filled or not).
-
-        """
-        # FIXME: Is there an itertool or a more_itertool for this?
-        segs = []
-        for seg in self.raw_segments:
-            if seg.operator == "m" and segs:
-                yield PathObject(
-                    gstate=self.gstate,
-                    ctm=self.ctm,
-                    mcstack=self.mcstack,
-                    raw_segments=segs,
-                    stroke=self.stroke,
-                    fill=self.fill,
-                    evenodd=self.evenodd,
-                )
-                segs = []
-            segs.append(seg)
-        if segs:
-            yield PathObject(
-                gstate=self.gstate,
-                ctm=self.ctm,
-                mcstack=self.mcstack,
-                raw_segments=segs,
-                stroke=self.stroke,
-                fill=self.fill,
-                evenodd=self.evenodd,
-            )
-
-    @property
-    def segments(self) -> Iterator[PathSegment]:
-        """Get path segments in device space."""
-        return (
-            PathSegment(
-                p.operator,
-                tuple(apply_matrix_pt(self.ctm, point) for point in p.points),
-            )
-            for p in self.raw_segments
-        )
-
-    @property
-    def bbox(self) -> Rect:
-        """Get bounding box of path in device space as defined by its
-        points and control points."""
-        # First get the bounding box in user space (fast)
-        bbox = get_bound(
-            itertools.chain.from_iterable(seg.points for seg in self.raw_segments)
-        )
-        # Transform it and get the new bounding box
-        return get_transformed_bound(self.ctm, bbox)
-
-
-@dataclass
-class GlyphObject(ContentObject):
-    """Individual glyph on the page.
-
-    Attributes:
-      textstate: Text state for this glyph.  This is a **mutable**
-        object and you should not expect it to be valid outside the
-        context of iteration over the parent `TextObject`.
-      cid: Character ID for this glyph.
-      text: Unicode mapping of this glyph, if any.
-      adv: glyph displacement in text space units (horizontal or vertical,
-           depending on the writing direction).
-      matrix: rendering matrix for this glyph, which transforms text
-              space (*not glyph space!*) coordinates to device space.
-      bbox: glyph bounding box in device space.
-      corners: Is the transformed bounding box rotated or skewed such
-               that all four corners need to be calculated (derived
-               from matrix but precomputed for speed)
-
-    """
-
-    textstate: TextState
-    cid: int
-    text: Union[str, None]
-    matrix: Matrix
-    adv: float
-    corners: bool
-
-    def __len__(self) -> int:
-        """Fool! You cannot iterate over a GlyphObject!"""
-        return 0
-
-    @property
-    def bbox(self) -> Rect:
-        tstate = self.textstate
-        font = tstate.font
-        assert font is not None
-        if font.vertical:
-            textdisp = font.char_disp(self.cid)
-            assert isinstance(textdisp, tuple)
-            (vx, vy) = textdisp
-            if vx is None:
-                vx = tstate.fontsize * 0.5
-            else:
-                vx = vx * tstate.fontsize * 0.001
-            vy = (1000 - vy) * tstate.fontsize * 0.001
-            x0, y0 = (-vx, vy + tstate.rise + self.adv)
-            x1, y1 = (-vx + tstate.fontsize, vy + tstate.rise)
-        else:
-            x0, y0 = (0, tstate.descent + tstate.rise)
-            x1, y1 = (self.adv, tstate.descent + tstate.rise + tstate.fontsize)
-
-        if self.corners:
-            return get_bound(
-                (
-                    apply_matrix_pt(self.matrix, (x0, y0)),
-                    apply_matrix_pt(self.matrix, (x0, y1)),
-                    apply_matrix_pt(self.matrix, (x1, y1)),
-                    apply_matrix_pt(self.matrix, (x1, y0)),
-                )
-            )
-        else:
-            x0, y0 = apply_matrix_pt(self.matrix, (x0, y0))
-            x1, y1 = apply_matrix_pt(self.matrix, (x1, y1))
-            if x1 < x0:
-                x0, x1 = x1, x0
-            if y1 < y0:
-                y0, y1 = y1, y0
-            return (x0, y0, x1, y1)
-
-
-@dataclass
-class TextObject(ContentObject):
-    """Text object (contains one or more glyphs).
-
-    Attributes:
-      textstate: Text state for this object.  This is a **mutable**
-        object and you should not expect it to be valid outside the
-        context of iteration over the parent `TextObject`.
-      args: Strings or position adjustments
-    """
-
-    textstate: TextState
-    args: List[Union[bytes, float]]
-    _chars: Union[List[str], None] = None
-
-    def __iter__(self) -> Iterator[GlyphObject]:
-        """Generate glyphs for this text object"""
-        tstate = self.textstate
-        font = tstate.font
-        # If no font is set, we cannot do anything, since even calling
-        # TJ with a displacement and no text effects requires us at
-        # least to know the fontsize.
-        if font is None:
-            log.warning(
-                "No font is set, will not update text state or output text: %r TJ",
-                self.args,
-            )
-            return
-        assert self.ctm is not None
-        # Extract all the elements so we can translate efficiently
-        a, b, c, d, e, f = mult_matrix(tstate.line_matrix, self.ctm)
-        # Pre-determine if we need to recompute the bound for rotated glyphs
-        corners = b * d < 0 or a * c < 0
-        # Apply horizontal scaling
-        scaling = tstate.scaling * 0.01
-        charspace = tstate.charspace * scaling
-        wordspace = tstate.wordspace * scaling
-        vert = font.vertical
-        if font.multibyte:
-            wordspace = 0
-        (x, y) = tstate.glyph_offset
-        pos = y if vert else x
-        needcharspace = False
-        for obj in self.args:
-            if isinstance(obj, (int, float)):
-                dxscale = 0.001 * tstate.fontsize * scaling
-                pos -= obj * dxscale
-                needcharspace = True
-            else:
-                for cid, text in font.decode(obj):
-                    if needcharspace:
-                        pos += charspace
-                    tstate.glyph_offset = (x, pos) if vert else (pos, y)
-                    textwidth = font.char_width(cid)
-                    adv = textwidth * tstate.fontsize * scaling
-                    x, y = tstate.glyph_offset
-                    glyph = GlyphObject(
-                        gstate=self.gstate,
-                        ctm=self.ctm,
-                        mcstack=self.mcstack,
-                        textstate=tstate,
-                        cid=cid,
-                        text=text,
-                        # Do pre-translation internally (taking rotation into account)
-                        matrix=(a, b, c, d, x * a + y * c + e, x * b + y * d + f),
-                        adv=adv,
-                        corners=corners,
-                    )
-                    yield glyph
-                    pos += adv
-                    if cid == 32 and wordspace:
-                        pos += wordspace
-                    needcharspace = True
-        tstate.glyph_offset = (x, pos) if vert else (pos, y)
-
-    @property
-    def chars(self) -> str:
-        """Get the Unicode characters (in stream order) for this object."""
-        if self._chars is not None:
-            return "".join(self._chars)
-        self._chars = []
-        font = self.textstate.font
-        assert font is not None, "No font was selected"
-        for obj in self.args:
-            if not isinstance(obj, bytes):
-                continue
-            for cid, text in font.decode(obj):
-                self._chars.append(text)
-        return "".join(self._chars)
-
-    def __len__(self) -> int:
-        """Return the number of glyphs that would result from iterating over
-        this object.
-
-        Important: this is the number of glyphs, *not* the number of
-        Unicode characters.
-        """
-        nglyphs = 0
-        font = self.textstate.font
-        assert font is not None, "No font was selected"
-        for obj in self.args:
-            if not isinstance(obj, bytes):
-                continue
-            nglyphs += sum(1 for _ in font.decode(obj))
-        return nglyphs
-
-
-class LazyInterpreter(BaseInterpreter):
-    """Interpret the page yielding lazy objects."""
-
-    def __iter__(self) -> Iterator[ContentObject]:
-        parser = ContentParser(self.contents)
-        for _, obj in parser:
-            # These are handled inside the parser as they don't obey
-            # the normal syntax rules (PDF 1.7 sec 8.9.7)
-            if isinstance(obj, InlineImage):
-                yield from self.do_EI(obj)
-            elif isinstance(obj, PSKeyword):
-                if obj in self._dispatch:
-                    method, nargs = self._dispatch[obj]
-                    if nargs:
-                        args = self.pop(nargs)
-                        if len(args) != nargs:
-                            log.warning(
-                                "Insufficient arguments (%d) for operator: %r",
-                                len(args),
-                                obj,
-                            )
-                        else:
-                            gen = method(*args)
-                    else:
-                        gen = method()
-                    if gen is not None:
-                        yield from gen
-                else:
-                    # TODO: This can get very verbose
-                    log.warning("Unknown operator: %r", obj)
-            else:
-                self.push(obj)
-
-    def create(self, object_class, **kwargs) -> ContentObject:
-        return object_class(
-            ctm=self.ctm,
-            mcstack=self.mcstack,
-            gstate=self.graphicstate,
-            **kwargs,
-        )
-
-    def do_S(self) -> Iterator[ContentObject]:
-        """Stroke path"""
-        if not self.curpath:
-            return
-        yield self.create(
-            PathObject,
-            stroke=True,
-            fill=False,
-            evenodd=False,
-            raw_segments=self.curpath,
-        )
-        self.curpath = []
-
-    def do_s(self) -> Iterator[ContentObject]:
-        """Close and stroke path"""
-        self.do_h()
-        yield from self.do_S()
-
-    def do_f(self) -> Iterator[ContentObject]:
-        """Fill path using nonzero winding number rule"""
-        if not self.curpath:
-            return
-        yield self.create(
-            PathObject,
-            stroke=False,
-            fill=True,
-            evenodd=False,
-            raw_segments=self.curpath,
-        )
-        self.curpath = []
-
-    def do_F(self) -> Iterator[ContentObject]:
-        """Fill path using nonzero winding number rule (obsolete)"""
-        yield from self.do_f()
-
-    def do_f_a(self) -> Iterator[ContentObject]:
-        """Fill path using even-odd rule"""
-        if not self.curpath:
-            return
-        yield self.create(
-            PathObject,
-            stroke=False,
-            fill=True,
-            evenodd=True,
-            raw_segments=self.curpath,
-        )
-        self.curpath = []
-
-    def do_B(self) -> Iterator[ContentObject]:
-        """Fill and stroke path using nonzero winding number rule"""
-        if not self.curpath:
-            return
-        yield self.create(
-            PathObject,
-            stroke=True,
-            fill=True,
-            evenodd=False,
-            raw_segments=self.curpath,
-        )
-        self.curpath = []
-
-    def do_B_a(self) -> Iterator[ContentObject]:
-        """Fill and stroke path using even-odd rule"""
-        if not self.curpath:
-            return
-        yield self.create(
-            PathObject,
-            stroke=True,
-            fill=True,
-            evenodd=True,
-            raw_segments=self.curpath,
-        )
-        self.curpath = []
-
-    def do_b(self) -> Iterator[ContentObject]:
-        """Close, fill, and stroke path using nonzero winding number rule"""
-        self.do_h()
-        yield from self.do_B()
-
-    def do_b_a(self) -> Iterator[ContentObject]:
-        """Close, fill, and stroke path using even-odd rule"""
-        self.do_h()
-        yield from self.do_B_a()
-
-    def do_TJ(self, strings: PDFObject) -> Iterator[ContentObject]:
-        """Show one or more text strings, allowing individual glyph
-        positioning"""
-        args: List[Union[bytes, float]] = []
-        has_text = False
-        for s in list_value(strings):
-            if isinstance(s, (int, float)):
-                args.append(s)
-            elif isinstance(s, bytes):
-                if s:
-                    has_text = True
-                args.append(s)
-            else:
-                log.warning(
-                    "Ignoring non-string/number %r in text object %r", s, strings
-                )
-        obj = self.create(TextObject, textstate=self.textstate, args=args)
-        if has_text:
-            yield obj
-        else:
-            # Even without text, TJ can still update the line matrix (ugh!)
-            for _ in obj:
-                pass
-
-    def do_Tj(self, s: PDFObject) -> Iterator[ContentObject]:
-        """Show a text string"""
-        yield from self.do_TJ([s])
-
-    def do__q(self, s: PDFObject) -> None:
-        """Move to next line and show text
-
-        The ' (single quote) operator.
-        """
-        self.do_T_a()
-        self.do_TJ([s])
-
-    def do__w(self, aw: PDFObject, ac: PDFObject, s: PDFObject) -> None:
-        """Set word and character spacing, move to next line, and show text
-
-        The " (double quote) operator.
-        """
-        self.do_Tw(aw)
-        self.do_Tc(ac)
-        self.do_TJ([s])
-
-    def do_EI(self, obj: PDFObject) -> Iterator[ContentObject]:
-        """End inline image object"""
-        if isinstance(obj, InlineImage):
-            # Inline images are not XObjects, have no xobjid
-            yield self.render_image(None, obj)
-        else:
-            # FIXME: Do... something?
-            pass
-
-    def do_Do(self, xobjid_arg: PDFObject) -> Iterator[ContentObject]:
-        """Invoke named XObject"""
-        xobjid = literal_name(xobjid_arg)
-        try:
-            xobj = stream_value(self.xobjmap[xobjid])
-        except KeyError:
-            log.debug("Undefined xobject id: %r", xobjid)
-            return
-        except TypeError as e:
-            log.debug("Empty or invalid xobject with id %r: %s", xobjid, e)
-            return
-        subtype = xobj.get("Subtype")
-        if subtype is LITERAL_FORM and "BBox" in xobj:
-            matrix = cast(Matrix, list_value(xobj.get("Matrix", MATRIX_IDENTITY)))
-            # According to PDF reference 1.7 section 4.9.1, XObjects in
-            # earlier PDFs (prior to v1.2) use the page's Resources entry
-            # instead of having their own Resources entry.
-            xobjres = xobj.get("Resources")
-            resources = None if xobjres is None else dict_value(xobjres)
-            xobjobj = XObjectObject(
-                ctm=mult_matrix(matrix, self.ctm),
-                mcstack=self.mcstack,
-                gstate=self.graphicstate,
-                xobjid=xobjid,
-                stream=xobj,
-                resources=resources,
-                _pageref=_ref_page(self.page),
-            )
-            # We are *lazy*, so just yield the XObject itself not its contents
-            yield xobjobj
-        elif subtype is LITERAL_IMAGE and "Width" in xobj and "Height" in xobj:
-            yield self.render_image(xobjid, xobj)
-        else:
-            # unsupported xobject type.
-            pass
-
-    def render_image(
-        self, xobjid: Union[str, None], stream: ContentStream
-    ) -> ContentObject:
-        colorspace = stream.get_any(("CS", "ColorSpace"))
-        colorspace = (
-            None if colorspace is None else get_colorspace(resolve1(colorspace))
-        )
-        return self.create(
-            ImageObject,
-            stream=stream,
-            xobjid=xobjid,
-            srcsize=(stream.get_any(("W", "Width")), stream.get_any(("H", "Height"))),
-            imagemask=stream.get_any(("IM", "ImageMask")),
-            bits=stream.get_any(("BPC", "BitsPerComponent"), 1),
-            colorspace=colorspace,
-        )
-
-    def do_MP(self, tag: PDFObject) -> Iterator[ContentObject]:
-        """Define marked-content point"""
-        yield from self.do_DP(tag, None)
-
-    def do_DP(self, tag: PDFObject, props: PDFObject = None) -> Iterator[ContentObject]:
-        """Define marked-content point with property list"""
-        # See above
-        if isinstance(props, PSLiteral):
-            props = self.get_property(props)
-        rprops = {} if props is None else dict_value(props)
-        yield TagObject(
-            ctm=self.ctm,
-            mcstack=self.mcstack,
-            gstate=self.graphicstate,
-            _mcs=MarkedContent(mcid=None, tag=literal_name(tag), props=rprops),
-        )

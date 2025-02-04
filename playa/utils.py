@@ -11,12 +11,6 @@ from typing import (
 )
 
 
-def make_compat_bytes(in_str: str) -> bytes:
-    """Converts to bytes, encoding to unicode."""
-    assert isinstance(in_str, str), str(type(in_str))
-    return in_str.encode()
-
-
 # from sys import maxint as INF doesn't work anymore under Python3, but PDF
 # still uses 32 bits ints
 INF = (1 << 31) - 1

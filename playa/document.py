@@ -8,7 +8,6 @@ import logging
 import mmap
 import re
 import struct
-import warnings
 from concurrent.futures import Executor
 from hashlib import md5, sha256, sha384, sha512
 from typing import (
@@ -44,9 +43,7 @@ from playa.exceptions import (
 from playa.font import CIDFont, Font, TrueTypeFont, Type1Font, Type3Font
 from playa.page import (
     Page,
-    LayoutDict as PageLayoutDict,
     DeviceSpace,
-    schema as page_schema,
 )
 from playa.parser import (
     KEYWORD_TRAILER,
@@ -765,33 +762,6 @@ class OutlineItem(NamedTuple):
     se: Union[ObjRef, None]
 
 
-class LayoutDict(PageLayoutDict):
-    """Dictionary-based layout objects.
-
-    These closely match the dictionaries returned by pdfplumber.  The
-    type of coordinates returned are determined by the `space`
-    argument passed to `Document`.  By default, `(0, 0)` is
-    the top-left corner of the page, with 72 units per inch.
-
-    All values can be converted to strings in some meaningful fashion,
-    such that you can simply write one of these to a CSV.  You can access
-    the field names through the `__annotations__` property:
-
-        writer = DictWriter(fieldnames=LayoutDict.__annotations__.keys())
-        dictwriter.write_rows(writer)
-    """
-
-    page_index: int
-    page_label: Union[str, None]
-
-
-schema = {
-    **page_schema,
-    "page_index": int,
-    "page_label": str,
-}
-
-
 class Document:
     """Representation of a PDF document on disk.
 
@@ -981,29 +951,6 @@ class Document:
     def tokens(self) -> Iterator[Token]:
         """Iterate over tokens."""
         return (tok for pos, tok in Lexer(self.buffer))
-
-    @property
-    def layout(self) -> Iterator[LayoutDict]:
-        """Iterate over `LayoutDict` for all pages.
-
-        Danger: Deprecated
-            This interface is deprecated and has been moved to
-            [PAVÉS](https://github.com/dhdaines/paves).  It will be
-            removed in PLAYA 0.3.
-        """
-        warnings.warn(
-            "The layout property has moved to PAVÉS (https://github.com/dhdaines/paves)"
-            " and will be removed in PLAYA 0.3",
-            DeprecationWarning,
-        )
-        from typing import cast
-
-        for idx, page in enumerate(self.pages):
-            for dic in page.layout:
-                dic = cast(LayoutDict, dic)  # ugh
-                dic["page_index"] = idx
-                dic["page_label"] = page.label
-                yield dic
 
     @property
     def structtree(self) -> StructTree:

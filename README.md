@@ -208,11 +208,6 @@ instance, get the `dests` or `annots` from every page without any
 trouble.  But if you have your own complex objects that you return you
 may encounter problems (or slowness).
 
-## Dictionary-based API
-
-There used to be a "dictionary-based" API here.  You can now find it
-in [PAVÉS](https://github.com/dhdaines/paves).
-
 ## An important note about coordinate spaces
 
 Wait, what is this "absolute position" of which you speak, and which
