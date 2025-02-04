@@ -47,3 +47,23 @@ XFAILS = {
     "issue9418.pdf",
     "bug1250079.pdf",
 }
+# We know pdfminer.six gives different output for these and we don't
+# care (generally because of PLAYA's better rectangle detection and
+# correct bboxes for rotated glyphs)
+PDFMINER_BUGS = {
+    "issue-449-vertical.pdf",
+    "issue_495_pdfobjref.pdf",
+    "issue-886-xref-stream-widths.pdf",
+    "issue-1004-indirect-mediabox.pdf",
+    "issue-1008-inline-ascii85.pdf",
+    "issue-1059-cmap-decode.pdf",
+    "issue-1062-filters.pdf",
+    "rotated.pdf",
+    "issue-1114-dedupe-chars.pdf",
+    "malformed-from-issue-932.pdf",
+    "mcid_example.pdf",
+    "utf8_tounicode.pdf",
+    "utf16_tounicode.pdf",
+    "ascii_tounicode.pdf",
+    "duplicate_encoding_tounicode.pdf",
+}

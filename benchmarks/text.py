@@ -5,8 +5,7 @@ Benchmark text extraction on the sample documents.
 import logging
 import time
 from pathlib import Path
-from tests.data import BASEPDFS, PASSWORDS, XFAILS
-from tests.test_open import PDFMINER_BUGS
+from tests.data import BASEPDFS, PASSWORDS, XFAILS, PDFMINER_BUGS
 
 LOG = logging.getLogger("benchmark-text")
 

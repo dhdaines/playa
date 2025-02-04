@@ -302,30 +302,7 @@ def bench_mmap():
         )
 
 
-def bench_playa():
-    from playa.document import Document
-
-    bench_bytes()
-    bench_mmap()
-
-    runs = 20
-    start = time.time()
-    for _ in range(runs):
-        with open(TESTDIR / "contrib" / "pagelabels.pdf", "rb") as infh:
-            doc = Document(infh)
-            page = doc.pages[0]
-            _ = list(page.layout)
-    print(
-        "PLAYA Interpreter: %dms / run" % ((time.time() - start) / runs * 1000),
-    )
-
-
 def bench_pdfminer():
-    from pdfminer.converter import PDFPageAggregator
-    from pdfminer.pdfdocument import PDFDocument
-    from pdfminer.pdfinterp import PDFPageInterpreter, PDFResourceManager
-    from pdfminer.pdfpage import PDFPage
-    from pdfminer.pdfparser import PDFParser
     from pdfminer.psparser import PSEOF, PSBaseParser
 
     runs = 100
@@ -355,29 +332,14 @@ def bench_pdfminer():
             "pdfminer.six Lexer (BinaryIO): %fms / run"
             % ((time.time() - start) / runs * 1000),
         )
-    runs = 20
-    start = time.time()
-    for _ in range(runs):
-        with open(TESTDIR / "contrib" / "pagelabels.pdf", "rb") as infh:
-            rsrc = PDFResourceManager()
-            agg = PDFPageAggregator(rsrc, pageno=1)
-            interp = PDFPageInterpreter(rsrc, agg)
-            doc = PDFDocument(PDFParser(infh))
-            page = next(PDFPage.create_pages(doc))
-            interp.process_page(page)
-    print(
-        "pdfminer.six Interpreter: %dms / run" % ((time.time() - start) / runs * 1000),
-    )
 
 
 if __name__ == "__main__":
     import sys
 
-    if len(sys.argv) < 2 or sys.argv[1] == "pdfminer":
+    if len(sys.argv) < 2 or sys.argv[1] == "miner":
         bench_pdfminer()
-    if len(sys.argv) < 2 or sys.argv[1] == "playa":
-        bench_playa()
-    if len(sys.argv) > 1 and sys.argv[1] == "bytes":
+    if len(sys.argv) < 2 or sys.argv[1] == "bytes":
         bench_bytes()
-    if len(sys.argv) > 1 and sys.argv[1] == "mmap":
+    if len(sys.argv) < 2 or sys.argv[1] == "mmap":
         bench_mmap()
