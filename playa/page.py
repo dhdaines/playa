@@ -69,17 +69,6 @@ from playa.worker import _deref_document, _ref_document, _ref_page, _deref_page,
 if TYPE_CHECKING:
     from playa.document import Document
 
-# Stub out Polars if not present
-try:
-    import polars as pl
-except ImportError:
-
-    class pl:  # type: ignore
-        def Array(*args, **kwargs): ...
-        def List(*args, **kwargs): ...
-        def Object(*args, **kwargs): ...
-
-
 log = logging.getLogger(__name__)
 
 # some predefined literals and keywords.
