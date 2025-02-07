@@ -238,11 +238,12 @@ def get_text_json(page: Page) -> List[str]:
             "line_matrix": tstate.line_matrix,
             "fontsize": tstate.fontsize,
             "render_mode": tstate.render_mode,
-            "font": {
+        }
+        if tstate.font is not None:
+            textstate["font"] = {
                 "fontname": tstate.font.fontname,
                 "vertical": tstate.font.vertical,
-            },
-        }
+            }
         gstate = {
             "scs": text.gstate.scs._asdict(),
             "scolor": text.gstate.scolor._asdict(),
