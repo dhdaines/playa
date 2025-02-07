@@ -101,7 +101,7 @@ LEXER = re.compile(
     rb"""(?:
       (?P<whitespace> \s+)
     | (?P<comment> %[^\r\n]*[\r\n])
-    | (?P<name> /(?: \#[A-Fa-f\d][A-Fa-f\d] | [^#/%\[\]()<>{}\s])+ )
+    | (?P<name> /(?: \#[A-Fa-f\d][A-Fa-f\d] | [^#/%\[\]()<>{}\s])* )
     | (?P<number> [-+]? (?: \d*\.\d+ | \d+ ) )
     | (?P<keyword> [A-Za-z] [^#/%\[\]()<>{}\s]*)
     | (?P<startstr> \([^()\\]*)
@@ -365,7 +365,7 @@ class ObjectParser:
                 try:
                     pos, obj = self.pop_to(KEYWORD_ARRAY_BEGIN)
                 except TypeError as e:
-                    log.warning(f"When constructing array: {e}")
+                    log.warning("When constructing array from %r: %s", obj, e)
                 if pos == top:
                     top = None
                     return pos, obj
@@ -388,7 +388,7 @@ class ObjectParser:
                         if v is not None
                     }
                 except TypeError as e:
-                    log.warning(f"When constructing dict: {e}")
+                    log.warning("When constructing dict from %r: %s", objs, e)
                 if pos == top:
                     top = None
                     return pos, obj
@@ -401,7 +401,7 @@ class ObjectParser:
                 try:
                     pos, obj = self.pop_to(KEYWORD_PROC_BEGIN)
                 except TypeError as e:
-                    log.warning(f"When constructing proc: {e}")
+                    log.warning("When constructing proc from %r: %s", obj, e)
                 if pos == top:
                     top = None
                     return pos, obj
