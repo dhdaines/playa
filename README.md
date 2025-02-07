@@ -25,7 +25,7 @@ parallelizable, pure-Python and Pythonic (for its author's definition
 of the term), lazy interface to the internals of PDF files.
 
 But yes, you *can* also extract text with PLAYA now.  This is fast compared
-to other Python-based libraries, slow compared to anything else, and I
+to other pure-Python libraries, slow compared to anything else, and I
 can't guarantee that the output is any good.  On my Thinkpad X250
 (Core i5-5300U circa 2015) I get these speeds when extracting the
 zoning bylaw of my town (486 pages of tagged PDF), using `playa --text` on
