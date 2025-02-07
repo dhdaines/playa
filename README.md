@@ -20,9 +20,22 @@ benchmarks](https://github.com/py-pdf/benchmarks) for a summary (TL;DR
 pypdfium2 is probably what you want, but pdfplumber does a nice job of
 converting PDF to ASCII art).
 
+Yes, you *can* also extract text with PLAYA now.  This is fast compared
+to other Python-based libraries, slow compared to anything else, and I
+can't guarantee that the output is any good.  On my Thinkpad X250
+(Core i5-5300U circa 2015) I get these speeds when extracting the
+zoning bylaw of my town (486 pages of tagged PDF):
+
+| Tool | Time |
+|------|------|
+| pdfminer.six | 36.6s |
+| PLAYA (2 CPUs) | 10.5 |
+| pypdfium2 | 1.7s |
+| Poppler | 1.6s |
+
 Soon you will also be able to use
 [PAVÉS](https://github.com/dhdaines/paves) for this and other
-higher-level tasks.
+higher-level tasks, and it will be better, maybe.
 
 The purpose of PLAYA is to provide an efficent, parallel and
 parallelizable, pure-Python and Pythonic (for its author's definition
