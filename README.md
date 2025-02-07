@@ -37,7 +37,7 @@ zoning bylaw of my town (486 pages of tagged PDF):
 
 Soon, this will get faster.  You will also be able to use
 [PAVÉS](https://github.com/dhdaines/paves) for this and other
-higher-level tasks.
+higher-level tasks, and it will be better, maybe.
 
 The purpose of PLAYA is to provide an efficent, parallel and
 parallelizable, pure-Python and Pythonic (for its author's definition
