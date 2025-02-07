@@ -1,5 +1,8 @@
 """PLAYA's CLI, which can get stuff out of a PDF (one PDF) for you.
 
+This used to extract arbitrary properties of arbitrary graphical objects
+as a CSV, but for that you want PAVÉS now.
+
 By default this will just print some hopefully useful metadata about
 all the pages and indirect objects in the PDF, as a JSON dictionary,
 not because we love JSON, but because it's built-in and easy to parse
@@ -36,13 +39,30 @@ Or recursively expand the document catalog into a horrible mess of JSON:
 
     playa --catalog foo.pdf
 
-This used to extract arbitrary properties of arbitrary graphical objects
-as a CSV, but for that you want PAVÉS now.
+You can look at the content streams for one or more or all pages:
+
+    playa --content-streams foo.pdf
+    playa --pages 1 --content-streams foo.pdf
+    playa --pages 3,4,9 --content-streams foo.pdf
+
+You can... sort of... use this to extract text (don't @ me).  On the
+one hand you can get a torrent of JSON for one or more or all pages,
+with each fragment of text and all of its properties (position, font,
+color, etc):
+
+    playa --text-objects foo.pdf
+    playa --pages 4-6 --text-objects foo.pdf
+
+But also, if you have a Tagged PDF, then in theory it has a defined
+reading order, and so we can actually really extract the text from it.
+You will note that this is quite fast, particularly if you use
+multiple CPUs (you can use multiple CPUs):
+
+    playa --text --max-workers 4 tagged-foo.pdf
 
 """
 
 import argparse
-import dataclasses
 import itertools
 import json
 import logging
@@ -53,7 +73,6 @@ from typing import Any, Deque, Iterable, Iterator, List, Tuple
 import playa
 from playa import Document, Page
 from playa.pdftypes import ContentStream, ObjRef
-from playa.utils import get_bound
 
 
 def make_argparse() -> argparse.ArgumentParser:
@@ -75,16 +94,21 @@ def make_argparse() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "-p",
-        "--page-contents",
+        "--pages",
         type=str,
-        help="Decode the content streams for a page "
-        "(or range, or 'all') into raw bytes",
+        help="Page, or range, or list of pages to process with -s or -x",
+    )
+    parser.add_argument(
+        "-s",
+        "--content-streams",
+        action="store_true",
+        help="Decode content streams into raw bytes",
     )
     parser.add_argument(
         "-x",
         "--text-objects",
-        type=str,
-        help="Extract text objects as JSON for a page " "(or range, or 'all')",
+        action="store_true",
+        help="Extract text objects as JSON",
     )
     parser.add_argument(
         "-o",
@@ -238,7 +262,7 @@ def get_text_json(page: Page) -> List[str]:
 
 def extract_text_objects(doc: Document, args: argparse.Namespace) -> None:
     """Extract text objects as JSON."""
-    pages = decode_page_spec(doc, args.text_objects)
+    pages = decode_page_spec(doc, args.pages)
     print("[")
     last = None
     for a, b in itertools.pairwise(
@@ -260,7 +284,7 @@ def get_stream_data(page: Page) -> bytes:
 
 def extract_page_contents(doc: Document, args: argparse.Namespace) -> None:
     """Extract content streams from pages."""
-    pages = decode_page_spec(doc, args.page_contents)
+    pages = decode_page_spec(doc, args.pages)
     for data in doc.pages[pages].map(get_stream_data):
         args.outfile.buffer.write(data)
 
@@ -273,7 +297,7 @@ def main() -> None:
         with playa.open(args.pdf, space="default", max_workers=args.max_workers) as doc:
             if args.stream is not None:  # it can't be zero either though
                 extract_stream(doc, args)
-            elif args.page_contents:
+            elif args.content_streams:
                 extract_page_contents(doc, args)
             elif args.catalog:
                 extract_catalog(doc, args)
