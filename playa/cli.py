@@ -42,15 +42,18 @@ as a CSV, but for that you want PAVÉS now.
 """
 
 import argparse
+import dataclasses
+import itertools
 import json
 import logging
 from collections import deque
 from pathlib import Path
-from typing import Any, Deque, Iterable, Tuple
+from typing import Any, Deque, Iterable, Iterator, List, Tuple
 
 import playa
-from playa.document import Document
+from playa import Document, Page
 from playa.pdftypes import ContentStream, ObjRef
+from playa.utils import get_bound
 
 
 def make_argparse() -> argparse.ArgumentParser:
@@ -79,9 +82,9 @@ def make_argparse() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "-x",
-        "--text",
-        action="store_true",
-        help="Extract text, badly",
+        "--text-objects",
+        type=str,
+        help="Extract text objects as JSON for a page " "(or range, or 'all')",
     )
     parser.add_argument(
         "-o",
@@ -89,6 +92,13 @@ def make_argparse() -> argparse.ArgumentParser:
         help="File to write output (or - for standard output)",
         type=argparse.FileType("wt"),
         default="-",
+    )
+    parser.add_argument(
+        "-w",
+        "--max-workers",
+        type=int,
+        help="Maximum number of worker processes to use",
+        default=1,
     )
     parser.add_argument(
         "--debug",
@@ -169,6 +179,7 @@ def extract_metadata(doc: Document, args: argparse.Namespace) -> None:
     stuff["pages"] = pages
     objects = []
     for obj in doc.objects:
+        # TODO: Add method to JSON serialize indirect objects
         objects.append(
             {
                 "objid": obj.objid,
@@ -181,16 +192,8 @@ def extract_metadata(doc: Document, args: argparse.Namespace) -> None:
     json.dump(stuff, args.outfile, indent=2, ensure_ascii=False)
 
 
-def extract_text_badly(doc: Document, args: argparse.Namespace) -> None:
-    """Extract text, badly."""
-    for page in doc.pages:
-        for text in page.texts:
-            print(text.chars, file=args.outfile)
-
-
-def extract_page_contents(doc: Document, args: argparse.Namespace) -> None:
-    """Extract text, badly."""
-    for page_spec in args.page_contents.split(","):
+def decode_page_spec(doc: Document, spec: str) -> Iterator[int]:
+    for page_spec in spec.split(","):
         start, _, end = page_spec.partition("-")
         if end:
             pages: Iterable[int] = range(int(start) - 1, int(end))
@@ -198,9 +201,68 @@ def extract_page_contents(doc: Document, args: argparse.Namespace) -> None:
             pages = range(len(doc.pages))
         else:
             pages = (int(start) - 1,)
-        for page_idx in pages:
-            for stream in doc.pages[page_idx].streams:
-                args.outfile.buffer.write(stream.buffer)
+        yield from pages
+
+
+def get_text_json(page: Page) -> List[str]:
+    objs = []
+    for text in page.texts:
+        tstate = text.textstate
+        # Prune these objects somewhat (FIXME: need a method that will
+        # serialize only non-default values and run _asdict as needed)
+        textstate = {
+            "line_matrix": tstate.line_matrix,
+            "fontsize": tstate.fontsize,
+            "render_mode": tstate.render_mode,
+            "font": {
+                "fontname": tstate.font.fontname,
+                "vertical": tstate.font.vertical,
+            },
+        }
+        gstate = {
+            "scs": text.gstate.scs._asdict(),
+            "scolor": text.gstate.scolor._asdict(),
+            "ncs": text.gstate.ncs._asdict(),
+            "ncolor": text.gstate.ncolor._asdict(),
+        }
+        obj = {
+            "chars": text.chars,
+            "bbox": text.bbox,
+            "textstate": textstate,
+            "gstate": gstate,
+            "mcstack": [mcs._asdict() for mcs in text.mcstack],
+        }
+        objs.append(json.dumps(obj, indent=2, ensure_ascii=False, default=repr))
+    return objs
+
+
+def extract_text_objects(doc: Document, args: argparse.Namespace) -> None:
+    """Extract text objects as JSON."""
+    pages = decode_page_spec(doc, args.text_objects)
+    print("[")
+    last = None
+    for a, b in itertools.pairwise(
+        itertools.chain.from_iterable(doc.pages[pages].map(get_text_json))
+    ):
+        print(a, ",", sep="")
+        last = b
+    if last is not None:
+        print(last)
+    print("]")
+
+
+def get_stream_data(page: Page) -> bytes:
+    streams = []
+    for stream in page.streams:
+        streams.append(stream.buffer)
+    return b"\n".join(streams)
+
+
+def extract_page_contents(doc: Document, args: argparse.Namespace) -> None:
+    """Extract content streams from pages."""
+    pages = decode_page_spec(doc, args.page_contents)
+    for data in doc.pages[pages].map(get_stream_data):
+        args.outfile.buffer.write(data)
 
 
 def main() -> None:
@@ -208,15 +270,15 @@ def main() -> None:
     args = parser.parse_args()
     logging.basicConfig(level=logging.DEBUG if args.debug else logging.WARNING)
     try:
-        with playa.open(args.pdf, space="default") as doc:
+        with playa.open(args.pdf, space="default", max_workers=args.max_workers) as doc:
             if args.stream is not None:  # it can't be zero either though
                 extract_stream(doc, args)
             elif args.page_contents:
                 extract_page_contents(doc, args)
             elif args.catalog:
                 extract_catalog(doc, args)
-            elif args.text:
-                extract_text_badly(doc, args)
+            elif args.text_objects:
+                extract_text_objects(doc, args)
             else:
                 extract_metadata(doc, args)
     except RuntimeError as e:

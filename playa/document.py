@@ -1388,15 +1388,16 @@ class PageList:
     def __iter__(self) -> Iterator[Page]:
         return iter(self._pages)
 
-    def __getitem__(self, key: Union[int, str]) -> Page:
+    def __getitem__(self, key: Union[int, str, slice, Iterable[Union[str, int]]]) -> Union[Page, "PageList"]:
         if isinstance(key, int):
             return self._pages[key]
+        elif isinstance(key, str):
+            return self._labels[key]
         elif isinstance(key, slice):
             return PageList(_deref_document(self.docref), self._pages[key])
-        elif isinstance(key, (tuple, list)):
-            return PageList(_deref_document(self.docref), (self[k] for k in key))
         else:
-            return self._labels[key]
+            # Try to iterate over it (exception if we can't)
+            return PageList(_deref_document(self.docref), (self[k] for k in key))
 
     def map(self, func: Callable[[Page], Any]) -> Iterator:
         """Apply a function over each page, iterating over its results.

@@ -917,7 +917,7 @@ class TextObject(ContentObject):
         for obj in self.args:
             if not isinstance(obj, bytes):
                 continue
-            for cid, text in font.decode(obj):
+            for _, text in font.decode(obj):
                 self._chars.append(text)
         return "".join(self._chars)
 
