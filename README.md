@@ -29,11 +29,13 @@ zoning bylaw of my town (486 pages of tagged PDF):
 | Tool | Time |
 |------|------|
 | pdfminer.six | 36.6s |
-| PLAYA (2 CPUs) | 10.5 |
+| PLAYA (1 CPU) | 18.2s |
+| PLAYA (1 CPU, PyPy 3.9) | 10.8s |
+| PLAYA (2 CPUs) | 10.5s |
 | pypdfium2 | 1.7s |
 | Poppler | 1.6s |
 
-Soon you will also be able to use
+Soon, this will get faster.  You will also be able to use
 [PAVÉS](https://github.com/dhdaines/paves) for this and other
 higher-level tasks, and it will be better, maybe.
 
