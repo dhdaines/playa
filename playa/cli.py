@@ -1,5 +1,8 @@
 """PLAYA's CLI, which can get stuff out of a PDF (one PDF) for you.
 
+This used to extract arbitrary properties of arbitrary graphical objects
+as a CSV, but for that you want PAVÉS now.
+
 By default this will just print some hopefully useful metadata about
 all the pages and indirect objects in the PDF, as a JSON dictionary,
 not because we love JSON, but because it's built-in and easy to parse
@@ -36,20 +39,39 @@ Or recursively expand the document catalog into a horrible mess of JSON:
 
     playa --catalog foo.pdf
 
-This used to extract arbitrary properties of arbitrary graphical objects
-as a CSV, but for that you want PAVÉS now.
+You can look at the content streams for one or more or all pages:
+
+    playa --content-streams foo.pdf
+    playa --pages 1 --content-streams foo.pdf
+    playa --pages 3,4,9 --content-streams foo.pdf
+
+You can... sort of... use this to extract text (don't @ me).  On the
+one hand you can get a torrent of JSON for one or more or all pages,
+with each fragment of text and all of its properties (position, font,
+color, etc):
+
+    playa --text-objects foo.pdf
+    playa --pages 4-6 --text-objects foo.pdf
+
+But also, if you have a Tagged PDF, then in theory it has a defined
+reading order, and so we can actually really extract the text from it.
+You will note that this is quite fast, particularly if you use
+multiple CPUs (you can use multiple CPUs):
+
+    playa --text --max-workers 4 tagged-foo.pdf
 
 """
 
 import argparse
+import itertools
 import json
 import logging
 from collections import deque
 from pathlib import Path
-from typing import Any, Deque, Iterable, Tuple
+from typing import Any, Deque, Iterable, Iterator, List, Tuple
 
 import playa
-from playa.document import Document
+from playa import Document, Page
 from playa.pdftypes import ContentStream, ObjRef
 
 
@@ -72,16 +94,21 @@ def make_argparse() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "-p",
-        "--page-contents",
+        "--pages",
         type=str,
-        help="Decode the content streams for a page "
-        "(or range, or 'all') into raw bytes",
+        help="Page, or range, or list of pages to process with -s or -x",
+    )
+    parser.add_argument(
+        "-s",
+        "--content-streams",
+        action="store_true",
+        help="Decode content streams into raw bytes",
     )
     parser.add_argument(
         "-x",
-        "--text",
+        "--text-objects",
         action="store_true",
-        help="Extract text, badly",
+        help="Extract text objects as JSON",
     )
     parser.add_argument(
         "-o",
@@ -89,6 +116,13 @@ def make_argparse() -> argparse.ArgumentParser:
         help="File to write output (or - for standard output)",
         type=argparse.FileType("wt"),
         default="-",
+    )
+    parser.add_argument(
+        "-w",
+        "--max-workers",
+        type=int,
+        help="Maximum number of worker processes to use",
+        default=1,
     )
     parser.add_argument(
         "--debug",
@@ -169,6 +203,7 @@ def extract_metadata(doc: Document, args: argparse.Namespace) -> None:
     stuff["pages"] = pages
     objects = []
     for obj in doc.objects:
+        # TODO: Add method to JSON serialize indirect objects
         objects.append(
             {
                 "objid": obj.objid,
@@ -181,16 +216,8 @@ def extract_metadata(doc: Document, args: argparse.Namespace) -> None:
     json.dump(stuff, args.outfile, indent=2, ensure_ascii=False)
 
 
-def extract_text_badly(doc: Document, args: argparse.Namespace) -> None:
-    """Extract text, badly."""
-    for page in doc.pages:
-        for text in page.texts:
-            print(text.chars, file=args.outfile)
-
-
-def extract_page_contents(doc: Document, args: argparse.Namespace) -> None:
-    """Extract text, badly."""
-    for page_spec in args.page_contents.split(","):
+def decode_page_spec(doc: Document, spec: str) -> Iterator[int]:
+    for page_spec in spec.split(","):
         start, _, end = page_spec.partition("-")
         if end:
             pages: Iterable[int] = range(int(start) - 1, int(end))
@@ -198,9 +225,69 @@ def extract_page_contents(doc: Document, args: argparse.Namespace) -> None:
             pages = range(len(doc.pages))
         else:
             pages = (int(start) - 1,)
-        for page_idx in pages:
-            for stream in doc.pages[page_idx].streams:
-                args.outfile.buffer.write(stream.buffer)
+        yield from pages
+
+
+def get_text_json(page: Page) -> List[str]:
+    objs = []
+    for text in page.texts:
+        tstate = text.textstate
+        # Prune these objects somewhat (FIXME: need a method that will
+        # serialize only non-default values and run _asdict as needed)
+        textstate = {
+            "line_matrix": tstate.line_matrix,
+            "fontsize": tstate.fontsize,
+            "render_mode": tstate.render_mode,
+        }
+        if tstate.font is not None:
+            textstate["font"] = {
+                "fontname": tstate.font.fontname,
+                "vertical": tstate.font.vertical,
+            }
+        gstate = {
+            "scs": text.gstate.scs._asdict(),
+            "scolor": text.gstate.scolor._asdict(),
+            "ncs": text.gstate.ncs._asdict(),
+            "ncolor": text.gstate.ncolor._asdict(),
+        }
+        obj = {
+            "chars": text.chars,
+            "bbox": text.bbox,
+            "textstate": textstate,
+            "gstate": gstate,
+            "mcstack": [mcs._asdict() for mcs in text.mcstack],
+        }
+        objs.append(json.dumps(obj, indent=2, ensure_ascii=False, default=repr))
+    return objs
+
+
+def extract_text_objects(doc: Document, args: argparse.Namespace) -> None:
+    """Extract text objects as JSON."""
+    pages = decode_page_spec(doc, args.pages)
+    print("[")
+    last = None
+    for a, b in itertools.pairwise(
+        itertools.chain.from_iterable(doc.pages[pages].map(get_text_json))
+    ):
+        print(a, ",", sep="")
+        last = b
+    if last is not None:
+        print(last)
+    print("]")
+
+
+def get_stream_data(page: Page) -> bytes:
+    streams = []
+    for stream in page.streams:
+        streams.append(stream.buffer)
+    return b"\n".join(streams)
+
+
+def extract_page_contents(doc: Document, args: argparse.Namespace) -> None:
+    """Extract content streams from pages."""
+    pages = decode_page_spec(doc, args.pages)
+    for data in doc.pages[pages].map(get_stream_data):
+        args.outfile.buffer.write(data)
 
 
 def main() -> None:
@@ -208,15 +295,15 @@ def main() -> None:
     args = parser.parse_args()
     logging.basicConfig(level=logging.DEBUG if args.debug else logging.WARNING)
     try:
-        with playa.open(args.pdf, space="default") as doc:
+        with playa.open(args.pdf, space="default", max_workers=args.max_workers) as doc:
             if args.stream is not None:  # it can't be zero either though
                 extract_stream(doc, args)
-            elif args.page_contents:
+            elif args.content_streams:
                 extract_page_contents(doc, args)
             elif args.catalog:
                 extract_catalog(doc, args)
-            elif args.text:
-                extract_text_badly(doc, args)
+            elif args.text_objects:
+                extract_text_objects(doc, args)
             else:
                 extract_metadata(doc, args)
     except RuntimeError as e:
