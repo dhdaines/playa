@@ -22,9 +22,10 @@ from typing import Union
 from playa.worker import _init_worker
 from playa.document import Document
 from playa.page import Page, DeviceSpace
+from playa.pdftypes import resolve1 as resolve, resolve_all
 from playa._version import __version__
 
-__all__ = ["Document", "Page", "DeviceSpace", "__version__"]
+__all__ = ["Document", "Page", "DeviceSpace", "resolve", "resolve_all", "__version__"]
 
 
 def open(
