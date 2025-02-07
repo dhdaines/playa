@@ -1109,8 +1109,11 @@ class Document:
 
     @property
     def outlines(self) -> Iterator[OutlineItem]:
-        """
-        Iterate over the PDF document outline.
+        """Iterate over the PDF document outline.
+
+        Danger: Deprecated
+            This interface is deprecated.  It will be removed or
+            modified in PLAYA 1.0.
         """
         if "Outlines" not in self.catalog:
             raise KeyError
@@ -1251,6 +1254,10 @@ class Document:
         > display purposes.
 
         therefore, you get them as `str`.
+
+        Danger: Deprecated
+            This interface is deprecated.  It will be removed or
+            modified in PLAYA 1.0.
 
         Raises:
           KeyError: if no destination tree exists
