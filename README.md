@@ -113,28 +113,28 @@ npages = len(pdf.pages)
 page_numbers = [page.label for page in pdf.pages]
 ```
 
-What's in the table of contents?  (NOTE: this API is deprecated and
-will change soon as it is not Lazy nor does it properly represent the
-hierarchy of the document outline)
+A PDF often contains a "document outline" which is a sequence of trees
+representing the coarse-grained logical structure of the document.
 
 ```python
-for entry in pdf.outlines:
-    level, title, dest, action, struct_element = entry
-    # or
-    entry.level, entry.title, entry.dest, entry.action, entry.se
-    ...
+for entry in pdf.outline:
+    entry.title, entry.destination, entry.action, entry.element
+    for child in entry:
+        child.title, child.destinatation, child.action, child.element
+        ...
 ```
 
 If you are lucky it has a "logical structure tree".  The elements here
-might even be referenced from the table of contents!  (or, they might
-not... with PDF you never know).  (NOTE: this API is deprecated and
-will change soon as it is not Lazy at all)
+might even be referenced from the `outline` above!  (or, they might
+not... with PDF you never know).
 
 ```python
 structure = pdf.structtree
 for element in structure:
    for child in element:
        ...
+sections = structure.find_all("Sect")
+first_p = structure.find("P")
 ```
 
 Now perhaps we want to look at a specific page.  Okay!  You can also
@@ -200,7 +200,7 @@ page_sizes = pdf.pages.map(get_page_size)
 ```
 
 You could also just do this for certain pages by subscripting
-`pdf.pages`:
+`pdf.pages` (this can be a slice or an iterable of `int` and/or `str`):
 
 ```python
 some_page_sizes = pdf.pages[2:5].map(get_page_size)
