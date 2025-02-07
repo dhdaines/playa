@@ -25,6 +25,7 @@ from typing import (
     Sequence,
     Tuple,
     Union,
+    overload,
 )
 
 try:
@@ -1388,9 +1389,22 @@ class PageList:
     def __iter__(self) -> Iterator[Page]:
         return iter(self._pages)
 
-    def __getitem__(
-        self, key: Union[int, str, slice, Iterable[Union[str, int]]]
-    ) -> Union[Page, "PageList"]:
+    @overload
+    def __getitem__(self, key: int) -> Page: ...
+
+    @overload
+    def __getitem__(self, key: str) -> Page: ...
+
+    @overload
+    def __getitem__(self, key: slice) -> "PageList": ...
+
+    @overload
+    def __getitem__(self, key: Iterable[int]) -> "PageList": ...
+
+    @overload
+    def __getitem__(self, key: Iterator[Union[int, str]]) -> "PageList": ...
+
+    def __getitem__(self, key):
         if isinstance(key, int):
             return self._pages[key]
         elif isinstance(key, str):
@@ -1398,7 +1412,6 @@ class PageList:
         elif isinstance(key, slice):
             return PageList(_deref_document(self.docref), self._pages[key])
         else:
-            # Try to iterate over it (exception if we can't)
             return PageList(_deref_document(self.docref), (self[k] for k in key))
 
     def map(self, func: Callable[[Page], Any]) -> Iterator:
