@@ -38,7 +38,7 @@ baa)
 12345>
 func/a/b{(c)do*}def
 [ 1 (z) ! ]
-<< /foo (bar) >>
+<< /foo (bar) / (baz) >>
 """
 TOKENS1 = [
     (5, KWD(b"begin")),
@@ -86,7 +86,9 @@ TOKENS1 = [
     (258, KWD(b"<<")),
     (261, LIT("foo")),
     (266, b"bar"),
-    (272, KWD(b">>")),
+    (272, LIT("")),
+    (274, b"baz"),
+    (280, KWD(b">>")),
 ]
 OBJS1 = [
     (5, KWD(b"begin")),
@@ -124,7 +126,7 @@ OBJS1 = [
     (234, [b"c", KWD(b"do*")]),
     (242, KWD(b"def")),
     (246, [1, b"z", KWD(b"!")]),
-    (258, {"foo": b"bar"}),
+    (258, {"foo": b"bar", "": b"baz"}),
 ]
 
 
