@@ -1388,7 +1388,9 @@ class PageList:
     def __iter__(self) -> Iterator[Page]:
         return iter(self._pages)
 
-    def __getitem__(self, key: Union[int, str, slice, Iterable[Union[str, int]]]) -> Union[Page, "PageList"]:
+    def __getitem__(
+        self, key: Union[int, str, slice, Iterable[Union[str, int]]]
+    ) -> Union[Page, "PageList"]:
         if isinstance(key, int):
             return self._pages[key]
         elif isinstance(key, str):
