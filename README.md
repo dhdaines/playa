@@ -34,6 +34,7 @@ the command-line:
 | Tool | Time |
 |------|------|
 | pdfminer.six | 36.6s |
+| pypdf | 17.7s |
 | PLAYA (1 CPU) | 18.2s |
 | PLAYA (1 CPU, PyPy 3.9) | 10.8s |
 | PLAYA (2 CPUs) | 10.5s |
