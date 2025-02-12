@@ -1436,6 +1436,11 @@ class PageList:
                 else:
                     self._labels[label] = page
 
+    @property
+    def doc(self) -> "Document":
+        """Get associated document if it exists."""
+        return _deref_document(self.docref)
+
     def __len__(self) -> int:
         return len(self._pages)
 
