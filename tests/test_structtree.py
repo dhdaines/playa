@@ -2,7 +2,8 @@ import re
 
 import pytest
 import playa
-from .data import CONTRIB, TESTDIR
+from playa.exceptions import PDFEncryptionError
+from .data import CONTRIB, TESTDIR, ALLPDFS
 
 
 def test_structure_tree_class() -> None:
@@ -73,3 +74,17 @@ def test_all_mcids() -> None:
         assert page_indices == {1}
         for p in sect.find_all("P"):
             assert set(mcid for page, mcid in p.all_mcids()) == set(p.mcids)
+
+
+@pytest.mark.parametrize("path", ALLPDFS, ids=str)
+def test_structtree(path) -> None:
+    """Verify that we can read structure trees when they exist."""
+    try:
+        with playa.open(path) as doc:
+            _ = doc.structtree
+            for page in doc.pages:
+                _ = page.structtree
+    except KeyError:
+        pytest.skip("skipping document with no logical structure")
+    except PDFEncryptionError:
+        pytest.skip("skipping encrypted PDF because whatever")
