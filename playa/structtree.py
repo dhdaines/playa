@@ -247,12 +247,19 @@ class StructTree(Findable):
                 if key not in self.class_map:
                     logger.warning("Unknown attribute class %s", key)
                     continue
-                class_obj = self.class_map[key]
-                for k, v in class_obj.items():
-                    if isinstance(v, PSLiteral):
-                        attr[k] = decode_text(v.name)
-                    else:
-                        attr[k] = class_obj[k]
+                class_obj = resolve1(self.class_map[key])
+                # For whatever reason, there can be multiple attribute
+                # objects in a class, and the spec **in no way**
+                # indicates what this is supposed to mean.
+                if not isinstance(class_obj, list):
+                    class_obj = [class_obj]
+                for class_attr_obj in class_obj:
+                    class_attr_obj = resolve1(class_attr_obj)
+                    for k, v in class_attr_obj.items():
+                        if isinstance(v, PSLiteral):
+                            attr[k] = decode_text(v.name)
+                        else:
+                            attr[k] = class_attr_obj[k]
         for obj in attr_objs:
             assert not isinstance(obj, ObjRef)
             # An attribute dict

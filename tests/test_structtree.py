@@ -3,7 +3,7 @@ import re
 import pytest
 import playa
 from playa.exceptions import PDFEncryptionError
-from .data import CONTRIB, TESTDIR, ALLPDFS
+from .data import CONTRIB, TESTDIR, ALLPDFS, XFAILS
 
 
 def test_structure_tree_class() -> None:
@@ -79,6 +79,8 @@ def test_all_mcids() -> None:
 @pytest.mark.parametrize("path", ALLPDFS, ids=str)
 def test_structtree(path) -> None:
     """Verify that we can read structure trees when they exist."""
+    if path.name in XFAILS:
+        pytest.xfail("Intentionally corrupt file: %s" % path.name)
     try:
         with playa.open(path) as doc:
             _ = doc.structtree
