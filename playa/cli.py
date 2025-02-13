@@ -301,7 +301,7 @@ def extract_page_contents(doc: Document, args: argparse.Namespace) -> None:
 def get_text_from_obj(obj: TextObject, vertical: bool) -> Tuple[str, float]:
     """Try to get text from a text object."""
     chars = []
-    prev_end = 0.
+    prev_end = 0.0
     for glyph in obj:
         x, y = glyph.textstate.glyph_offset
         off = y if vertical else x
@@ -317,7 +317,7 @@ def get_text_from_obj(obj: TextObject, vertical: bool) -> Tuple[str, float]:
 def get_text_untagged(page: Page) -> str:
     """Get text from a page of an untagged PDF."""
     prev_line_matrix = None
-    prev_end = 0.
+    prev_end = 0.0
     lines = []
     strings = []
     for text in page.texts:
