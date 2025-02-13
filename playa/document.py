@@ -1271,6 +1271,10 @@ class Document:
         Raises:
           KeyError: if no destination tree exists
         """
+        warnings.warn(
+            "The `dests` property is deprecated and will be removed in PLAYA 1.0.",
+            DeprecationWarning,
+        )
         try:
             # PDF-1.2 or later
             dests = (
