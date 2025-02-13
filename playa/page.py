@@ -5,6 +5,7 @@ Classes for looking at pages and their contents.
 import itertools
 import logging
 import re
+import warnings
 from copy import copy
 from dataclasses import dataclass
 from typing import (
@@ -173,9 +174,7 @@ class Page:
             self.ctm = (1.0, 0.0, 0.0, 1.0, -x0, -y0)
         # "default" device space: no transformation or rotation
         else:
-            if self.space == "user":
-                log.warning('"user" device space is deprecated, use "default" instead')
-            elif self.space != "default":
+            if self.space != "default":
                 log.warning("Unknown device space: %r", self.space)
             self.ctm = MATRIX_IDENTITY
             width = height = 0
@@ -195,8 +194,6 @@ class Page:
         elif self.rotate != 0:
             log.warning("Invalid /Rotate: %r", self.rotate)
 
-        self.annots = self.attrs.get("Annots")
-        self.beads = self.attrs.get("B")
         contents = resolve1(self.attrs.get("Contents"))
         if contents is None:
             self._contents = []
@@ -205,6 +202,24 @@ class Page:
                 self._contents = contents
             else:
                 self._contents = [contents]
+
+    @property
+    def annots(self) -> Union[List[Dict], None]:
+        warnings.warn(
+            "The `annots` property is deprecated and will be removed in PLAYA 1.0.  "
+            "Use `page.attrs['Annots']` instead.",
+            DeprecationWarning,
+        )
+        return self.attrs.get("Annots")
+
+    @property
+    def beads(self) -> Union[List[Dict], None]:
+        warnings.warn(
+            "The `beads` property is deprecated and will be removed in PLAYA 1.0.  "
+            "Use `page.attrs['B']` instead.",
+            DeprecationWarning,
+        )
+        return self.attrs.get("B")
 
     @property
     def doc(self) -> "Document":
@@ -282,7 +297,11 @@ class Page:
 
     @property
     def structtree(self) -> StructTree:
-        """Return the PDF structure tree."""
+        """Return the subset of the structure tree for a page."""
+        warnings.warn(
+            "The `structtree` property is deprecated and will be removed in PLAYA 1.0.",
+            DeprecationWarning,
+        )
         doc = _deref_document(self.docref)
         return StructTree(doc, (self,))
 
