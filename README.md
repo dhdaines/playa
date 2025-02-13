@@ -115,10 +115,11 @@ page_numbers = [page.label for page in pdf.pages]
 
 You can also subscript `pdf.pages` in various other ways, using a
 slice or an iterable of `int`, which will give you a page list object
-that behaves similarly to `pdf.pages`.
+that behaves similarly to `pdf.pages`.  Pages and page lists can refer
+back to their document (using weak reference magic to avoid memory
+leaks) with the `doc` property.
 
-Pages and page lists can refer back to their document (using weak
-reference magic to avoid memory leaks) with the `doc` property.
+## Some (by no means all) helpful metadata
 
 A PDF often contains a "document outline" which is a sequence of trees
 representing the coarse-grained logical structure of the document.

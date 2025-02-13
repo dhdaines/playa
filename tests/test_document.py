@@ -13,9 +13,7 @@ from playa.document import read_header, XRefTable
 from playa.exceptions import PDFSyntaxError
 from playa.parser import LIT
 from playa.utils import decode_text
-from .data import CONTRIB
-
-TESTDIR = Path(__file__).parent.parent / "samples"
+from .data import CONTRIB, TESTDIR
 
 
 def test_read_header():
@@ -163,3 +161,10 @@ def test_xobjects() -> None:
         xobj = next(page.xobjects)
         assert xobj.object_type == "xobject"
         assert len(list(xobj)) == 2
+
+
+def test_annotations() -> None:
+    with playa.open(TESTDIR / "simple5.pdf") as doc:
+        page = doc.pages[0]
+        for annot in page.annotations:
+            assert annot.page is page

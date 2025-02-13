@@ -204,6 +204,35 @@ class Page:
                 self._contents = [contents]
 
     @property
+    def annotations(self) -> Iterator["Annotation"]:
+        """Lazily iterate over page annotations."""
+        alist = resolve1(self.attrs.get("Annots"))
+        if alist is None:
+            return
+        for annot in alist:
+            annot = resolve1(annot)
+            if not isinstance(annot, dict):
+                log.warning("Invalid object in Annots: %r", annot)
+                continue
+            subtype = annot.get("Subtype")
+            if subtype is None or not isinstance(subtype, PSLiteral):
+                log.warning("Invalid Subtype in annotation: %r", annot)
+                continue
+            try:
+                rect = parse_rect(annot.get("Rect"))
+            except (TypeError, ValueError):
+                log.warning("Invalid Rect in annotation: %r", annot)
+                continue
+            contents = resolve1(annot.get("Contents"))
+            yield Annotation(
+                _pageref=_ref_page(self),
+                subtype=literal_name(subtype),
+                rect=rect,
+                contents=contents,
+                props=annot,
+            )
+
+    @property
     def annots(self) -> Union[List[Dict], None]:
         warnings.warn(
             "The `annots` property is deprecated and will be removed in PLAYA 1.0.  "
@@ -307,6 +336,30 @@ class Page:
 
     def __repr__(self) -> str:
         return f"<Page: Resources={self.resources!r}, MediaBox={self.mediabox!r}>"
+
+
+@dataclass
+class Annotation:
+    """PDF annotation (PDF 1.7 section 12.5).
+
+    Attributes:
+      subtype: Type of annotation.
+      rect: Annotation rectangle (location on page).
+      contents: Text contents.
+      props: Annotation dictionary containing all other properties
+             (PDF 1.7 sec. 12.5.2).
+    """
+
+    _pageref: PageRef
+    subtype: str
+    rect: Rect
+    contents: Union[str, None]
+    props: Dict[str, PDFObject]
+
+    @property
+    def page(self) -> Page:
+        """Containing page for this annotation."""
+        return _deref_page(self._pageref)
 
 
 @dataclass
