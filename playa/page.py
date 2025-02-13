@@ -498,9 +498,10 @@ class ContentObject:
       mcstack: Stack of enclosing marked content sections.
     """
 
+    _pageref: PageRef
     gstate: GraphicState
     ctm: Matrix
-    mcstack: List[MarkedContent]
+    mcstack: Tuple[MarkedContent, ...]
 
     def __iter__(self) -> Iterator["ContentObject"]:
         yield from ()
@@ -538,6 +539,11 @@ class ContentObject:
             if mcs.mcid is not None:
                 return mcs.mcid
         return None
+
+    @property
+    def page(self) -> Page:
+        """The page containing this content object."""
+        return _deref_page(self._pageref)
 
 
 BBOX_NONE = (-1, -1, -1, -1)
@@ -649,7 +655,6 @@ class XObjectObject(ContentObject):
     xobjid: str
     stream: ContentStream
     resources: Union[None, Dict[str, PDFObject]]
-    _pageref: PageRef
 
     def __contains__(self, name: object) -> bool:
         return name in self.stream
@@ -735,6 +740,7 @@ class PathObject(ContentObject):
         for seg in self.raw_segments:
             if seg.operator == "m" and segs:
                 yield PathObject(
+                    _pageref=self._pageref,
                     gstate=self.gstate,
                     ctm=self.ctm,
                     mcstack=self.mcstack,
@@ -747,6 +753,7 @@ class PathObject(ContentObject):
             segs.append(seg)
         if segs:
             yield PathObject(
+                _pageref=self._pageref,
                 gstate=self.gstate,
                 ctm=self.ctm,
                 mcstack=self.mcstack,
@@ -907,6 +914,7 @@ class TextObject(ContentObject):
                     adv = textwidth * tstate.fontsize * scaling
                     x, y = tstate.glyph_offset
                     glyph = GlyphObject(
+                        _pageref=self._pageref,
                         gstate=self.gstate,
                         ctm=self.ctm,
                         mcstack=self.mcstack,
@@ -1040,7 +1048,7 @@ class LazyInterpreter:
         # argstack: stack for command arguments.
         self.argstack: List[PDFObject] = []
         # mcstack: stack for marked content sections.
-        self.mcstack: List[MarkedContent] = []
+        self.mcstack: Tuple[MarkedContent, ...] = ()
 
     def push(self, obj: PDFObject) -> None:
         self.argstack.append(obj)
@@ -1093,6 +1101,7 @@ class LazyInterpreter:
 
     def create(self, object_class, **kwargs) -> ContentObject:
         return object_class(
+            _pageref=_ref_page(self.page),
             ctm=self.ctm,
             mcstack=self.mcstack,
             gstate=self.graphicstate,
@@ -1257,13 +1266,13 @@ class LazyInterpreter:
             xobjres = xobj.get("Resources")
             resources = None if xobjres is None else dict_value(xobjres)
             xobjobj = XObjectObject(
+                _pageref=_ref_page(self.page),
                 ctm=mult_matrix(matrix, self.ctm),
                 mcstack=self.mcstack,
                 gstate=self.graphicstate,
                 xobjid=xobjid,
                 stream=xobj,
                 resources=resources,
-                _pageref=_ref_page(self.page),
             )
             # We are *lazy*, so just yield the XObject itself not its contents
             yield xobjobj
@@ -1301,6 +1310,7 @@ class LazyInterpreter:
             props = self.get_property(props)
         rprops = {} if props is None else dict_value(props)
         yield TagObject(
+            _pageref=_ref_page(self.page),
             ctm=self.ctm,
             mcstack=self.mcstack,
             gstate=self.graphicstate,
@@ -1695,7 +1705,8 @@ class LazyInterpreter:
 
     def do_EMC(self) -> None:
         """End marked-content sequence"""
-        self.mcstack.pop()
+        if self.mcstack:
+            self.mcstack = self.mcstack[:-1]
 
     def begin_tag(self, tag: PDFObject, props: Dict[str, PDFObject]) -> None:
         """Handle beginning of tag, setting current MCID if any."""
@@ -1705,4 +1716,4 @@ class LazyInterpreter:
             mcid = int_value(props["MCID"])
         else:
             mcid = None
-        self.mcstack.append(MarkedContent(mcid=mcid, tag=tag, props=props))
+        self.mcstack = (*self.mcstack, MarkedContent(mcid=mcid, tag=tag, props=props))

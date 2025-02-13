@@ -20,11 +20,44 @@ from multiprocessing.context import BaseContext
 from typing import Union
 
 from playa.worker import _init_worker
-from playa.document import Document
-from playa.page import Page, DeviceSpace
+from playa.color import Color, ColorSpace
+from playa.document import Document, PageList
+from playa.page import (
+    Page,
+    DeviceSpace,
+    ContentObject,
+    MarkedContent,
+    PathSegment,
+    GraphicState,
+    TextState,
+)
+from playa.parser import Token
+from playa.pdftypes import resolve1 as resolve, resolve_all, ContentStream, ObjRef
+from playa.utils import Matrix, Point, Rect
 from playa._version import __version__
 
-__all__ = ["Document", "Page", "DeviceSpace", "__version__"]
+__all__ = [
+    "Document",
+    "Page",
+    "PageList",
+    "DeviceSpace",
+    "Color",
+    "ColorSpace",
+    "ContentObject",
+    "ContentStream",
+    "GraphicState",
+    "MarkedContent",
+    "Matrix",
+    "Point",
+    "Rect",
+    "PathSegment",
+    "TextState",
+    "Token",
+    "ObjRef",
+    "resolve",
+    "resolve_all",
+    "__version__",
+]
 
 
 def open(

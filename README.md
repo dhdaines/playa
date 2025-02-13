@@ -113,6 +113,13 @@ npages = len(pdf.pages)
 page_numbers = [page.label for page in pdf.pages]
 ```
 
+You can also subscript `pdf.pages` in various other ways, using a
+slice or an iterable of `int`, which will give you a page list object
+that behaves similarly to `pdf.pages`.
+
+Pages and page lists can refer back to their document (using weak
+reference magic to avoid memory leaks) with the `doc` property.
+
 A PDF often contains a "document outline" which is a sequence of trees
 representing the coarse-grained logical structure of the document.
 
@@ -323,6 +330,16 @@ will *always* have a `tag`.
 PDF also has the concept of "marked content points". PLAYA suports
 these with objects of `object_type == "tag"`.  The tag name and
 properties are also accessible via the `mcs` attribute.
+
+You may also wish to know the complete stack of enclosing marked
+content sections.  This is accessible from the `mcstack` property.
+Note that though it's called a "stack", it's actually a tuple.  This
+means that it is immutable, and you can check if it has changed from
+one object to the next using the `is` operator.
+
+All content objects can also refer back to their containing `Page`
+from the `page` property.  This uses weak reference magic in order to
+avoid causing memory leaks.
 
 ### Form XObjects
 
