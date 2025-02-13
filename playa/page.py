@@ -481,7 +481,7 @@ class ContentObject:
 
     gstate: GraphicState
     ctm: Matrix
-    mcstack: List[MarkedContent]
+    mcstack: Tuple[MarkedContent, ...]
 
     def __iter__(self) -> Iterator["ContentObject"]:
         yield from ()
@@ -1021,7 +1021,7 @@ class LazyInterpreter:
         # argstack: stack for command arguments.
         self.argstack: List[PDFObject] = []
         # mcstack: stack for marked content sections.
-        self.mcstack: List[MarkedContent] = []
+        self.mcstack: Tuple[MarkedContent, ...] = ()
 
     def push(self, obj: PDFObject) -> None:
         self.argstack.append(obj)
@@ -1676,7 +1676,8 @@ class LazyInterpreter:
 
     def do_EMC(self) -> None:
         """End marked-content sequence"""
-        self.mcstack.pop()
+        if self.mcstack:
+            self.mcstack = self.mcstack[:-1]
 
     def begin_tag(self, tag: PDFObject, props: Dict[str, PDFObject]) -> None:
         """Handle beginning of tag, setting current MCID if any."""
@@ -1686,4 +1687,4 @@ class LazyInterpreter:
             mcid = int_value(props["MCID"])
         else:
             mcid = None
-        self.mcstack.append(MarkedContent(mcid=mcid, tag=tag, props=props))
+        self.mcstack = (*self.mcstack, MarkedContent(mcid=mcid, tag=tag, props=props))
