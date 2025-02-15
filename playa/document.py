@@ -8,6 +8,7 @@ import logging
 import mmap
 import re
 import struct
+import warnings
 from concurrent.futures import Executor
 from hashlib import md5, sha256, sha384, sha512
 from typing import (
@@ -956,6 +957,10 @@ class Document:
     @property
     def structtree(self) -> StructTree:
         """Return the PDF structure tree."""
+        warnings.warn(
+            "The `structtree` property is deprecated and will be removed in PLAYA 1.0.",
+            DeprecationWarning,
+        )
         return StructTree(self)
 
     def _getobj_objstm(
@@ -1109,9 +1114,16 @@ class Document:
 
     @property
     def outlines(self) -> Iterator[OutlineItem]:
+        """Iterate over the PDF document outline.
+
+        Danger: Deprecated
+            This interface is deprecated.  It will be removed or
+            modified in PLAYA 1.0.
         """
-        Iterate over the PDF document outline.
-        """
+        warnings.warn(
+            "The `outlines` property is deprecated and will be removed in PLAYA 1.0.",
+            DeprecationWarning,
+        )
         if "Outlines" not in self.catalog:
             raise KeyError
 
@@ -1252,9 +1264,17 @@ class Document:
 
         therefore, you get them as `str`.
 
+        Danger: Deprecated
+            This interface is deprecated.  It will be removed or
+            modified in PLAYA 1.0.
+
         Raises:
           KeyError: if no destination tree exists
         """
+        warnings.warn(
+            "The `dests` property is deprecated and will be removed in PLAYA 1.0.",
+            DeprecationWarning,
+        )
         try:
             # PDF-1.2 or later
             dests = (

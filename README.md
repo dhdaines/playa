@@ -113,28 +113,35 @@ npages = len(pdf.pages)
 page_numbers = [page.label for page in pdf.pages]
 ```
 
-What's in the table of contents?  (NOTE: this API is deprecated and
-will change soon as it is not Lazy nor does it properly represent the
-hierarchy of the document outline)
+You can also subscript `pdf.pages` in various other ways, using a
+slice or an iterable of `int`, which will give you a page list object
+that behaves similarly to `pdf.pages`.  Pages and page lists can refer
+back to their document (using weak reference magic to avoid memory
+leaks) with the `doc` property.
+
+## Some (by no means all) helpful metadata
+
+A PDF often contains a "document outline" which is a sequence of trees
+representing the coarse-grained logical structure of the document.
 
 ```python
-for entry in pdf.outlines:
-    level, title, dest, action, struct_element = entry
-    # or
-    entry.level, entry.title, entry.dest, entry.action, entry.se
-    ...
+for entry in pdf.outline:
+    entry.title, entry.destination, entry.action, entry.element
+    for child in entry:
+        child.title, child.destination, child.action, child.element
+        ...
 ```
 
 If you are lucky it has a "logical structure tree".  The elements here
-might even be referenced from the table of contents!  (or, they might
-not... with PDF you never know).  (NOTE: this API is deprecated and
-will change soon as it is not Lazy at all)
+might even be referenced from the `outline` above!  (or, they might
+not... with PDF you never know).
 
 ```python
-structure = pdf.structtree
-for element in structure:
+for element in pdf.structure:
    for child in element:
        ...
+sections = structure.find_all("Sect")
+first_p = structure.find("P")
 ```
 
 Now perhaps we want to look at a specific page.  Okay!  You can also
@@ -147,12 +154,30 @@ page = pdf.pages["42"]     # or "logical" page number (also a string)
 print(f"Page {page.label} is {page.width} x {page.height}")
 ```
 
-You can also subscript `pdf.pages` in various other ways, using a
-slice or an iterable of `int`, which will give you a page list object
-that behaves similarly to `pdf.pages`.
+Since PDF is at heard a page-oriented, presentation format, many types
+of metadata are mostly accessible via the page objects.  First, pages
+also have their own specific view of the logical structure tree:
 
-Pages and page lists can refer back to their document (using weak
-reference magic to avoid memory leaks) with the `doc` property.
+```python
+for element in page.structure:
+    for child in element:
+        ...
+```
+
+But if you are looking for annotations (internal or external links),
+you will also find them on the pages.  There are umpteen zillion kinds
+of annotations (PDF 1.7 sect 12.5.6) but they all have at least these
+attributes in common:
+
+```python
+for annot in page.annotations:
+    annot.subtype, annot.rect, annot.props
+```
+
+The set of possible entries in annotation dictionaries (PDF 1.7 sect
+12.5.2) is vast and confusing and inconsistently implemented, but you
+can always access them by their names (as defined in the PDF standard)
+via `annot.props`.
 
 ## Accessing content
 
@@ -207,7 +232,8 @@ page_sizes = pdf.pages.map(get_page_size)
 ```
 
 You could also just do this for certain pages by subscripting
-`pdf.pages`:
+`pdf.pages` (this can be a slice, an iterable of `int`, or a
+generator expression over `int` and/or `str`):
 
 ```python
 some_page_sizes = pdf.pages[2:5].map(get_page_size)

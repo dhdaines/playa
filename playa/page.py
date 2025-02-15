@@ -5,6 +5,7 @@ Classes for looking at pages and their contents.
 import itertools
 import logging
 import re
+import warnings
 from copy import copy
 from dataclasses import dataclass
 from typing import (
@@ -130,6 +131,7 @@ class Page:
         self.label = label
         self.page_idx = page_idx
         self.space = space
+        self.pageref = _ref_page(self)
         self.lastmod = resolve1(self.attrs.get("LastModified"))
         try:
             self.resources: Dict[str, PDFObject] = dict_value(
@@ -173,9 +175,7 @@ class Page:
             self.ctm = (1.0, 0.0, 0.0, 1.0, -x0, -y0)
         # "default" device space: no transformation or rotation
         else:
-            if self.space == "user":
-                log.warning('"user" device space is deprecated, use "default" instead')
-            elif self.space != "default":
+            if self.space != "default":
                 log.warning("Unknown device space: %r", self.space)
             self.ctm = MATRIX_IDENTITY
             width = height = 0
@@ -195,8 +195,6 @@ class Page:
         elif self.rotate != 0:
             log.warning("Invalid /Rotate: %r", self.rotate)
 
-        self.annots = self.attrs.get("Annots")
-        self.beads = self.attrs.get("B")
         contents = resolve1(self.attrs.get("Contents"))
         if contents is None:
             self._contents = []
@@ -205,6 +203,53 @@ class Page:
                 self._contents = contents
             else:
                 self._contents = [contents]
+
+    @property
+    def annotations(self) -> Iterator["Annotation"]:
+        """Lazily iterate over page annotations."""
+        alist = resolve1(self.attrs.get("Annots"))
+        if alist is None:
+            return
+        for annot in alist:
+            annot = resolve1(annot)
+            if not isinstance(annot, dict):
+                log.warning("Invalid object in Annots: %r", annot)
+                continue
+            subtype = annot.get("Subtype")
+            if subtype is None or not isinstance(subtype, PSLiteral):
+                log.warning("Invalid Subtype in annotation: %r", annot)
+                continue
+            try:
+                rect = parse_rect(annot.get("Rect"))
+            except (TypeError, ValueError):
+                log.warning("Invalid Rect in annotation: %r", annot)
+                continue
+            contents = resolve1(annot.get("Contents"))
+            yield Annotation(
+                _pageref=self.pageref,
+                subtype=literal_name(subtype),
+                rect=rect,
+                contents=contents,
+                props=annot,
+            )
+
+    @property
+    def annots(self) -> Union[List[Dict], None]:
+        warnings.warn(
+            "The `annots` property is deprecated and will be removed in PLAYA 1.0.  "
+            "Use `page.attrs['Annots']` instead.",
+            DeprecationWarning,
+        )
+        return self.attrs.get("Annots")
+
+    @property
+    def beads(self) -> Union[List[Dict], None]:
+        warnings.warn(
+            "The `beads` property is deprecated and will be removed in PLAYA 1.0.  "
+            "Use `page.attrs['B']` instead.",
+            DeprecationWarning,
+        )
+        return self.attrs.get("B")
 
     @property
     def doc(self) -> "Document":
@@ -282,12 +327,40 @@ class Page:
 
     @property
     def structtree(self) -> StructTree:
-        """Return the PDF structure tree."""
+        """Return the subset of the structure tree for a page."""
+        warnings.warn(
+            "The `structtree` property is deprecated and will be removed in PLAYA 1.0.",
+            DeprecationWarning,
+        )
         doc = _deref_document(self.docref)
         return StructTree(doc, (self,))
 
     def __repr__(self) -> str:
         return f"<Page: Resources={self.resources!r}, MediaBox={self.mediabox!r}>"
+
+
+@dataclass
+class Annotation:
+    """PDF annotation (PDF 1.7 section 12.5).
+
+    Attributes:
+      subtype: Type of annotation.
+      rect: Annotation rectangle (location on page).
+      contents: Text contents.
+      props: Annotation dictionary containing all other properties
+             (PDF 1.7 sec. 12.5.2).
+    """
+
+    _pageref: PageRef
+    subtype: str
+    rect: Rect
+    contents: Union[str, None]
+    props: Dict[str, PDFObject]
+
+    @property
+    def page(self) -> Page:
+        """Containing page for this annotation."""
+        return _deref_page(self._pageref)
 
 
 @dataclass
@@ -442,9 +515,12 @@ class ContentParser(ObjectParser):
                 self.newstream(stream.buffer)
 
 
+BBOX_NONE = (-1, -1, -1, -1)
+
+
 class MarkedContent(NamedTuple):
     """
-    Marked content point or section in a PDF page.
+    Marked content information for a point or section in a PDF page.
 
     Attributes:
       mcid: Marked content section ID, or `None` for a marked content point.
@@ -525,9 +601,6 @@ class ContentObject:
     def page(self) -> Page:
         """The page containing this content object."""
         return _deref_page(self._pageref)
-
-
-BBOX_NONE = (-1, -1, -1, -1)
 
 
 @dataclass
@@ -1082,7 +1155,7 @@ class LazyInterpreter:
 
     def create(self, object_class, **kwargs) -> ContentObject:
         return object_class(
-            _pageref=_ref_page(self.page),
+            _pageref=self.page.pageref,
             ctm=self.ctm,
             mcstack=self.mcstack,
             gstate=self.graphicstate,
@@ -1247,7 +1320,7 @@ class LazyInterpreter:
             xobjres = xobj.get("Resources")
             resources = None if xobjres is None else dict_value(xobjres)
             xobjobj = XObjectObject(
-                _pageref=_ref_page(self.page),
+                _pageref=self.page.pageref,
                 ctm=mult_matrix(matrix, self.ctm),
                 mcstack=self.mcstack,
                 gstate=self.graphicstate,
@@ -1291,7 +1364,7 @@ class LazyInterpreter:
             props = self.get_property(props)
         rprops = {} if props is None else dict_value(props)
         yield TagObject(
-            _pageref=_ref_page(self.page),
+            _pageref=self.page.pageref,
             ctm=self.ctm,
             mcstack=self.mcstack,
             gstate=self.graphicstate,
