@@ -1,22 +1,16 @@
-## PLAYA 0.3: 2025-02-07
+## PLAYA 0.3.0: unreleased
 
 - Remove deprecated `LayoutDict` API and simplify code
-- Accept empty name objects
-- Correct type annotations
-- Extract text objects with `-x` instead of just texts
-- Extract text objects and streams in parallel in CLI
-- Support arbitrary iterables in `PageList.__getitem__`
+- Deprecate `annots` API and add friendly `annotations`
+- Elevate `resolve1` and `resolve_all` to top-level exports
 
 ### TODO
 
 - Deprecate `outlines` API and add tree-structured `outline`
 - Deprecate `dests` API and add friendly `destinations`
 - Create friendly API for actions
-- Deprecate `annots` API and add friendly `annotations`
-- Create friendly `annotations` API
 - Expose `XRef` API for users to look around in
 - Make `structtree` lazy (nothing happens until you iterate or call `find`)
-- Elevate `resolve1` and `resolve_all` to top-level exports
 - Format all `ContentObject` as JSON
 - Extract text from tagged PDFs following the standard
 
@@ -24,6 +18,10 @@
 
 - Accept empty name objects
 - Correct type annotations for PageList
+- Extract text objects with `-x` instead of just texts
+- Extract text objects and streams in parallel in CLI
+- Support arbitrary iterables in `PageList.__getitem__`
+- Correct type annotations
 
 ## PLAYA 0.2.8: 2025-01-22
 - Accept `None` for `max_workers`

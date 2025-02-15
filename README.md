@@ -232,7 +232,8 @@ page_sizes = pdf.pages.map(get_page_size)
 ```
 
 You could also just do this for certain pages by subscripting
-`pdf.pages` (this can be a slice or an iterable of `int` and/or `str`):
+`pdf.pages` (this can be a slice, an iterable of `int`, or a
+generator expression over `int` and/or `str`):
 
 ```python
 some_page_sizes = pdf.pages[2:5].map(get_page_size)
