@@ -84,6 +84,7 @@ bench = [
 
 [tool.hatch.envs.docs]
 dependencies = [
+    "mike",
     "mkdocs-material",
     "mkdocstrings[python]",
     "mkdocs-include-markdown-plugin"
