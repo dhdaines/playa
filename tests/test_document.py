@@ -3,7 +3,6 @@ Test the classes in pdfdocument.py
 """
 
 from io import BytesIO
-from pathlib import Path
 
 import pytest
 

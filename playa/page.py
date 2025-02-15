@@ -131,6 +131,7 @@ class Page:
         self.label = label
         self.page_idx = page_idx
         self.space = space
+        self.pageref = _ref_page(self)
         self.lastmod = resolve1(self.attrs.get("LastModified"))
         try:
             self.resources: Dict[str, PDFObject] = dict_value(
@@ -225,7 +226,7 @@ class Page:
                 continue
             contents = resolve1(annot.get("Contents"))
             yield Annotation(
-                _pageref=_ref_page(self),
+                _pageref=self.pageref,
                 subtype=literal_name(subtype),
                 rect=rect,
                 contents=contents,
@@ -514,9 +515,12 @@ class ContentParser(ObjectParser):
                 self.newstream(stream.buffer)
 
 
+BBOX_NONE = (-1, -1, -1, -1)
+
+
 class MarkedContent(NamedTuple):
     """
-    Marked content point or section in a PDF page.
+    Marked content information for a point or section in a PDF page.
 
     Attributes:
       mcid: Marked content section ID, or `None` for a marked content point.
@@ -597,9 +601,6 @@ class ContentObject:
     def page(self) -> Page:
         """The page containing this content object."""
         return _deref_page(self._pageref)
-
-
-BBOX_NONE = (-1, -1, -1, -1)
 
 
 @dataclass
@@ -1154,7 +1155,7 @@ class LazyInterpreter:
 
     def create(self, object_class, **kwargs) -> ContentObject:
         return object_class(
-            _pageref=_ref_page(self.page),
+            _pageref=self.page.pageref,
             ctm=self.ctm,
             mcstack=self.mcstack,
             gstate=self.graphicstate,
@@ -1319,7 +1320,7 @@ class LazyInterpreter:
             xobjres = xobj.get("Resources")
             resources = None if xobjres is None else dict_value(xobjres)
             xobjobj = XObjectObject(
-                _pageref=_ref_page(self.page),
+                _pageref=self.page.pageref,
                 ctm=mult_matrix(matrix, self.ctm),
                 mcstack=self.mcstack,
                 gstate=self.graphicstate,
@@ -1363,7 +1364,7 @@ class LazyInterpreter:
             props = self.get_property(props)
         rprops = {} if props is None else dict_value(props)
         yield TagObject(
-            _pageref=_ref_page(self.page),
+            _pageref=self.page.pageref,
             ctm=self.ctm,
             mcstack=self.mcstack,
             gstate=self.graphicstate,
