@@ -1,4 +1,4 @@
-"""PLAYA's CLI, which can get stuff out of a PDF (one PDF) for you.
+"""PLAYA's CLI, which can get stuff out of PDFs for you.
 
 This used to extract arbitrary properties of arbitrary graphical objects
 as a CSV, but for that you want PAVÉS now.
@@ -80,9 +80,10 @@ LOG = logging.getLogger(__name__)
 
 def make_argparse() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="PLAYA's CLI, which can get stuff out of a PDF for you."
+        description="PLAYA's CLI, which can get stuff out of PDFs for you."
     )
-    parser.add_argument("pdf", type=Path)
+    parser.add_argument("pdfs", type=Path, nargs="*")
+    parser.add_argument("--version", action="store_true", help="Display version")
     parser.add_argument(
         "-t",
         "--stream",
@@ -403,21 +404,27 @@ def extract_text(doc: Document, args: argparse.Namespace) -> None:
 def main() -> None:
     parser = make_argparse()
     args = parser.parse_args()
+    if args.version:
+        print(playa.__version__)
+        return
+    elif not args.pdfs:
+        parser.error("At least one PDF is required")
     logging.basicConfig(level=logging.DEBUG if args.debug else logging.WARNING)
     try:
-        with playa.open(args.pdf, space="default", max_workers=args.max_workers) as doc:
-            if args.stream is not None:  # it can't be zero either though
-                extract_stream(doc, args)
-            elif args.content_streams:
-                extract_page_contents(doc, args)
-            elif args.catalog:
-                extract_catalog(doc, args)
-            elif args.text_objects:
-                extract_text_objects(doc, args)
-            elif args.text:
-                extract_text(doc, args)
-            else:
-                extract_metadata(doc, args)
+        for path in args.pdfs:
+            with playa.open(path, space="default", max_workers=args.max_workers) as doc:
+                if args.stream is not None:  # it can't be zero either though
+                    extract_stream(doc, args)
+                elif args.content_streams:
+                    extract_page_contents(doc, args)
+                elif args.catalog:
+                    extract_catalog(doc, args)
+                elif args.text_objects:
+                    extract_text_objects(doc, args)
+                elif args.text:
+                    extract_text(doc, args)
+                else:
+                    extract_metadata(doc, args)
     except RuntimeError as e:
         parser.error(f"Something went wrong:\n{e}")
 
