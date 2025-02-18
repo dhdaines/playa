@@ -75,7 +75,7 @@ import logging
 import textwrap
 from collections import deque
 from pathlib import Path
-from typing import Any, Deque, Dict, Iterable, Iterator, List, Tuple, Union
+from typing import Any, Deque, Dict, Iterable, Iterator, List, TextIO, Tuple, Union
 
 import playa
 from playa import Document, Page
@@ -237,7 +237,7 @@ def extract_metadata(doc: Document, args: argparse.Namespace) -> None:
             }
         )
     stuff["objects"] = objects
-    json.dump(stuff, args.outfile, indent=2, ensure_ascii=False)
+    json.dump(stuff, args.outfile, indent=2, ensure_ascii=False, default=repr)
 
 
 def decode_page_spec(doc: Document, spec: str) -> Iterator[int]:
@@ -437,52 +437,71 @@ def get_mcid_text(pageref: PageRef) -> Dict[int, List[str]]:
 
 @functools.singledispatch
 def _extract_child(
-    kid: Union[Element, StructContentObject, ContentItem]
-) -> Union[dict, str, None]:
-    return None
+    kid: Union[Element, StructContentObject, ContentItem], indent: int, outfh: TextIO
+) -> bool:
+    return False
 
 
 @_extract_child.register(StructContentObject)
-def _extract_content_object(kid: StructContentObject) -> dict:
-    return kid.props
+def _extract_content_object(
+    kid: StructContentObject, indent: int, outfh: TextIO
+) -> bool:
+    ws = " " * indent
+    text = json.dumps(kid.props, default=repr)
+    print(f"{ws}{text}", end="", file=outfh)
+    return True
 
 
 @_extract_child.register(ContentItem)
-def _extract_content_item(kid: ContentItem) -> Union[str, None]:
+def _extract_content_item(kid: ContentItem, indent: int, outfh: TextIO) -> bool:
     strs = get_mcid_text(kid.page.pageref).get(kid.mcid)
     if strs is None:
-        return None
-    return "".join(strs)
+        return False
+    ws = " " * indent
+    text = json.dumps("".join(strs), ensure_ascii=False)
+    print(f"{ws}{text}", end="", file=outfh)
+    return True
 
 
 @_extract_child.register(Element)
-def _extract_element(el: Element) -> dict:
+def _extract_element(el: Element, indent: int, outfh: TextIO) -> bool:
     """Extract a single structure element."""
-    assert "S" in el.props, f"WTF: {el!r}"
-    structure = {
-        "structure_type": el.props["S"].name,
-    }
+    ws = " " * indent
+    ss = "  "
+    s = []
+
+    def format_attr(k, v) -> str:
+        k = json.dumps(k, ensure_ascii=False)
+        v = json.dumps(v, ensure_ascii=False)
+        s.append(f"{ws}{ss}{k}: {v}")
+
+    format_attr("structure_type", el.props["S"].name)
     page = el.page
     if page is not None:
-        structure["page_idx"] = page.page_idx
+        format_attr("page_idx", page.page_idx)
     if "T" in el.props:
-        structure["title"] = resolve1(el.props["T"])
+        format_attr("title", decode_text(resolve1(el.props["T"])))
     if "Lang" in el.props:
-        structure["language"] = resolve1(el.props["Lang"])
+        format_attr("language", decode_text(resolve1(el.props["Lang"])))
     if "Alt" in el.props:
-        structure["alternate_description"] = decode_text(resolve1(el.props["Alt"]))
+        format_attr("alternate_description", decode_text(resolve1(el.props["Alt"])))
     if "E" in el.props:
-        structure["abbreviation_expansion"] = resolve1(el.props["E"])
+        format_attr("abbreviation_expansion", decode_text(resolve1(el.props["E"])))
     if "ActualText" in el.props:
-        structure["actual_text"] = decode_text(resolve1(el.props["ActualText"]))
-    children = []
-    for kid in el:
-        kidrep = _extract_child(kid)
-        if kidrep is not None:
-            children.append(kidrep)
+        format_attr("actual_text", decode_text(resolve1(el.props["ActualText"])))
+    print(f"{ws}{{", file=outfh)
+    print(",\n".join(s), end="", file=outfh)
+    children = list(el)
     if children:
-        structure["children"] = children
-    return structure
+        print(f',\n{ws}{ss}"children": [', file=outfh)
+        comma = False
+        for kid in children:
+            if comma:
+                print(",", file=outfh)
+            comma = _extract_child(kid, indent + 4, outfh)
+        print(f"\n{ws}{ss}]", end="", file=outfh)
+    print(f"\n{ws}}}", end="", file=outfh)
+    return True
 
 
 def extract_structure(doc: Document, args: argparse.Namespace) -> None:
@@ -492,26 +511,11 @@ def extract_structure(doc: Document, args: argparse.Namespace) -> None:
         print("[]", file=args.outfile)
         return
     print("[", file=args.outfile, end="")
-    last = None
+    comma = False
     for el in doc.structure:
-        if last is not None:
-            json.dump(
-                _extract_child(last),
-                args.outfile,
-                indent=2,
-                default=repr,
-                ensure_ascii=False,
-            )
+        if comma:
             print(",", file=args.outfile)
-        last = el
-    if last is not None:
-        json.dump(
-            _extract_child(last),
-            args.outfile,
-            indent=2,
-            default=repr,
-            ensure_ascii=False,
-        )
+        comma = _extract_child(el, 2, args.outfile)
     print("]", file=args.outfile)
 
 
