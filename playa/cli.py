@@ -493,15 +493,13 @@ def _extract_element(el: Element, indent: int, outfh: TextIO) -> bool:
         format_attr("actual_text", decode_text(resolve1(el.props["ActualText"])))
     print(f"{ws}{{", file=outfh)
     print(",\n".join(s), end="", file=outfh)
-    children = list(el)
-    if children:
-        print(f',\n{ws}{ss}"children": [', file=outfh)
-        comma = False
-        for kid in children:
-            if comma:
-                print(",", file=outfh)
-            comma = _extract_child(kid, indent + 4, outfh)
-        print(f"\n{ws}{ss}]", end="", file=outfh)
+    print(f',\n{ws}{ss}"children": [', file=outfh)
+    comma = False
+    for kid in el:
+        if comma:
+            print(",", file=outfh)
+        comma = _extract_child(kid, indent + 4, outfh)
+    print(f"\n{ws}{ss}]", end="", file=outfh)
     print(f"\n{ws}}}", end="", file=outfh)
     return True
 
