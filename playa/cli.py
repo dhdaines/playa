@@ -45,10 +45,16 @@ You can look at the content streams for one or more or all pages:
     playa --pages 1 --content-streams foo.pdf
     playa --pages 3,4,9 --content-streams foo.pdf
 
-You can... sort of... use this to extract text (don't @ me).  On the
-one hand you can get a torrent of JSON for one or more or all pages,
-with each fragment of text and all of its properties (position, font,
-color, etc):
+And you can get the logical structure tree, including the text of
+content items (for properly tagged PDFs this is more useful than just
+getting the raw text):
+
+    playa --structure foo.pdf
+
+You can even... sort of... use this to extract text (don't @ me).  On
+the one hand you can get a torrent of JSON for one or more or all
+pages, with each fragment of text and all of its properties (position,
+font, color, etc):
 
     playa --text-objects foo.pdf
     playa --pages 4-6 --text-objects foo.pdf
