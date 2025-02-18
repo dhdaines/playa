@@ -45,6 +45,13 @@ Soon, this will get faster.  You will also be able to use
 [PAVÉS](https://github.com/dhdaines/paves) for this and other
 higher-level tasks, and it will be better, maybe.
 
+Also, for things other than extracting text, PLAYA is actually quite
+efficient.  For instance, it is very good at reading logical structure
+trees.  On the zoning bylaw above, extracting the entire tree with its
+text contents using `playa --structure` takes only 23.3 seconds,
+whereas doing this with `pdfinfo -struct-text` takes 110 seconds.  The
+output is also friendly JSON, not some text you have to parse `;-)`
+
 ## Installation
 
 Installing it should be really simple as long as you have Python 3.8
