@@ -3,8 +3,9 @@ from typing import Union
 
 import pytest
 import playa
+from playa.exceptions import PDFEncryptionError
 from playa.structure import Element, Tree
-from .data import ALLPDFS, TESTDIR, XFAILS
+from .data import ALLPDFS, TESTDIR, XFAILS, PASSWORDS
 
 
 def walk_structure(el: Union[Tree, Element], indent=0):
@@ -19,19 +20,16 @@ def test_structure(path) -> None:
     """Verify that we can read structure trees when they exist."""
     if path.name in XFAILS:
         pytest.xfail("Intentionally corrupt file: %s" % path.name)
-    with playa.open(path) as doc:
-        st = doc.structure
-        if st is not None:
-            assert st.doc is doc
-            assert st.page is None
-            walk_structure(st)
-        for page in doc.pages:
-            st = page.structure
-            if st is None:
-                continue
-            assert st.doc is doc
-            assert st.page is page
-            walk_structure(st)
+    passwords = PASSWORDS.get(path.name, [""])
+    for password in passwords:
+        try:
+            with playa.open(path, password=password) as doc:
+                st = doc.structure
+                if st is not None:
+                    assert st.doc is doc
+                    walk_structure(st)
+        except PDFEncryptionError:
+            pytest.skip("cryptography package not installed")
 
 
 if __name__ == "__main__":

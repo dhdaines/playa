@@ -337,17 +337,6 @@ class Page:
         doc = _deref_document(self.docref)
         return StructTree(doc, (self,))
 
-    @property
-    def structure(self) -> Union[Tree, None]:
-        """Logical structure of this page, if any.
-
-        In the case where no logical structure tree exists, this will
-        be `None`.  Otherwise you may iterate over it, search it, etc.
-        """
-        if "StructTreeRoot" not in self.doc.catalog:
-            return None
-        return Tree(self.doc, self)
-
     def __repr__(self) -> str:
         return f"<Page: Resources={self.resources!r}, MediaBox={self.mediabox!r}>"
 

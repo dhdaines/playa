@@ -5,17 +5,16 @@ Lazy interface to PDF logical structure.
 import functools
 import logging
 from dataclasses import dataclass
-from typing import Dict, Iterator, Union, TYPE_CHECKING
+from typing import TYPE_CHECKING, Dict, Iterator, Union
 
 from playa.parser import PDFObject
-from playa.pdftypes import resolve1, ObjRef, ContentStream, stream_value
+from playa.pdftypes import ContentStream, ObjRef, resolve1, stream_value
 from playa.worker import (
     DocumentRef,
     PageRef,
-    _ref_document,
     _deref_document,
-    _ref_page,
     _deref_page,
+    _ref_document,
 )
 
 LOG = logging.getLogger(__name__)
@@ -94,7 +93,10 @@ class Element:
         if pg is None:
             return None
         elif isinstance(pg, ObjRef):
-            return self.doc.pages.by_id(pg.objid)
+            try:
+                return self.doc.pages.by_id(pg.objid)
+            except KeyError:
+                LOG.warning("'Pg' entry not found in document: %r", self.props)
         else:
             LOG.warning(
                 "'Pg' entry is not an indirect object reference: %r", self.props
@@ -230,36 +232,17 @@ def _iter_structure(doc: "Document") -> Iterator[Element]:
         yield Element.from_dict(doc, k)
 
 
-def _iter_page_structure(doc: "Document", page: "Page") -> Iterator[Element]:
-    yield from ()
-
-
 class Tree:
     _docref: DocumentRef
-    _pageref: Union[PageRef, None]
 
-    def __init__(self, doc: "Document", page: Union["Page", None] = None) -> None:
+    def __init__(self, doc: "Document") -> None:
         self._docref = _ref_document(doc)
-        self._pageref = None if page is None else _ref_page(page)
 
     def __iter__(self) -> Iterator[Element]:
         doc = _deref_document(self._docref)
-        # If we have a page, then work back from the parent tree to
-        # find out what we cover (unless it is missing...)
-        if self._pageref is not None:
-            page = _deref_page(self._pageref)
-            return _iter_page_structure(doc, page)
-        else:
-            return _iter_structure(doc)
+        return _iter_structure(doc)
 
     @property
     def doc(self) -> "Document":
         """Document with which this structure tree is associated."""
         return _deref_document(self._docref)
-
-    @property
-    def page(self) -> Union["Page", None]:
-        """Specific page for this structure tree, if any."""
-        if self._pageref is None:
-            return None
-        return _deref_page(self._pageref)
