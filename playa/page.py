@@ -65,7 +65,6 @@ from playa.utils import (
     normalize_rect,
 )
 from playa.structtree import StructTree
-from playa.structure import Tree
 from playa.worker import _deref_document, _ref_document, _ref_page, _deref_page, PageRef
 
 if TYPE_CHECKING:
