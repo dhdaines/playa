@@ -48,9 +48,9 @@ higher-level tasks, and it will be better, maybe.
 Also, for things other than extracting text, PLAYA is actually quite
 efficient.  For instance, it is very good at reading logical structure
 trees.  On the zoning bylaw above, extracting the entire tree with its
-text contents using `playa --structure` takes only 23.3 seconds,
-whereas doing this with `pdfinfo -struct-text` takes 110 seconds.  The
-output is also friendly JSON, not some text you have to parse `;-)`
+text contents as JSON using `playa --structure` takes only 23 seconds,
+whereas `pdfplumber --structure-text` takes 69 seconds and `pdfinfo
+-struct-text` (which doesn't output JSON) takes 110 seconds.
 
 ## Installation
 
