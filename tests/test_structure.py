@@ -8,6 +8,18 @@ from playa.structure import Element, Tree
 from .data import ALLPDFS, TESTDIR, XFAILS, PASSWORDS
 
 
+def test_specific_structure():
+    with playa.open(TESTDIR / "pdf_structure.pdf") as pdf:
+        tables = list(pdf.structure.find_all("Table"))
+        assert len(tables) == 1
+        lis = list(pdf.structure.find_all("LI"))
+        assert len(lis) == 4
+        table = pdf.structure.find("Table")
+        assert table
+        trs = list(table.find_all("TR"))
+        assert len(trs) == 3
+
+
 def walk_structure(el: Union[Tree, Element], indent=0):
     for k in el:
         print(" " * indent, asdict(k))
@@ -33,4 +45,4 @@ def test_structure(path) -> None:
 
 
 if __name__ == "__main__":
-    test_structure(TESTDIR / "pdf_structure.pdf")
+    test_specific_structure()

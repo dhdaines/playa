@@ -4,11 +4,20 @@ Lazy interface to PDF logical structure.
 
 import functools
 import logging
+import re
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Dict, Iterator, Union
+from typing import (
+    TYPE_CHECKING,
+    Callable,
+    Dict,
+    Iterable,
+    Iterator,
+    Union,
+    Pattern,
+)
 
 from playa.parser import PDFObject, LIT
-from playa.pdftypes import ContentStream, ObjRef, resolve1, stream_value
+from playa.pdftypes import ContentStream, ObjRef, resolve1, stream_value, literal_name
 from playa.worker import (
     DocumentRef,
     PageRef,
@@ -20,6 +29,8 @@ from playa.worker import (
 LOG = logging.getLogger(__name__)
 LITERAL_MCR = LIT("MCR")
 LITERAL_OBJR = LIT("OBJR")
+MatchFunc = Callable[["Element"], bool]
+
 if TYPE_CHECKING:
     from playa.document import Document
     from playa.page import Page
@@ -67,8 +78,70 @@ class ContentObject:
         return _deref_page(self._pageref)
 
 
+def _find_all(
+    elements: Iterable["Element"],
+    matcher: Union[str, Pattern[str], MatchFunc],
+) -> Iterator["Element"]:
+    """
+    Common code for `find_all()` in trees and elements.
+    """
+
+    def match_tag(x: "Element") -> bool:
+        """Match an element name."""
+        return x.type == matcher
+
+    def match_regex(x: "Element") -> bool:
+        """Match an element name by regular expression."""
+        return matcher.match(x.type)  # type: ignore
+
+    if isinstance(matcher, str):
+        match_func = match_tag
+    elif isinstance(matcher, re.Pattern):
+        match_func = match_regex
+    else:
+        match_func = matcher  # type: ignore
+    d = list(elements)[::-1]
+    while d:
+        el = d.pop()
+        if match_func(el):
+            yield el
+        for child in reversed(list(el)):
+            if isinstance(child, Element):
+                d.append(child)
+
+
+class Findable:
+    """find() and find_all() methods that can be inherited to avoid
+    repeating oneself"""
+
+    def find_all(
+        self, matcher: Union[str, Pattern[str], MatchFunc]
+    ) -> Iterator["Element"]:
+        """Iterate depth-first over matching elements in subtree.
+
+        The `matcher` argument is either an element name, a regular
+        expression, or a function taking a `Element` and
+        returning `True` if the element matches.
+        """
+        return _find_all(self, matcher)
+
+    def find(
+        self, matcher: Union[str, Pattern[str], MatchFunc]
+    ) -> Union["Element", None]:
+        """Find the first matching element in subtree.
+
+        The `matcher` argument is either an element name, a regular
+        expression, or a function taking a `Element` and
+        returning `True` if the element matches.
+        """
+        try:
+            return next(_find_all(self, matcher))
+        except StopIteration:
+            return None
+
+
 @dataclass
-class Element:
+class Element(Findable):
     """Logical structure element.
 
     Attributes:
@@ -82,6 +155,10 @@ class Element:
     def from_dict(cls, doc: "Document", obj: Dict[str, PDFObject]) -> "Element":
         """Construct from PDF structure element dictionary."""
         return cls(_docref=_ref_document(doc), props=obj)
+
+    @property
+    def type(self) -> str:
+        return literal_name(self.props["S"])
 
     @property
     def doc(self) -> "Document":
@@ -243,7 +320,7 @@ def _iter_structure(doc: "Document") -> Iterator[Element]:
         yield Element.from_dict(doc, k)
 
 
-class Tree:
+class Tree(Findable):
     _docref: DocumentRef
 
     def __init__(self, doc: "Document") -> None:

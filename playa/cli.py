@@ -80,7 +80,7 @@ from typing import Any, Deque, Dict, Iterable, Iterator, List, TextIO, Tuple, Un
 import playa
 from playa import Document, Page
 from playa.page import MarkedContent, TextObject
-from playa.pdftypes import ContentStream, ObjRef, resolve1, literal_name
+from playa.pdftypes import ContentStream, ObjRef, resolve1
 from playa.structure import Element, ContentObject as StructContentObject, ContentItem
 from playa.utils import decode_text
 from playa.worker import _deref_page, PageRef
@@ -477,7 +477,7 @@ def _extract_element(el: Element, indent: int, outfh: TextIO) -> bool:
         v = json.dumps(v, ensure_ascii=False)
         s.append(f"{ws}{ss}{k}: {v}")
 
-    format_attr("type", literal_name(el.props["S"]))
+    format_attr("type", el.type)
     page = el.page
     if page is not None:
         format_attr("page_idx", page.page_idx)
