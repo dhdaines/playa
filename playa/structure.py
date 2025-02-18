@@ -12,6 +12,7 @@ from typing import (
     Dict,
     Iterable,
     Iterator,
+    List,
     Union,
     Pattern,
 )
@@ -79,7 +80,7 @@ class ContentObject:
 
 
 def _find_all(
-    elements: Iterable["Element"],
+    elements: List["Element"],
     matcher: Union[str, Pattern[str], MatchFunc],
 ) -> Iterator["Element"]:
     """
@@ -100,17 +101,17 @@ def _find_all(
         match_func = match_regex
     else:
         match_func = matcher  # type: ignore
-    d = list(elements)[::-1]
-    while d:
-        el = d.pop()
+    elements.reverse()
+    while elements:
+        el = elements.pop()
         if match_func(el):
             yield el
         for child in reversed(list(el)):
             if isinstance(child, Element):
-                d.append(child)
+                elements.append(child)
 
 
-class Findable:
+class Findable(Iterable):
     """find() and find_all() methods that can be inherited to avoid
     repeating oneself"""
 
@@ -123,7 +124,7 @@ class Findable:
         expression, or a function taking a `Element` and
         returning `True` if the element matches.
         """
-        return _find_all(self, matcher)
+        return _find_all(list(self), matcher)
 
     def find(
         self, matcher: Union[str, Pattern[str], MatchFunc]
@@ -135,7 +136,7 @@ class Findable:
         returning `True` if the element matches.
         """
         try:
-            return next(_find_all(self, matcher))
+            return next(_find_all(list(self), matcher))
         except StopIteration:
             return None
 
