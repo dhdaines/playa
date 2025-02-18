@@ -101,7 +101,7 @@ class Element:
             LOG.warning(
                 "'Pg' entry is not an indirect object reference: %r", self.props
             )
-            return None
+        return None
 
     def __iter__(self) -> Iterator[Union["Element", ContentItem, ContentObject]]:
         if "K" in self.props:
