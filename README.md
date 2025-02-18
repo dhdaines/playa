@@ -155,19 +155,13 @@ print(f"Page {page.label} is {page.width} x {page.height}")
 ```
 
 Since PDF is at heard a page-oriented, presentation format, many types
-of metadata are mostly accessible via the page objects.  First, pages
-also have their own specific view of the logical structure tree:
+of metadata are mostly accessible via the page objects.
 
-```python
-for element in page.structure:
-    for child in element:
-        ...
-```
-
-But if you are looking for annotations (internal or external links),
-you will also find them on the pages.  There are umpteen zillion kinds
-of annotations (PDF 1.7 sect 12.5.6) but they all have at least these
-attributes in common:
+For example, annotations (internal or external links) are only
+accessible via pages (FIXME: No reason we couldn't access them from
+the document too).  There are umpteen zillion kinds of annotations
+(PDF 1.7 sect 12.5.6) but they all have at least these attributes in
+common:
 
 ```python
 for annot in page.annotations:

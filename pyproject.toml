@@ -90,7 +90,7 @@ dependencies = [
     "mkdocs-include-markdown-plugin"
 ]
 [tool.hatch.envs.docs.scripts]
-serve = "mike serve"
+serve = "mkdocs serve"
 publish = "mike deploy --push --update-aliases $(playa --version) latest"
 
 [tool.hatch.envs.types]

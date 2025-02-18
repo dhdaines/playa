@@ -45,10 +45,16 @@ You can look at the content streams for one or more or all pages:
     playa --pages 1 --content-streams foo.pdf
     playa --pages 3,4,9 --content-streams foo.pdf
 
-You can... sort of... use this to extract text (don't @ me).  On the
-one hand you can get a torrent of JSON for one or more or all pages,
-with each fragment of text and all of its properties (position, font,
-color, etc):
+And you can get the logical structure tree, including the text of
+content items (for properly tagged PDFs this is more useful than just
+getting the raw text):
+
+    playa --structure foo.pdf
+
+You can even... sort of... use this to extract text (don't @ me).  On
+the one hand you can get a torrent of JSON for one or more or all
+pages, with each fragment of text and all of its properties (position,
+font, color, etc):
 
     playa --text-objects foo.pdf
     playa --pages 4-6 --text-objects foo.pdf
@@ -62,18 +68,22 @@ reading order, and so we can actually really extract the text from it
 """
 
 import argparse
+import functools
 import itertools
 import json
 import logging
 import textwrap
 from collections import deque
 from pathlib import Path
-from typing import Any, Deque, Iterable, Iterator, List, Tuple, Union
+from typing import Any, Deque, Dict, Iterable, Iterator, List, TextIO, Tuple, Union
 
 import playa
 from playa import Document, Page
 from playa.page import MarkedContent, TextObject
-from playa.pdftypes import ContentStream, ObjRef
+from playa.pdftypes import ContentStream, ObjRef, resolve1
+from playa.structure import Element, ContentObject as StructContentObject, ContentItem
+from playa.utils import decode_text
+from playa.worker import _deref_page, PageRef
 
 LOG = logging.getLogger(__name__)
 
@@ -118,6 +128,11 @@ def make_argparse() -> argparse.ArgumentParser:
     parser.add_argument(
         "--text",
         action="store_true",
+    )
+    parser.add_argument(
+        "--structure",
+        action="store_true",
+        help="Extract logical structure tree as JSON",
     )
     parser.add_argument(
         "-o",
@@ -222,7 +237,7 @@ def extract_metadata(doc: Document, args: argparse.Namespace) -> None:
             }
         )
     stuff["objects"] = objects
-    json.dump(stuff, args.outfile, indent=2, ensure_ascii=False)
+    json.dump(stuff, args.outfile, indent=2, ensure_ascii=False, default=repr)
 
 
 def decode_page_spec(doc: Document, spec: str) -> Iterator[int]:
@@ -275,11 +290,10 @@ def extract_text_objects(doc: Document, args: argparse.Namespace) -> None:
     pages = decode_page_spec(doc, args.pages)
     print("[", file=args.outfile)
     last = None
-    for a, b in itertools.pairwise(
-        itertools.chain.from_iterable(doc.pages[pages].map(get_text_json))
-    ):
-        print(a, ",", sep="", file=args.outfile)
-        last = b
+    for obj in itertools.chain.from_iterable(doc.pages[pages].map(get_text_json)):
+        if last is not None:
+            print(last, ",", sep="", file=args.outfile)
+        last = obj
     if last is not None:
         print(last, file=args.outfile)
     print("]", file=args.outfile)
@@ -401,6 +415,110 @@ def extract_text(doc: Document, args: argparse.Namespace) -> None:
         print(text, file=args.outfile)
 
 
+@functools.lru_cache(maxsize=16)
+def get_mcid_text(pageref: PageRef) -> Dict[int, List[str]]:
+    """Get text for all MCIDs on a page"""
+    page = _deref_page(pageref)
+    mctext: Dict[int, List[str]] = {}
+    for text in page.texts:
+        mcs = text.mcs
+        if mcs is None or mcs.mcid is None:
+            continue
+        if "ActualText" in mcs.props:
+            assert isinstance(mcs.props["ActualText"], bytes)
+            chars = mcs.props["ActualText"].decode("UTF-16")
+        else:
+            chars = text.chars
+        # Remove soft hyphens
+        chars = chars.replace("\xad", "")
+        mctext.setdefault(mcs.mcid, []).append(chars)
+    return mctext
+
+
+@functools.singledispatch
+def _extract_child(
+    kid: Union[Element, StructContentObject, ContentItem], indent: int, outfh: TextIO
+) -> bool:
+    return False
+
+
+@_extract_child.register(StructContentObject)
+def _extract_content_object(
+    kid: StructContentObject, indent: int, outfh: TextIO
+) -> bool:
+    ws = " " * indent
+    text = json.dumps(kid.props, default=repr)
+    print(f"{ws}{text}", end="", file=outfh)
+    return True
+
+
+@_extract_child.register(ContentItem)
+def _extract_content_item(kid: ContentItem, indent: int, outfh: TextIO) -> bool:
+    if kid.page is None:
+        return False
+    strs = get_mcid_text(kid.page.pageref).get(kid.mcid)
+    if strs is None:
+        return False
+    ws = " " * indent
+    text = json.dumps("".join(strs), ensure_ascii=False)
+    print(f"{ws}{text}", end="", file=outfh)
+    return True
+
+
+@_extract_child.register(Element)
+def _extract_element(el: Element, indent: int, outfh: TextIO) -> bool:
+    """Extract a single structure element."""
+    ws = " " * indent
+    ss = "  "
+    s = []
+
+    def format_attr(k: Any, v: Any) -> None:
+        k = json.dumps(k, ensure_ascii=False)
+        v = json.dumps(v, ensure_ascii=False)
+        s.append(f"{ws}{ss}{k}: {v}")
+
+    format_attr("type", el.type)
+    page = el.page
+    if page is not None:
+        format_attr("page_idx", page.page_idx)
+    if "T" in el.props:
+        format_attr("title", decode_text(resolve1(el.props["T"])))
+    if "Lang" in el.props:
+        format_attr("language", decode_text(resolve1(el.props["Lang"])))
+    if "Alt" in el.props:
+        format_attr("alternate_description", decode_text(resolve1(el.props["Alt"])))
+    if "E" in el.props:
+        format_attr("abbreviation_expansion", decode_text(resolve1(el.props["E"])))
+    if "ActualText" in el.props:
+        format_attr("actual_text", decode_text(resolve1(el.props["ActualText"])))
+    print(f"{ws}{{", file=outfh)
+    print(",\n".join(s), end="", file=outfh)
+    print(f',\n{ws}{ss}"children": [', file=outfh)
+    comma = False
+    for kid in el:
+        if comma:
+            print(",", file=outfh)
+        comma = _extract_child(kid, indent + 4, outfh)
+    print(f"\n{ws}{ss}]", end="", file=outfh)
+    print(f"\n{ws}}}", end="", file=outfh)
+    return True
+
+
+def extract_structure(doc: Document, args: argparse.Namespace) -> None:
+    """Extract logical structure as JSON, with (not at all fancy) text."""
+    if doc.structure is None:
+        LOG.info("Document has no logical structure")
+        print("[]", file=args.outfile)
+        return
+    print("[", file=args.outfile, end="")
+    comma = False
+    for el in doc.structure:
+        if comma:
+            print(",", file=args.outfile)
+        comma = _extract_child(el, 2, args.outfile)
+    print("]", file=args.outfile)
+
+
 def main() -> None:
     parser = make_argparse()
     args = parser.parse_args()
@@ -423,6 +541,8 @@ def main() -> None:
                     extract_text_objects(doc, args)
                 elif args.text:
                     extract_text(doc, args)
+                elif args.structure:
+                    extract_structure(doc, args)
                 else:
                     extract_metadata(doc, args)
     except RuntimeError as e:

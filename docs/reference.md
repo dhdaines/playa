@@ -1,25 +1,22 @@
 # Reference
 
 ::: playa
+    options:
+        members:
+        - open
 
 ::: playa.document
     options:
-        members:
-        - Document
-        - PageList
+        filters:
+        - '!Security'
+        - '!XRef'
 
 ::: playa.page
     options:
         filters:
         - '!Interpreter'
         - '!Parser'
-        inherited_members: true
 
-::: playa.structtree
-    options:
-        members:
-        - StructElement
-        - StructTree
-        inherited_members: true
+::: playa.structure
 
 ::: playa.worker

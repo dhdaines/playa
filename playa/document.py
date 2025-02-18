@@ -84,6 +84,7 @@ from playa.utils import (
     nunpack,
 )
 from playa.structtree import StructTree
+from playa.structure import Tree
 from playa.worker import (
     _set_document,
     _ref_document,
@@ -956,12 +957,29 @@ class Document:
 
     @property
     def structtree(self) -> StructTree:
-        """Return the PDF structure tree."""
+        """Return the PDF structure tree.
+
+        Danger: Deprecated
+            This interface is deprecated.  It will be removed or
+            modified in PLAYA 1.0.
+        """
         warnings.warn(
-            "The `structtree` property is deprecated and will be removed in PLAYA 1.0.",
+            "The `structtree` property is deprecated and will be removed in PLAYA 1.0."
+            "  Use `structure` instead. ",
             DeprecationWarning,
         )
         return StructTree(self)
+
+    @property
+    def structure(self) -> Union[Tree, None]:
+        """Logical structure of this document, if any.
+
+        In the case where no logical structure tree exists, this will
+        be `None`.  Otherwise you may iterate over it, search it, etc.
+        """
+        if "StructTreeRoot" not in self.catalog:
+            return None
+        return Tree(self)
 
     def _getobj_objstm(
         self, stream: ContentStream, index: int, objid: int
@@ -1387,6 +1405,7 @@ class PageList:
         except (KeyError, ValueError):
             page_labels = (str(idx) for idx in itertools.count(1))
         self._pages = []
+        self._objids = {}
         self._labels = {}
         try:
             page_objects = list(doc._get_page_objects())
@@ -1397,6 +1416,7 @@ class PageList:
         ):
             page = Page(doc, objid, properties, label, page_idx, doc.space)
             self._pages.append(page)
+            self._objids[objid] = page
             if label is not None:
                 if label in self._labels:
                     log.info("Duplicate page label %s at index %d", label, page_idx)
@@ -1438,6 +1458,17 @@ class PageList:
             return PageList(_deref_document(self.docref), self._pages[key])
         else:
             return PageList(_deref_document(self.docref), (self[k] for k in key))
+
+    def by_id(self, objid: int) -> Page:
+        """Get a page by its indirect object ID.
+
+        Args:
+            objid: Indirect object ID for the page object.
+
+        Returns:
+            the page in question.
+        """
+        return self._objids[objid]
 
     def map(self, func: Callable[[Page], Any]) -> Iterator:
         """Apply a function over each page, iterating over its results.

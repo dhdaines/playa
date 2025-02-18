@@ -235,6 +235,11 @@ class Page:
 
     @property
     def annots(self) -> Union[List[Dict], None]:
+        """
+        Danger: Deprecated
+            This interface is deprecated.  It will be removed or
+            modified in PLAYA 1.0.
+        """
         warnings.warn(
             "The `annots` property is deprecated and will be removed in PLAYA 1.0.  "
             "Use `page.attrs['Annots']` instead.",
@@ -244,6 +249,11 @@ class Page:
 
     @property
     def beads(self) -> Union[List[Dict], None]:
+        """
+        Danger: Deprecated
+            This interface is deprecated.  It will be removed or
+            modified in PLAYA 1.0.
+        """
         warnings.warn(
             "The `beads` property is deprecated and will be removed in PLAYA 1.0.  "
             "Use `page.attrs['B']` instead.",
@@ -327,9 +337,15 @@ class Page:
 
     @property
     def structtree(self) -> StructTree:
-        """Return the subset of the structure tree for a page."""
+        """Return the subset of the structure tree for a page.
+
+        Danger: Deprecated
+            This interface is deprecated.  It will be removed or
+            modified in PLAYA 1.0.
+        """
         warnings.warn(
-            "The `structtree` property is deprecated and will be removed in PLAYA 1.0.",
+            "The `structtree` property is deprecated and will be removed in PLAYA 1.0."
+            "  Use `structure` instead. ",
             DeprecationWarning,
         )
         doc = _deref_document(self.docref)
