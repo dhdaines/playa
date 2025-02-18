@@ -29,7 +29,7 @@ def test_structure(path) -> None:
                     assert st.doc is doc
                     walk_structure(st)
         except PDFEncryptionError:
-            pytest.skip("cryptography package not installed")
+            pytest.skip("password incorrect or cryptography package not installed")
 
 
 if __name__ == "__main__":

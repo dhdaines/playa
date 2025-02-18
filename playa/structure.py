@@ -7,7 +7,7 @@ import logging
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Dict, Iterator, Union
 
-from playa.parser import PDFObject
+from playa.parser import PDFObject, LIT
 from playa.pdftypes import ContentStream, ObjRef, resolve1, stream_value
 from playa.worker import (
     DocumentRef,
@@ -18,6 +18,8 @@ from playa.worker import (
 )
 
 LOG = logging.getLogger(__name__)
+LITERAL_MCR = LIT("MCR")
+LITERAL_OBJR = LIT("OBJR")
 if TYPE_CHECKING:
     from playa.document import Document
     from playa.page import Page
@@ -145,9 +147,9 @@ class Element:
         self, k: Dict[str, PDFObject]
     ) -> Iterator[Union[ContentItem, ContentObject, "Element"]]:
         ktype = k.get("Type")
-        if ktype == "MCR":
+        if ktype is LITERAL_MCR:
             yield from self._make_kids_mcr(k)
-        elif ktype == "OBJR":
+        elif ktype is LITERAL_OBJR:
             yield from self._make_kids_objr(k)
         else:
             yield Element(_docref=self._docref, props=k)
@@ -228,6 +230,15 @@ def _iter_structure(doc: "Document") -> Iterator[Element]:
         k = resolve1(k)
         if not isinstance(k, dict):
             LOG.warning("'K' entry in StructTreeRoot contains non-element %r", k)
+            continue
+        # Should not happen?!?!?!?
+        if k.get("Type") is LITERAL_OBJR:
+            LOG.warning("'K' entry in StructTreeRoot contains object reference %r", k)
+            continue
+        if k.get("Type") is LITERAL_MCR:
+            LOG.warning(
+                "'K' entry in StructTreeRoot contains marked content reference %r", k
+            )
             continue
         yield Element.from_dict(doc, k)
 
