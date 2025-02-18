@@ -959,7 +959,7 @@ class Document:
     def structtree(self) -> StructTree:
         """Return the PDF structure tree."""
         warnings.warn(
-            "The `structtree` property is deprecated and will be removed in PLAYA 1.0.",
+            "The `structtree` property is deprecated and will be removed in PLAYA 1.0."
             "  Use `structure` instead. ",
             DeprecationWarning,
         )

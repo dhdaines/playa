@@ -78,7 +78,7 @@ class Element:
     props: Dict[str, PDFObject]
 
     @classmethod
-    def from_dict(cls, doc: "Document", obj: PDFObject) -> "Element":
+    def from_dict(cls, doc: "Document", obj: Dict[str, PDFObject]) -> "Element":
         """Construct from PDF structure element dictionary."""
         return cls(_docref=_ref_document(doc), props=obj)
 
@@ -101,7 +101,7 @@ class Element:
             )
             return None
 
-    def __iter__(self) -> Iterator["Element"]:
+    def __iter__(self) -> Iterator[Union["Element", ContentItem, ContentObject]]:
         if "K" in self.props:
             kids = resolve1(self.props["K"])
             yield from self._make_kids(kids)
@@ -109,7 +109,7 @@ class Element:
     @functools.singledispatchmethod
     def _make_kids(
         self, k: PDFObject
-    ) -> Iterator[Union["Element", ContentItem, ContentObject, None]]:
+    ) -> Iterator[Union["Element", ContentItem, ContentObject]]:
         """
         Make a child for this element from its K array.
 
@@ -121,11 +121,12 @@ class Element:
         - an array of one or more of the above
         """
         LOG.warning("Unrecognized 'K' element: %r", k)
+        yield from ()
 
     @_make_kids.register(list)
     def _make_kids_list(
         self, k: list
-    ) -> Iterator[Union["Element", ContentItem, ContentObject, None]]:
+    ) -> Iterator[Union["Element", ContentItem, ContentObject]]:
         for el in k:
             yield from self._make_kids(resolve1(el))
 
@@ -171,6 +172,7 @@ class Element:
         ref = k.get("Obj")
         if not isinstance(ref, ObjRef):
             LOG.warning("'Obj' entry is not an indirect object reference: %r", k)
+            return
         obj = ref.resolve()
         if not isinstance(obj, dict):
             LOG.warning("'Obj' entry does not point to a dict: %r", obj)

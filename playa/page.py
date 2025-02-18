@@ -330,7 +330,7 @@ class Page:
     def structtree(self) -> StructTree:
         """Return the subset of the structure tree for a page."""
         warnings.warn(
-            "The `structtree` property is deprecated and will be removed in PLAYA 1.0.",
+            "The `structtree` property is deprecated and will be removed in PLAYA 1.0."
             "  Use `structure` instead. ",
             DeprecationWarning,
         )
