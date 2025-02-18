@@ -411,7 +411,7 @@ def extract_text(doc: Document, args: argparse.Namespace) -> None:
 
 
 @functools.lru_cache(maxsize=16)
-def get_mcid_text(pageref: PageRef) -> Dict[int, str]:
+def get_mcid_text(pageref: PageRef) -> Dict[int, List[str]]:
     """Get text for all MCIDs on a page"""
     page = _deref_page(pageref)
     mctext: Dict[int, str] = {}
@@ -426,7 +426,7 @@ def get_mcid_text(pageref: PageRef) -> Dict[int, str]:
             chars = text.chars
         # Remove soft hyphens
         chars = chars.replace("\xad", "")
-        mctext[mcs.mcid] = chars
+        mctext.setdefault(mcs.mcid, []).append(chars)
     return mctext
 
 
@@ -444,7 +444,10 @@ def _extract_content_object(kid: StructContentObject) -> dict:
 
 @_extract_child.register(ContentItem)
 def _extract_content_item(kid: ContentItem) -> Union[str, None]:
-    return get_mcid_text(kid.page.pageref).get(kid.mcid)
+    strs = get_mcid_text(kid.page.pageref).get(kid.mcid)
+    if strs is None:
+        return None
+    return "".join(strs)
 
 
 @_extract_child.register(Element)
