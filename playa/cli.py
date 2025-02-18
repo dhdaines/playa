@@ -477,7 +477,7 @@ def _extract_element(el: Element, indent: int, outfh: TextIO) -> bool:
         v = json.dumps(v, ensure_ascii=False)
         s.append(f"{ws}{ss}{k}: {v}")
 
-    format_attr("structure_type", literal_name(el.props["S"]))
+    format_attr("type", literal_name(el.props["S"]))
     page = el.page
     if page is not None:
         format_attr("page_idx", page.page_idx)
