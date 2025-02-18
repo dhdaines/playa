@@ -284,11 +284,10 @@ def extract_text_objects(doc: Document, args: argparse.Namespace) -> None:
     pages = decode_page_spec(doc, args.pages)
     print("[", file=args.outfile)
     last = None
-    for a, b in itertools.pairwise(
-        itertools.chain.from_iterable(doc.pages[pages].map(get_text_json))
-    ):
-        print(a, ",", sep="", file=args.outfile)
-        last = b
+    for obj in itertools.chain.from_iterable(doc.pages[pages].map(get_text_json)):
+        if last is not None:
+            print(last, ",", sep="", file=args.outfile)
+        last = obj
     if last is not None:
         print(last, file=args.outfile)
     print("]", file=args.outfile)
@@ -488,13 +487,17 @@ def extract_structure(doc: Document, args: argparse.Namespace) -> None:
         return
     print("[", file=args.outfile, end="")
     last = None
-    for a, b in itertools.pairwise(doc.structure):
-        assert isinstance(a, Element)
-        json.dump(
-            _extract_child(a), args.outfile, indent=2, default=repr, ensure_ascii=False
-        )
-        print(",", file=args.outfile)
-        last = b
+    for el in doc.structure:
+        if last is not None:
+            json.dump(
+                _extract_child(last),
+                args.outfile,
+                indent=2,
+                default=repr,
+                ensure_ascii=False,
+            )
+            print(",", file=args.outfile)
+        last = el
     if last is not None:
         json.dump(
             _extract_child(last),
