@@ -3,10 +3,11 @@ Benchmark the converter on all of the sample documents.
 """
 
 import logging
-import sys
 import time
 from pathlib import Path
-from tests.data import BASEPDFS, PASSWORDS, XFAILS, PDFMINER_BUGS
+
+from playa import ContentObject, Rect
+from tests.data import BASEPDFS, PASSWORDS, PDFMINER_BUGS, XFAILS
 
 LOG = logging.getLogger("benchmark-convert")
 
@@ -22,6 +23,8 @@ def benchmark_one_lazy(path: Path):
         LOG.info("Reading %s", path)
         with playa.open(path, password=password) as pdf:
             for page in pdf.pages:
+                obj: ContentObject
+                _: Rect
                 for obj in page.texts:
                     _ = obj.bbox
                 for obj in page.paths:

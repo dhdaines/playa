@@ -298,17 +298,26 @@ class Page:
     @property
     def paths(self) -> Iterator["PathObject"]:
         """Iterator over lazy path objects."""
-        return iter(LazyInterpreter(self, self._contents, filter_class=PathObject))
+        return cast(
+            Iterator["PathObject"],
+            iter(LazyInterpreter(self, self._contents, filter_class=PathObject)),
+        )
 
     @property
     def images(self) -> Iterator["ImageObject"]:
         """Iterator over lazy image objects."""
-        return iter(LazyInterpreter(self, self._contents, filter_class=ImageObject))
+        return cast(
+            Iterator["ImageObject"],
+            iter(LazyInterpreter(self, self._contents, filter_class=ImageObject)),
+        )
 
     @property
     def texts(self) -> Iterator["TextObject"]:
         """Iterator over lazy text objects."""
-        return iter(LazyInterpreter(self, self._contents, filter_class=TextObject))
+        return cast(
+            Iterator["TextObject"],
+            iter(LazyInterpreter(self, self._contents, filter_class=TextObject)),
+        )
 
     @property
     def xobjects(self) -> Iterator["XObjectObject"]:
@@ -323,7 +332,10 @@ class Page:
         need to access their actual definitions you'll have to look at
         `page.resources`.
         """
-        return iter(LazyInterpreter(self, self._contents, filter_class=XObjectObject))
+        return cast(
+            Iterator["XObjectObject"],
+            iter(LazyInterpreter(self, self._contents, filter_class=XObjectObject)),
+        )
 
     @property
     def tokens(self) -> Iterator[Token]:
@@ -1351,20 +1363,20 @@ class LazyInterpreter:
             # instead of having their own Resources entry.
             xobjres = xobj.get("Resources")
             resources = None if xobjres is None else dict_value(xobjres)
-            return XObjectObject(
-                _pageref=self.page.pageref,
-                ctm=mult_matrix(matrix, self.ctm),
-                mcstack=self.mcstack,
-                gstate=self.graphicstate,
-                xobjid=xobjid,
-                stream=xobj,
-                resources=resources,
-            )
+            if self.filter_class is None or self.filter_class is XObjectObject:
+                return XObjectObject(
+                    _pageref=self.page.pageref,
+                    ctm=mult_matrix(matrix, self.ctm),
+                    mcstack=self.mcstack,
+                    gstate=self.graphicstate,
+                    xobjid=xobjid,
+                    stream=xobj,
+                    resources=resources,
+                )
         elif subtype is LITERAL_IMAGE and "Width" in xobj and "Height" in xobj:
             return self.render_image(xobjid, xobj)
-        else:
-            # unsupported xobject type.
-            return None
+        # unsupported xobject type.
+        return None
 
     def render_image(
         self, xobjid: Union[str, None], stream: ContentStream
@@ -1755,13 +1767,15 @@ class LazyInterpreter:
         if isinstance(props, PSLiteral):
             props = self.get_property(props)
         rprops = {} if props is None else dict_value(props)
-        return TagObject(
-            _pageref=self.page.pageref,
-            ctm=self.ctm,
-            mcstack=self.mcstack,
-            gstate=self.graphicstate,
-            _mcs=MarkedContent(mcid=None, tag=literal_name(tag), props=rprops),
-        )
+        if self.filter_class is None or self.filter_class is TagObject:
+            return TagObject(
+                _pageref=self.page.pageref,
+                ctm=self.ctm,
+                mcstack=self.mcstack,
+                gstate=self.graphicstate,
+                _mcs=MarkedContent(mcid=None, tag=literal_name(tag), props=rprops),
+            )
+        return None
 
     def begin_tag(self, tag: PDFObject, props: Dict[str, PDFObject]) -> None:
         """Handle beginning of tag, setting current MCID if any."""
@@ -1789,7 +1803,7 @@ class LazyInterpreter:
 
         if not isinstance(tag, PSLiteral):
             log.warning("Tag %r is not a name object, ignoring", tag)
-            return
+            return None
         if isinstance(props, PSLiteral):
             propdict = self.get_property(props)
             if propdict is None:
