@@ -1383,26 +1383,6 @@ class LazyInterpreter:
             colorspace=colorspace,
         )
 
-    def do_MP(self, tag: PDFObject) -> Union[ContentObject, None]:
-        """Define marked-content point"""
-        return self.do_DP(tag, None)
-
-    def do_DP(
-        self, tag: PDFObject, props: PDFObject = None
-    ) -> Union[ContentObject, None]:
-        """Define marked-content point with property list"""
-        # See above
-        if isinstance(props, PSLiteral):
-            props = self.get_property(props)
-        rprops = {} if props is None else dict_value(props)
-        return TagObject(
-            _pageref=self.page.pageref,
-            ctm=self.ctm,
-            mcstack=self.mcstack,
-            gstate=self.graphicstate,
-            _mcs=MarkedContent(mcid=None, tag=literal_name(tag), props=rprops),
-        )
-
     def do_q(self) -> None:
         """Save graphics state"""
         self.gstack.append(self.get_current_state())
@@ -1608,7 +1588,7 @@ class LazyInterpreter:
         """Paint area defined by shading pattern"""
 
     def do_BT(self) -> None:
-        """Begin text object
+        """Begin text object.
 
         Initializing the text matrix, Tm, and the text line matrix, Tlm, to
         the identity matrix. Text objects cannot be nested; a second BT cannot
@@ -1616,7 +1596,7 @@ class LazyInterpreter:
         """
         self.textstate.reset()
 
-    def do_ET(self) -> Union[None, Iterator]:
+    def do_ET(self) -> None:
         """End a text object"""
         return None
 
@@ -1757,15 +1737,45 @@ class LazyInterpreter:
     def do_ID(self) -> None:
         """Begin inline image data"""
 
-    def do_BMC(self, tag: PDFObject) -> None:
-        """Begin marked-content sequence"""
-        self.begin_tag(tag, {})
-
     def get_property(self, prop: PSLiteral) -> Union[Dict, None]:
         if "Properties" in self.resources:
             props = dict_value(self.resources["Properties"])
             return dict_value(props.get(prop.name))
         return None
+
+    def do_MP(self, tag: PDFObject) -> Union[ContentObject, None]:
+        """Define marked-content point"""
+        return self.do_DP(tag, None)
+
+    def do_DP(
+        self, tag: PDFObject, props: PDFObject = None
+    ) -> Union[ContentObject, None]:
+        """Define marked-content point with property list"""
+        # See above
+        if isinstance(props, PSLiteral):
+            props = self.get_property(props)
+        rprops = {} if props is None else dict_value(props)
+        return TagObject(
+            _pageref=self.page.pageref,
+            ctm=self.ctm,
+            mcstack=self.mcstack,
+            gstate=self.graphicstate,
+            _mcs=MarkedContent(mcid=None, tag=literal_name(tag), props=rprops),
+        )
+
+    def begin_tag(self, tag: PDFObject, props: Dict[str, PDFObject]) -> None:
+        """Handle beginning of tag, setting current MCID if any."""
+        assert isinstance(tag, PSLiteral)
+        tag = decode_text(tag.name)
+        if "MCID" in props:
+            mcid = int_value(props["MCID"])
+        else:
+            mcid = None
+        self.mcstack = (*self.mcstack, MarkedContent(mcid=mcid, tag=tag, props=props))
+
+    def do_BMC(self, tag: PDFObject) -> None:
+        """Begin marked-content sequence"""
+        self.begin_tag(tag, {})
 
     def do_BDC(self, tag: PDFObject, props: PDFObject) -> None:
         """Begin marked-content sequence with property list"""
@@ -1793,13 +1803,3 @@ class LazyInterpreter:
         """End marked-content sequence"""
         if self.mcstack:
             self.mcstack = self.mcstack[:-1]
-
-    def begin_tag(self, tag: PDFObject, props: Dict[str, PDFObject]) -> None:
-        """Handle beginning of tag, setting current MCID if any."""
-        assert isinstance(tag, PSLiteral)
-        tag = decode_text(tag.name)
-        if "MCID" in props:
-            mcid = int_value(props["MCID"])
-        else:
-            mcid = None
-        self.mcstack = (*self.mcstack, MarkedContent(mcid=mcid, tag=tag, props=props))
