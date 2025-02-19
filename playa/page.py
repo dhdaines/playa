@@ -19,6 +19,7 @@ from typing import (
     NamedTuple,
     Optional,
     Tuple,
+    Type,
     Union,
     cast,
 )
@@ -297,17 +298,17 @@ class Page:
     @property
     def paths(self) -> Iterator["PathObject"]:
         """Iterator over lazy path objects."""
-        return (obj for obj in self if isinstance(obj, PathObject))
+        return iter(LazyInterpreter(self, self._contents, filter_class=PathObject))
 
     @property
     def images(self) -> Iterator["ImageObject"]:
         """Iterator over lazy image objects."""
-        return (obj for obj in self if isinstance(obj, ImageObject))
+        return iter(LazyInterpreter(self, self._contents, filter_class=ImageObject))
 
     @property
     def texts(self) -> Iterator["TextObject"]:
         """Iterator over lazy text objects."""
-        return (obj for obj in self if isinstance(obj, TextObject))
+        return iter(LazyInterpreter(self, self._contents, filter_class=TextObject))
 
     @property
     def xobjects(self) -> Iterator["XObjectObject"]:
@@ -322,7 +323,7 @@ class Page:
         need to access their actual definitions you'll have to look at
         `page.resources`.
         """
-        return (obj for obj in self if isinstance(obj, XObjectObject))
+        return iter(LazyInterpreter(self, self._contents, filter_class=XObjectObject))
 
     @property
     def tokens(self) -> Iterator[Token]:
@@ -1053,6 +1054,7 @@ class LazyInterpreter:
         page: Page,
         contents: Iterable[PDFObject],
         resources: Union[Dict, None] = None,
+        filter_class: Union[Type[ContentObject], None] = None,
     ) -> None:
         self._dispatch: Dict[PSKeyword, Tuple[Callable, int]] = {}
         for name in dir(self):
@@ -1068,6 +1070,7 @@ class LazyInterpreter:
                 self._dispatch[kwd] = (func, nargs)
         self.page = page
         self.contents = contents
+        self.filter_class = filter_class
         self.init_resources(page, page.resources if resources is None else resources)
         self.init_state(page.ctm)
 
@@ -1171,7 +1174,9 @@ class LazyInterpreter:
             else:
                 self.push(obj)
 
-    def create(self, object_class, **kwargs) -> ContentObject:
+    def create(self, object_class, **kwargs) -> Union[ContentObject, None]:
+        if self.filter_class is not None and object_class is not self.filter_class:
+            return None
         return object_class(
             _pageref=self.page.pageref,
             ctm=self.ctm,
@@ -1290,8 +1295,9 @@ class LazyInterpreter:
             return obj
         else:
             # Even without text, TJ can still update the line matrix (ugh!)
-            for _ in obj:
-                pass
+            if obj is not None:
+                for _ in obj:
+                    pass
         return None
 
     def do_Tj(self, s: PDFObject) -> Union[ContentObject, None]:
@@ -1362,7 +1368,7 @@ class LazyInterpreter:
 
     def render_image(
         self, xobjid: Union[str, None], stream: ContentStream
-    ) -> ContentObject:
+    ) -> Union[ContentObject, None]:
         colorspace = stream.get_any(("CS", "ColorSpace"))
         colorspace = (
             None if colorspace is None else get_colorspace(resolve1(colorspace))
