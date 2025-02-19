@@ -30,6 +30,7 @@ from playa.worker import (
 LOG = logging.getLogger(__name__)
 LITERAL_MCR = LIT("MCR")
 LITERAL_OBJR = LIT("OBJR")
+LITERAL_STRUCTTREEROOT = LIT("StructTreeRoot")
 MatchFunc = Callable[["Element"], bool]
 
 if TYPE_CHECKING:
@@ -182,6 +183,15 @@ class Element(Findable):
                 "'Pg' entry is not an indirect object reference: %r", self.props
             )
         return None
+
+    @property
+    def parent(self) -> Union["Element", "Tree", None]:
+        p = resolve1(self.props.get("P"))
+        if p is None:
+            return None
+        if p.get("Type") is LITERAL_STRUCTTREEROOT:
+            return Tree(self.doc)
+        return Element.from_dict(self.doc, p)
 
     def __iter__(self) -> Iterator[Union["Element", ContentItem, ContentObject]]:
         if "K" in self.props:

@@ -981,6 +981,22 @@ class Document:
             return None
         return Tree(self)
 
+    @property
+    def parent_tree(self) -> Union[NumberTree, None]:
+        """Parent tree of this document.
+
+        This is a somewhat obscure data structure that links marked
+        content sections to their corresponding structure elements.
+        If you don't know what that means, you probably don't need it,
+        but if you do, here it is.
+        """
+        if "StructTreeRoot" not in self.catalog:
+            return None
+        st = dict_value(self.catalog["StructTreeRoot"])
+        if "ParentTree" not in st:
+            return None
+        return NumberTree(st["ParentTree"])
+
     def _getobj_objstm(
         self, stream: ContentStream, index: int, objid: int
     ) -> PDFObject:
