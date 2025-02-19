@@ -1145,7 +1145,9 @@ class LazyInterpreter:
             # These are handled inside the parser as they don't obey
             # the normal syntax rules (PDF 1.7 sec 8.9.7)
             if isinstance(obj, InlineImage):
-                yield from self.do_EI(obj)
+                co = self.do_EI(obj)
+                if co is not None:
+                    yield co
             elif isinstance(obj, PSKeyword):
                 if obj in self._dispatch:
                     method, nargs = self._dispatch[obj]
@@ -1158,11 +1160,11 @@ class LazyInterpreter:
                                 obj,
                             )
                         else:
-                            gen = method(*args)
+                            co = method(*args)
                     else:
-                        gen = method()
-                    if gen is not None:
-                        yield from gen
+                        co = method()
+                    if co is not None:
+                        yield co
                 else:
                     # TODO: This can get very verbose
                     log.warning("Unknown operator: %r", obj)
@@ -1178,91 +1180,96 @@ class LazyInterpreter:
             **kwargs,
         )
 
-    def do_S(self) -> Iterator[ContentObject]:
+    def do_S(self) -> Union[ContentObject, None]:
         """Stroke path"""
         if not self.curpath:
-            return
-        yield self.create(
+            return None
+        curpath = self.curpath
+        self.curpath = []
+        return self.create(
             PathObject,
             stroke=True,
             fill=False,
             evenodd=False,
-            raw_segments=self.curpath,
+            raw_segments=curpath,
         )
-        self.curpath = []
 
-    def do_s(self) -> Iterator[ContentObject]:
+    def do_s(self) -> Union[ContentObject, None]:
         """Close and stroke path"""
         self.do_h()
-        yield from self.do_S()
+        return self.do_S()
 
-    def do_f(self) -> Iterator[ContentObject]:
+    def do_f(self) -> Union[ContentObject, None]:
         """Fill path using nonzero winding number rule"""
         if not self.curpath:
-            return
-        yield self.create(
+            return None
+        curpath = self.curpath
+        self.curpath = []
+        return self.create(
             PathObject,
             stroke=False,
             fill=True,
             evenodd=False,
-            raw_segments=self.curpath,
+            raw_segments=curpath,
         )
-        self.curpath = []
 
-    def do_F(self) -> Iterator[ContentObject]:
+    def do_F(self) -> Union[ContentObject, None]:
         """Fill path using nonzero winding number rule (obsolete)"""
-        yield from self.do_f()
+        return self.do_f()
 
-    def do_f_a(self) -> Iterator[ContentObject]:
+    def do_f_a(self) -> Union[ContentObject, None]:
         """Fill path using even-odd rule"""
         if not self.curpath:
-            return
-        yield self.create(
+            return None
+        curpath = self.curpath
+        self.curpath = []
+        return self.create(
             PathObject,
             stroke=False,
             fill=True,
             evenodd=True,
-            raw_segments=self.curpath,
+            raw_segments=curpath,
         )
-        self.curpath = []
 
-    def do_B(self) -> Iterator[ContentObject]:
+    def do_B(self) -> Union[ContentObject, None]:
         """Fill and stroke path using nonzero winding number rule"""
         if not self.curpath:
-            return
-        yield self.create(
+            return None
+        curpath = self.curpath
+        self.curpath = []
+        return self.create(
             PathObject,
             stroke=True,
             fill=True,
             evenodd=False,
-            raw_segments=self.curpath,
+            raw_segments=curpath,
         )
-        self.curpath = []
 
-    def do_B_a(self) -> Iterator[ContentObject]:
+    def do_B_a(self) -> Union[ContentObject, None]:
         """Fill and stroke path using even-odd rule"""
         if not self.curpath:
-            return
-        yield self.create(
+            return None
+        curpath = self.curpath
+        self.curpath = []
+        return self.create(
             PathObject,
             stroke=True,
             fill=True,
             evenodd=True,
-            raw_segments=self.curpath,
+            raw_segments=curpath,
         )
-        self.curpath = []
 
-    def do_b(self) -> Iterator[ContentObject]:
+    def do_b(self) -> Union[ContentObject, None]:
         """Close, fill, and stroke path using nonzero winding number rule"""
         self.do_h()
-        yield from self.do_B()
+        return self.do_B()
 
-    def do_b_a(self) -> Iterator[ContentObject]:
+    def do_b_a(self) -> Union[ContentObject, None]:
         """Close, fill, and stroke path using even-odd rule"""
         self.do_h()
-        yield from self.do_B_a()
+        return self.do_B_a()
 
-    def do_TJ(self, strings: PDFObject) -> Iterator[ContentObject]:
+    def do_TJ(self, strings: PDFObject) -> Union[ContentObject, None]:
         """Show one or more text strings, allowing individual glyph
         positioning"""
         args: List[Union[bytes, float]] = []
@@ -1280,53 +1287,54 @@ class LazyInterpreter:
                 )
         obj = self.create(TextObject, textstate=self.textstate, args=args)
         if has_text:
-            yield obj
+            return obj
         else:
             # Even without text, TJ can still update the line matrix (ugh!)
             for _ in obj:
                 pass
+        return None
 
-    def do_Tj(self, s: PDFObject) -> Iterator[ContentObject]:
+    def do_Tj(self, s: PDFObject) -> Union[ContentObject, None]:
         """Show a text string"""
-        yield from self.do_TJ([s])
+        return self.do_TJ([s])
 
-    def do__q(self, s: PDFObject) -> None:
+    def do__q(self, s: PDFObject) -> Union[ContentObject, None]:
         """Move to next line and show text
 
         The ' (single quote) operator.
         """
         self.do_T_a()
-        self.do_TJ([s])
+        return self.do_TJ([s])
 
-    def do__w(self, aw: PDFObject, ac: PDFObject, s: PDFObject) -> None:
+    def do__w(self, aw: PDFObject, ac: PDFObject, s: PDFObject) -> Union[ContentObject, None]:
         """Set word and character spacing, move to next line, and show text
 
         The " (double quote) operator.
         """
         self.do_Tw(aw)
         self.do_Tc(ac)
-        self.do_TJ([s])
+        return self.do_TJ([s])
 
-    def do_EI(self, obj: PDFObject) -> Iterator[ContentObject]:
+    def do_EI(self, obj: PDFObject) -> Union[ContentObject, None]:
         """End inline image object"""
         if isinstance(obj, InlineImage):
             # Inline images are not XObjects, have no xobjid
-            yield self.render_image(None, obj)
+            return self.render_image(None, obj)
         else:
             # FIXME: Do... something?
-            pass
+            return None
 
-    def do_Do(self, xobjid_arg: PDFObject) -> Iterator[ContentObject]:
+    def do_Do(self, xobjid_arg: PDFObject) -> Union[ContentObject, None]:
         """Invoke named XObject"""
         xobjid = literal_name(xobjid_arg)
         try:
             xobj = stream_value(self.xobjmap[xobjid])
         except KeyError:
             log.debug("Undefined xobject id: %r", xobjid)
-            return
+            return None
         except TypeError as e:
             log.debug("Empty or invalid xobject with id %r: %s", xobjid, e)
-            return
+            return None
         subtype = xobj.get("Subtype")
         if subtype is LITERAL_FORM and "BBox" in xobj:
             matrix = cast(Matrix, list_value(xobj.get("Matrix", MATRIX_IDENTITY)))
@@ -1335,7 +1343,7 @@ class LazyInterpreter:
             # instead of having their own Resources entry.
             xobjres = xobj.get("Resources")
             resources = None if xobjres is None else dict_value(xobjres)
-            xobjobj = XObjectObject(
+            return XObjectObject(
                 _pageref=self.page.pageref,
                 ctm=mult_matrix(matrix, self.ctm),
                 mcstack=self.mcstack,
@@ -1344,13 +1352,11 @@ class LazyInterpreter:
                 stream=xobj,
                 resources=resources,
             )
-            # We are *lazy*, so just yield the XObject itself not its contents
-            yield xobjobj
         elif subtype is LITERAL_IMAGE and "Width" in xobj and "Height" in xobj:
-            yield self.render_image(xobjid, xobj)
+            return self.render_image(xobjid, xobj)
         else:
             # unsupported xobject type.
-            pass
+            return None
 
     def render_image(
         self, xobjid: Union[str, None], stream: ContentStream
@@ -1369,17 +1375,17 @@ class LazyInterpreter:
             colorspace=colorspace,
         )
 
-    def do_MP(self, tag: PDFObject) -> Iterator[ContentObject]:
+    def do_MP(self, tag: PDFObject) -> Union[ContentObject, None]:
         """Define marked-content point"""
-        yield from self.do_DP(tag, None)
+        return self.do_DP(tag, None)
 
-    def do_DP(self, tag: PDFObject, props: PDFObject = None) -> Iterator[ContentObject]:
+    def do_DP(self, tag: PDFObject, props: PDFObject = None) -> Union[ContentObject, None]:
         """Define marked-content point with property list"""
         # See above
         if isinstance(props, PSLiteral):
             props = self.get_property(props)
         rprops = {} if props is None else dict_value(props)
-        yield TagObject(
+        return TagObject(
             _pageref=self.page.pageref,
             ctm=self.ctm,
             mcstack=self.mcstack,
