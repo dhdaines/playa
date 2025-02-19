@@ -195,7 +195,9 @@ class StructTree(Findable):
                 parent_id = page.attrs["StructParents"]
                 parent_array = list_value(parent_tree[parent_id])
                 assert isinstance(parent_array, list)  # srsly
-                self._parse_parent_tree(parent_array)
+                if not self._parse_parent_tree(parent_array):
+                    # see below...
+                    self._parse_struct_tree()
             else:
                 # ...EXCEPT that the ParentTree is sometimes missing, in which
                 # case we fall back to the non-approved way.
@@ -279,7 +281,9 @@ class StructTree(Findable):
         page_idx = None
         if "Pg" in obj:
             page_objid = obj["Pg"].objid
-            assert page_objid in self.page_dict, "Object on unparsed page: %s" % obj
+            if page_objid not in self.page_dict:
+                logger.warning("Object on unparsed page ID %d" % page_objid)
+                return None, []
             page_idx = self.page_dict[page_objid]
         obj_tag = ""
         if "S" in obj:
@@ -313,7 +317,7 @@ class StructTree(Findable):
         )
         return element, children
 
-    def _parse_parent_tree(self, parent_array: List[Any]) -> None:
+    def _parse_parent_tree(self, parent_array: List[Any]) -> bool:
         """Populate the structure tree using the leaves of the parent tree for
         a given page."""
         # First walk backwards from the leaves to the root, tracking references
@@ -340,12 +344,15 @@ class StructTree(Findable):
                 # references or marked-content sections...
                 element, children = self._make_element(obj)
                 # We have no page tree so we assume this page was parsed
-                assert element is not None
+                if element is None:
+                    continue
                 s[repr(ref)] = element, children
                 d.append(obj["P"])
         # If we didn't reach the root something is quite wrong!
-        assert found_root
+        if not found_root:
+            return False
         self._resolve_children(s)
+        return True
 
     def on_parsed_page(self, obj: Dict[str, Any]) -> bool:
         if "Pg" not in obj:
@@ -376,6 +383,8 @@ class StructTree(Findable):
                 ref = obj["Obj"]
                 obj = resolve1(ref)
             element, children = self._make_element(obj)
+            if element is None:
+                continue
             # Similar to above, delay resolving the children to avoid
             # tree-recursion.
             s[repr(ref)] = element, children
@@ -459,8 +468,9 @@ class StructTree(Findable):
                     if not self.on_parsed_page(obj):
                         continue
                     if "MCID" in obj:
-                        # FIXME: This might fail, for the same reasons!
-                        assert element.page_idx is not None
+                        if element.page_idx is None:
+                            logger.warning("Element with MCID has no page: %s", obj)
+                            continue
                         element.mcids.append(obj["MCID"])
                     elif "Obj" in obj:
                         child = obj["Obj"]

@@ -2302,7 +2302,9 @@ class LazyInterpreter(BaseInterpreter):
         self.do_T_a()
         yield from self.do_TJ([s])
 
-    def do__w(self, aw: PDFObject, ac: PDFObject, s: PDFObject) -> Iterator[ContentObject]:
+    def do__w(
+        self, aw: PDFObject, ac: PDFObject, s: PDFObject
+    ) -> Iterator[ContentObject]:
         """Set word and character spacing, move to next line, and show text
 
         The " (double quote) operator.
