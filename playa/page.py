@@ -1306,7 +1306,9 @@ class LazyInterpreter:
         self.do_T_a()
         return self.do_TJ([s])
 
-    def do__w(self, aw: PDFObject, ac: PDFObject, s: PDFObject) -> Union[ContentObject, None]:
+    def do__w(
+        self, aw: PDFObject, ac: PDFObject, s: PDFObject
+    ) -> Union[ContentObject, None]:
         """Set word and character spacing, move to next line, and show text
 
         The " (double quote) operator.
@@ -1379,7 +1381,9 @@ class LazyInterpreter:
         """Define marked-content point"""
         return self.do_DP(tag, None)
 
-    def do_DP(self, tag: PDFObject, props: PDFObject = None) -> Union[ContentObject, None]:
+    def do_DP(
+        self, tag: PDFObject, props: PDFObject = None
+    ) -> Union[ContentObject, None]:
         """Define marked-content point with property list"""
         # See above
         if isinstance(props, PSLiteral):
