@@ -5,6 +5,7 @@
 - Elevate `resolve1` and `resolve_all` to top-level exports
 - Deprecate `structtree` and add lazy `structure` API
 - Extract logical structure in CLI
+- Speed up iteration over particular object types
 
 ### TODO
 
