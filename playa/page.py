@@ -2294,22 +2294,22 @@ class LazyInterpreter(BaseInterpreter):
         """Show a text string"""
         yield from self.do_TJ([s])
 
-    def do__q(self, s: PDFObject) -> None:
+    def do__q(self, s: PDFObject) -> Iterator[ContentObject]:
         """Move to next line and show text
 
         The ' (single quote) operator.
         """
         self.do_T_a()
-        self.do_TJ([s])
+        yield from self.do_TJ([s])
 
-    def do__w(self, aw: PDFObject, ac: PDFObject, s: PDFObject) -> None:
+    def do__w(self, aw: PDFObject, ac: PDFObject, s: PDFObject) -> Iterator[ContentObject]:
         """Set word and character spacing, move to next line, and show text
 
         The " (double quote) operator.
         """
         self.do_Tw(aw)
         self.do_Tc(ac)
-        self.do_TJ([s])
+        yield from self.do_TJ([s])
 
     def do_EI(self, obj: PDFObject) -> Iterator[ContentObject]:
         """End inline image object"""
