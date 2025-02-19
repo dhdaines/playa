@@ -2,12 +2,14 @@
 - Fix serious bug in rare ' and " text operators
 - Fix robustness issues in structtree API
 
-## PLAYA 0.2.9: 2025-02-12
+## PLAYA 0.2.9: 2025-02-07
 - Support the all-important empty name object
 - Break the CLI again (ZeroVer YOLO) to better support page ranges
-- Support some limited and lossy text extraction in the CLI
 - Add necessary .doc property to page list
 - Correct type annotations for page list
+- Extract text objects with `-x` instead of just texts
+- Extract text objects and streams in parallel in CLI
+- Support arbitrary iterables in `PageList.__getitem__`
 
 ## PLAYA 0.2.8: 2025-01-22
 - Accept `None` for `max_workers`
