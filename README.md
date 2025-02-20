@@ -18,7 +18,7 @@ The purpose of PLAYA is to provide an efficent, parallel and
 parallelizable, pure-Python and Pythonic (for its author's definition
 of the term), lazy interface to the internals of PDF files.
 
-If you just want to extract text from a PDF, there are a better and/or
+If you just want to extract text from a PDF, there are better and/or
 faster tools and libraries out there, notably
 [pypdfium2](https://pypi.org/project/pypdfium2/) and
 [pypdf](https://pypi.org/project/pypdf/), among others.  See [these
@@ -149,7 +149,7 @@ page = pdf.pages["42"]     # or "logical" page number (also a string)
 print(f"Page {page.label} is {page.width} x {page.height}")
 ```
 
-Since PDF is at heard a page-oriented, presentation format, many types
+Since PDF is at heart a page-oriented, presentation format, many types
 of metadata are mostly accessible via the page objects.
 
 For example, annotations (internal or external links) are only
@@ -296,9 +296,16 @@ in the aforementioned interpretation of "device space"):
 ```python
 for obj in page:
     print(f"{obj.object_type} at {obj.bbox}")
+
+    # With space="screen" (the default)
     left, top, right, bottom = obj.bbox
     print(f"  top left is {left, top}")
-    print(f"  bottom right is {right, botom}")
+    print(f"  bottom right is {right, bottom}")
+
+    # With space="page" or space="default"
+    left, bottom, right, top = obj.bbox
+    print(f"  bottom left is {left, bottom}")
+    print(f"  top right is {right, top}")
 ```
 
 Another important piece of information (which `pdfminer.six` does not

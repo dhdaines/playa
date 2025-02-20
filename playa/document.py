@@ -902,6 +902,7 @@ class Document:
                 self.pdf_version,
             )
             self.pdf_version = self.catalog["Version"]
+        self.is_tagged = "MarkInfo" in self.catalog and self.catalog["MarkInfo"].get("Marked")
 
     def _initialize_password(self, password: str = "") -> None:
         """Initialize the decryption handler with a given password, if any.

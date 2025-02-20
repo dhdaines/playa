@@ -10,6 +10,7 @@ import playa
 from playa.data_structures import NameTree
 from playa.document import read_header, XRefTable
 from playa.exceptions import PDFSyntaxError
+from playa.page import TextObject
 from playa.parser import LIT
 from playa.utils import decode_text
 from .data import CONTRIB, TESTDIR
@@ -160,6 +161,12 @@ def test_xobjects() -> None:
         xobj = next(page.xobjects)
         assert xobj.object_type == "xobject"
         assert len(list(xobj)) == 2
+
+        for obj in page.flatten():
+            assert obj.object_type != "xobject"
+
+        for obj in page.flatten(TextObject):
+            assert isinstance(obj, TextObject)
 
 
 def test_annotations() -> None:

@@ -5,6 +5,7 @@ Classes for looking at pages and their contents.
 import itertools
 import logging
 import re
+import textwrap
 import warnings
 from copy import copy
 from dataclasses import dataclass
@@ -20,8 +21,10 @@ from typing import (
     Optional,
     Tuple,
     Type,
+    TypeVar,
     Union,
     cast,
+    overload,
 )
 
 from playa.color import (
@@ -80,6 +83,7 @@ LITERAL_FORM = LIT("Form")
 LITERAL_IMAGE = LIT("Image")
 TextSeq = Iterable[Union[int, float, bytes]]
 DeviceSpace = Literal["page", "screen", "default", "user"]
+CO = TypeVar("CO")
 
 
 # FIXME: This should go in utils/pdftypes but there are circular imports
@@ -91,6 +95,23 @@ def parse_rect(o: PDFObject) -> Rect:
         raise ValueError("Could not parse rectangle %r" % (o,))
     except TypeError:
         raise PDFSyntaxError("Rectangle contains non-numeric values")
+
+
+# FIXME: This should be a method of TextObject (soon)
+def _extract_text_from_obj(obj: "TextObject", vertical: bool) -> Tuple[str, float]:
+    """Try to get text from a text object."""
+    chars = []
+    prev_end = 0.0
+    for glyph in obj:
+        x, y = glyph.textstate.glyph_offset
+        off = y if vertical else x
+        # FIXME: This is a heuristic!!!
+        if prev_end and off - prev_end > 0.5:
+            chars.append(" ")
+        if glyph.text is not None:
+            chars.append(glyph.text)
+        prev_end = off + glyph.adv
+    return "".join(chars), prev_end
 
 
 class Page:
@@ -366,6 +387,119 @@ class Page:
 
     def __repr__(self) -> str:
         return f"<Page: Resources={self.resources!r}, MediaBox={self.mediabox!r}>"
+
+    @overload
+    def flatten(self) -> Iterator["ContentObject"]: ...
+
+    @overload
+    def flatten(self, filter_class: Type[CO]) -> Iterator[CO]: ...
+
+    def flatten(
+        self, filter_class: Union[None, Type[CO]] = None
+    ) -> Iterator[Union[CO, "ContentObject"]]:
+        """Iterate over content objects, recursing into form XObjects."""
+
+        def flatten_one(itor: Iterable["ContentObject"]) -> Iterator["ContentObject"]:
+            for obj in itor:
+                if isinstance(obj, XObjectObject):
+                    yield from flatten_one(obj)
+                else:
+                    yield obj
+
+        if filter_class is None:
+            yield from flatten_one(self)
+        else:
+            for obj in flatten_one(self):
+                if isinstance(obj, filter_class):
+                    yield obj
+
+    def extract_text(self) -> str:
+        """Do some best-effort text extraction.
+
+        This necessarily involves a few heuristics, so don't get your
+        hopes up.  It will attempt to use marked content information
+        for a tagged PDF, otherwise it will fall back on the character
+        displacement and line matrix to determine word and line breaks.
+        """
+        if self.doc.is_tagged:
+            return self.extract_text_tagged()
+        else:
+            return self.extract_text_untagged()
+
+    def extract_text_untagged(self) -> str:
+        """Get text from a page of an untagged PDF."""
+        prev_line_matrix = None
+        prev_end = 0.0
+        lines = []
+        strings = []
+        for text in self.flatten(TextObject):
+            line_matrix = text.textstate.line_matrix
+            vertical = (
+                False if text.textstate.font is None else text.textstate.font.vertical
+            )
+            lpos = -2 if vertical else -1
+            if (
+                prev_line_matrix is not None
+                and line_matrix[lpos] < prev_line_matrix[lpos]
+            ):
+                lines.append("".join(strings))
+                strings.clear()
+            wpos = -1 if vertical else -2
+            if (
+                prev_line_matrix is not None
+                and prev_end + prev_line_matrix[wpos] < line_matrix[wpos]
+            ):
+                strings.append(" ")
+            textstr, end = _extract_text_from_obj(text, vertical)
+            strings.append(textstr)
+            prev_line_matrix = line_matrix
+            prev_end = end
+        if strings:
+            lines.append("".join(strings))
+        return "\n".join(lines)
+
+    def extract_text_tagged(self) -> str:
+        """Get text from a page of a tagged PDF."""
+        lines: List[str] = []
+        strings: List[str] = []
+        at_mcs: Union[MarkedContent, None] = None
+        prev_mcid: Union[int, None] = None
+        for text in self.flatten(TextObject):
+            in_artifact = same_actual_text = reversed_chars = False
+            actual_text = None
+            for mcs in reversed(text.mcstack):
+                if mcs.tag == "Artifact":
+                    in_artifact = True
+                    break
+                actual_text = mcs.props.get("ActualText")
+                if actual_text is not None:
+                    if mcs is at_mcs:
+                        same_actual_text = True
+                    at_mcs = mcs
+                    break
+                if mcs.tag == "ReversedChars":
+                    reversed_chars = True
+                    break
+            if in_artifact or same_actual_text:
+                continue
+            if actual_text is None:
+                chars = text.chars
+                if reversed_chars:
+                    chars = chars[::-1]
+            else:
+                assert isinstance(actual_text, bytes)
+                chars = actual_text.decode("UTF-16")
+            # Remove soft hyphens
+            chars = chars.replace("\xad", "")
+            # Insert a line break (FIXME: not really correct)
+            if text.mcid != prev_mcid:
+                lines.extend(textwrap.wrap("".join(strings)))
+                strings.clear()
+                prev_mcid = text.mcid
+            strings.append(chars)
+        if strings:
+            lines.extend(textwrap.wrap("".join(strings)))
+        return "\n".join(lines)
 
 
 @dataclass
