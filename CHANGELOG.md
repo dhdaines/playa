@@ -1,5 +1,7 @@
 ## PLAYA 0.3.0: unreleased
 
+- API for text extraction
+- Extract text from XObjects with `playa --text`
 - Remove deprecated `LayoutDict` API and simplify code
 - Deprecate `annots` API and add friendly `annotations`
 - Elevate `resolve1` and `resolve_all` to top-level exports
@@ -10,10 +12,12 @@
 ### TODO
 
 - Deprecate `outlines` API and add tree-structured `outline`
+  - Link structured elements in outline to structure tree (lazily)
 - Deprecate `dests` API and add friendly `destinations`
 - Create friendly API for actions
 - Expose `XRef` API for users to look around in
-- Format all `ContentObject` as JSON
+- Methods for all `ContentObject` to format as JSON/dict
+  - Do not want to use Pydantic but be Pydantic-like
 
 ## PLAYA 0.2.10: 2025-02-18
 - Fix serious bug in rare ' and " text operators

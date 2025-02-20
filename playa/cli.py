@@ -72,14 +72,12 @@ import functools
 import itertools
 import json
 import logging
-import textwrap
 from collections import deque
 from pathlib import Path
 from typing import Any, Deque, Dict, Iterable, Iterator, List, TextIO, Tuple, Union
 
 import playa
 from playa import Document, Page
-from playa.page import MarkedContent, TextObject, XObjectObject
 from playa.pdftypes import ContentStream, ObjRef, resolve1
 from playa.structure import Element, ContentObject as StructContentObject, ContentItem
 from playa.utils import decode_text
@@ -313,112 +311,12 @@ def extract_page_contents(doc: Document, args: argparse.Namespace) -> None:
         args.outfile.buffer.write(data)
 
 
-def get_text_from_obj(obj: TextObject, vertical: bool) -> Tuple[str, float]:
-    """Try to get text from a text object."""
-    chars = []
-    prev_end = 0.0
-    for glyph in obj:
-        x, y = glyph.textstate.glyph_offset
-        off = y if vertical else x
-        # FIXME: This is a heuristic!!!
-        if prev_end and off - prev_end > 0.5:
-            chars.append(" ")
-        if glyph.text is not None:
-            chars.append(glyph.text)
-        prev_end = off + glyph.adv
-    return "".join(chars), prev_end
-
-
-def get_all_texts(page: Union[Page, XObjectObject]) -> Iterator[TextObject]:
-    for obj in page:
-        if isinstance(obj, XObjectObject):
-            yield from get_all_texts(obj)
-        elif isinstance(obj, TextObject):
-            yield obj
-
-
-def get_text_untagged(page: Page) -> str:
-    """Get text from a page of an untagged PDF."""
-    prev_line_matrix = None
-    prev_end = 0.0
-    lines = []
-    strings = []
-    for text in get_all_texts(page):
-        line_matrix = text.textstate.line_matrix
-        vertical = (
-            False if text.textstate.font is None else text.textstate.font.vertical
-        )
-        lpos = -2 if vertical else -1
-        if prev_line_matrix is not None and line_matrix[lpos] < prev_line_matrix[lpos]:
-            lines.append("".join(strings))
-            strings.clear()
-        wpos = -1 if vertical else -2
-        if (
-            prev_line_matrix is not None
-            and prev_end + prev_line_matrix[wpos] < line_matrix[wpos]
-        ):
-            strings.append(" ")
-        textstr, end = get_text_from_obj(text, vertical)
-        strings.append(textstr)
-        prev_line_matrix = line_matrix
-        prev_end = end
-    if strings:
-        lines.append("".join(strings))
-    return "\n".join(lines)
-
-
-def get_text_tagged(page: Page) -> str:
-    """Get text from a page of a tagged PDF."""
-    lines: List[str] = []
-    strings: List[str] = []
-    at_mcs: Union[MarkedContent, None] = None
-    prev_mcid: Union[int, None] = None
-    for text in get_all_texts(page):
-        in_artifact = same_actual_text = reversed_chars = False
-        actual_text = None
-        for mcs in reversed(text.mcstack):
-            if mcs.tag == "Artifact":
-                in_artifact = True
-                break
-            actual_text = mcs.props.get("ActualText")
-            if actual_text is not None:
-                if mcs is at_mcs:
-                    same_actual_text = True
-                at_mcs = mcs
-                break
-            if mcs.tag == "ReversedChars":
-                reversed_chars = True
-                break
-        if in_artifact or same_actual_text:
-            continue
-        if actual_text is None:
-            chars = text.chars
-            if reversed_chars:
-                chars = chars[::-1]
-        else:
-            assert isinstance(actual_text, bytes)
-            chars = actual_text.decode("UTF-16")
-        # Remove soft hyphens
-        chars = chars.replace("\xad", "")
-        # Insert a line break (FIXME: not really correct)
-        if text.mcid != prev_mcid:
-            lines.extend(textwrap.wrap("".join(strings)))
-            strings.clear()
-            prev_mcid = text.mcid
-        strings.append(chars)
-    if strings:
-        lines.extend(textwrap.wrap("".join(strings)))
-    return "\n".join(lines)
-
-
 def extract_text(doc: Document, args: argparse.Namespace) -> None:
     """Extract text, but not in any kind of fancy way."""
     pages = decode_page_spec(doc, args.pages)
-    if "MarkInfo" not in doc.catalog or not doc.catalog["MarkInfo"].get("Marked"):
+    if not doc.is_tagged:
         LOG.warning("Document is not a tagged PDF, text may not be readable")
-        textor = doc.pages[pages].map(get_text_untagged)
-    else:
-        textor = doc.pages[pages].map(get_text_tagged)
+    textor = doc.pages[pages].map(Page.extract_text)
     for text in textor:
         print(text, file=args.outfile)
 

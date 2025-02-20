@@ -10,6 +10,7 @@ import playa
 from playa.data_structures import NameTree
 from playa.document import read_header, XRefTable
 from playa.exceptions import PDFSyntaxError
+from playa.page import TextObject
 from playa.parser import LIT
 from playa.utils import decode_text
 from .data import CONTRIB, TESTDIR
@@ -161,9 +162,22 @@ def test_xobjects() -> None:
         assert xobj.object_type == "xobject"
         assert len(list(xobj)) == 2
 
+        for obj in page.flatten():
+            assert obj.object_type != "xobject"
+
+        for obj in page.flatten(TextObject):
+            assert isinstance(obj, TextObject)
+
 
 def test_annotations() -> None:
     with playa.open(TESTDIR / "simple5.pdf") as doc:
         page = doc.pages[0]
         for annot in page.annotations:
             assert annot.page is page
+
+
+def test_is_tagged() -> None:
+    with playa.open(TESTDIR / "simple1.pdf") as doc:
+        assert not doc.is_tagged
+    with playa.open(TESTDIR / "pdf_structure.pdf") as doc:
+        assert doc.is_tagged
