@@ -42,14 +42,9 @@ jobs:
         uses: actions/setup-python@v5
       - name: Install Hatch
         uses: pypa/hatch@install
-      - name: Run pdf.js testsuite
+      - name: Run pdf.js examples
         run: |
           hatch run pytest -k pdf.js
-      - name: Run pdfplumber tests
+      - name: Run pdfplumber examples
         run: |
-          sudo apt update && sudo apt install ghostscript
-          cd samples/3rdparty/pdfplumber
-          python -m venv venv
-          SETUPTOOLS_SCM_PRETEND_VERSION=0.2.5 venv/bin/pip install -e ../../..
-          make venv
-          make tests
+          hatch run pytest -k pdfplumber
