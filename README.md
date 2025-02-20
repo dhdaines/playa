@@ -29,10 +29,10 @@ Nonetheless, you will notice in this comparison that:
 - PLAYA has no dependencies and no C++
 - PLAYA is MIT licensed
 
-PLAYA is also very good at reading logical structure trees.  On the
-zoning bylaw above, extracting the entire tree with its text contents
-as JSON using `playa --structure` takes only 23 seconds, whereas
-`pdfplumber --structure-text` takes 69 seconds and `pdfinfo
+PLAYA is also very good at reading logical structure trees.  On my
+town's 486-page zoning bylaw, extracting the entire tree with its text
+contents as JSON using `playa --structure` takes only 23 seconds,
+whereas `pdfplumber --structure-text` takes 69 seconds and `pdfinfo
 -struct-text` (which doesn't output JSON) takes 110 seconds.
 
 I cannot stress this enough, *text extraction is not the primary use
