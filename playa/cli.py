@@ -72,7 +72,7 @@ from typing import Any, Deque, Iterable, Iterator, List, Tuple, Union
 
 import playa
 from playa import Document, Page
-from playa.page import MarkedContent, TextObject
+from playa.page import MarkedContent, TextObject, XObjectObject
 from playa.pdftypes import ContentStream, ObjRef
 
 LOG = logging.getLogger(__name__)
@@ -314,13 +314,21 @@ def get_text_from_obj(obj: TextObject, vertical: bool) -> Tuple[str, float]:
     return "".join(chars), prev_end
 
 
+def get_all_texts(page: Union[Page, XObjectObject]) -> Iterator[TextObject]:
+    for obj in page:
+        if isinstance(obj, XObjectObject):
+            yield from get_all_texts(obj)
+        elif isinstance(obj, TextObject):
+            yield obj
+
+
 def get_text_untagged(page: Page) -> str:
     """Get text from a page of an untagged PDF."""
     prev_line_matrix = None
     prev_end = 0.0
     lines = []
     strings = []
-    for text in page.texts:
+    for text in get_all_texts(page):
         line_matrix = text.textstate.line_matrix
         vertical = (
             False if text.textstate.font is None else text.textstate.font.vertical
@@ -350,7 +358,7 @@ def get_text_tagged(page: Page) -> str:
     strings: List[str] = []
     at_mcs: Union[MarkedContent, None] = None
     prev_mcid: Union[int, None] = None
-    for text in page.texts:
+    for text in get_all_texts(page):
         in_artifact = same_actual_text = reversed_chars = False
         actual_text = None
         for mcs in reversed(text.mcstack):
