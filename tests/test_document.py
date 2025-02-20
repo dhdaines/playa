@@ -174,3 +174,10 @@ def test_annotations() -> None:
         page = doc.pages[0]
         for annot in page.annotations:
             assert annot.page is page
+
+
+def test_is_tagged() -> None:
+    with playa.open(TESTDIR / "simple1.pdf") as doc:
+        assert not doc.is_tagged
+    with playa.open(TESTDIR / "pdf_structure.pdf") as doc:
+        assert doc.is_tagged
