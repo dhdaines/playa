@@ -85,6 +85,7 @@ from playa.utils import (
 )
 from playa.structtree import StructTree
 from playa.structure import Tree
+from playa.outline import Outline
 from playa.worker import (
     _set_document,
     _ref_document,
@@ -1149,6 +1150,13 @@ class Document:
         if objid:
             self._cached_fonts[objid] = font
         return font
+
+    @property
+    def outline(self) -> Union[Outline, None]:
+        """Document outline, if any."""
+        if "Outlines" not in self.catalog:
+            return None
+        return Outline(self)
 
     @property
     def outlines(self) -> Iterator[OutlineItem]:

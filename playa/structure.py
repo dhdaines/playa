@@ -1,5 +1,5 @@
 """
-Lazy interface to PDF logical structure.
+Lazy interface to PDF logical structure (PDF 1.7 sect 14.7).
 """
 
 import functools
