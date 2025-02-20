@@ -512,4 +512,4 @@ license text is included in
 license itself has not changed!
 
 For the moment PLAYA is developed and maintained by [David
-Huggins-Daines](https://ecolingui.ca/) <dhd@ecolingui.ca>.
+Huggins-Daines](https://ecolingui.ca/).
