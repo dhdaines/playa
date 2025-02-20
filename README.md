@@ -14,43 +14,31 @@ would be specifically one of these things and nothing else:
 2. Obtaining the absolute position and attributes of every character,
    line, path, and image in every page of a PDF.
    
-If you just want to extract text from a PDF, there are a lot of better
-and faster tools and libraries out there, see [these
-benchmarks](https://github.com/py-pdf/benchmarks) for a summary (TL;DR
-pypdfium2 is probably what you want, but pdfplumber does a nice job of
-converting PDF to ASCII art).
-
 The purpose of PLAYA is to provide an efficent, parallel and
 parallelizable, pure-Python and Pythonic (for its author's definition
 of the term), lazy interface to the internals of PDF files.
 
-But yes, you *can* also extract text with PLAYA now.  This is fast compared
-to other pure-Python libraries, slow compared to anything else, and I
-can't guarantee that the output is any good.  On my Thinkpad X250
-(Core i5-5300U circa 2015) I get these speeds when extracting the
-zoning bylaw of my town (486 pages of tagged PDF), using `playa --text` on
-the command-line:
+If you just want to extract text from a PDF, there are a better and/or
+faster tools and libraries out there, notably
+[pypdfium2](https://pypi.org/project/pypdfium2/) and
+[pypdf](https://pypi.org/project/pypdf/), among others.  See [these
+benchmarks](https://github.com/dhdaines/benchmarks) for a comparison.
+Nonetheless, you will notice in this comparison that:
 
-| Tool | Time |
-|------|------|
-| pdfminer.six | 36.6s |
-| pypdf | 17.7s |
-| PLAYA (1 CPU) | 18.2s |
-| PLAYA (1 CPU, PyPy 3.9) | 10.8s |
-| PLAYA (2 CPUs) | 10.5s |
-| pypdfium2 | 1.7s |
-| Poppler | 1.6s |
+- PLAYA (using 2 CPUs) is the fastest pure-Python PDF reader by far
+- PLAYA has no dependencies and no C++
+- PLAYA is MIT licensed
 
-Soon, this will get faster.  You will also be able to use
-[PAVÉS](https://github.com/dhdaines/paves) for this and other
-higher-level tasks, and it will be better, maybe.
-
-Also, for things other than extracting text, PLAYA is actually quite
-efficient.  For instance, it is very good at reading logical structure
-trees.  On the zoning bylaw above, extracting the entire tree with its
-text contents as JSON using `playa --structure` takes only 23 seconds,
-whereas `pdfplumber --structure-text` takes 69 seconds and `pdfinfo
+PLAYA is also very good at reading logical structure trees.  On the
+zoning bylaw above, extracting the entire tree with its text contents
+as JSON using `playa --structure` takes only 23 seconds, whereas
+`pdfplumber --structure-text` takes 69 seconds and `pdfinfo
 -struct-text` (which doesn't output JSON) takes 110 seconds.
+
+I cannot stress this enough, *text extraction is not the primary use
+case for PLAYA*, because [extracting text from PDFs is not
+fun](https://pypdf.readthedocs.io/en/latest/user/extract-text.html#why-text-extraction-is-hard),
+and I like fun.  Do you like fun?  Then read on.
 
 ## Installation
 
@@ -522,3 +510,6 @@ This repository obviously includes code from `pdfminer.six`.  Original
 license text is included in
 [LICENSE](https://github.com/dhdaines/playa/blob/main/LICENSE).  The
 license itself has not changed!
+
+For the moment PLAYA is developed and maintained by [David
+Huggins-Daines](https://ecolingui.ca/) <dhd@ecolingui.ca>.
