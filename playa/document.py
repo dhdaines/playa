@@ -131,26 +131,31 @@ def _open_input(fp: Union[BinaryIO, bytes]) -> Tuple[str, int, Union[bytes, mmap
 
 
 class Document:
-    """Representation of a PDF document on disk.
+    """Representation of a PDF document.
 
     Since PDF documents can be very large and complex, merely creating
-    a `Document` does very little aside from opening the file and
-    verifying that the password is correct and it is, in fact, a PDF.
-    This may, however, involve a certain amount of file access since
-    the cross-reference table and trailer must be read in order to
-    determine this (we do not treat linearized PDFs specially for the
-    moment).
+    a `Document` does very little aside from verifying that the
+    password is correct and getting a minimal amount of metadata.  In
+    general, PLAYA will try to open just about anything as a PDF, so
+    you should not expect the constructor to fail here if you give it
+    nonsense (something else may fail later on).
 
     Some metadata, such as the structure tree and page tree, will be
     loaded lazily and cached.  We do not handle modification of PDFs.
 
     Args:
-      fp: File-like object in binary mode.  Will be read using
-          `mmap` if possible, otherwise will be read into memory.
+      fp: File-like object in binary mode, or a buffer with binary data.
+          Files Will be read using `mmap` if possible.  They do not need
+          to be seekable, as if `mmap` fails the entire file will simply
+          be read into memory (so a pipe or socket ought to work).
       password: Password for decryption, if needed.
       space: the device space to use for interpreting content ("screen"
-             or "page")
+          or "page")
 
+    Raises:
+      TypeError: if `fp` is a file opened in text mode (don't do that!)
+      PDFEncryptionError: if the PDF has an unsupported encryption scheme
+      PDFPasswordIncorrect: if the password is incorrect
     """
 
     _fp: Union[BinaryIO, None] = None
