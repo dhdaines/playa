@@ -33,6 +33,8 @@ ACTION_GOTO = LIT("GoTo")
 
 @dataclass
 class Destination:
+    """PDF destinations (PDF 1.7 sect 12.3.2)"""
+
     _docref: DocumentRef
     page_idx: Union[int, None]
     display: Union[PSLiteral, None]
@@ -75,6 +77,8 @@ class Destination:
 
 @dataclass
 class Action:
+    """PDF actions (PDF 1.7 sect 12.6)"""
+
     _docref: DocumentRef
     props: Dict[str, PDFObject]
 
@@ -97,6 +101,8 @@ class Action:
 
 
 class Outline:
+    """PDF document outline (PDF 1.7 sect 12.3.3)"""
+
     _docref: DocumentRef
     props: Dict[str, PDFObject]
 
@@ -140,7 +146,17 @@ class Outline:
 
     @property
     def destination(self) -> Union[Destination, None]:
-        # Treat a GoTo action as equivalent to a destination
+        """Destination for this outline item.
+
+        Note: Special case of `GoTo` actions.
+            Since internal `GoTo` actions (PDF 1.7 sect 12.6.4.2) in
+            outlines and links are entirely equivalent to
+            destinations, if one exists, it will be returned here as
+            well.
+
+        Returns:
+            destination, if one exists.
+        """
         dest = resolve1(self.props.get("Dest"))
         if dest is not None:
             return Destination.from_dest(self.doc, dest)
@@ -159,7 +175,11 @@ class Outline:
     @property
     def element(self) -> Union[Element, None]:
         """The structure element associated with this outline item, if
-        any."""
+        any.
+
+        Returns:
+            structure element, if one exists.
+        """
         el = self.props.get("SE")
         if el is None:
             return None

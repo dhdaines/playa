@@ -8,8 +8,7 @@ import pytest
 
 import playa
 from playa.data_structures import NameTree
-from playa.document import read_header, XRefTable
-from playa.exceptions import PDFSyntaxError
+from playa.document import _open_input, Document, XRefTable
 from playa.page import TextObject
 from playa.parser import LIT
 from playa.utils import decode_text
@@ -18,19 +17,18 @@ from .data import CONTRIB, TESTDIR
 
 def test_read_header():
     """Verify reading header."""
-    with pytest.raises(PDFSyntaxError):
-        read_header(BytesIO(b"NOT-A-PDF!!!"))
-    with pytest.raises(PDFSyntaxError):
-        read_header(BytesIO(b"%PDF"))
-    with pytest.raises(PDFSyntaxError) as e:
-        read_header(BytesIO("%PDF-ÅÖÜ".encode("latin1")))
-    assert "ASCII" in str(e)
-    with pytest.raises(PDFSyntaxError) as e:
-        read_header(BytesIO(b"%PDF-OMG"))
-    assert "invalid" in str(e)
-    assert read_header(BytesIO(b"%PDF-1.7")) == ("1.7", 0)
+    version, offset, buffer = _open_input(BytesIO(b"NOT-A-PDF!!!"))
+    assert version == "1.0"
+    version, offset, buffer = _open_input(BytesIO(b"%PDF"))
+    assert version == "1.0"
+    version, offset, buffer = _open_input(BytesIO("%PDF-ÅÖÜ".encode("latin1")))
+    assert version == "1.0"
+    version, offset, buffer = _open_input(BytesIO(b"%PDF-OMG"))
+    version, offset, buffer = _open_input(BytesIO(b"%PDF-1.7"))
+    assert version == "1.7"
+    assert offset == 0
     with open(TESTDIR / "junk_before_header.pdf", "rb") as infh:
-        version, pos = read_header(infh)
+        version, pos, buffer = _open_input(infh)
         assert version == "1.4"
         assert pos == 86
 
@@ -40,6 +38,16 @@ def test_read_xref():
     with playa.open(TESTDIR / "junk_before_header.pdf") as pdf:
         # Not a fallback, we got the right one
         assert isinstance(pdf.xrefs[0], XRefTable)
+
+
+def test_bytes():
+    """Verify we can read input from a `bytes` buffer."""
+    with open(TESTDIR / "simple1.pdf", "rb") as fh:
+        buffer = fh.read()
+        doc = Document(buffer)
+        tokens = list(doc.tokens)
+        assert len(tokens) == 190
+        assert LIT("Helvetica") in tokens
 
 
 def test_tokens():

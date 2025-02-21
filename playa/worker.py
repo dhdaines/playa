@@ -38,6 +38,16 @@ def _init_worker(
     GLOBAL_DOC = boss
 
 
+def _init_worker_buffer(
+    boss: int, buffer: bytes, password: str = "", space: "DeviceSpace" = "screen"
+) -> None:
+    from playa.document import Document
+
+    global __pdf, GLOBAL_DOC
+    __pdf = Document(buffer, password=password, space=space, _boss_id=boss)
+    GLOBAL_DOC = boss
+
+
 def _set_document(doc: "Document", boss: int) -> None:
     """Call this in the worker process."""
     global __pdf, GLOBAL_DOC

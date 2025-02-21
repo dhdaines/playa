@@ -97,76 +97,63 @@ LITERAL_PAGES = LIT("Pages")
 INHERITABLE_PAGE_ATTRS = {"Resources", "MediaBox", "CropBox", "Rotate"}
 
 
-def read_header(fp: BinaryIO) -> Tuple[str, int]:
-    """Read the PDF header and return the (initial) version string and
-    its position.
+def _find_header(buffer: Union[bytes, mmap.mmap]) -> Tuple[bytes, int]:
+    start = buffer.find(b"%PDF-")
+    if start == -1:
+        log.warning("Could not find b'%PDF-' header, is this a PDF?")
+        return b"", 0
+    return buffer[start : start + 8], start
 
-    Sets the file pointer to after the header (this is not reliable).
 
-    Note that this version can be overridden in the document catalog.
-
-    """
-    try:
-        hdr = fp.read(8)
-        start = 0
-    except IOError as err:
-        raise PDFSyntaxError("Failed to read PDF header") from err
-    if not hdr.startswith(b"%PDF-"):
-        # Try harder... there might be some extra junk before it
-        fp.seek(0, 0)
-        hdr = fp.read(4096)  # FIXME: this is arbitrary...
-        start = hdr.find(b"%PDF-")
-        if start == -1:
-            raise PDFSyntaxError("Could not find b'%%PDF-', is this a PDF?")
-        hdr = hdr[start : start + 8]
-        fp.seek(start + 8)
-        log.debug("Found header at position %d: %r", start, hdr)
+def _open_input(fp: Union[BinaryIO, bytes]) -> Tuple[str, int, Union[bytes, mmap.mmap]]:
+    if isinstance(fp, bytes):
+        buffer: Union[bytes, mmap.mmap] = fp
+    else:
+        try:
+            buffer = mmap.mmap(fp.fileno(), 0, access=mmap.ACCESS_READ)
+        except io.UnsupportedOperation:
+            log.warning("mmap not supported on %r, reading document into memory", fp)
+            buffer = fp.read()
+        except ValueError:
+            raise
+    hdr, offset = _find_header(buffer)
     try:
         version = hdr[5:].decode("ascii")
-    except UnicodeDecodeError as err:
-        raise PDFSyntaxError(
-            "Version number in %r contains non-ASCII characters" % hdr
-        ) from err
+    except UnicodeDecodeError:
+        log.warning("Version number in header %r contains non-ASCII characters", hdr)
+        version = "1.0"
     if not re.match(r"\d\.\d", version):
-        raise PDFSyntaxError("Version number in  %r is invalid" % hdr)
-    return version, start
-
-
-class OutlineItem(NamedTuple):
-    """The most relevant fields of an outline item dictionary.
-
-    Danger: Deprecated
-        This interface is deprecated.  It will be removed in PLAYA 1.0.
-    """
-
-    level: int
-    title: str
-    dest: Union[PSLiteral, bytes, list, None]
-    action: Union[dict, None]
-    se: Union[ObjRef, None]
+        log.warning("Version number in header %r is invalid", hdr)
+        version = "1.0"
+    return version, offset, buffer
 
 
 class Document:
-    """Representation of a PDF document on disk.
+    """Representation of a PDF document.
 
     Since PDF documents can be very large and complex, merely creating
-    a `Document` does very little aside from opening the file and
-    verifying that the password is correct and it is, in fact, a PDF.
-    This may, however, involve a certain amount of file access since
-    the cross-reference table and trailer must be read in order to
-    determine this (we do not treat linearized PDFs specially for the
-    moment).
+    a `Document` does very little aside from verifying that the
+    password is correct and getting a minimal amount of metadata.  In
+    general, PLAYA will try to open just about anything as a PDF, so
+    you should not expect the constructor to fail here if you give it
+    nonsense (something else may fail later on).
 
     Some metadata, such as the structure tree and page tree, will be
     loaded lazily and cached.  We do not handle modification of PDFs.
 
     Args:
-      fp: File-like object in binary mode.  Will be read using
-          `mmap` if possible, otherwise will be read into memory.
+      fp: File-like object in binary mode, or a buffer with binary data.
+          Files Will be read using `mmap` if possible.  They do not need
+          to be seekable, as if `mmap` fails the entire file will simply
+          be read into memory (so a pipe or socket ought to work).
       password: Password for decryption, if needed.
       space: the device space to use for interpreting content ("screen"
-             or "page")
+          or "page")
 
+    Raises:
+      TypeError: if `fp` is a file opened in text mode (don't do that!)
+      PDFEncryptionError: if the PDF has an unsupported encryption scheme
+      PDFPasswordIncorrect: if the password is incorrect
     """
 
     _fp: Union[BinaryIO, None] = None
@@ -189,7 +176,7 @@ class Document:
 
     def __init__(
         self,
-        fp: BinaryIO,
+        fp: Union[BinaryIO, bytes],
         password: str = "",
         space: DeviceSpace = "screen",
         _boss_id: int = 0,
@@ -210,24 +197,7 @@ class Document:
         self._cached_fonts: Dict[object, Font] = {}
         if isinstance(fp, io.TextIOBase):
             raise TypeError("fp is not a binary file")
-        # The header is frequently mangled, in which case we will try to read the
-        # file anyway.
-        try:
-            self.pdf_version, self.offset = read_header(fp)
-        except PDFSyntaxError:
-            log.warning("PDF header not found, will try to read the file anyway")
-            self.pdf_version = "UNKNOWN"
-            self.offset = 0
-        try:
-            self.buffer: Union[bytes, mmap.mmap] = mmap.mmap(
-                fp.fileno(), 0, access=mmap.ACCESS_READ
-            )
-        except io.UnsupportedOperation:
-            log.warning("mmap not supported on %r, reading document into memory", fp)
-            fp.seek(0, 0)
-            self.buffer = fp.read()
-        except ValueError:
-            raise
+        self.pdf_version, self.offset, self.buffer = _open_input(fp)
         self.is_printable = self.is_modifiable = self.is_extractable = True
         # Getting the XRef table and trailer is done non-lazily
         # because they contain encryption information among other
@@ -451,8 +421,9 @@ class Document:
     def __getitem__(self, objid: int) -> PDFObject:
         """Get an indirect object from the PDF.
 
-        Note that the behaviour in the case of a non-existent object,
-        while Pythonic, is not PDFic, as PDF 1.7 sec 7.3.10 states:
+        Note that the behaviour in the case of a non-existent object
+        (raising `IndexError`), while Pythonic, is not PDFic, as PDF
+        1.7 sec 7.3.10 states:
 
         > An indirect reference to an undefined object shall not be
         considered an error by a conforming reader; it shall be
@@ -461,6 +432,7 @@ class Document:
         Raises:
           ValueError: if Document is not initialized
           IndexError: if objid does not exist in PDF
+
         """
         if not self.xrefs:
             raise ValueError("Document is not initialized")
@@ -539,7 +511,7 @@ class Document:
         return Outline(self)
 
     @property
-    def outlines(self) -> Iterator[OutlineItem]:
+    def outlines(self) -> Iterator["OutlineItem"]:
         """Iterate over the PDF document outline.
 
         Danger: Deprecated
@@ -552,7 +524,7 @@ class Document:
         if "Outlines" not in self.catalog:
             raise KeyError
 
-        def search(entry: object, level: int) -> Iterator[OutlineItem]:
+        def search(entry: object, level: int) -> Iterator["OutlineItem"]:
             entry = dict_value(entry)
             if "Title" in entry:
                 if "A" in entry or "Dest" in entry:
@@ -990,6 +962,15 @@ class Destinations:
                 self.dests_tree = NameTree(names["Dests"])
 
     def __iter__(self) -> Iterator[str]:
+        """Iterate over named destinations.
+
+        Danger: Beware of corrupted PDFs
+            This simply iterates over the names listed in the PDF, nad
+            does not attempt to actually parse the destinations
+            (because that's pretty slow).  If the PDF is broken, you
+            may encounter exceptions when actually trying to access
+            them by name.
+        """
         if self.dests_dict is not None:
             yield from self.dests_dict
         elif self.dests_tree is not None:
@@ -998,6 +979,16 @@ class Destinations:
                 yield ks
 
     def __getitem__(self, name: Union[bytes, str, PSLiteral]) -> Destination:
+        """Get a named destination.
+
+        Args:
+            name: The name of the destination.
+
+        Raises:
+            KeyError: If no such destination exists.
+            TypeError: If the PDF is damaged and the destinations tree
+                contains something unexpected or missing.
+        """
         if isinstance(name, bytes):
             name = decode_text(name)
         elif isinstance(name, PSLiteral):
@@ -1028,3 +1019,17 @@ class Destinations:
     def doc(self) -> "Document":
         """Get associated document if it exists."""
         return _deref_document(self._docref)
+
+
+class OutlineItem(NamedTuple):
+    """The most relevant fields of an outline item dictionary.
+
+    Danger: Deprecated
+        This interface is deprecated.  It will be removed in PLAYA 1.0.
+    """
+
+    level: int
+    title: str
+    dest: Union[PSLiteral, bytes, list, None]
+    action: Union[dict, None]
+    se: Union[ObjRef, None]
