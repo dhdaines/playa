@@ -18,6 +18,7 @@ def expand_titles(outline: Outline) -> List:
         for c in child:
             out.append(expand_one(c))
         return out
+
     out = []
     for child in outline:
         out.extend(expand_one(child))
@@ -28,7 +29,7 @@ def test_outline():
     """Test basic outline functionality."""
     with playa.open(TESTDIR / "pdf_structure.pdf") as pdf:
         titles = expand_titles(pdf.outline)
-        assert titles == ['Titre 1', ['Titre 2', ['Tableau']]]
+        assert titles == ["Titre 1", ["Titre 2", ["Tableau"]]]
 
 
 def expand(outline: Outline) -> List:
@@ -37,6 +38,7 @@ def expand(outline: Outline) -> List:
         for c in child:
             out.append(expand_one(c))
         return out
+
     out = []
     for child in outline:
         out.extend(expand_one(child))
@@ -59,5 +61,5 @@ def test_outlines(path) -> None:
             pytest.skip("password incorrect or cryptography package not installed")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     test_outline()

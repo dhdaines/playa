@@ -1597,6 +1597,7 @@ class Destinations:
     These either come as a NameTree or a dict, depending on the
     version of the PDF standard, so this abstracts that away.
     """
+
     dests_dict: Union[Dict[str, PDFObject], None] = None
     dests_tree: Union[NameTree, None] = None
 
@@ -1640,7 +1641,7 @@ class Destinations:
             for k, v in self.dests_tree:
                 if decode_text(k) == name:
                     dest = list_value(v)
-                    self.dests[name] = Destination.from_list(self.doc, v)
+                    self.dests[name] = Destination.from_list(self.doc, dest)
                     break
         # This will also raise KeyError if necessary
         return self.dests[name]
