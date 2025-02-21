@@ -1620,9 +1620,11 @@ class Destinations:
                 ks = decode_text(kb)
                 yield ks
 
-    def __getitem__(self, name: Union[bytes, str]) -> Destination:
+    def __getitem__(self, name: Union[bytes, str, PSLiteral]) -> Destination:
         if isinstance(name, bytes):
             name = decode_text(name)
+        elif isinstance(name, PSLiteral):
+            name = literal_name(name)
         if name in self.dests:
             return self.dests[name]
         elif self.dests_dict is not None:

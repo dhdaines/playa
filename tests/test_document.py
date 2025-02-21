@@ -131,6 +131,7 @@ def test_names():
         assert names == ["382901691/01_UBL.xml", "382901691/02_EAN_UCC.xml"]
 
 
+@pytest.mark.filterwarnings("ignore::DeprecationWarning")
 @pytest.mark.skipif(not CONTRIB.exists(), reason="contrib samples not present")
 def test_dests():
     with playa.open(CONTRIB / "issue620f.pdf") as doc:
@@ -148,6 +149,7 @@ def test_destinations():
         assert names == ["Page.1", "Page.2"]
 
 
+@pytest.mark.filterwarnings("ignore::DeprecationWarning")
 @pytest.mark.skipif(not CONTRIB.exists(), reason="contrib samples not present")
 def test_outlines():
     with playa.open(

@@ -34,7 +34,7 @@ def test_outline():
 
 def expand(outline: Outline) -> List:
     def expand_one(child):
-        out = [child.title, child.destination, child.action, child.element]
+        out = [child.title, child.destination, child.element]
         for c in child:
             out.append(expand_one(c))
         return out
@@ -56,7 +56,7 @@ def test_outlines(path) -> None:
             with playa.open(path, password=password) as pdf:
                 outline = pdf.outline
                 if outline is not None:
-                    expand(outline)
+                    print(expand(outline))
         except PDFEncryptionError:
             pytest.skip("password incorrect or cryptography package not installed")
 
