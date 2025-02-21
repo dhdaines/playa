@@ -97,7 +97,7 @@ LITERAL_PAGES = LIT("Pages")
 INHERITABLE_PAGE_ATTRS = {"Resources", "MediaBox", "CropBox", "Rotate"}
 
 
-def _find_header(buffer: bytes) -> Tuple[bytes, int]:
+def _find_header(buffer: Union[bytes, mmap.mmap]) -> Tuple[bytes, int]:
     start = buffer.find(b"%PDF-")
     if start == -1:
         log.warning("Could not find b'%PDF-' header, is this a PDF?")
@@ -107,12 +107,10 @@ def _find_header(buffer: bytes) -> Tuple[bytes, int]:
 
 def _open_input(fp: Union[BinaryIO, bytes]) -> Tuple[str, int, Union[bytes, mmap.mmap]]:
     if isinstance(fp, bytes):
-        buffer = fp
+        buffer: Union[bytes, mmap.mmap] = fp
     else:
         try:
-            buffer: Union[bytes, mmap.mmap] = mmap.mmap(
-                fp.fileno(), 0, access=mmap.ACCESS_READ
-            )
+            buffer = mmap.mmap(fp.fileno(), 0, access=mmap.ACCESS_READ)
         except io.UnsupportedOperation:
             log.warning("mmap not supported on %r, reading document into memory", fp)
             buffer = fp.read()
