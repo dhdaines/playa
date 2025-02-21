@@ -90,7 +90,7 @@ for obj in pdf.objects:
 In this case it is possible you will encounter multiple objects with
 the same `objid` due to the "incremental updates" feature of PDF.
 Currently, iterating over the objects in a particular stream is
-possible, but complicated.  It may be simplified in PLAYA 0.3.
+possible, but complicated.
 
 You can also access indirect objects by number (this will return the
 object with most recent generation number):
@@ -152,11 +152,10 @@ print(f"Page {page.label} is {page.width} x {page.height}")
 Since PDF is at heart a page-oriented, presentation format, many types
 of metadata are mostly accessible via the page objects.
 
-For example, annotations (internal or external links) are only
-accessible via pages (FIXME: No reason we couldn't access them from
-the document too).  There are umpteen zillion kinds of annotations
-(PDF 1.7 sect 12.5.6) but they all have at least these attributes in
-common:
+For example, annotations (internal or external links) are defined on
+pages (since their position would not make any sense otherwise).
+There are umpteen zillion kinds of annotations (PDF 1.7 sect 12.5.6)
+but they all have at least these attributes in common:
 
 ```python
 for annot in page.annotations:

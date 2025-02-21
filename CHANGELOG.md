@@ -1,4 +1,4 @@
-## PLAYA 0.3.0: unreleased
+## PLAYA 0.3.0: 2025-02-20
 
 - API for text extraction
 - Extract text from XObjects with `playa --text`
@@ -10,13 +10,6 @@
 - Speed up iteration over particular object types
 - Deprecate `outlines` API and add tree-structured `outline`
 - Deprecate `dests` API and add friendly `destinations`
-
-### TODO
-
-- Create friendly API for actions
-- Expose `XRef` API for users to look around in
-- Methods for all `ContentObject` to format as JSON/dict
-  - Do not want to use Pydantic but be Pydantic-like
 
 ## PLAYA 0.2.10: 2025-02-18
 - Fix serious bug in rare ' and " text operators

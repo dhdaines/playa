@@ -756,11 +756,14 @@ def read_header(fp: BinaryIO) -> Tuple[str, int]:
 
 
 class OutlineItem(NamedTuple):
-    """The most relevant fields of an outline item dictionary."""
+    """The most relevant fields of an outline item dictionary.
+
+    Danger: Deprecated
+        This interface is deprecated.  It will be removed in PLAYA 1.0.
+    """
 
     level: int
     title: str
-    # FIXME: Create Destination and Action types
     dest: Union[PSLiteral, bytes, list, None]
     action: Union[dict, None]
     se: Union[ObjRef, None]
@@ -966,8 +969,7 @@ class Document:
         """Return the PDF structure tree.
 
         Danger: Deprecated
-            This interface is deprecated.  It will be removed or
-            modified in PLAYA 1.0.
+            This interface is deprecated.  It will be removed in PLAYA 1.0.
         """
         warnings.warn(
             "The `structtree` property is deprecated and will be removed in PLAYA 1.0."
@@ -1164,8 +1166,7 @@ class Document:
         """Iterate over the PDF document outline.
 
         Danger: Deprecated
-            This interface is deprecated.  It will be removed or
-            modified in PLAYA 1.0.
+            This interface is deprecated.  It will be removed in PLAYA 1.0.
         """
         warnings.warn(
             "The `outlines` property is deprecated and will be removed in PLAYA 1.0.",
@@ -1319,8 +1320,7 @@ class Document:
         therefore, you get them as `str`.
 
         Danger: Deprecated
-            This interface is deprecated.  It will be removed or
-            modified in PLAYA 1.0.
+            This interface is deprecated.  It will be removed in PLAYA 1.0.
 
         Raises:
           KeyError: if no destination tree exists
