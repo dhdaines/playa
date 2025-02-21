@@ -4,6 +4,7 @@
     options:
         members:
         - open
+        - parse
 
 ::: playa.document
     options:
