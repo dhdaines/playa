@@ -8,7 +8,7 @@ import pytest
 
 import playa
 from playa.data_structures import NameTree
-from playa.document import read_header, XRefTable
+from playa.document import read_header, Document, XRefTable
 from playa.exceptions import PDFSyntaxError
 from playa.page import TextObject
 from playa.parser import LIT
@@ -40,6 +40,16 @@ def test_read_xref():
     with playa.open(TESTDIR / "junk_before_header.pdf") as pdf:
         # Not a fallback, we got the right one
         assert isinstance(pdf.xrefs[0], XRefTable)
+
+
+def test_bytes():
+    """Verify we can read input from a `bytes` buffer."""
+    with open(TESTDIR / "simple1.pdf", "rb") as fh:
+        buffer = fh.read()
+        doc = Document(buffer)
+        tokens = list(doc.tokens)
+        assert len(tokens) == 190
+        assert LIT("Helvetica") in tokens
 
 
 def test_tokens():

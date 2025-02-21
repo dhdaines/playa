@@ -97,7 +97,14 @@ LITERAL_PAGES = LIT("Pages")
 INHERITABLE_PAGE_ATTRS = {"Resources", "MediaBox", "CropBox", "Rotate"}
 
 
-def read_header(fp: BinaryIO) -> Tuple[str, int]:
+def _find_header(buffer: bytes) -> Tuple[bytes, int]:
+    start = buffer.find(b"%PDF-")
+    if start == -1:
+        raise PDFSyntaxError("Could not find b'%PDF-', is this a PDF?")
+    return buffer[start : start + 8], start
+
+
+def read_header(fp: Union[bytes, BinaryIO]) -> Tuple[str, int]:
     """Read the PDF header and return the (initial) version string and
     its position.
 
@@ -106,21 +113,21 @@ def read_header(fp: BinaryIO) -> Tuple[str, int]:
     Note that this version can be overridden in the document catalog.
 
     """
-    try:
-        hdr = fp.read(8)
-        start = 0
-    except IOError as err:
-        raise PDFSyntaxError("Failed to read PDF header") from err
-    if not hdr.startswith(b"%PDF-"):
-        # Try harder... there might be some extra junk before it
-        fp.seek(0, 0)
-        hdr = fp.read(4096)  # FIXME: this is arbitrary...
-        start = hdr.find(b"%PDF-")
-        if start == -1:
-            raise PDFSyntaxError("Could not find b'%%PDF-', is this a PDF?")
-        hdr = hdr[start : start + 8]
-        fp.seek(start + 8)
-        log.debug("Found header at position %d: %r", start, hdr)
+    if isinstance(fp, bytes):
+        hdr, start = _find_header(fp)
+    else:
+        try:
+            hdr = fp.read(8)
+            start = 0
+        except IOError as err:
+            raise PDFSyntaxError("Failed to read PDF header") from err
+        if not hdr.startswith(b"%PDF-"):
+            # Try harder... there might be some extra junk before it
+            fp.seek(0, 0)
+            hdr = fp.read(4096)  # FIXME: this is arbitrary...
+            hdr, start = _find_header(hdr)
+            fp.seek(start + 8)
+            log.debug("Found header at position %d: %r", start, hdr)
     try:
         version = hdr[5:].decode("ascii")
     except UnicodeDecodeError as err:
@@ -132,18 +139,29 @@ def read_header(fp: BinaryIO) -> Tuple[str, int]:
     return version, start
 
 
-class OutlineItem(NamedTuple):
-    """The most relevant fields of an outline item dictionary.
-
-    Danger: Deprecated
-        This interface is deprecated.  It will be removed in PLAYA 1.0.
-    """
-
-    level: int
-    title: str
-    dest: Union[PSLiteral, bytes, list, None]
-    action: Union[dict, None]
-    se: Union[ObjRef, None]
+def _open_input(fp: Union[BinaryIO, bytes]) -> Tuple[str, int, Union[bytes, mmap.mmap]]:
+    # The header is frequently mangled, in which case we will try to read the
+    # file anyway.
+    try:
+        pdf_version, offset = read_header(fp)
+    except PDFSyntaxError:
+        log.warning("PDF header not found, will try to read the file anyway")
+        pdf_version = "UNKNOWN"
+        offset = 0
+    if isinstance(fp, bytes):
+        return pdf_version, offset, fp
+    else:
+        try:
+            buffer: Union[bytes, mmap.mmap] = mmap.mmap(
+                fp.fileno(), 0, access=mmap.ACCESS_READ
+            )
+        except io.UnsupportedOperation:
+            log.warning("mmap not supported on %r, reading document into memory", fp)
+            fp.seek(0, 0)
+            buffer = fp.read()
+        except ValueError:
+            raise
+        return pdf_version, offset, buffer
 
 
 class Document:
@@ -189,7 +207,7 @@ class Document:
 
     def __init__(
         self,
-        fp: BinaryIO,
+        fp: Union[BinaryIO, bytes],
         password: str = "",
         space: DeviceSpace = "screen",
         _boss_id: int = 0,
@@ -210,24 +228,7 @@ class Document:
         self._cached_fonts: Dict[object, Font] = {}
         if isinstance(fp, io.TextIOBase):
             raise TypeError("fp is not a binary file")
-        # The header is frequently mangled, in which case we will try to read the
-        # file anyway.
-        try:
-            self.pdf_version, self.offset = read_header(fp)
-        except PDFSyntaxError:
-            log.warning("PDF header not found, will try to read the file anyway")
-            self.pdf_version = "UNKNOWN"
-            self.offset = 0
-        try:
-            self.buffer: Union[bytes, mmap.mmap] = mmap.mmap(
-                fp.fileno(), 0, access=mmap.ACCESS_READ
-            )
-        except io.UnsupportedOperation:
-            log.warning("mmap not supported on %r, reading document into memory", fp)
-            fp.seek(0, 0)
-            self.buffer = fp.read()
-        except ValueError:
-            raise
+        self.pdf_version, self.offset, self.buffer = _open_input(fp)
         self.is_printable = self.is_modifiable = self.is_extractable = True
         # Getting the XRef table and trailer is done non-lazily
         # because they contain encryption information among other
@@ -539,7 +540,7 @@ class Document:
         return Outline(self)
 
     @property
-    def outlines(self) -> Iterator[OutlineItem]:
+    def outlines(self) -> Iterator["OutlineItem"]:
         """Iterate over the PDF document outline.
 
         Danger: Deprecated
@@ -552,7 +553,7 @@ class Document:
         if "Outlines" not in self.catalog:
             raise KeyError
 
-        def search(entry: object, level: int) -> Iterator[OutlineItem]:
+        def search(entry: object, level: int) -> Iterator["OutlineItem"]:
             entry = dict_value(entry)
             if "Title" in entry:
                 if "A" in entry or "Dest" in entry:
@@ -1028,3 +1029,16 @@ class Destinations:
     def doc(self) -> "Document":
         """Get associated document if it exists."""
         return _deref_document(self._docref)
+
+class OutlineItem(NamedTuple):
+    """The most relevant fields of an outline item dictionary.
+
+    Danger: Deprecated
+        This interface is deprecated.  It will be removed in PLAYA 1.0.
+    """
+
+    level: int
+    title: str
+    dest: Union[PSLiteral, bytes, list, None]
+    action: Union[dict, None]
+    se: Union[ObjRef, None]
