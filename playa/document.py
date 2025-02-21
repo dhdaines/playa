@@ -1614,15 +1614,10 @@ class Destinations:
 
     def __iter__(self) -> Iterator[str]:
         if self.dests_dict is not None:
-            for k in self.dests_dict:
-                if k not in self.dests:
-                    self.__getitem__(k)
-                yield k
+            yield from self.dests_dict
         elif self.dests_tree is not None:
             for kb, _ in self.dests_tree:
                 ks = decode_text(kb)
-                if ks not in self.dests:
-                    self.__getitem__(ks)
                 yield ks
 
     def __getitem__(self, name: Union[bytes, str]) -> Destination:
@@ -1640,8 +1635,12 @@ class Destinations:
             # the keys (and we cache the result...)
             for k, v in self.dests_tree:
                 if decode_text(k) == name:
-                    dest = list_value(v)
-                    self.dests[name] = Destination.from_list(self.doc, dest)
+                    dest = resolve1(v)
+                    if isinstance(dest, list):
+                        self.dests[name] = Destination.from_list(self.doc, dest)
+                    elif isinstance(dest, dict):
+                        dest = list_value(resolve1(dest["D"]))
+                        self.dests[name] = Destination.from_list(self.doc, dest)
                     break
         # This will also raise KeyError if necessary
         return self.dests[name]

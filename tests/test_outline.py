@@ -47,7 +47,7 @@ def expand(outline: Outline) -> List:
 
 @pytest.mark.parametrize("path", ALLPDFS, ids=str)
 def test_outlines(path) -> None:
-    """Verify that we can read outlines and destinations when they exist."""
+    """Verify that we can read outlines when they exist."""
     if path.name in XFAILS:
         pytest.xfail("Intentionally corrupt file: %s" % path.name)
     passwords = PASSWORDS.get(path.name, [""])
@@ -57,6 +57,21 @@ def test_outlines(path) -> None:
                 outline = pdf.outline
                 if outline is not None:
                     expand(outline)
+        except PDFEncryptionError:
+            pytest.skip("password incorrect or cryptography package not installed")
+
+
+@pytest.mark.parametrize("path", ALLPDFS, ids=str)
+def test_destinations(path) -> None:
+    """Verify that we can read destinations when they exist."""
+    if path.name in XFAILS:
+        pytest.xfail("Intentionally corrupt file: %s" % path.name)
+    passwords = PASSWORDS.get(path.name, [""])
+    for password in passwords:
+        try:
+            with playa.open(path, password=password) as pdf:
+                for k in pdf.destinations:
+                    print(k, pdf.destinations[k])
         except PDFEncryptionError:
             pytest.skip("password incorrect or cryptography package not installed")
 

@@ -12,16 +12,12 @@ from playa.structure import Element
 from playa.utils import decode_text
 from playa.worker import (
     DocumentRef,
-    PageRef,
     _ref_document,
-    _ref_page,
     _deref_document,
-    _deref_page,
 )
 
 if TYPE_CHECKING:
     from playa.document import Document
-    from playa.page import Page
 
 LOG = logging.getLogger(__name__)
 DISPLAY_XYZ = LIT("XYZ")
@@ -36,14 +32,10 @@ DISPLAY_FITBV = LIT("FitBV")
 
 @dataclass
 class Destination:
-    _pageref: PageRef
-    display: PSLiteral
+    _docref: DocumentRef
+    page_idx: Union[int, None]
+    display: Union[PSLiteral, None]
     coords: Tuple[Union[float, None], ...]
-
-    @property
-    def page(self) -> "Page":
-        """Containing page for this destination."""
-        return _deref_page(self._pageref)
 
     @classmethod
     def from_outline(cls, outline: "Outline") -> Union["Destination", None]:
@@ -60,19 +52,25 @@ class Destination:
     @classmethod
     def from_list(cls, doc: "Document", dest: Sequence) -> "Destination":
         pageobj, display, *args = dest
-        pages = doc.pages
+        page_idx: Union[int, None] = None
         if isinstance(pageobj, int):
-            page = pages[pageobj + 1]
+            # Not really sure if this is page number or page index...
+            page_idx = pageobj - 1
         elif isinstance(pageobj, ObjRef):
-            page = pages.by_id(pageobj.objid)
-        else:
-            LOG.warning("Unknown page type: %r", pageobj)
-            page = pages[0]
+            try:
+                page_idx = doc.pages.by_id(pageobj.objid).page_idx
+            except KeyError:
+                LOG.warning("Invalid page object in destination: %r", pageobj)
         if not isinstance(display, PSLiteral):
             LOG.warning("Unknown display type: %r", display)
-            display = LIT("WTF")
+            display = None
         coords = tuple(x if isinstance(x, (int, float)) else None for x in args)
-        return Destination(_pageref=_ref_page(page), display=display, coords=coords)
+        return Destination(
+            _docref=_ref_document(doc),
+            page_idx=page_idx,
+            display=display,
+            coords=coords,
+        )
 
 
 @dataclass

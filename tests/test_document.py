@@ -139,6 +139,16 @@ def test_dests():
 
 
 @pytest.mark.skipif(not CONTRIB.exists(), reason="contrib samples not present")
+def test_destinations():
+    with playa.open(CONTRIB / "issue620f.pdf") as doc:
+        assert "Page.1" in doc.destinations
+        assert "Page.2" in doc.destinations
+    with playa.open(CONTRIB / "issue620f.pdf") as doc:
+        names = list(doc.destinations)
+        assert names == ["Page.1", "Page.2"]
+
+
+@pytest.mark.skipif(not CONTRIB.exists(), reason="contrib samples not present")
 def test_outlines():
     with playa.open(
         CONTRIB / "2023-04-06-ODJ et Résolutions-séance xtra 6 avril 2023.pdf"
