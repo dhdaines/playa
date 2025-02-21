@@ -85,7 +85,7 @@ from playa.utils import (
 )
 from playa.structtree import StructTree
 from playa.structure import Tree
-from playa.outline import Outline
+from playa.outline import Outline, Destination
 from playa.worker import (
     _set_document,
     _ref_document,
@@ -792,6 +792,7 @@ class Document:
     _fp: Union[BinaryIO, None] = None
     _pages: Union["PageList", None] = None
     _pool: Union[Executor, None] = None
+    _destinations: Union["Destinations", None] = None
 
     def __enter__(self) -> "Document":
         return self
@@ -1297,6 +1298,13 @@ class Document:
         return dict_value(self.catalog["Names"])
 
     @property
+    def destinations(self) -> "Destinations":
+        """Named destinations as an iterable/addressable `Destinations` object."""
+        if self._destinations is None:
+            self._destinations = Destinations(self)
+        return self._destinations
+
+    @property
     def dests(self) -> Iterable[Tuple[str, list]]:
         """Iterable of named destinations as (name, destination) tuples
         (PDF 1.7 sec 12.3.2).
@@ -1581,3 +1589,63 @@ class PageLabels(NumberTree):
             log.warning("Unknown page label style: %r", style)
             label = ""
         return label
+
+
+class Destinations:
+    """Mapping of named destinations.
+
+    These either come as a NameTree or a dict, depending on the
+    version of the PDF standard, so this abstracts that away.
+    """
+    dests_dict: Union[Dict[str, PDFObject], None] = None
+    dests_tree: Union[NameTree, None] = None
+
+    def __init__(self, doc: Document) -> None:
+        self._docref = _ref_document(doc)
+        self.dests: Dict[str, Destination] = {}
+        if "Dests" in doc.catalog:
+            # PDF-1.1: dictionary
+            self.dests_dict = dict_value(doc.catalog["Dests"])
+        elif "Names" in doc.catalog:
+            names = dict_value(doc.catalog["Names"])
+            if "Dests" in names:
+                self.dests_tree = NameTree(names["Dests"])
+
+    def __iter__(self) -> Iterator[str]:
+        if self.dests_dict is not None:
+            for k in self.dests_dict:
+                if k not in self.dests:
+                    self.__getitem__(k)
+                yield k
+        elif self.dests_tree is not None:
+            for kb, _ in self.dests_tree:
+                ks = decode_text(kb)
+                if ks not in self.dests:
+                    self.__getitem__(ks)
+                yield ks
+
+    def __getitem__(self, name: Union[bytes, str]) -> Destination:
+        if isinstance(name, bytes):
+            name = decode_text(name)
+        if name in self.dests:
+            return self.dests[name]
+        elif self.dests_dict is not None:
+            # This will raise KeyError or TypeError if necessary, so
+            # we don't have to do it explicitly
+            destlist = list_value(self.dests_dict[name])
+            self.dests[name] = Destination.from_list(self.doc, destlist)
+        elif self.dests_tree is not None:
+            # This is not the most efficient, but we need to decode
+            # the keys (and we cache the result...)
+            for k, v in self.dests_tree:
+                if decode_text(k) == name:
+                    dest = list_value(v)
+                    self.dests[name] = Destination.from_list(self.doc, v)
+                    break
+        # This will also raise KeyError if necessary
+        return self.dests[name]
+
+    @property
+    def doc(self) -> "Document":
+        """Get associated document if it exists."""
+        return _deref_document(self._docref)
