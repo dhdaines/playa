@@ -22,6 +22,7 @@ from typing import Union
 from playa.worker import _init_worker
 from playa.color import Color, ColorSpace
 from playa.document import Document, PageList
+from playa.exceptions import PDFException
 from playa.page import (
     Page,
     DeviceSpace,
@@ -54,6 +55,7 @@ __all__ = [
     "TextState",
     "Token",
     "ObjRef",
+    "PDFException",
     "resolve",
     "resolve_all",
     "__version__",

@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Dict, Iterator, Sequence, Tuple, Union
 
 from playa.parser import PDFObject, PSLiteral
-from playa.pdftypes import dict_value, ObjRef, LIT, resolve1, num_value
+from playa.pdftypes import dict_value, ObjRef, LIT, resolve1
 from playa.structure import Element
 from playa.utils import decode_text
 from playa.worker import (
@@ -38,7 +38,7 @@ DISPLAY_FITBV = LIT("FitBV")
 class Destination:
     _pageref: PageRef
     display: PSLiteral
-    coords: Tuple[float, ...]
+    coords: Tuple[Union[float, None], ...]
 
     @property
     def page(self) -> "Page":
@@ -71,7 +71,7 @@ class Destination:
         if not isinstance(display, PSLiteral):
             LOG.warning("Unknown display type: %r", display)
             display = LIT("WTF")
-        coords = tuple(num_value(x) for x in args)
+        coords = tuple(x if isinstance(x, (int, float)) else None for x in args)
         return Destination(_pageref=_ref_page(page), display=display, coords=coords)
 
 

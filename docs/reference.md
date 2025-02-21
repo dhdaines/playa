@@ -19,4 +19,7 @@
 
 ::: playa.structure
 
+::: playa.outline
+
 ::: playa.worker
+

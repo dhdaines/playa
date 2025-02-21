@@ -8,12 +8,11 @@
 - Deprecate `structtree` and add lazy `structure` API
 - Extract logical structure in CLI
 - Speed up iteration over particular object types
+- Deprecate `outlines` API and add tree-structured `outline`
+- Deprecate `dests` API and add friendly `destinations`
 
 ### TODO
 
-- Deprecate `outlines` API and add tree-structured `outline`
-  - Link structured elements in outline to structure tree (lazily)
-- Deprecate `dests` API and add friendly `destinations`
 - Create friendly API for actions
 - Expose `XRef` API for users to look around in
 - Methods for all `ContentObject` to format as JSON/dict
