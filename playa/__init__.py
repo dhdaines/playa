@@ -107,10 +107,12 @@ def parse(
 ) -> Document:
     """Read a PDF document from binary data.
 
-    NOTE: When using multiple processes, this results in the entire
-    buffer being copied to the worker processes for the moment, which
-    may cause some overhead.  It is preferable to use `open` on a
-    filesystem path if possible, since that uses memory-mapped I/O.
+    Note: Potential slowness
+        When using multiple processes, this results in the entire
+        buffer being copied to the worker processes for the moment,
+        which may cause some overhead.  It is preferable to use `open`
+        on a filesystem path if possible, since that uses
+        memory-mapped I/O.
 
     Args:
         buffer: Buffer containing PDF data.

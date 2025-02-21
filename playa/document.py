@@ -423,8 +423,9 @@ class Document:
     def __getitem__(self, objid: int) -> PDFObject:
         """Get an indirect object from the PDF.
 
-        Note that the behaviour in the case of a non-existent object,
-        while Pythonic, is not PDFic, as PDF 1.7 sec 7.3.10 states:
+        Note that the behaviour in the case of a non-existent object
+        (raising `IndexError`), while Pythonic, is not PDFic, as PDF
+        1.7 sec 7.3.10 states:
 
         > An indirect reference to an undefined object shall not be
         considered an error by a conforming reader; it shall be
@@ -433,6 +434,7 @@ class Document:
         Raises:
           ValueError: if Document is not initialized
           IndexError: if objid does not exist in PDF
+
         """
         if not self.xrefs:
             raise ValueError("Document is not initialized")
@@ -962,6 +964,15 @@ class Destinations:
                 self.dests_tree = NameTree(names["Dests"])
 
     def __iter__(self) -> Iterator[str]:
+        """Iterate over named destinations.
+
+        Danger: Beware of corrupted PDFs
+            This simply iterates over the names listed in the PDF, nad
+            does not attempt to actually parse the destinations
+            (because that's pretty slow).  If the PDF is broken, you
+            may encounter exceptions when actually trying to access
+            them by name.
+        """
         if self.dests_dict is not None:
             yield from self.dests_dict
         elif self.dests_tree is not None:
@@ -970,6 +981,16 @@ class Destinations:
                 yield ks
 
     def __getitem__(self, name: Union[bytes, str, PSLiteral]) -> Destination:
+        """Get a named destination.
+
+        Args:
+            name: The name of the destination.
+
+        Raises:
+            KeyError: If no such destination exists.
+            TypeError: If the PDF is damaged and the destinations tree
+                contains something unexpected or missing.
+        """
         if isinstance(name, bytes):
             name = decode_text(name)
         elif isinstance(name, PSLiteral):
