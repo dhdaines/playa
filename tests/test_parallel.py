@@ -33,6 +33,17 @@ def test_open_parallel():
         assert future.result() == 1
 
 
+def test_parse_parallel():
+    with open(TESTDIR / "pdf_structure.pdf", "rb") as infh:
+        buffer = infh.read()
+    with playa.parse(buffer, space="default", max_workers=4) as pdf:
+        future = pdf._pool.submit(has_one_true_pdf)
+        assert future.result() == 1
+    with playa.parse(buffer, space="default", max_workers=None) as pdf:
+        future = pdf._pool.submit(has_one_true_pdf)
+        assert future.result() == 1
+
+
 def test_parallel_references():
     with playa.open(
         TESTDIR / "pdf_structure.pdf", space="default", max_workers=2

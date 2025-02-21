@@ -19,7 +19,7 @@ from os import PathLike
 from multiprocessing.context import BaseContext
 from typing import Union
 
-from playa.worker import _init_worker
+from playa.worker import _init_worker, _init_worker_buffer
 from playa.color import Color, ColorSpace
 from playa.document import Document, PageList
 from playa.exceptions import PDFException
@@ -93,5 +93,44 @@ def open(
             mp_context=mp_context,
             initializer=_init_worker,  # type: ignore[arg-type]
             initargs=(id(pdf), path, password, space),  # type: ignore[arg-type]
+        )
+    return pdf
+
+
+def parse(
+    buffer: bytes,
+    *,
+    password: str = "",
+    space: DeviceSpace = "screen",
+    max_workers: Union[int, None] = 1,
+    mp_context: Union[BaseContext, None] = None,
+) -> Document:
+    """Read a PDF document from binary data.
+
+    NOTE: When using multiple processes, this results in the entire
+    buffer being copied to the worker processes for the moment, which
+    may cause some overhead.  It is preferable to use `open` on a
+    filesystem path if possible, since that uses memory-mapped I/O.
+
+    Args:
+        buffer: Buffer containing PDF data.
+        space: Device space to use ("screen" for screen-like
+               coordinates, "page" for pdfminer.six-like coordinates, "default" for
+               default user space with no rotation or translation)
+        max_workers: Number of worker processes to use for parallel
+                     processing of pages (if 1, no workers are spawned)
+        mp_context: Multiprocessing context to use for worker
+                    processes, see [Contexts and Start
+                    Methods](https://docs.python.org/3/library/multiprocessing.html#contexts-and-start-methods)
+                    for more information.
+
+    """
+    pdf = Document(buffer, password=password, space=space)
+    if max_workers is None or max_workers > 1:
+        pdf._pool = ProcessPoolExecutor(
+            max_workers=max_workers,
+            mp_context=mp_context,
+            initializer=_init_worker_buffer,  # type: ignore[arg-type]
+            initargs=(id(pdf), buffer, password, space),  # type: ignore[arg-type]
         )
     return pdf
