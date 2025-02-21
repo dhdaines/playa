@@ -100,56 +100,14 @@ INHERITABLE_PAGE_ATTRS = {"Resources", "MediaBox", "CropBox", "Rotate"}
 def _find_header(buffer: bytes) -> Tuple[bytes, int]:
     start = buffer.find(b"%PDF-")
     if start == -1:
-        raise PDFSyntaxError("Could not find b'%PDF-', is this a PDF?")
+        log.warning("Could not find b'%PDF-' header, is this a PDF?")
+        return b"", 0
     return buffer[start : start + 8], start
 
 
-def read_header(fp: Union[bytes, BinaryIO]) -> Tuple[str, int]:
-    """Read the PDF header and return the (initial) version string and
-    its position.
-
-    Sets the file pointer to after the header (this is not reliable).
-
-    Note that this version can be overridden in the document catalog.
-
-    """
-    if isinstance(fp, bytes):
-        hdr, start = _find_header(fp)
-    else:
-        try:
-            hdr = fp.read(8)
-            start = 0
-        except IOError as err:
-            raise PDFSyntaxError("Failed to read PDF header") from err
-        if not hdr.startswith(b"%PDF-"):
-            # Try harder... there might be some extra junk before it
-            fp.seek(0, 0)
-            hdr = fp.read(4096)  # FIXME: this is arbitrary...
-            hdr, start = _find_header(hdr)
-            fp.seek(start + 8)
-            log.debug("Found header at position %d: %r", start, hdr)
-    try:
-        version = hdr[5:].decode("ascii")
-    except UnicodeDecodeError as err:
-        raise PDFSyntaxError(
-            "Version number in %r contains non-ASCII characters" % hdr
-        ) from err
-    if not re.match(r"\d\.\d", version):
-        raise PDFSyntaxError("Version number in  %r is invalid" % hdr)
-    return version, start
-
-
 def _open_input(fp: Union[BinaryIO, bytes]) -> Tuple[str, int, Union[bytes, mmap.mmap]]:
-    # The header is frequently mangled, in which case we will try to read the
-    # file anyway.
-    try:
-        pdf_version, offset = read_header(fp)
-    except PDFSyntaxError:
-        log.warning("PDF header not found, will try to read the file anyway")
-        pdf_version = "UNKNOWN"
-        offset = 0
     if isinstance(fp, bytes):
-        return pdf_version, offset, fp
+        buffer = fp
     else:
         try:
             buffer: Union[bytes, mmap.mmap] = mmap.mmap(
@@ -157,11 +115,19 @@ def _open_input(fp: Union[BinaryIO, bytes]) -> Tuple[str, int, Union[bytes, mmap
             )
         except io.UnsupportedOperation:
             log.warning("mmap not supported on %r, reading document into memory", fp)
-            fp.seek(0, 0)
             buffer = fp.read()
         except ValueError:
             raise
-        return pdf_version, offset, buffer
+    hdr, offset = _find_header(buffer)
+    try:
+        version = hdr[5:].decode("ascii")
+    except UnicodeDecodeError:
+        log.warning("Version number in header %r contains non-ASCII characters", hdr)
+        version = "1.0"
+    if not re.match(r"\d\.\d", version):
+        log.warning("Version number in header %r is invalid", hdr)
+        version = "1.0"
+    return version, offset, buffer
 
 
 class Document:
@@ -1029,6 +995,7 @@ class Destinations:
     def doc(self) -> "Document":
         """Get associated document if it exists."""
         return _deref_document(self._docref)
+
 
 class OutlineItem(NamedTuple):
     """The most relevant fields of an outline item dictionary.
