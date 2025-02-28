@@ -508,7 +508,8 @@ class Annotation:
 
     Attributes:
       subtype: Type of annotation.
-      rect: Annotation rectangle (location on page).
+      rect: Annotation rectangle (location on page) in *default user space*
+      bbox: Annotation rectangle in *device space*
       contents: Text contents.
       props: Annotation dictionary containing all other properties
              (PDF 1.7 sec. 12.5.2).
@@ -913,7 +914,9 @@ class XObjectObject(ContentObject):
             yield obj
 
     def __iter__(self) -> Iterator["ContentObject"]:
-        return iter(LazyInterpreter(self.page, [self.stream], self.resources))
+        interp = LazyInterpreter(self.page, [self.stream], self.resources)
+        interp.ctm = self.ctm
+        return iter(interp)
 
 
 @dataclass
