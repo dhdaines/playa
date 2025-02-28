@@ -185,8 +185,20 @@ def test_xobjects() -> None:
         for obj in page.flatten():
             assert obj.object_type != "xobject"
 
+        boxes = []
         for obj in page.flatten(TextObject):
             assert isinstance(obj, TextObject)
+            boxes.append(tuple(round(x) for x in obj.bbox))
+        # Make sure they are in the right place!
+        assert boxes == [
+            (136, 16, 136, 17),
+            (238, 80, 358, 96),
+            (45, 119, 116, 131),
+            (118, 118, 550, 130),
+            (61, 134, 142, 145),
+            (147, 133, 550, 145),
+            (389, 816, 546, 828),
+        ]
 
 
 def test_annotations() -> None:
