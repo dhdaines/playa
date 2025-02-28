@@ -1,3 +1,8 @@
+## PLAYA 0.3.1: 2025-02-28
+
+- Correct CTM in children of XObjectObject
+- Add `have_labels` attribute to PageList
+
 ## PLAYA 0.3.0: 2025-02-20
 
 - API for text extraction
