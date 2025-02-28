@@ -143,7 +143,7 @@ class Document:
 
     Args:
       fp: File-like object in binary mode, or a buffer with binary data.
-          Files Will be read using `mmap` if possible.  They do not need
+          Files will be read using `mmap` if possible.  They do not need
           to be seekable, as if `mmap` fails the entire file will simply
           be read into memory (so a pipe or socket ought to work).
       password: Password for decryption, if needed.
@@ -770,7 +770,13 @@ def call_page(func: Callable[[Page], Any], pageref: PageRef) -> Any:
 
 
 class PageList:
-    """List of pages indexable by 0-based index or string label."""
+    """List of pages indexable by 0-based index or string label.
+
+    Attributes:
+        have_labels: If pages have explicit labels in the PDF.
+    """
+
+    have_labels: bool
 
     def __init__(
         self, doc: Document, pages: Union[Iterable[Page], None] = None
@@ -781,14 +787,17 @@ class PageList:
             self._labels: Dict[str, Page] = {
                 page.label: page for page in pages if page.label is not None
             }
+            self.have_labels = not not self._labels
         else:
             self._init_pages(doc)
 
     def _init_pages(self, doc: Document) -> None:
         try:
             page_labels: Iterable[Union[str, None]] = doc.page_labels
+            self.have_labels = True
         except (KeyError, ValueError):
             page_labels = (str(idx) for idx in itertools.count(1))
+            self.have_labels = False
         self._pages = []
         self._objids = {}
         self._labels = {}
