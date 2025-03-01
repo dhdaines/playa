@@ -1,0 +1,42 @@
+name: Test
+on:
+  push:
+    # Only run automatically on release tags
+    tags:
+      - v*
+  workflow_dispatch:
+
+jobs:
+  thirdparty-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: samples/3rdparty/pdf.js/package-lock.json
+      - name: Install pdf.js
+        run: |
+          cd samples/3rdparty/pdf.js && npm install
+      - name: Cache downloads
+        id: cache-downloads
+        uses: actions/cache@v4
+        with:
+          path: samples/3rdparty/pdf.js/test/pdfs
+          key: pdf.js-tests
+      - name: Download pdf.js examples
+        run: |
+          cd samples/3rdparty/pdf.js/test && node test.mjs --downloadOnly --strictVerify
+      - name: Set up Python
+        uses: actions/setup-python@v5
+      - name: Install Hatch
+        uses: pypa/hatch@install
+      - name: Run pdf.js examples
+        run: |
+          hatch run pytest -k pdf.js
+      - name: Run pdfplumber examples
+        run: |
+          hatch run pytest -k pdfplumber
