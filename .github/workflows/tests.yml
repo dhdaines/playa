@@ -38,6 +38,15 @@ jobs:
       - uses: actions/checkout@v4
         with:
           submodules: true
+      - name: Cache downloads
+        id: cache-downloads
+        uses: actions/cache@v4
+        with:
+          path: samples/3rdparty/pdf.js/test/pdfs
+          key: pdf.js-tests
+      - name: Download pdf.js examples
+        run: |
+          cd samples/3rdparty/pdf.js/test && node test.mjs --downloadOnly --strictVerify
       - name: Set up Python
         uses: actions/setup-python@v5
       - name: Install Hatch
