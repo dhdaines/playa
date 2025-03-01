@@ -41,7 +41,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: 'npm'
+          cache: npm
+          cache-dependency-path: samples/3rdparty/pdf.js/package-lock.json
       - name: Install pdf.js
         run: |
           cd samples/3rdparty/pdf.js && npm install
