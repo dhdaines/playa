@@ -38,6 +38,13 @@ jobs:
       - uses: actions/checkout@v4
         with:
           submodules: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+      - name: Install pdf.js
+        run: |
+          cd samples/3rdparty/pdf.js && npm install
       - name: Cache downloads
         id: cache-downloads
         uses: actions/cache@v4
