@@ -290,10 +290,10 @@ def inline_parsers(
     expected: Tuple[int, bytes],
     target: bytes = b"EI",
     nexttoken: Any = None,
-    blocksize: int = 16,
+    try_harder: bool = False,
 ) -> None:
     bp = Lexer(data)
-    assert bp.get_inline_data(target=target, blocksize=blocksize) == expected
+    assert bp.get_inline_data(target=target, try_harder=try_harder) == expected
     if nexttoken is not None:
         assert next(bp) == nexttoken
 
@@ -306,21 +306,29 @@ def test_get_inline_data() -> None:
     inline_parsers(
         b"""0123456789EIEIO""", (10, b"0123456789EI"), nexttoken=(12, kwd_eio)
     )
-    inline_parsers(b"""012EIEIO""", (3, b"012EI"), nexttoken=(5, kwd_eio), blocksize=4)
+    inline_parsers(b"""012EIEIO""", (3, b"012EI"), nexttoken=(5, kwd_eio))
     inline_parsers(
-        b"""0123012EIEIO""", (7, b"0123012EI"), nexttoken=(9, kwd_eio), blocksize=4
+        b"""0123012EIEIO""", (7, b"0123012EI"), nexttoken=(9, kwd_eio)
     )
-    for blocksize in range(1, 8):
-        inline_parsers(
-            b"""012EIEIOOMG""",
-            (
-                3,
-                b"012EIEIO",
-            ),
-            target=b"EIEIO",
-            nexttoken=(8, kwd_omg),
-            blocksize=blocksize,
-        )
+    inline_parsers(
+        b"""012EIEIOOMG""",
+        (
+            3,
+            b"012EIEIO",
+        ),
+        target=b"EIEIO",
+        nexttoken=(8, kwd_omg),
+    )
+    inline_parsers(b"OMG WTF SRSLY?~> SMH",
+                   (14, b"OMG WTF SRSLY?~>"),
+                   target=b"~>",
+                   nexttoken=(17, KWD(b"SMH")),
+                   try_harder=False)
+    inline_parsers(b"OMG WTF SRSLY?~  > SMH",
+                   (14, b"OMG WTF SRSLY?~>"),
+                   target=b"~>",
+                   nexttoken=(19, KWD(b"SMH")),
+                   try_harder=True)
 
 
 def test_literals():

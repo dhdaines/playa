@@ -199,7 +199,7 @@ class Lexer:
                 result = (tpos, self.data[self.pos : tpos] + target)
                 self.pos = m.end(0)
                 return result
-        else:
+        elif tpos != -1:
             nextpos = tpos + len(target)
             result = (tpos, self.data[self.pos : nextpos])
             self.pos = nextpos
