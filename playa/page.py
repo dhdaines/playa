@@ -1241,8 +1241,15 @@ class LazyInterpreter:
         doc = _deref_document(page.docref)
 
         for k, v in dict_value(self.resources).items():
+            mapping = resolve1(v)
+            if mapping is None:
+                log.warning("Missing %s mapping", k)
+                continue
             if k == "Font":
-                for fontid, spec in dict_value(v).items():
+                if not isinstance(mapping, dict):
+                    log.warning("Font mapping not a dict: %r", mapping)
+                    continue
+                for fontid, spec in mapping.items():
                     objid = None
                     if isinstance(spec, ObjRef):
                         objid = spec.objid
@@ -1255,20 +1262,21 @@ class LazyInterpreter:
                         )
                         self.fontmap[fontid] = doc.get_font(objid, {})
             elif k == "ColorSpace":
-                try:
-                    for csid, spec in dict_value(v).items():
-                        colorspace = get_colorspace(resolve1(spec), csid)
-                        if colorspace is not None:
-                            self.csmap[csid] = colorspace
-                except TypeError:
-                    log.warning(
-                        "Broken/missing ColorSpace map: %r", v
-                    )
+                if not isinstance(mapping, dict):
+                    log.warning("ColorSpace mapping not a dict: %r", mapping)
+                    continue
+                for csid, spec in mapping.items():
+                    colorspace = get_colorspace(resolve1(spec), csid)
+                    if colorspace is not None:
+                        self.csmap[csid] = colorspace
             elif k == "ProcSet":
                 pass  # called get_procset which did exactly
                 # nothing. perhaps we want to do something?
             elif k == "XObject":
-                for xobjid, xobjstrm in dict_value(v).items():
+                if not isinstance(mapping, dict):
+                    log.warning("XObject mapping not a dict: %r", mapping)
+                    continue
+                for xobjid, xobjstrm in mapping.items():
                     self.xobjmap[xobjid] = xobjstrm
 
     def init_state(self, ctm: Matrix) -> None:
