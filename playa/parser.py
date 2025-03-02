@@ -459,7 +459,7 @@ class ObjectParser:
                                 "Object ID in reference at pos %d cannot be 0" % (pos,)
                             )
                         log.warning(
-                            "Ignoring indirect object reference to 0 at %s", (pos,)
+                            "Ignoring indirect object reference to 0 at %s", pos
                         )
                         continue
                     obj = ObjRef(self.docref, objid)
