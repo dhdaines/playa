@@ -663,7 +663,7 @@ class ContentParser(ObjectParser):
         except StopIteration:
             super().__init__(b"")
         except TypeError:
-            log.warning("Found nonexistent stream in contents: %r", streams)
+            log.warning("Found non-stream in contents: %r", streams)
             super().__init__(b"")
 
     def nexttoken(self) -> Tuple[int, Token]:
@@ -678,8 +678,12 @@ class ContentParser(ObjectParser):
             except StopIteration:
                 # Will also raise StopIteration if there are no more,
                 # which is exactly what we want
-                stream = stream_value(next(self.streamiter))
-                self.newstream(stream.buffer)
+                try:
+                    ref = next(self.streamiter)
+                    stream = stream_value(ref)
+                    self.newstream(stream.buffer)
+                except TypeError:
+                    log.warning("Found non-stream in contents: %r", ref)
 
 
 BBOX_NONE = (-1, -1, -1, -1)
