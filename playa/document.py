@@ -662,11 +662,7 @@ class Document:
     def destinations(self) -> "Destinations":
         """Named destinations as an iterable/addressable `Destinations` object."""
         if self._destinations is None:
-            try:
-                self._destinations = Destinations(self)
-            except TypeError:
-                log.warning("Invalid Dests entry in catalog or Names dictionary")
-                return None
+            self._destinations = Destinations(self)
         return self._destinations
 
     @property
@@ -983,11 +979,23 @@ class Destinations:
         self.dests: Dict[str, Destination] = {}
         if "Dests" in doc.catalog:
             # PDF-1.1: dictionary
-            self.dests_dict = dict_value(doc.catalog["Dests"])
+            self.dests_dict = resolve1(doc.catalog["Dests"])
+            if not isinstance(self.dests_dict, dict):
+                log.warning(
+                    "Dests entry in catalog is not dictionary: %r", self.dests_dict
+                )
+                self.dests_dict = None
         elif "Names" in doc.catalog:
-            names = dict_value(doc.catalog["Names"])
+            names = resolve1(doc.catalog["Names"])
+            if not isinstance(names, dict):
+                log.warning("Names entry in catalog is not dictionary: %r", names)
+                return
             if "Dests" in names:
-                self.dests_tree = NameTree(names["Dests"])
+                dests = resolve1(names["Dests"])
+                if not isinstance(names, dict):
+                    log.warning("Dests entry in names is not dictionary: %r", dests)
+                    return
+                self.dests_tree = NameTree(dests)
 
     def __iter__(self) -> Iterator[str]:
         """Iterate over named destinations.
