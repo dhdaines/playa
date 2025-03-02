@@ -160,7 +160,6 @@ class UnicodeMap(CMapBase):
     def get_unichr(self, cid: int) -> str:
         if cid not in self.cid2unichr:
             log.warning("CID %d not found in Unicode map %s", cid, self)
-            return ""
         return self.cid2unichr[cid]
 
     def dump(self, out: TextIO = sys.stdout) -> None:
