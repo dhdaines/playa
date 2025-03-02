@@ -186,11 +186,12 @@ class Lexer:
         if tpos == -1 and try_harder:
             log.warning(
                 "Inline image at %s not terminated with %s, trying harder",
-                self.pos, target
+                self.pos,
+                target,
             )
             # Try it, ignoring whitespace, for **really broken** PDFs
             # (see https://github.com/mozilla/pdf.js/pull/10615)
-            r = re.compile(br"\s*".join(re.escape(bytes((c,))) for c in target))
+            r = re.compile(rb"\s*".join(re.escape(bytes((c,))) for c in target))
             m = r.search(self.data, self.pos)
             if m is not None:
                 log.warning("It was actually terminated with '%r'", m[0])
@@ -454,8 +455,12 @@ class ObjectParser:
                     objid = int_value(objid)
                     if objid == 0:
                         if self.strict:
-                            raise PDFSyntaxError("Object ID in reference at pos %d cannot be 0" % (pos,))
-                        log.warning("Ignoring indirect object reference to 0 at %s", (pos,))
+                            raise PDFSyntaxError(
+                                "Object ID in reference at pos %d cannot be 0" % (pos,)
+                            )
+                        log.warning(
+                            "Ignoring indirect object reference to 0 at %s", (pos,)
+                        )
                         continue
                     obj = ObjRef(self.docref, objid)
                     self.stack.append((pos, obj))
@@ -498,25 +503,31 @@ class ObjectParser:
                     if eipos == -1:
                         # Try again with b" EI"
                         self.seek(idpos + len(KEYWORD_ID.name) + 1)
-                        (eipos, data) = self.get_inline_data(target=b" EI", try_harder=False)
+                        (eipos, data) = self.get_inline_data(
+                            target=b" EI", try_harder=False
+                        )
                     if eipos == -1:
                         # Try again with just plain b"EI"
                         self.seek(idpos + len(KEYWORD_ID.name) + 1)
-                        (eipos, data) = self.get_inline_data(target=b"EI", try_harder=False)
+                        (eipos, data) = self.get_inline_data(
+                            target=b"EI", try_harder=False
+                        )
                     data = re.sub(rb"(?:\r\n|[\r\n])$", b"", data[: -len(eos)])
                 else:
                     # Note absence of + 1 here (the "Unless" above)
                     self.seek(idpos + len(KEYWORD_ID.name))
-                    (eipos, data) = self.get_inline_data(target=eos)
+                    (eipos, data) = self.get_inline_data(target=eos, try_harder=True)
                     if eipos == -1:
-                        raise PDFSyntaxError("End of inline stream at %d not found"
-                                             % (idpos,))
+                        raise PDFSyntaxError(
+                            "End of inline stream at %d not found" % (idpos,)
+                        )
                     # There should be an "EI" here
                     (eipos, token) = self.nexttoken()
                     if token is not KEYWORD_EI:
                         log.warning(
                             "Junk after inline image at %d: got %r instead of EI",
-                            idpos, token
+                            idpos,
+                            token,
                         )
                 if eipos == -1:
                     raise PDFSyntaxError("End of inline stream %r not found" % eos)
@@ -559,10 +570,12 @@ class ObjectParser:
         position to the end of this data."""
         return self._lexer.read(objlen)
 
-    def get_inline_data(self, target: bytes = b"EI", try_harder: bool = False) -> Tuple[int, bytes]:
+    def get_inline_data(
+        self, target: bytes = b"EI", try_harder: bool = False
+    ) -> Tuple[int, bytes]:
         """Get the data for an inline image up to the target
         end-of-stream marker."""
-        return self._lexer.get_inline_data(target)
+        return self._lexer.get_inline_data(target, try_harder)
 
     def nextline(self) -> Tuple[int, bytes]:
         """Read (and do not parse) next line from underlying data."""
@@ -702,7 +715,13 @@ class IndirectObjectParser:
                     # In reality there usually is no end-of-line
                     # marker.  We will nonetheless warn if there's
                     # something other than 'endstream'.
-                    if line not in (b"\r", b"\n", b"\r\n", b"endstream\n", b"endstream\r\n"):
+                    if line not in (
+                        b"\r",
+                        b"\n",
+                        b"\r\n",
+                        b"endstream\n",
+                        b"endstream\r\n",
+                    ):
                         log.warning("Expected newline or 'endstream', got %r", line)
                 else:
                     # Reuse that line and read more if necessary
