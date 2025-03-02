@@ -152,6 +152,7 @@ class XRefFallback:
         assert doc is not None
         # Get all the objects
         for pos, obj in parser:
+            log.debug("Indirect object at %d: %r", pos, obj)
             self.offsets[obj.objid] = XRefPos(None, pos, obj.genno)
             # Expand any object streams right away
             if (
