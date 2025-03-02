@@ -15,8 +15,8 @@ from typing import (
     Union,
 )
 
-from playa.worker import _ref_document, _deref_document
 from playa.exceptions import PDFSyntaxError
+from playa.models import IndirectObjectMetadata
 from playa.pdftypes import (
     KWD,
     LIT,
@@ -30,6 +30,7 @@ from playa.pdftypes import (
     name_str,
 )
 from playa.utils import choplist
+from playa.worker import _deref_document, _ref_document
 
 log = logging.getLogger(__name__)
 if TYPE_CHECKING:
@@ -591,6 +592,11 @@ class IndirectObject(NamedTuple):
     objid: int
     genno: int
     obj: PDFObject
+
+    def dict(self) -> IndirectObjectMetadata:
+        return IndirectObjectMetadata(objid=self.objid,
+                                      genno=self.genno,
+                                      type=type(self.obj).__name__)
 
 
 class IndirectObjectParser:

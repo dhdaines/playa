@@ -32,6 +32,7 @@ from playa.exceptions import (
     PDFSyntaxError,
 )
 from playa.font import CIDFont, Font, TrueTypeFont, Type1Font, Type3Font
+from playa.models import DocumentMetadata
 from playa.page import (
     Page,
     DeviceSpace,
@@ -290,6 +291,17 @@ class Document:
         assert self.parser is not None
         # Ensure that no extra data leaks into encrypted streams
         self.parser.strict = True
+
+    def dict(self) -> DocumentMetadata:
+        """Dictionary representation of this document."""
+        return DocumentMetadata(
+            pdf_version=self.pdf_version,
+            is_printable=self.is_printable,
+            is_modifiable=self.is_modifiable,
+            is_extractable=self.is_extractable,
+            pages=[page.dict() for page in self.pages],
+            objects=[obj.dict() for obj in self.objects],
+        )
 
     def __iter__(self) -> Iterator[IndirectObject]:
         """Iterate over top-level `IndirectObject` (does not expand object streams)"""

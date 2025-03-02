@@ -25,8 +25,6 @@ following keys (but will probably contain more in the future):
     - `objid`: the object number
     - `genno`: the generation number
     - `type`: the type of object this is
-    - `repr`: an arbitrary string representation of the object, **do not
-        depend too closely on the contents of this as it will change**
 
 Bucking the trend of the last 20 years towards horribly slow
 Click-addled CLIs with deeply nested subcommands, anything else is
@@ -205,36 +203,7 @@ def extract_catalog(doc: Document, args: argparse.Namespace) -> None:
 
 def extract_metadata(doc: Document, args: argparse.Namespace) -> None:
     """Extract random metadata."""
-    stuff = {
-        "pdf_version": doc.pdf_version,
-        "is_printable": doc.is_printable,
-        "is_modifiable": doc.is_modifiable,
-        "is_extractable": doc.is_extractable,
-    }
-    pages = []
-    for page in doc.pages:
-        pages.append(
-            {
-                "objid": page.pageid,
-                "label": page.label,
-                "mediabox": page.mediabox,
-                "cropbox": page.cropbox,
-                "rotate": page.rotate,
-            }
-        )
-    stuff["pages"] = pages
-    objects = []
-    for obj in doc.objects:
-        # TODO: Add method to JSON serialize indirect objects
-        objects.append(
-            {
-                "objid": obj.objid,
-                "genno": obj.genno,
-                "type": type(obj.obj).__name__,
-                "repr": repr(obj.obj),
-            }
-        )
-    stuff["objects"] = objects
+    stuff = doc.dict()
     json.dump(stuff, args.outfile, indent=2, ensure_ascii=False, default=repr)
 
 
