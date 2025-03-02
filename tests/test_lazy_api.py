@@ -62,12 +62,7 @@ def test_open_lazy(path: Path) -> None:
             with playa.open(path, password=password) as doc:
                 for page in doc.pages:
                     for obj in page:
-                        try:
-                            beach.append((obj.object_type, obj.bbox))
-                        except ValueError as e:
-                            if "not enough values" in str(e):
-                                continue
-                            raise e
+                        beach.append((obj.object_type, obj.bbox))
         except PDFEncryptionError:
             pytest.skip("cryptography package not installed")
 
