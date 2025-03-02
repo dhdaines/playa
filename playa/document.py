@@ -515,7 +515,9 @@ class Document:
             try:
                 self._outline = Outline(self)
             except TypeError:
-                log.warning("Invalid Outlines entry in catalog: %r", self.catalog["Outlines"])
+                log.warning(
+                    "Invalid Outlines entry in catalog: %r", self.catalog["Outlines"]
+                )
                 return None
         return self._outline
 
@@ -663,7 +665,7 @@ class Document:
             try:
                 self._destinations = Destinations(self)
             except TypeError:
-                log.warning("Invalid Dests entry in catalog or Names dictionary") 
+                log.warning("Invalid Dests entry in catalog or Names dictionary")
                 return None
         return self._destinations
 
@@ -721,7 +723,9 @@ class Document:
                 if not start >= 0:
                     raise ValueError("Invalid negative startxref position: %d" % start)
                 elif start > pos:
-                    raise ValueError("Invalid startxref position (> %d): %d" % (pos, start))
+                    raise ValueError(
+                        "Invalid startxref position (> %d): %d" % (pos, start)
+                    )
                 return start + self.offset
             elif line == b"xref":
                 return pos

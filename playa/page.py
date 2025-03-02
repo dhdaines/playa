@@ -1335,8 +1335,12 @@ class LazyInterpreter:
                             try:
                                 co = method(*args)
                             except TypeError as e:
-                                log.warning("Incorrect type of arguments(%r) for operator %r: %s",
-                                            args, obj, e)
+                                log.warning(
+                                    "Incorrect type of arguments(%r) for operator %r: %s",
+                                    args,
+                                    obj,
+                                    e,
+                                )
                     else:
                         co = method()
                     if co is not None:
