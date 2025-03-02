@@ -583,7 +583,12 @@ class IndirectObjectParser:
     def __next__(self) -> Tuple[int, IndirectObject]:
         obj: Union[PDFObject, ContentStream]
         while True:
-            pos, obj = next(self._parser)
+            try:
+                pos, obj = next(self._parser)
+            except PDFSyntaxError as e:
+                if self.strict:
+                    raise e
+                log.warning("Syntax error near position %d: %s", pos, e)
             if obj is KEYWORD_OBJ:
                 pass
             elif isinstance(obj, PSKeyword) and obj.name.startswith(b"endobj"):
