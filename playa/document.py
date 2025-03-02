@@ -160,6 +160,7 @@ class Document:
     _fp: Union[BinaryIO, None] = None
     _pages: Union["PageList", None] = None
     _pool: Union[Executor, None] = None
+    _outline: Union["Outline", None] = None
     _destinations: Union["Destinations", None] = None
 
     def __enter__(self) -> "Document":
@@ -510,11 +511,13 @@ class Document:
         """Document outline, if any."""
         if "Outlines" not in self.catalog:
             return None
-        try:
-            return Outline(self)
-        except TypeError:
-            log.warning("Invalid Outline entry in catalog: %r", self.catalog["Outline"])
-            return None
+        if self._outline is None:
+            try:
+                self._outline = Outline(self)
+            except TypeError:
+                log.warning("Invalid Outlines entry in catalog: %r", self.catalog["Outlines"])
+                return None
+        return self._outline
 
     @property
     def outlines(self) -> Iterator["OutlineItem"]:
@@ -657,7 +660,11 @@ class Document:
     def destinations(self) -> "Destinations":
         """Named destinations as an iterable/addressable `Destinations` object."""
         if self._destinations is None:
-            self._destinations = Destinations(self)
+            try:
+                self._destinations = Destinations(self)
+            except TypeError:
+                log.warning("Invalid Dests entry in catalog or Names dictionary") 
+                return None
         return self._destinations
 
     @property
