@@ -20,6 +20,7 @@ from typing import (
     Mapping,
     NamedTuple,
     Optional,
+    Set,
     Tuple,
     Union,
     overload,
@@ -206,6 +207,7 @@ class Document:
         # header, it will instead be loaded with all the rest.
         self.parser = IndirectObjectParser(self.buffer, self)
         self.parser.seek(self.offset)
+        self._xrefpos: Set[int] = set()
         try:
             pos = self._find_xref()
             log.debug("Found xref at %d", pos)
@@ -728,6 +730,10 @@ class Document:
         xrefs: List[XRef],
     ) -> None:
         """Reads XRefs from the given location."""
+        if start in self._xrefpos:
+            log.warning("Detected circular xref chain at %d", start)
+            return
+        self._xrefpos.add(start)
         parser = ObjectParser(self.buffer, self, start)
         try:
             (pos, token) = parser.nexttoken()
