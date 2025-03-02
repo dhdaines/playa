@@ -325,10 +325,12 @@ class ObjectParser:
         data: Union[bytes, mmap.mmap],
         doc: Union["Document", None] = None,
         pos: int = 0,
+        strict: bool = False,
     ) -> None:
         self._lexer = Lexer(data, pos)
         self.stack: List[StackEntry] = []
         self.docref = None if doc is None else _ref_document(doc)
+        self.strict = strict
 
     @property
     def doc(self) -> Union["Document", None]:
@@ -352,7 +354,7 @@ class ObjectParser:
     def __next__(self) -> StackEntry:
         """Get next PDF object from stream (raises StopIteration at EOF)."""
         top: Union[int, None] = None
-        obj: Union[Dict[Any, Any], List[PDFObject], PDFObject]
+        obj: Union[Dict[Any, Any], List[PDFObject], PDFObject] = None
         while True:
             if self.stack and top is None:
                 return self.stack.pop()
@@ -364,7 +366,9 @@ class ObjectParser:
             elif token is KEYWORD_ARRAY_END:
                 try:
                     pos, obj = self.pop_to(KEYWORD_ARRAY_BEGIN)
-                except TypeError as e:
+                except (TypeError, PDFSyntaxError) as e:
+                    if self.strict:
+                        raise e
                     log.warning("When constructing array from %r: %s", obj, e)
                 if pos == top:
                     top = None
@@ -387,7 +391,9 @@ class ObjectParser:
                         for (k, v) in choplist(2, objs)
                         if v is not None
                     }
-                except TypeError as e:
+                except (TypeError, PDFSyntaxError) as e:
+                    if self.strict:
+                        raise e
                     log.warning("When constructing dict from %r: %s", objs, e)
                 if pos == top:
                     top = None
@@ -400,7 +406,9 @@ class ObjectParser:
             elif token is KEYWORD_PROC_END:
                 try:
                     pos, obj = self.pop_to(KEYWORD_PROC_BEGIN)
-                except TypeError as e:
+                except (TypeError, PDFSyntaxError) as e:
+                    if self.strict:
+                        raise e
                     log.warning("When constructing proc from %r: %s", obj, e)
                 if pos == top:
                     top = None
@@ -417,10 +425,17 @@ class ObjectParser:
                     try:
                         _pos, _genno = self.stack.pop()
                         _pos, objid = self.stack.pop()
-                    except ValueError:
-                        raise PDFSyntaxError(
-                            "Expected generation and object id in indirect object reference"
-                        )
+                    except ValueError as e:
+                        if self.strict:
+                            raise PDFSyntaxError(
+                                "Expected generation and object id in indirect object reference"
+                            ) from e
+                        else:
+                            log.warning(
+                                "Expected generation and object id in indirect object reference: %s",
+                                e,
+                            )
+                            continue
                     objid = int_value(objid)
                     obj = ObjRef(self.docref, objid)
                     self.stack.append((pos, obj))
@@ -433,7 +448,10 @@ class ObjectParser:
                 (pos, objs) = self.pop_to(KEYWORD_BI)
                 if len(objs) % 2 != 0:
                     error_msg = f"Invalid dictionary construct: {objs!r}"
-                    raise TypeError(error_msg)
+                    if self.strict:
+                        raise TypeError(error_msg)
+                    else:
+                        log.warning(error_msg)
                 dic = {
                     literal_name(k): v for (k, v) in choplist(2, objs) if v is not None
                 }
@@ -564,7 +582,7 @@ class IndirectObjectParser:
         doc: Union["Document", None] = None,
         strict: bool = False,
     ) -> None:
-        self._parser = ObjectParser(data, doc)
+        self._parser = ObjectParser(data, doc, strict=strict)
         self.buffer = data
         self.trailer: List[Tuple[int, Union[PDFObject, ContentStream]]] = []
         self.docref = None if doc is None else _ref_document(doc)
