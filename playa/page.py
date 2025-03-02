@@ -662,6 +662,9 @@ class ContentParser(ObjectParser):
             super().__init__(stream.buffer)
         except StopIteration:
             super().__init__(b"")
+        except TypeError:
+            log.warning("Found nonexistent stream in contents: %r", streams)
+            super().__init__(b"")
 
     def nexttoken(self) -> Tuple[int, Token]:
         """Override nexttoken() to continue parsing in subsequent streams.
@@ -1248,10 +1251,15 @@ class LazyInterpreter:
                         )
                         self.fontmap[fontid] = doc.get_font(objid, {})
             elif k == "ColorSpace":
-                for csid, spec in dict_value(v).items():
-                    colorspace = get_colorspace(resolve1(spec), csid)
-                    if colorspace is not None:
-                        self.csmap[csid] = colorspace
+                try:
+                    for csid, spec in dict_value(v).items():
+                        colorspace = get_colorspace(resolve1(spec), csid)
+                        if colorspace is not None:
+                            self.csmap[csid] = colorspace
+                except TypeError:
+                    log.warning(
+                        "Broken/missing ColorSpace map: %r", v
+                    )
             elif k == "ProcSet":
                 pass  # called get_procset which did exactly
                 # nothing. perhaps we want to do something?
@@ -1312,7 +1320,11 @@ class LazyInterpreter:
                                 obj,
                             )
                         else:
-                            co = method(*args)
+                            try:
+                                co = method(*args)
+                            except TypeError as e:
+                                log.warning("Incorrect type of arguments(%r) for operator %r: %s",
+                                            args, obj, e)
                     else:
                         co = method()
                     if co is not None:
