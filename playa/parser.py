@@ -169,7 +169,7 @@ class Lexer:
         return (linepos, self.data[linepos : self.pos])
 
     def get_inline_data(
-        self, target: bytes = b"\nEI", blocksize: int = -1
+        self, target: bytes = b"EI", try_harder: bool = False
     ) -> Tuple[int, bytes]:
         """Get the data for an inline image up to the target
         end-of-stream marker.
@@ -183,7 +183,23 @@ class Lexer:
         the end-of-stream token (likewise) if necessary.
         """
         tpos = self.data.find(target, self.pos)
-        if tpos != -1:
+        if tpos == -1 and try_harder:
+            log.warning(
+                "Inline image at %s not terminated with %s, trying harder",
+                self.pos,
+                target,
+            )
+            # Try it, ignoring whitespace, for **really broken** PDFs
+            # (see https://github.com/mozilla/pdf.js/pull/10615)
+            r = re.compile(rb"\s*".join(re.escape(bytes((c,))) for c in target))
+            m = r.search(self.data, self.pos)
+            if m is not None:
+                log.warning("It was actually terminated with '%r'", m[0])
+                tpos = m.start(0)
+                result = (tpos, self.data[self.pos : tpos] + target)
+                self.pos = m.end(0)
+                return result
+        elif tpos != -1:
             nextpos = tpos + len(target)
             result = (tpos, self.data[self.pos : nextpos])
             self.pos = nextpos
@@ -325,10 +341,12 @@ class ObjectParser:
         data: Union[bytes, mmap.mmap],
         doc: Union["Document", None] = None,
         pos: int = 0,
+        strict: bool = False,
     ) -> None:
         self._lexer = Lexer(data, pos)
         self.stack: List[StackEntry] = []
         self.docref = None if doc is None else _ref_document(doc)
+        self.strict = strict
 
     @property
     def doc(self) -> Union["Document", None]:
@@ -352,7 +370,7 @@ class ObjectParser:
     def __next__(self) -> StackEntry:
         """Get next PDF object from stream (raises StopIteration at EOF)."""
         top: Union[int, None] = None
-        obj: Union[Dict[Any, Any], List[PDFObject], PDFObject]
+        obj: Union[Dict[Any, Any], List[PDFObject], PDFObject] = None
         while True:
             if self.stack and top is None:
                 return self.stack.pop()
@@ -364,7 +382,9 @@ class ObjectParser:
             elif token is KEYWORD_ARRAY_END:
                 try:
                     pos, obj = self.pop_to(KEYWORD_ARRAY_BEGIN)
-                except TypeError as e:
+                except (TypeError, PDFSyntaxError) as e:
+                    if self.strict:
+                        raise e
                     log.warning("When constructing array from %r: %s", obj, e)
                 if pos == top:
                     top = None
@@ -387,8 +407,10 @@ class ObjectParser:
                         for (k, v) in choplist(2, objs)
                         if v is not None
                     }
-                except TypeError as e:
-                    log.warning("When constructing dict from %r: %s", objs, e)
+                except (TypeError, PDFSyntaxError) as e:
+                    if self.strict:
+                        raise e
+                    log.warning("When constructing dict from %r: %s", self.stack, e)
                 if pos == top:
                     top = None
                     return pos, obj
@@ -400,7 +422,9 @@ class ObjectParser:
             elif token is KEYWORD_PROC_END:
                 try:
                     pos, obj = self.pop_to(KEYWORD_PROC_BEGIN)
-                except TypeError as e:
+                except (TypeError, PDFSyntaxError) as e:
+                    if self.strict:
+                        raise e
                     log.warning("When constructing proc from %r: %s", obj, e)
                 if pos == top:
                     top = None
@@ -417,11 +441,27 @@ class ObjectParser:
                     try:
                         _pos, _genno = self.stack.pop()
                         _pos, objid = self.stack.pop()
-                    except ValueError:
-                        raise PDFSyntaxError(
-                            "Expected generation and object id in indirect object reference"
-                        )
+                    except ValueError as e:
+                        if self.strict:
+                            raise PDFSyntaxError(
+                                "Expected generation and object id in indirect object reference"
+                            ) from e
+                        else:
+                            log.warning(
+                                "Expected generation and object id in indirect object reference: %s",
+                                e,
+                            )
+                            continue
                     objid = int_value(objid)
+                    if objid == 0:
+                        if self.strict:
+                            raise PDFSyntaxError(
+                                "Object ID in reference at pos %d cannot be 0" % (pos,)
+                            )
+                        log.warning(
+                            "Ignoring indirect object reference to 0 at %s", pos
+                        )
+                        continue
                     obj = ObjRef(self.docref, objid)
                     self.stack.append((pos, obj))
             elif token is KEYWORD_BI:
@@ -433,7 +473,10 @@ class ObjectParser:
                 (pos, objs) = self.pop_to(KEYWORD_BI)
                 if len(objs) % 2 != 0:
                     error_msg = f"Invalid dictionary construct: {objs!r}"
-                    raise TypeError(error_msg)
+                    if self.strict:
+                        raise TypeError(error_msg)
+                    else:
+                        log.warning(error_msg)
                 dic = {
                     literal_name(k): v for (k, v) in choplist(2, objs) if v is not None
                 }
@@ -456,23 +499,35 @@ class ObjectParser:
                     # character shall be interpreted as the first byte
                     # of image data.
                     self.seek(idpos + len(KEYWORD_ID.name) + 1)
-                    (eipos, data) = self.get_inline_data(target=eos)
+                    (eipos, data) = self.get_inline_data(target=eos, try_harder=False)
+                    if eipos == -1:
+                        # Try again with b" EI"
+                        self.seek(idpos + len(KEYWORD_ID.name) + 1)
+                        (eipos, data) = self.get_inline_data(
+                            target=b" EI", try_harder=False
+                        )
                     if eipos == -1:
                         # Try again with just plain b"EI"
                         self.seek(idpos + len(KEYWORD_ID.name) + 1)
-                        (eipos, data) = self.get_inline_data(target=b"EI")
-                        data = re.sub(rb"(?:\r\n|[\r\n])$", b"", data[: -len(eos)])
-                    else:
-                        data = re.sub(rb"\r$", b"", data[: -len(eos)])
+                        (eipos, data) = self.get_inline_data(
+                            target=b"EI", try_harder=False
+                        )
+                    data = re.sub(rb"(?:\r\n|[\r\n])$", b"", data[: -len(eos)])
                 else:
                     # Note absence of + 1 here (the "Unless" above)
                     self.seek(idpos + len(KEYWORD_ID.name))
-                    (_, data) = self.get_inline_data(target=eos)
+                    (eipos, data) = self.get_inline_data(target=eos, try_harder=True)
+                    if eipos == -1:
+                        raise PDFSyntaxError(
+                            "End of inline stream at %d not found" % (idpos,)
+                        )
                     # There should be an "EI" here
                     (eipos, token) = self.nexttoken()
                     if token is not KEYWORD_EI:
                         log.warning(
-                            "Inline image not terminated with EI: got %r", token
+                            "Junk after inline image at %d: got %r instead of EI",
+                            idpos,
+                            token,
                         )
                 if eipos == -1:
                     raise PDFSyntaxError("End of inline stream %r not found" % eos)
@@ -515,10 +570,12 @@ class ObjectParser:
         position to the end of this data."""
         return self._lexer.read(objlen)
 
-    def get_inline_data(self, target: bytes = b"EI") -> Tuple[int, bytes]:
+    def get_inline_data(
+        self, target: bytes = b"EI", try_harder: bool = False
+    ) -> Tuple[int, bytes]:
         """Get the data for an inline image up to the target
         end-of-stream marker."""
-        return self._lexer.get_inline_data(target)
+        return self._lexer.get_inline_data(target, try_harder)
 
     def nextline(self) -> Tuple[int, bytes]:
         """Read (and do not parse) next line from underlying data."""
@@ -564,7 +621,7 @@ class IndirectObjectParser:
         doc: Union["Document", None] = None,
         strict: bool = False,
     ) -> None:
-        self._parser = ObjectParser(data, doc)
+        self._parser = ObjectParser(data, doc, strict=strict)
         self.buffer = data
         self.trailer: List[Tuple[int, Union[PDFObject, ContentStream]]] = []
         self.docref = None if doc is None else _ref_document(doc)
@@ -583,7 +640,12 @@ class IndirectObjectParser:
     def __next__(self) -> Tuple[int, IndirectObject]:
         obj: Union[PDFObject, ContentStream]
         while True:
-            pos, obj = next(self._parser)
+            try:
+                pos, obj = next(self._parser)
+            except PDFSyntaxError as e:
+                if self.strict:
+                    raise e
+                log.warning("Syntax error near position %d: %s", pos, e)
             if obj is KEYWORD_OBJ:
                 pass
             elif isinstance(obj, PSKeyword) and obj.name.startswith(b"endobj"):
@@ -653,7 +715,13 @@ class IndirectObjectParser:
                     # In reality there usually is no end-of-line
                     # marker.  We will nonetheless warn if there's
                     # something other than 'endstream'.
-                    if line not in (b"\n", b"\r\n", b"endstream\n", b"endstream\r\n"):
+                    if line not in (
+                        b"\r",
+                        b"\n",
+                        b"\r\n",
+                        b"endstream\n",
+                        b"endstream\r\n",
+                    ):
                         log.warning("Expected newline or 'endstream', got %r", line)
                 else:
                     # Reuse that line and read more if necessary

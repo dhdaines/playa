@@ -662,6 +662,9 @@ class ContentParser(ObjectParser):
             super().__init__(stream.buffer)
         except StopIteration:
             super().__init__(b"")
+        except TypeError:
+            log.warning("Found non-stream in contents: %r", streams)
+            super().__init__(b"")
 
     def nexttoken(self) -> Tuple[int, Token]:
         """Override nexttoken() to continue parsing in subsequent streams.
@@ -675,8 +678,12 @@ class ContentParser(ObjectParser):
             except StopIteration:
                 # Will also raise StopIteration if there are no more,
                 # which is exactly what we want
-                stream = stream_value(next(self.streamiter))
-                self.newstream(stream.buffer)
+                try:
+                    ref = next(self.streamiter)
+                    stream = stream_value(ref)
+                    self.newstream(stream.buffer)
+                except TypeError:
+                    log.warning("Found non-stream in contents: %r", ref)
 
 
 BBOX_NONE = (-1, -1, -1, -1)
@@ -1234,8 +1241,15 @@ class LazyInterpreter:
         doc = _deref_document(page.docref)
 
         for k, v in dict_value(self.resources).items():
+            mapping = resolve1(v)
+            if mapping is None:
+                log.warning("Missing %s mapping", k)
+                continue
             if k == "Font":
-                for fontid, spec in dict_value(v).items():
+                if not isinstance(mapping, dict):
+                    log.warning("Font mapping not a dict: %r", mapping)
+                    continue
+                for fontid, spec in mapping.items():
                     objid = None
                     if isinstance(spec, ObjRef):
                         objid = spec.objid
@@ -1248,7 +1262,10 @@ class LazyInterpreter:
                         )
                         self.fontmap[fontid] = doc.get_font(objid, {})
             elif k == "ColorSpace":
-                for csid, spec in dict_value(v).items():
+                if not isinstance(mapping, dict):
+                    log.warning("ColorSpace mapping not a dict: %r", mapping)
+                    continue
+                for csid, spec in mapping.items():
                     colorspace = get_colorspace(resolve1(spec), csid)
                     if colorspace is not None:
                         self.csmap[csid] = colorspace
@@ -1256,7 +1273,10 @@ class LazyInterpreter:
                 pass  # called get_procset which did exactly
                 # nothing. perhaps we want to do something?
             elif k == "XObject":
-                for xobjid, xobjstrm in dict_value(v).items():
+                if not isinstance(mapping, dict):
+                    log.warning("XObject mapping not a dict: %r", mapping)
+                    continue
+                for xobjid, xobjstrm in mapping.items():
                     self.xobjmap[xobjid] = xobjstrm
 
     def init_state(self, ctm: Matrix) -> None:
@@ -1312,7 +1332,15 @@ class LazyInterpreter:
                                 obj,
                             )
                         else:
-                            co = method(*args)
+                            try:
+                                co = method(*args)
+                            except TypeError as e:
+                                log.warning(
+                                    "Incorrect type of arguments(%r) for operator %r: %s",
+                                    args,
+                                    obj,
+                                    e,
+                                )
                     else:
                         co = method()
                     if co is not None:

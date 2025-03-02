@@ -20,6 +20,7 @@ from typing import (
     Mapping,
     NamedTuple,
     Optional,
+    Set,
     Tuple,
     Union,
     overload,
@@ -159,6 +160,7 @@ class Document:
     _fp: Union[BinaryIO, None] = None
     _pages: Union["PageList", None] = None
     _pool: Union[Executor, None] = None
+    _outline: Union["Outline", None] = None
     _destinations: Union["Destinations", None] = None
 
     def __enter__(self) -> "Document":
@@ -206,6 +208,7 @@ class Document:
         # header, it will instead be loaded with all the rest.
         self.parser = IndirectObjectParser(self.buffer, self)
         self.parser.seek(self.offset)
+        self._xrefpos: Set[int] = set()
         try:
             pos = self._find_xref()
             log.debug("Found xref at %d", pos)
@@ -508,7 +511,15 @@ class Document:
         """Document outline, if any."""
         if "Outlines" not in self.catalog:
             return None
-        return Outline(self)
+        if self._outline is None:
+            try:
+                self._outline = Outline(self)
+            except TypeError:
+                log.warning(
+                    "Invalid Outlines entry in catalog: %r", self.catalog["Outlines"]
+                )
+                return None
+        return self._outline
 
     @property
     def outlines(self) -> Iterator["OutlineItem"]:
@@ -706,11 +717,11 @@ class Document:
                     continue
                 start = int(prev)
                 if not start >= 0:
-                    log.warning("Invalid negative startxref position: %d", start)
-                    continue
+                    raise ValueError("Invalid negative startxref position: %d" % start)
                 elif start > pos:
-                    log.warning("Invalid startxref position (> %d): %d", pos, start)
-                    continue
+                    raise ValueError(
+                        "Invalid startxref position (> %d): %d" % (pos, start)
+                    )
                 return start + self.offset
             elif line == b"xref":
                 return pos
@@ -728,6 +739,10 @@ class Document:
         xrefs: List[XRef],
     ) -> None:
         """Reads XRefs from the given location."""
+        if start in self._xrefpos:
+            log.warning("Detected circular xref chain at %d", start)
+            return
+        self._xrefpos.add(start)
         parser = ObjectParser(self.buffer, self, start)
         try:
             (pos, token) = parser.nexttoken()
@@ -964,11 +979,23 @@ class Destinations:
         self.dests: Dict[str, Destination] = {}
         if "Dests" in doc.catalog:
             # PDF-1.1: dictionary
-            self.dests_dict = dict_value(doc.catalog["Dests"])
+            self.dests_dict = resolve1(doc.catalog["Dests"])
+            if not isinstance(self.dests_dict, dict):
+                log.warning(
+                    "Dests entry in catalog is not dictionary: %r", self.dests_dict
+                )
+                self.dests_dict = None
         elif "Names" in doc.catalog:
-            names = dict_value(doc.catalog["Names"])
+            names = resolve1(doc.catalog["Names"])
+            if not isinstance(names, dict):
+                log.warning("Names entry in catalog is not dictionary: %r", names)
+                return
             if "Dests" in names:
-                self.dests_tree = NameTree(names["Dests"])
+                dests = resolve1(names["Dests"])
+                if not isinstance(names, dict):
+                    log.warning("Dests entry in names is not dictionary: %r", dests)
+                    return
+                self.dests_tree = NameTree(dests)
 
     def __iter__(self) -> Iterator[str]:
         """Iterate over named destinations.
@@ -1007,10 +1034,18 @@ class Destinations:
         elif self.dests_dict is not None:
             # This will raise KeyError or TypeError if necessary, so
             # we don't have to do it explicitly
-            destlist = list_value(self.dests_dict[name])
-            self.dests[name] = Destination.from_list(self.doc, destlist)
+            dest = resolve1(self.dests_dict[name])
+            if isinstance(dest, list):
+                self.dests[name] = Destination.from_list(self.doc, dest)
+            elif isinstance(dest, dict) and "D" in dest:
+                destlist = resolve1(dest["D"])
+                if not isinstance(destlist, list):
+                    raise TypeError("Invalid destination for %s: %r", name, dest)
+                self.dests[name] = Destination.from_list(self.doc, destlist)
+            else:
+                raise TypeError("Invalid destination for %s: %r", name, dest)
         elif self.dests_tree is not None:
-            # This is not the most efficient, but we need to decode
+            # This is not at all efficient, but we need to decode
             # the keys (and we cache the result...)
             for k, v in self.dests_tree:
                 if decode_text(k) == name:

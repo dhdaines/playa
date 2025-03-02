@@ -12,8 +12,6 @@ from playa.font import Type1FontHeaderParser
 from .data import TESTDIR
 
 THISDIR = Path(__file__).parent
-
-
 BOGUS = rb"""begincmap
 1 begincodespacerange
 <0001> <0002>

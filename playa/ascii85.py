@@ -15,6 +15,7 @@ def ascii85decode(data: bytes) -> bytes:
     its original in handling the last characters.
 
     """
+    data = data.strip()
     try:
         return a85decode(data, adobe=True)
     except ValueError:

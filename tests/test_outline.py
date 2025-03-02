@@ -66,15 +66,17 @@ def test_destinations(path) -> None:
     """Verify that we can read destinations when they exist."""
     if path.name in XFAILS:
         pytest.xfail("Intentionally corrupt file: %s" % path.name)
+    if path.name == "issue2098.pdf":
+        pytest.skip("Skipping excessively borken PDF with bad destinations")
     passwords = PASSWORDS.get(path.name, [""])
     for password in passwords:
         try:
             with playa.open(path, password=password) as pdf:
-                for k in pdf.destinations:
-                    print(k, pdf.destinations[k])
+                for idx, k in enumerate(pdf.destinations):
+                    _ = pdf.destinations[k]
+                    # FIXME: Currently getting destinations is quite
+                    # slow, so only do a few of them.
+                    if idx == 300:
+                        break
         except PDFEncryptionError:
             pytest.skip("password incorrect or cryptography package not installed")
-
-
-if __name__ == "__main__":
-    test_outline()

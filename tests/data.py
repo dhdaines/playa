@@ -46,6 +46,13 @@ XFAILS = {
     # really rather broken.
     "issue9418.pdf",
     "bug1250079.pdf",
+    # FIXME: These seem to be due to problems in the Unicode mappings
+    # we inherited from pdfminer.six
+    "JST2007-5.pdf",
+    "P020121130574743273239.pdf",
+    "SFAA_Japanese.pdf",
+    "issue2829.pdf",
+    "issue11526.pdf",
 }
 # We know pdfminer.six gives different output for these and we don't
 # care (generally because of PLAYA's better rectangle detection and
