@@ -1022,10 +1022,18 @@ class Destinations:
         elif self.dests_dict is not None:
             # This will raise KeyError or TypeError if necessary, so
             # we don't have to do it explicitly
-            destlist = list_value(self.dests_dict[name])
-            self.dests[name] = Destination.from_list(self.doc, destlist)
+            dest = resolve1(self.dests_dict[name])
+            if isinstance(dest, list):
+                self.dests[name] = Destination.from_list(self.doc, dest)
+            elif isinstance(dest, dict) and "D" in dest:
+                destlist = resolve1(dest["D"])
+                if not isinstance(destlist, list):
+                    raise TypeError("Invalid destination for %s: %r", name, dest)
+                self.dests[name] = Destination.from_list(self.doc, destlist)
+            else:
+                raise TypeError("Invalid destination for %s: %r", name, dest)
         elif self.dests_tree is not None:
-            # This is not the most efficient, but we need to decode
+            # This is not at all efficient, but we need to decode
             # the keys (and we cache the result...)
             for k, v in self.dests_tree:
                 if decode_text(k) == name:
