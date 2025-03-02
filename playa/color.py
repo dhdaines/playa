@@ -74,7 +74,10 @@ for name, n in [
 def get_colorspace(
     spec: PDFObject, csid: Union[str, None] = None
 ) -> Union[ColorSpace, None]:
-    if isinstance(spec, list):
+    if isinstance(spec, PSLiteral):
+        name = literal_name(spec)
+        return PREDEFINED_COLORSPACE.get(name)
+    elif isinstance(spec, list):
         name = spec[0].name if csid is None else csid
         if spec[0] is LITERAL_ICC_BASED and len(spec) >= 2:
             n = stream_value(spec[1])["N"]
@@ -100,6 +103,4 @@ def get_colorspace(
             if cs is None:
                 return None
             return ColorSpace(cs.name, cs.ncomponents, spec)
-    else:
-        name = literal_name(spec)
-        return PREDEFINED_COLORSPACE.get(name)
+    return None
