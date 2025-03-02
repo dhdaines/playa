@@ -708,11 +708,9 @@ class Document:
                     continue
                 start = int(prev)
                 if not start >= 0:
-                    log.warning("Invalid negative startxref position: %d", start)
-                    continue
+                    raise ValueError("Invalid negative startxref position: %d" % start)
                 elif start > pos:
-                    log.warning("Invalid startxref position (> %d): %d", pos, start)
-                    continue
+                    raise ValueError("Invalid startxref position (> %d): %d" % (pos, start))
                 return start + self.offset
             elif line == b"xref":
                 return pos
