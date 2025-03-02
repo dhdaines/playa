@@ -510,7 +510,11 @@ class Document:
         """Document outline, if any."""
         if "Outlines" not in self.catalog:
             return None
-        return Outline(self)
+        try:
+            return Outline(self)
+        except TypeError:
+            log.warning("Invalid Outline entry in catalog: %r", self.catalog["Outline"])
+            return None
 
     @property
     def outlines(self) -> Iterator["OutlineItem"]:
