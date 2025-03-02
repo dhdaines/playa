@@ -136,7 +136,7 @@ class Outline:
 
     @property
     def title(self) -> Union[str, None]:
-        raw = self.props.get("Title")
+        raw = resolve1(self.props.get("Title"))
         if raw is None:
             return None
         if not isinstance(raw, bytes):
@@ -159,7 +159,10 @@ class Outline:
         """
         dest = resolve1(self.props.get("Dest"))
         if dest is not None:
-            return Destination.from_dest(self.doc, dest)
+            try:
+                return Destination.from_dest(self.doc, dest)
+            except KeyError:
+                return None
         action = self.action
         if action is None or action.type is not ACTION_GOTO:
             return None
@@ -167,7 +170,7 @@ class Outline:
 
     @property
     def action(self) -> Union[Action, None]:
-        action = self.props.get("A")
+        action = resolve1(self.props.get("A"))
         if action is None:
             return None
         return Action(self._docref, dict_value(action))
