@@ -169,7 +169,7 @@ class Lexer:
         return (linepos, self.data[linepos : self.pos])
 
     def get_inline_data(
-        self, target: bytes = b"\nEI", blocksize: int = -1
+        self, target: bytes = b"EI", try_harder: bool = False
     ) -> Tuple[int, bytes]:
         """Get the data for an inline image up to the target
         end-of-stream marker.
@@ -183,7 +183,22 @@ class Lexer:
         the end-of-stream token (likewise) if necessary.
         """
         tpos = self.data.find(target, self.pos)
-        if tpos != -1:
+        if tpos == -1 and try_harder:
+            log.warning(
+                "Inline image at %s not terminated with %s, trying harder",
+                self.pos, target
+            )
+            # Try it, ignoring whitespace, for **really broken** PDFs
+            # (see https://github.com/mozilla/pdf.js/pull/10615)
+            r = re.compile(br"\s*".join(re.escape(bytes((c,))) for c in target))
+            m = r.search(self.data, self.pos)
+            if m is not None:
+                log.warning("It was actually terminated with '%r'", m[0])
+                tpos = m.start(0)
+                result = (tpos, self.data[self.pos : tpos] + target)
+                self.pos = m.end(0)
+                return result
+        else:
             nextpos = tpos + len(target)
             result = (tpos, self.data[self.pos : nextpos])
             self.pos = nextpos
@@ -394,7 +409,7 @@ class ObjectParser:
                 except (TypeError, PDFSyntaxError) as e:
                     if self.strict:
                         raise e
-                    log.warning("When constructing dict from %r: %s", objs, e)
+                    log.warning("When constructing dict from %r: %s", self.stack, e)
                 if pos == top:
                     top = None
                     return pos, obj
@@ -474,23 +489,29 @@ class ObjectParser:
                     # character shall be interpreted as the first byte
                     # of image data.
                     self.seek(idpos + len(KEYWORD_ID.name) + 1)
-                    (eipos, data) = self.get_inline_data(target=eos)
+                    (eipos, data) = self.get_inline_data(target=eos, try_harder=False)
+                    if eipos == -1:
+                        # Try again with b" EI"
+                        self.seek(idpos + len(KEYWORD_ID.name) + 1)
+                        (eipos, data) = self.get_inline_data(target=b" EI", try_harder=False)
                     if eipos == -1:
                         # Try again with just plain b"EI"
                         self.seek(idpos + len(KEYWORD_ID.name) + 1)
-                        (eipos, data) = self.get_inline_data(target=b"EI")
-                        data = re.sub(rb"(?:\r\n|[\r\n])$", b"", data[: -len(eos)])
-                    else:
-                        data = re.sub(rb"\r$", b"", data[: -len(eos)])
+                        (eipos, data) = self.get_inline_data(target=b"EI", try_harder=False)
+                    data = re.sub(rb"(?:\r\n|[\r\n])$", b"", data[: -len(eos)])
                 else:
                     # Note absence of + 1 here (the "Unless" above)
                     self.seek(idpos + len(KEYWORD_ID.name))
-                    (_, data) = self.get_inline_data(target=eos)
+                    (eipos, data) = self.get_inline_data(target=eos)
+                    if eipos == -1:
+                        raise PDFSyntaxError("End of inline stream at %d not found"
+                                             % (idpos,))
                     # There should be an "EI" here
                     (eipos, token) = self.nexttoken()
                     if token is not KEYWORD_EI:
                         log.warning(
-                            "Inline image not terminated with EI: got %r", token
+                            "Junk after inline image at %d: got %r instead of EI",
+                            idpos, token
                         )
                 if eipos == -1:
                     raise PDFSyntaxError("End of inline stream %r not found" % eos)
@@ -533,7 +554,7 @@ class ObjectParser:
         position to the end of this data."""
         return self._lexer.read(objlen)
 
-    def get_inline_data(self, target: bytes = b"EI") -> Tuple[int, bytes]:
+    def get_inline_data(self, target: bytes = b"EI", try_harder: bool = False) -> Tuple[int, bytes]:
         """Get the data for an inline image up to the target
         end-of-stream marker."""
         return self._lexer.get_inline_data(target)
