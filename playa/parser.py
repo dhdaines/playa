@@ -697,7 +697,7 @@ class IndirectObjectParser:
                     # In reality there usually is no end-of-line
                     # marker.  We will nonetheless warn if there's
                     # something other than 'endstream'.
-                    if line not in (b"\n", b"\r\n", b"endstream\n", b"endstream\r\n"):
+                    if line not in (b"\r", b"\n", b"\r\n", b"endstream\n", b"endstream\r\n"):
                         log.warning("Expected newline or 'endstream', got %r", line)
                 else:
                     # Reuse that line and read more if necessary
