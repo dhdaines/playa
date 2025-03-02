@@ -36,7 +36,7 @@ jobs:
         uses: pypa/hatch@install
       - name: Run pdf.js examples
         run: |
-          hatch run pytest -k pdf.js
+          hatch run pytest -n auto -k pdf.js
       - name: Run pdfplumber examples
         run: |
-          hatch run pytest -k pdfplumber
+          hatch run pytest -n auto -k pdfplumber

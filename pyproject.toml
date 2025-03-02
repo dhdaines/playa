@@ -73,7 +73,7 @@ testpaths = [ "tests" ]
 extra-dependencies = [ "cryptography", "pdfminer.six" ]
 
 [tool.hatch.envs.default]
-dependencies = [ "cryptography", "pytest", "pdfminer.six" ]
+dependencies = [ "cryptography", "pytest", "pytest-xdist", "pdfminer.six" ]
 
 [tool.hatch.envs.default.scripts]
 bench = [
