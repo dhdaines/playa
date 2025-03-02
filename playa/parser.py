@@ -452,6 +452,11 @@ class ObjectParser:
                             )
                             continue
                     objid = int_value(objid)
+                    if objid == 0:
+                        if self.strict:
+                            raise PDFSyntaxError("Object ID in reference at pos %d cannot be 0" % (pos,))
+                        log.warning("Ignoring indirect object reference to 0 at %s", (pos,))
+                        continue
                     obj = ObjRef(self.docref, objid)
                     self.stack.append((pos, obj))
             elif token is KEYWORD_BI:
