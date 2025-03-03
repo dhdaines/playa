@@ -81,7 +81,7 @@ from pathlib import Path
 from typing import Any, Deque, Dict, Iterable, Iterator, List, TextIO, Tuple, Union
 
 import playa
-from playa import Document, Page, asdict, asobj
+from playa import Document, Page, asobj
 from playa.pdftypes import ContentStream, ObjRef, resolve1
 from playa.structure import Element, ContentObject as StructContentObject, ContentItem
 from playa.utils import decode_text
@@ -209,7 +209,7 @@ def extract_catalog(doc: Document, args: argparse.Namespace) -> None:
 
 def extract_metadata(doc: Document, args: argparse.Namespace) -> None:
     """Extract random metadata."""
-    json.dump(asdict(doc), args.outfile, indent=2, ensure_ascii=False)
+    json.dump(asobj(doc), args.outfile, indent=2, ensure_ascii=False)
 
 
 def decode_page_spec(doc: Document, spec: str) -> Iterator[int]:
@@ -228,7 +228,7 @@ def get_text_json(page: Page) -> List[str]:
     objs = []
     for text in page.texts:
         objs.append(
-            json.dumps(asdict(text), indent=2, ensure_ascii=False, default=asobj)
+            json.dumps(asobj(text), indent=2, ensure_ascii=False, default=asobj)
         )
     return objs
 

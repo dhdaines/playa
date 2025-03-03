@@ -23,7 +23,7 @@ from playa.worker import _init_worker, _init_worker_buffer
 from playa.color import Color, ColorSpace
 from playa.document import Document, PageList
 from playa.exceptions import PDFException
-from playa.metadata import asdict, asobj
+from playa.metadata import asobj
 from playa.page import (
     Page,
     DeviceSpace,
@@ -57,7 +57,6 @@ __all__ = [
     "Token",
     "ObjRef",
     "PDFException",
-    "asdict",
     "asobj",
     "resolve",
     "resolve_all",

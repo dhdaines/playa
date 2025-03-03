@@ -200,9 +200,9 @@ def asobj_text(text: _TextObject) -> TextObject:
     return TextObject(
         chars=text.chars,
         bbox=text.bbox,
-        textstate=asdict(text.textstate),
-        gstate=asdict(text.gstate),
-        mcstack=[asdict(mcs) for mcs in text.mcstack],
+        textstate=asobj(text.textstate),
+        gstate=asobj(text.gstate),
+        mcstack=[asobj(mcs) for mcs in text.mcstack],
     )
 
 
@@ -216,6 +216,3 @@ def asobj_document(pdf: _Document) -> Document:
         pages=[asobj(page) for page in pdf.pages],
         objects=[asobj(obj) for obj in pdf.objects],
     )
-
-
-asdict = asobj
