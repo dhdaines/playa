@@ -28,16 +28,14 @@ from typing import (
 )
 
 from playa.color import (
-    PREDEFINED_COLORSPACE,
-    LITERAL_RELATIVE_COLORIMETRIC,
     BASIC_BLACK,
+    LITERAL_RELATIVE_COLORIMETRIC,
+    PREDEFINED_COLORSPACE,
     Color,
     ColorSpace,
     get_colorspace,
 )
-from playa.exceptions import (
-    PDFSyntaxError,
-)
+from playa.exceptions import PDFSyntaxError
 from playa.font import Font
 
 # FIXME: PDFObject needs to go in pdftypes somehow
@@ -56,6 +54,7 @@ from playa.pdftypes import (
     resolve1,
     stream_value,
 )
+from playa.structtree import StructTree
 from playa.utils import (
     MATRIX_IDENTITY,
     Matrix,
@@ -68,8 +67,7 @@ from playa.utils import (
     mult_matrix,
     normalize_rect,
 )
-from playa.structtree import StructTree
-from playa.worker import _deref_document, _ref_document, _ref_page, _deref_page, PageRef
+from playa.worker import PageRef, _deref_document, _deref_page, _ref_document, _ref_page
 
 if TYPE_CHECKING:
     from playa.document import Document
