@@ -5,7 +5,7 @@ metadata from various PLAYA objects, as well as a single-dispatch
 function to extract said metadata from any object.
 
 This is not done by methods on the classes in question as the
-metadata schema, which has its own version (`playa.models.VERSION`),
+metadata schema, which has its own version (`playa.metadata.VERSION`),
 should not depend on the particular implementation of those objects.
 """
 
@@ -115,68 +115,14 @@ class MarkedContent(TypedDict, total=False):
 
 
 @functools.singledispatch
-def asdict(obj):
+def asobj(obj: PDFObject):
+    """JSON serializable representation of PDF object metadata."""
+    # Catch dataclasses that don't have a specific serializer
     if dataclasses.is_dataclass(obj) and not isinstance(obj, type):
         return {k: asobj(v) for k, v in obj.__dict__.items()}
-    elif hasattr(obj, "_asdict"):
-        return {k: asobj(v) for k, v in obj._asdict().items()}
-    elif isinstance(obj, dict):
-        return {k: asobj(v) for k, v in obj.items()}
-
-
-@asdict.register(_Document)
-def document_asdict(pdf: _Document) -> Document:
-    """Dictionary representation of a document."""
-    return Document(
-        pdf_version=pdf.pdf_version,
-        is_printable=pdf.is_printable,
-        is_modifiable=pdf.is_modifiable,
-        is_extractable=pdf.is_extractable,
-        pages=[page_asdict(page) for page in pdf.pages],
-        objects=[obj_asdict(obj) for obj in pdf.objects],
-    )
-
-
-@asdict.register(_Page)
-def page_asdict(page: _Page) -> Page:
-    """Dictionary representation of a page."""
-    return Page(
-        objid=page.pageid,
-        index=page.page_idx,
-        label=page.label,
-        mediabox=page.mediabox,
-        cropbox=page.cropbox,
-        rotate=page.rotate,
-    )
-
-
-@asdict.register(_IndirectObject)
-def obj_asdict(obj: _IndirectObject) -> IndirectObject:
-    return IndirectObject(
-        objid=obj.objid,
-        genno=obj.genno,
-        type=type(obj.obj).__name__,
-        obj=asobj(obj.obj),
-    )
-
-
-@asdict.register(_TextObject)
-def text_asdict(text: _TextObject) -> TextObject:
-    return TextObject(
-        chars=text.chars,
-        bbox=text.bbox,
-        textstate=asdict(text.textstate),
-        gstate=asdict(text.gstate),
-        mcstack=[asdict(mcs) for mcs in text.mcstack],
-    )
-
-
-@functools.singledispatch
-def asobj(obj: PDFObject):
-    if dataclasses.is_dataclass(obj) and not isinstance(obj, type):
-        return asdict(obj)
+    # Catch NamedTuples that don't have a specific serializer
     if hasattr(obj, "_asdict"):
-        return asdict(obj)
+        return {k: asobj(v) for k, v in obj._asdict().items()}
     return repr(obj)
 
 
@@ -208,7 +154,7 @@ def asobj_literal(obj: PSLiteral) -> str:
 
 @asobj.register(dict)
 def asobj_dict(obj: dict) -> dict:
-    return asdict(obj)
+    return {k: asobj(v) for k, v in obj.items()}
 
 
 @asobj.register(list)
@@ -225,3 +171,51 @@ def asobj_stream(obj: ContentStream) -> dict:
 def asobj_ref(obj: ObjRef) -> str:
     # This is the same as repr() but we want it defined separately
     return f"<ObjRef:{obj.objid}>"
+
+
+@asobj.register(_Page)
+def asobj_page(page: _Page) -> Page:
+    return Page(
+        objid=page.pageid,
+        index=page.page_idx,
+        label=page.label,
+        mediabox=page.mediabox,
+        cropbox=page.cropbox,
+        rotate=page.rotate,
+    )
+
+
+@asobj.register(_IndirectObject)
+def asobj_obj(obj: _IndirectObject) -> IndirectObject:
+    return IndirectObject(
+        objid=obj.objid,
+        genno=obj.genno,
+        type=type(obj.obj).__name__,
+        obj=asobj(obj.obj),
+    )
+
+
+@asobj.register(_TextObject)
+def asobj_text(text: _TextObject) -> TextObject:
+    return TextObject(
+        chars=text.chars,
+        bbox=text.bbox,
+        textstate=asdict(text.textstate),
+        gstate=asdict(text.gstate),
+        mcstack=[asdict(mcs) for mcs in text.mcstack],
+    )
+
+
+@asobj.register(_Document)
+def asobj_document(pdf: _Document) -> Document:
+    return Document(
+        pdf_version=pdf.pdf_version,
+        is_printable=pdf.is_printable,
+        is_modifiable=pdf.is_modifiable,
+        is_extractable=pdf.is_extractable,
+        pages=[asobj(page) for page in pdf.pages],
+        objects=[asobj(obj) for obj in pdf.objects],
+    )
+
+
+asdict = asobj
