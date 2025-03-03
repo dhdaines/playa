@@ -11,7 +11,7 @@ should not depend on the particular implementation of those objects.
 
 import dataclasses
 import functools
-from typing import List, TypedDict, TypeVar, Union
+from typing import Iterable, List, TypedDict, TypeVar, Union
 
 from playa.document import Document as _Document, DeviceSpace
 from playa.page import Page as _Page, TextObject as _TextObject
@@ -33,27 +33,33 @@ class Document(TypedDict, total=False):
     """Should the user be allowed to modify?"""
     is_extractable: bool
     """Should the user be allowed to extract text?"""
-    pages: List["Page"]
-    """Pages in this document."""
-    objects: List["IndirectObject"]
-    """Indirect objects in this document."""
     space: DeviceSpace
     """Device space for this document."""
     encryption: "Encryption"
     """Encryption information for this document."""
     outlines: "Outlines"
     """Outline hierarchy for this document.."""
+    structure: "Structure"
+    """Logical structure for this document.."""
+    pages: List["Page"]
+    """Pages in this document."""
+    objects: List["IndirectObject"]
+    """Indirect objects in this document."""
 
 
-class Encryption(TypedDict):
+class Encryption(TypedDict, total=False):
     """Encryption information."""
 
 
-class Outlines(TypedDict):
+class Outlines(TypedDict, total=False):
     """Outline hierarchy for a PDF document."""
 
 
-class Page(TypedDict):
+class Structure(TypedDict, total=False):
+    """Logical structure tree for a PDF document."""
+
+
+class Page(TypedDict, total=False):
     """Metadata for a PDF page."""
 
     objid: int
@@ -70,7 +76,7 @@ class Page(TypedDict):
     """Page rotation in degrees."""
 
 
-class IndirectObject(TypedDict):
+class IndirectObject(TypedDict, total=False):
     objid: int
     """Indirect object ID."""
     genno: int
@@ -81,7 +87,7 @@ class IndirectObject(TypedDict):
     """Object metadata (or data, for simple objects)."""
 
 
-class TextObject(TypedDict):
+class TextObject(TypedDict, total=False):
     """Text object on a page."""
 
     chars: str
@@ -96,26 +102,26 @@ class TextObject(TypedDict):
     """Stack of enclosing marked content sections."""
 
 
-class TextState(TypedDict):
+class TextState(TypedDict, total=False):
     """Text state."""
 
 
-class GraphicState(TypedDict):
+class GraphicState(TypedDict, total=False):
     """Graphic state."""
 
 
-class MarkedContent(TypedDict):
+class MarkedContent(TypedDict, total=False):
     """Marked content section."""
 
 
 @functools.singledispatch
 def asdict(obj):
-    if dataclasses.is_dataclass(obj):
-        return dataclasses.asdict(obj)
+    if dataclasses.is_dataclass(obj) and not isinstance(obj, type):
+        return {k: asobj(v) for k, v in obj.__dict__.items()}
     elif hasattr(obj, "_asdict"):
-        return obj._asdict()
-    else:
-        return {}
+        return {k: asobj(v) for k, v in obj._asdict().items()}
+    elif isinstance(obj, dict):
+        return {k: asobj(v) for k, v in obj.items()}
 
 
 @asdict.register(_Document)
@@ -167,10 +173,14 @@ def text_asdict(text: _TextObject) -> TextObject:
 
 @functools.singledispatch
 def asobj(obj: PDFObject):
+    if dataclasses.is_dataclass(obj) and not isinstance(obj, type):
+        return asdict(obj)
+    if hasattr(obj, "_asdict"):
+        return asdict(obj)
     return repr(obj)
 
 
-_S = TypeVar('_S', int, float, bool, str)
+_S = TypeVar("_S", int, float, bool, str)
 
 
 def asobj_simple(obj: _S) -> _S:
@@ -183,6 +193,7 @@ asobj.register(int, asobj_simple)
 asobj.register(float, asobj_simple)
 asobj.register(bool, asobj_simple)
 asobj.register(str, asobj_simple)
+asobj.register(tuple, asobj_simple)
 
 
 @asobj.register(bytes)
@@ -197,7 +208,7 @@ def asobj_literal(obj: PSLiteral) -> str:
 
 @asobj.register(dict)
 def asobj_dict(obj: dict) -> dict:
-    return {k: asobj(v) for k, v in obj.items()}
+    return asdict(obj)
 
 
 @asobj.register(list)
