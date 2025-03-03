@@ -15,7 +15,7 @@ from typing import List, TypedDict, TypeVar, Union
 
 from playa.document import Document as _Document, DeviceSpace
 from playa.page import Page as _Page, TextObject as _TextObject
-from playa.parser import IndirectObject as _IndirectObject, PDFObject, PSLiteral
+from playa.parser import IndirectObject as _IndirectObject, PSLiteral
 from playa.pdftypes import literal_name, ContentStream, ObjRef
 from playa.utils import Rect, decode_text
 
@@ -115,7 +115,7 @@ class MarkedContent(TypedDict, total=False):
 
 
 @functools.singledispatch
-def asobj(obj: PDFObject):
+def asobj(obj):
     """JSON serializable representation of PDF object metadata."""
     # Catch dataclasses that don't have a specific serializer
     if dataclasses.is_dataclass(obj) and not isinstance(obj, type):
