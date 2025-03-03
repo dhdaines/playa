@@ -9,8 +9,9 @@ metadata schema, which has its own version (`playa.models.VERSION`),
 should not depend on the particular implementation of those objects.
 """
 
+import dataclasses
 import functools
-from typing import List, TypedDict, Union
+from typing import List, TypedDict, TypeVar, Union
 
 from playa.document import Document as _Document, DeviceSpace
 from playa.page import Page as _Page, TextObject as _TextObject
@@ -21,7 +22,7 @@ from playa.utils import Rect, decode_text
 VERSION = "1.0"
 
 
-class Document(TypedDict):
+class Document(TypedDict, total=False):
     """Metadata for a PDF document."""
 
     pdf_version: str
@@ -83,10 +84,38 @@ class IndirectObject(TypedDict):
 class TextObject(TypedDict):
     """Text object on a page."""
 
+    chars: str
+    """Unicode string representation of text."""
+    bbox: Rect
+    """Bounding rectangle for all glyphs in text."""
+    textstate: "TextState"
+    """Text state."""
+    gstate: "GraphicState"
+    """Graphic state."""
+    mcstack: List["MarkedContent"]
+    """Stack of enclosing marked content sections."""
+
+
+class TextState(TypedDict):
+    """Text state."""
+
+
+class GraphicState(TypedDict):
+    """Graphic state."""
+
+
+class MarkedContent(TypedDict):
+    """Marked content section."""
+
 
 @functools.singledispatch
 def asdict(obj):
-    return {}
+    if dataclasses.is_dataclass(obj):
+        return dataclasses.asdict(obj)
+    elif hasattr(obj, "_asdict"):
+        return obj._asdict()
+    else:
+        return {}
 
 
 @asdict.register(_Document)
@@ -127,33 +156,13 @@ def obj_asdict(obj: _IndirectObject) -> IndirectObject:
 
 @asdict.register(_TextObject)
 def text_asdict(text: _TextObject) -> TextObject:
-    tstate = text.textstate
-    # Prune these objects somewhat (FIXME: need a method that will
-    # serialize only non-default values and run _asdict as needed)
-    textstate = {
-        "line_matrix": tstate.line_matrix,
-        "fontsize": tstate.fontsize,
-        "render_mode": tstate.render_mode,
-    }
-    if tstate.font is not None:
-        textstate["font"] = {
-            "fontname": tstate.font.fontname,
-            "vertical": tstate.font.vertical,
-        }
-    gstate = {
-        "scs": text.gstate.scs._asdict(),
-        "scolor": text.gstate.scolor._asdict(),
-        "ncs": text.gstate.ncs._asdict(),
-        "ncolor": text.gstate.ncolor._asdict(),
-    }
-    obj = {
-        "chars": text.chars,
-        "bbox": text.bbox,
-        "textstate": textstate,
-        "gstate": gstate,
-        "mcstack": [mcs._asdict() for mcs in text.mcstack],
-    }
-    return obj
+    return TextObject(
+        chars=text.chars,
+        bbox=text.bbox,
+        textstate=asdict(text.textstate),
+        gstate=asdict(text.gstate),
+        mcstack=[asdict(mcs) for mcs in text.mcstack],
+    )
 
 
 @functools.singledispatch
@@ -161,17 +170,23 @@ def asobj(obj: PDFObject):
     return repr(obj)
 
 
-@asobj.register(Union[int, float, bool, str])
-def asobj_simple(
-    obj: Union[int, float, bool, str]
-) -> Union[int, float, bool, str]:
+_S = TypeVar('_S', int, float, bool, str)
+
+
+def asobj_simple(obj: _S) -> _S:
     return obj
 
 
+# Have to list these all for Python <3.11 where
+# functools.singledispatch doesn't support Union
+asobj.register(int, asobj_simple)
+asobj.register(float, asobj_simple)
+asobj.register(bool, asobj_simple)
+asobj.register(str, asobj_simple)
+
+
 @asobj.register(bytes)
-def asobj_string(
-    obj: bytes
-) -> str:
+def asobj_string(obj: bytes) -> str:
     return decode_text(obj)
 
 

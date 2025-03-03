@@ -227,33 +227,9 @@ def decode_page_spec(doc: Document, spec: str) -> Iterator[int]:
 def get_text_json(page: Page) -> List[str]:
     objs = []
     for text in page.texts:
-        tstate = text.textstate
-        # Prune these objects somewhat (FIXME: need a method that will
-        # serialize only non-default values and run _asdict as needed)
-        textstate = {
-            "line_matrix": tstate.line_matrix,
-            "fontsize": tstate.fontsize,
-            "render_mode": tstate.render_mode,
-        }
-        if tstate.font is not None:
-            textstate["font"] = {
-                "fontname": tstate.font.fontname,
-                "vertical": tstate.font.vertical,
-            }
-        gstate = {
-            "scs": text.gstate.scs._asdict(),
-            "scolor": text.gstate.scolor._asdict(),
-            "ncs": text.gstate.ncs._asdict(),
-            "ncolor": text.gstate.ncolor._asdict(),
-        }
-        obj = {
-            "chars": text.chars,
-            "bbox": text.bbox,
-            "textstate": textstate,
-            "gstate": gstate,
-            "mcstack": [mcs._asdict() for mcs in text.mcstack],
-        }
-        objs.append(json.dumps(obj, indent=2, ensure_ascii=False, default=repr))
+        objs.append(
+            json.dumps(asdict(text), indent=2, ensure_ascii=False, default=asobj)
+        )
     return objs
 
 
