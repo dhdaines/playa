@@ -11,7 +11,7 @@ should not depend on the particular implementation of those objects.
 
 import dataclasses
 import functools
-from typing import Iterable, List, TypedDict, TypeVar, Union
+from typing import List, TypedDict, TypeVar, Union
 
 from playa.document import Document as _Document, DeviceSpace
 from playa.page import Page as _Page, TextObject as _TextObject
