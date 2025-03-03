@@ -80,7 +80,8 @@ from collections import deque
 from pathlib import Path
 from typing import Any, Deque, Dict, Iterable, Iterator, List, TextIO, Tuple, Union
 
-import playa from playa import Document, Page, asdict, asobj
+import playa
+from playa import Document, Page, asdict, asobj
 from playa.pdftypes import ContentStream, ObjRef, resolve1
 from playa.structure import Element, ContentObject as StructContentObject, ContentItem
 from playa.utils import decode_text
