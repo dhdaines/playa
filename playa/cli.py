@@ -25,6 +25,12 @@ following keys (but will probably contain more in the future):
     - `objid`: the object number
     - `genno`: the generation number
     - `type`: the type of object this is
+    - `obj`: a best-effort JSON serialization of the object's
+      metadata.  In the case of simple objects like strings,
+      dictionaries, or lists, this is the object itself.  Object
+      references are converted to a string representation of the form
+      "<ObjRef:OBJID>", while content streams are reprented by their
+      properties dictionary.
 
 Bucking the trend of the last 20 years towards horribly slow
 Click-addled CLIs with deeply nested subcommands, anything else is
@@ -74,8 +80,7 @@ from collections import deque
 from pathlib import Path
 from typing import Any, Deque, Dict, Iterable, Iterator, List, TextIO, Tuple, Union
 
-import playa
-from playa import Document, Page
+import playa from playa import Document, Page, asdict, asobj
 from playa.pdftypes import ContentStream, ObjRef, resolve1
 from playa.structure import Element, ContentObject as StructContentObject, ContentItem
 from playa.utils import decode_text
@@ -197,14 +202,13 @@ def extract_catalog(doc: Document, args: argparse.Namespace) -> None:
         args.outfile,
         indent=2,
         ensure_ascii=False,
-        default=repr,
+        default=asobj,
     )
 
 
 def extract_metadata(doc: Document, args: argparse.Namespace) -> None:
     """Extract random metadata."""
-    stuff = doc.dict()
-    json.dump(stuff, args.outfile, indent=2, ensure_ascii=False, default=repr)
+    json.dump(asdict(doc), args.outfile, indent=2, ensure_ascii=False)
 
 
 def decode_page_spec(doc: Document, spec: str) -> Iterator[int]:
@@ -322,7 +326,7 @@ def _extract_content_object(
     kid: StructContentObject, indent: int, outfh: TextIO
 ) -> bool:
     ws = " " * indent
-    text = json.dumps(kid.props, default=repr)
+    text = json.dumps(kid.props, default=asobj)
     print(f"{ws}{text}", end="", file=outfh)
     return True
 

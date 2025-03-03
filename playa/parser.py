@@ -16,7 +16,6 @@ from typing import (
 )
 
 from playa.exceptions import PDFSyntaxError
-from playa.models import IndirectObjectMetadata
 from playa.pdftypes import (
     KWD,
     LIT,
@@ -592,11 +591,6 @@ class IndirectObject(NamedTuple):
     objid: int
     genno: int
     obj: PDFObject
-
-    def dict(self) -> IndirectObjectMetadata:
-        return IndirectObjectMetadata(objid=self.objid,
-                                      genno=self.genno,
-                                      type=type(self.obj).__name__)
 
 
 class IndirectObjectParser:
