@@ -73,6 +73,7 @@ reading order, and so we can actually really extract the text from it
 
 import argparse
 import functools
+import getpass
 import itertools
 import json
 import logging
@@ -81,7 +82,7 @@ from pathlib import Path
 from typing import Any, Deque, Dict, Iterable, Iterator, List, TextIO, Tuple, Union
 
 import playa
-from playa import Document, Page, asobj
+from playa import Document, Page, asobj, PDFPasswordIncorrect
 from playa.pdftypes import ContentStream, ObjRef, resolve1
 from playa.structure import Element, ContentObject as StructContentObject, ContentItem
 from playa.utils import decode_text
@@ -149,6 +150,13 @@ def make_argparse() -> argparse.ArgumentParser:
         type=int,
         help="Maximum number of worker processes to use",
         default=1,
+    )
+    parser.add_argument(
+        "--password",
+        help="Password for an encrypted PDF.  If not supplied, "
+        "will be read from the console.",
+        type=str,
+        default="",
     )
     parser.add_argument(
         "--debug",
@@ -386,21 +394,36 @@ def main() -> None:
     logging.basicConfig(level=logging.DEBUG if args.debug else logging.WARNING)
     try:
         for path in args.pdfs:
-            with playa.open(path, space="default", max_workers=args.max_workers) as doc:
-                if args.stream is not None:  # it can't be zero either though
-                    extract_stream(doc, args)
-                elif args.content_streams:
-                    extract_page_contents(doc, args)
-                elif args.catalog:
-                    extract_catalog(doc, args)
-                elif args.text_objects:
-                    extract_text_objects(doc, args)
-                elif args.text:
-                    extract_text(doc, args)
-                elif args.structure:
-                    extract_structure(doc, args)
-                else:
-                    extract_metadata(doc, args)
+            try:
+                doc = playa.open(
+                    path,
+                    space="default",
+                    max_workers=args.max_workers,
+                    password=args.password,
+                )
+            except PDFPasswordIncorrect:
+                password = getpass.getpass(prompt=f"Password for {path}: ")
+                doc = playa.open(
+                    path,
+                    space="default",
+                    max_workers=args.max_workers,
+                    password=password,
+                )
+            if args.stream is not None:  # it can't be zero either though
+                extract_stream(doc, args)
+            elif args.content_streams:
+                extract_page_contents(doc, args)
+            elif args.catalog:
+                extract_catalog(doc, args)
+            elif args.text_objects:
+                extract_text_objects(doc, args)
+            elif args.text:
+                extract_text(doc, args)
+            elif args.structure:
+                extract_structure(doc, args)
+            else:
+                extract_metadata(doc, args)
+            doc.close()
     except RuntimeError as e:
         parser.error(f"Something went wrong:\n{e}")
 

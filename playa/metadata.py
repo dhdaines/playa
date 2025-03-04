@@ -1,4 +1,4 @@
-"""Metadata schemas for various objects.
+"""Schemas for various metadata and content objects.
 
 This module contains schemas (as TypedDict) and extractors for
 metadata from various PLAYA objects, as well as a single-dispatch
@@ -7,11 +7,16 @@ function to extract said metadata from any object.
 This is not done by methods on the classes in question as the
 metadata schema, which has its own version (`playa.metadata.VERSION`),
 should not depend on the particular implementation of those objects.
+
+The other reason this is separate is because this is an entirely
+non-lazy API.  It is provided here because the PLAYA CLI uses it, and
+to prevent users of the library from reimplementing it themselves.
 """
 
+import binascii
 import dataclasses
 import functools
-from typing import List, TypedDict, TypeVar, Union
+from typing import List, Tuple, TypedDict, TypeVar, Union
 
 from playa.document import Document as _Document, DeviceSpace
 from playa.page import Page as _Page, TextObject as _TextObject
@@ -39,7 +44,7 @@ class Document(TypedDict, total=False):
     """Encryption information for this document."""
     outlines: "Outlines"
     """Outline hierarchy for this document.."""
-    structure: "Structure"
+    structure: "StructTree"
     """Logical structure for this document.."""
     pages: List["Page"]
     """Pages in this document."""
@@ -49,14 +54,42 @@ class Document(TypedDict, total=False):
 
 class Encryption(TypedDict, total=False):
     """Encryption information."""
+    ids: Tuple[str, str]
+    """ID values for encryption."""
+    encrypt: dict
+    """Encryption properties."""
 
 
 class Outlines(TypedDict, total=False):
     """Outline hierarchy for a PDF document."""
+    title: str
+    """Title of this outline entry."""
+    destination: "Dest"
+    """Destination (or target of GoTo action)."""
+    element: "StructElement"
+    """Structure element asociated with this entry."""
+    children: List["Outlines"]
+    """Children of this entry."""
 
 
-class Structure(TypedDict, total=False):
+class Dest(TypedDict, total=False):
+    """Destination for an outline entry or annotation."""
+
+
+class StructElement(TypedDict, total=False):
+    """Element or root node of logical structure tree.
+
+    Contrary to the PDF standard, we create a root node to make
+    navigation over the tree easier.
+    """
+    type: str
+    """Type of structure element (or "StructTreeRoot" for root)"""
+
+
+class StructTree(TypedDict, total=False):
     """Logical structure tree for a PDF document."""
+    root: StructElement
+    """Root node of the tree."""
 
 
 class Page(TypedDict, total=False):
@@ -195,6 +228,28 @@ def asobj_obj(obj: _IndirectObject) -> IndirectObject:
     )
 
 
+@asobj.register(_Document)
+def asobj_document(pdf: _Document) -> Document:
+    doc = {
+        "pdf_version": pdf.pdf_version,
+        "is_printable": pdf.is_printable,
+        "is_modifiable": pdf.is_modifiable,
+        "is_extractable": pdf.is_extractable,
+        "pages": [asobj(page) for page in pdf.pages],
+        "objects": [asobj(obj) for obj in pdf.objects],
+    }
+    if pdf.encryption is not None:
+        ids, encrypt = pdf.encryption
+        ids = ["<%s>" % binascii.hexlify(b).decode('ascii') for b in ids]
+        encrypt = encrypt.copy()
+        for k, v in encrypt.items():
+            # They aren't printable strings, do not try to decode them...
+            if isinstance(v, bytes):
+                encrypt[k] = "<%s>" % binascii.hexlify(v).decode('ascii')
+        doc["encryption"] = Encryption(ids=ids, encrypt=asobj(encrypt))
+    return doc
+
+
 @asobj.register(_TextObject)
 def asobj_text(text: _TextObject) -> TextObject:
     return TextObject(
@@ -203,16 +258,4 @@ def asobj_text(text: _TextObject) -> TextObject:
         textstate=asobj(text.textstate),
         gstate=asobj(text.gstate),
         mcstack=[asobj(mcs) for mcs in text.mcstack],
-    )
-
-
-@asobj.register(_Document)
-def asobj_document(pdf: _Document) -> Document:
-    return Document(
-        pdf_version=pdf.pdf_version,
-        is_printable=pdf.is_printable,
-        is_modifiable=pdf.is_modifiable,
-        is_extractable=pdf.is_extractable,
-        pages=[asobj(page) for page in pdf.pages],
-        objects=[asobj(obj) for obj in pdf.objects],
     )

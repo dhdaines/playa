@@ -167,6 +167,9 @@ class Document:
         return self
 
     def __exit__(self, exc_type, exc_value, traceback) -> None:
+        self.close()
+
+    def close(self) -> None:
         # If we were opened from a file then close it
         if self._fp:
             self._fp.close()
