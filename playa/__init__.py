@@ -23,7 +23,7 @@ from playa.worker import _init_worker, _init_worker_buffer
 from playa.color import Color, ColorSpace
 from playa.document import Document, PageList
 from playa.exceptions import PDFException, PDFPasswordIncorrect
-from playa.metadata import asobj
+from playa.data import asobj
 from playa.page import (
     Page,
     DeviceSpace,
