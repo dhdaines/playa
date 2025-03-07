@@ -159,6 +159,11 @@ def make_argparse() -> argparse.ArgumentParser:
         default="",
     )
     parser.add_argument(
+        "--non-interactive",
+        help="Do not attempt to read a password from the console.",
+        action="store_true",
+    )
+    parser.add_argument(
         "--debug",
         help="Very verbose debugging output",
         action="store_true",
@@ -383,9 +388,9 @@ def extract_structure(doc: Document, args: argparse.Namespace) -> None:
     print("]", file=args.outfile)
 
 
-def main() -> None:
+def main(argv: Union[List[str], None] = None) -> None:
     parser = make_argparse()
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
     if args.version:
         print(playa.__version__)
         return
@@ -402,6 +407,8 @@ def main() -> None:
                     password=args.password,
                 )
             except PDFPasswordIncorrect:
+                if args.non_interactive:
+                    raise
                 password = getpass.getpass(prompt=f"Password for {path}: ")
                 doc = playa.open(
                     path,
