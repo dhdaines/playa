@@ -222,7 +222,8 @@ def extract_catalog(doc: Document, args: argparse.Namespace) -> None:
 
 def extract_metadata(doc: Document, args: argparse.Namespace) -> None:
     """Extract random metadata."""
-    json.dump(asobj(doc), args.outfile, indent=2, ensure_ascii=False)
+    metadata = asobj(doc)
+    json.dump(metadata, args.outfile, indent=2, ensure_ascii=False)
 
 
 def decode_page_spec(doc: Document, spec: str) -> Iterator[int]:

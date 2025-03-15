@@ -259,7 +259,7 @@ class Document:
                 self.catalog["Version"],
                 self.pdf_version,
             )
-            self.pdf_version = self.catalog["Version"]
+            self.pdf_version = literal_name(self.catalog["Version"])
         self.is_tagged = False
         markinfo = resolve1(self.catalog.get("MarkInfo"))
         if isinstance(markinfo, dict):
