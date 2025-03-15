@@ -722,7 +722,9 @@ class IndirectObjectParser:
                         b"endstream\n",
                         b"endstream\r\n",
                     ):
-                        log.warning("Expected newline or 'endstream', got %r", line)
+                        raise PDFSyntaxError(
+                            "Expected newline or 'endstream', got %r" % (line,)
+                        )
                 else:
                     # Reuse that line and read more if necessary
                     while True:
@@ -748,6 +750,13 @@ class IndirectObjectParser:
             elif obj is KEYWORD_ENDSTREAM:
                 if not isinstance(self.trailer[-1][1], ContentStream):
                     log.warning("Got endstream without a stream, ignoring!")
+            elif isinstance(obj, PSKeyword) and obj.name.startswith(b"endstream"):
+                # Some broken PDFs have junk after "endstream"
+                errmsg = "Expected 'endstream', got %r" % (obj,)
+                if self.strict:
+                    raise PDFSyntaxError(errmsg)
+                else:
+                    log.warning(errmsg)
             else:
                 self.trailer.append((pos, obj))
 
