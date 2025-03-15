@@ -624,7 +624,7 @@ class IndirectObjectParser:
     ) -> None:
         self._parser = ObjectParser(data, doc, strict=strict)
         self.buffer = data
-        self.trailer: List[Tuple[int, Union[PDFObject, ContentStream]]] = []
+        self.objstack: List[Tuple[int, Union[PDFObject, ContentStream]]] = []
         self.docref = None if doc is None else _ref_document(doc)
         self.strict = strict
 
@@ -654,21 +654,25 @@ class IndirectObjectParser:
                 if obj is not KEYWORD_ENDOBJ:
                     self._parser.seek(pos + len(b"endobj"))
                 # objid genno "obj" (skipped) ... and the object
-                (_, obj) = self.trailer.pop()
-                (_, genno) = self.trailer.pop()
+                (_, obj) = self.objstack.pop()
+                (_, genno) = self.objstack.pop()
                 # Update pos to be the beginning of the indirect object
-                (pos, objid) = self.trailer.pop()
+                (pos, objid) = self.objstack.pop()
                 try:
                     objid = int_value(objid)
                     genno = int_value(genno)
                 except TypeError as e:
                     objs = " ".join(
                         repr(obj)
-                        for obj in itertools.chain((x[1] for x in self.trailer), (objid, genno, obj))
+                        for obj in itertools.chain(
+                            (x[1] for x in self.objstack), (objid, genno, obj)
+                        )
                     )
-                    errmsg = (f"Failed to parse indirect object at {pos}: "
-                              f"got: {objs} "
-                              f"before 'endobj'")
+                    errmsg = (
+                        f"Failed to parse indirect object at {pos}: "
+                        f"got: {objs} "
+                        f"before 'endobj'"
+                    )
                     if self.strict:
                         raise PDFSyntaxError(errmsg) from e
                     else:
@@ -679,13 +683,14 @@ class IndirectObjectParser:
                 if isinstance(obj, ContentStream):
                     obj.objid = objid
                     obj.genno = genno
+                del self.objstack[:]
                 return pos, IndirectObject(objid, genno, obj)
             elif obj is KEYWORD_STREAM:
                 # PDF 1.7 sec 7.3.8.1: A stream shall consist of a
                 # dictionary followed by zero or more bytes bracketed
                 # between the keywords `stream` (followed by newline)
                 # and `endstream`
-                (_, dic) = self.trailer.pop()
+                (_, dic) = self.objstack.pop()
                 if not isinstance(dic, dict):
                     # sec 7.3.8.1: the stream dictionary shall be a
                     # direct object.
@@ -699,6 +704,12 @@ class IndirectObjectParser:
                     log.warning("/Length is undefined in stream dictionary %r", dic)
                     objlen = 0
                 except ValueError:
+                    # FIXME: This warning should be suppressed in
+                    # fallback xref parsing, since we obviously can't
+                    # resolve any references.  Either that or fallback
+                    # xref parsing should just run a regex over the
+                    # PDF and not try to actually parse the objects
+                    # (probably a better solution)
                     log.warning("/Length reference cannot be resolved %r", dic)
                     objlen = 0
                 # sec 7.3.8.1: The keyword `stream` that follows the stream
@@ -757,9 +768,9 @@ class IndirectObjectParser:
                 stream = ContentStream(
                     dic, bytes(data), None if doc is None else doc.decipher
                 )
-                self.trailer.append((pos, stream))
+                self.objstack.append((pos, stream))
             elif obj is KEYWORD_ENDSTREAM:
-                if not isinstance(self.trailer[-1][1], ContentStream):
+                if not isinstance(self.objstack[-1][1], ContentStream):
                     log.warning("Got endstream without a stream, ignoring!")
             elif isinstance(obj, PSKeyword) and obj.name.startswith(b"endstream"):
                 # Some broken PDFs have junk after "endstream"
@@ -769,7 +780,7 @@ class IndirectObjectParser:
                 else:
                     log.warning(errmsg)
             else:
-                self.trailer.append((pos, obj))
+                self.objstack.append((pos, obj))
 
     # Delegation follows
     def seek(self, pos: int) -> None:
