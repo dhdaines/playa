@@ -1,3 +1,4 @@
+import itertools
 import logging
 import mmap
 import re
@@ -655,14 +656,24 @@ class IndirectObjectParser:
                 # objid genno "obj" (skipped) ... and the object
                 (_, obj) = self.trailer.pop()
                 (_, genno) = self.trailer.pop()
+                # Update pos to be the beginning of the indirect object
                 (pos, objid) = self.trailer.pop()
                 try:
                     objid = int_value(objid)
                     genno = int_value(genno)
                 except TypeError as e:
-                    raise PDFSyntaxError(
-                        f"Object numbers must be integers, got {objid!r} {genno!r}"
-                    ) from e
+                    objs = " ".join(
+                        repr(obj)
+                        for obj in itertools.chain((x[1] for x in self.trailer), (objid, genno, obj))
+                    )
+                    errmsg = (f"Failed to parse indirect object at {pos}: "
+                              f"got: {objs} "
+                              f"before 'endobj'")
+                    if self.strict:
+                        raise PDFSyntaxError(errmsg) from e
+                    else:
+                        log.warning(errmsg)
+                        continue
                 # ContentStream is *special* and needs these
                 # internally for decryption.
                 if isinstance(obj, ContentStream):
