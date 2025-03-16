@@ -13,8 +13,12 @@ try:
 except ImportError:
     from typing import TypedDict
 
+from playa.data.asobj import asobj
+from playa.document import Document as _Document
+from playa.page import Page as _Page
 from playa.document import DeviceSpace
 from playa.utils import Rect, Matrix
+from playa.parser import IndirectObject as _IndirectObject
 
 
 class Document(TypedDict, total=False):
@@ -150,3 +154,43 @@ class Font(TypedDict, total=False):
     leading: float
     bbox: Rect
     matrix: Matrix
+
+
+@asobj.register(_Page)
+def asobj_page(page: _Page) -> Page:
+    return Page(
+        objid=page.pageid,
+        index=page.page_idx,
+        label=page.label,
+        mediabox=page.mediabox,
+        cropbox=page.cropbox,
+        rotate=page.rotate,
+    )
+
+
+@asobj.register(_IndirectObject)
+def asobj_obj(obj: _IndirectObject) -> IndirectObject:
+    return IndirectObject(
+        objid=obj.objid,
+        genno=obj.genno,
+        type=type(obj.obj).__name__,
+        obj=asobj(obj.obj),
+    )
+
+
+@asobj.register(_Document)
+def asobj_document(pdf: _Document) -> Document:
+    doc = Document(
+        pdf_version=pdf.pdf_version,
+        is_printable=pdf.is_printable,
+        is_modifiable=pdf.is_modifiable,
+        is_extractable=pdf.is_extractable,
+        pages=[asobj(page) for page in pdf.pages],
+        objects=[asobj(obj) for obj in pdf.objects],
+    )
+    if pdf.encryption is not None:
+        ids, encrypt = pdf.encryption
+        doc["encryption"] = Encryption(
+            ids=[asobj(b) for b in ids], encrypt=asobj(encrypt)
+        )
+    return doc

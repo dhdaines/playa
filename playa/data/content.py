@@ -13,7 +13,9 @@ try:
 except ImportError:
     from typing import TypedDict
 
+from playa.data.asobj import asobj
 from playa.utils import Rect, Matrix
+from playa.page import TextObject as _TextObject
 
 
 class Text(TypedDict, total=False):
@@ -68,3 +70,14 @@ class Tag(TypedDict, total=False):
     """Marked content section."""
 
     name: str
+
+
+@asobj.register(_TextObject)
+def asobj_text(text: _TextObject) -> Text:
+    return Text(
+        chars=text.chars,
+        bbox=text.bbox,
+        textstate=asobj(text.textstate),
+        gstate=asobj(text.gstate),
+        mcstack=[asobj(mcs) for mcs in text.mcstack],
+    )
