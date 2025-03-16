@@ -225,6 +225,7 @@ def test_objects_decrypted() -> None:
             assert info is not None
             # Make sure strings are decrypted in both cases
             assert info.obj == doc[10]
+            assert isinstance(info.obj, dict)
             assert info.obj["CreationDate"] == b"D:20140509193727+02'00'"
     except playa.PDFEncryptionError:
         pytest.skip("cryptography package not installed")
