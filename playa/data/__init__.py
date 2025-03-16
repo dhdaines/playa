@@ -1,4 +1,4 @@
-import binascii
+import base64
 import dataclasses
 import functools
 from typing import TypeVar
@@ -20,7 +20,6 @@ from playa.page import TextObject as _TextObject
 from playa.parser import IndirectObject as _IndirectObject
 from playa.parser import PSLiteral
 from playa.pdftypes import ContentStream, ObjRef, literal_name
-from playa.utils import decode_text
 
 __all__ = [
     "GraphicState",
@@ -68,8 +67,18 @@ asobj.register(tuple, asobj_simple)
 
 
 @asobj.register(bytes)
-def asobj_string(obj: bytes) -> str:
-    return decode_text(obj)
+def asobj_bytes(obj: bytes) -> str:
+    # Reimplement decode_text here as we want to be stricter about
+    # what we consider a text string.  PDFDocEncoding is impossible to
+    # detect so should only be used when we *know* it's a text string
+    # according to the PDF standard.
+    if obj.startswith(b"\xfe\xff"):
+        return obj.decode("UTF-16")
+    try:
+        return obj.decode("ascii")
+    except UnicodeDecodeError:
+        # FIXME: This may be subject to change...
+        return "base64:" + base64.b64encode(obj).decode("ascii")
 
 
 @asobj.register(PSLiteral)
@@ -132,13 +141,7 @@ def asobj_document(pdf: _Document) -> Document:
     )
     if pdf.encryption is not None:
         ids, encrypt = pdf.encryption
-        ids = ["<%s>" % binascii.hexlify(b).decode("ascii") for b in ids]
-        encrypt = encrypt.copy()
-        for k, v in encrypt.items():
-            # They aren't printable strings, do not try to decode them...
-            if isinstance(v, bytes):
-                encrypt[k] = "<%s>" % binascii.hexlify(v).decode("ascii")
-        doc["encryption"] = Encryption(ids=ids, encrypt=asobj(encrypt))
+        doc["encryption"] = Encryption(ids=asobj(ids), encrypt=asobj(encrypt))
     return doc
 
 
