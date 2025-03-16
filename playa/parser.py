@@ -647,14 +647,19 @@ class IndirectObjectParser:
                 if self.strict:
                     raise e
                 log.warning("Syntax error near position %d: %s", pos, e)
-            if obj is KEYWORD_OBJ:
-                pass
-            elif isinstance(obj, PSKeyword) and obj.name.startswith(b"endobj"):
+            if isinstance(obj, PSKeyword) and obj.name.startswith(b"endobj"):
                 # Some broken PDFs omit the space after `endobj`...
                 if obj is not KEYWORD_ENDOBJ:
                     self._parser.seek(pos + len(b"endobj"))
                 # objid genno "obj" (skipped) ... and the object
                 (_, obj) = self.objstack.pop()
+                (kpos, kwd) = self.objstack.pop()
+                if kwd is not KEYWORD_OBJ:
+                    errmsg = "Expected 'obj' at %d, got %r" % (kpos, kwd)
+                    if self.strict:
+                        raise PDFSyntaxError(errmsg)
+                    else:
+                        log.warning(errmsg)
                 (_, genno) = self.objstack.pop()
                 # Update pos to be the beginning of the indirect object
                 (pos, objid) = self.objstack.pop()
