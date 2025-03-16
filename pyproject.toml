@@ -31,9 +31,6 @@ classifiers = [
     "Programming Language :: Python :: 3.12",
     "Topic :: Text Processing",
 ]
-dependencies = [
-    "typing-extensions >= 4.12.2; python_version < '3.12'",
-]
 
 [project.optional-dependencies]
 crypto = ["cryptography >= 36.0.0"]

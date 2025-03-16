@@ -6,7 +6,12 @@ PLAYA objects.
 """
 
 from typing import Dict, List, Tuple, Union
-from typing_extensions import TypedDict
+
+try:
+    # We only absolutely need this when using Pydantic TypeAdapter
+    from typing_extensions import TypedDict
+except ImportError:
+    from typing import TypedDict
 
 from playa.document import DeviceSpace
 from playa.utils import Rect, Matrix
