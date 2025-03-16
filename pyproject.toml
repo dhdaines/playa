@@ -31,6 +31,9 @@ classifiers = [
     "Programming Language :: Python :: 3.12",
     "Topic :: Text Processing",
 ]
+dependencies = [
+    "typing-extensions >= 4.12.2; python_version < '3.12'",
+]
 
 [project.optional-dependencies]
 crypto = ["cryptography >= 36.0.0"]
@@ -100,3 +103,6 @@ extra-dependencies = [
 ]
 [tool.hatch.envs.types.scripts]
 check = "mypy --install-types --non-interactive {args:playa tests benchmarks}"
+
+[tool.hatch.envs.schema]
+extra-dependencies = [ "pydantic > 2" ]

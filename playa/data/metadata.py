@@ -5,7 +5,8 @@ PLAYA objects.
 
 """
 
-from typing import Dict, List, Tuple, TypedDict, Union
+from typing import Dict, List, Tuple, Union
+from typing_extensions import TypedDict
 
 from playa.document import DeviceSpace
 from playa.utils import Rect, Matrix
@@ -124,8 +125,8 @@ class IndirectObject(TypedDict, total=False):
     """Generation number."""
     type: str
     """Name of Python type to which this object was converted."""
-    obj: Union[float, int, str, bool, bytes, dict, list]
-    """Object metadata (or data, for simple objects)."""
+    obj: Union[float, int, str, bool, dict, list]
+    """Object metadata (for streams) or data (otherwise)."""
 
 
 class Font(TypedDict, total=False):
