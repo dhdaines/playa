@@ -1,19 +1,3 @@
-"""PLAYA data API and schemas.
-
-This module contains schemas (as TypedDict) and extractors for
-metadata and content from various PLAYA objects, as well as a
-single-dispatch function to extract said metadata from any object.
-
-This is not done by methods on the classes in question as the
-metadata schema, which has its own version (`playa.metadata.VERSION`),
-should not depend on the particular implementation of those objects.
-
-The other reason this is separate is because this is an entirely
-non-lazy API.  It is provided here because the PLAYA CLI uses it, and
-to prevent users of the library from reimplementing it themselves.
-
-"""
-
 import binascii
 import dataclasses
 import functools

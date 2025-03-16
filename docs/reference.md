@@ -23,5 +23,3 @@
 ::: playa.outline
 
 ::: playa.worker
-
-::: playa.metadata
