@@ -779,14 +779,10 @@ class IndirectObjectParser:
                 data += line
                 linepos, line = self._parser.nextline()
                 if line == b"":  # Means EOF
-                    log.warning(
-                        "Incorrect length for stream, no 'endstream' found"
-                    )
+                    log.warning("Incorrect length for stream, no 'endstream' found")
                     break
         doc = self.doc
-        return ContentStream(
-            dic, bytes(data), None if doc is None else doc.decipher
-        )
+        return ContentStream(dic, bytes(data), None if doc is None else doc.decipher)
 
     # Delegation follows
     def seek(self, pos: int) -> None:
