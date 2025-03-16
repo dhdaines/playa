@@ -138,14 +138,14 @@ def asobj_obj(obj: _IndirectObject) -> IndirectObject:
 
 @asobj.register(_Document)
 def asobj_document(pdf: _Document) -> Document:
-    doc = {
-        "pdf_version": pdf.pdf_version,
-        "is_printable": pdf.is_printable,
-        "is_modifiable": pdf.is_modifiable,
-        "is_extractable": pdf.is_extractable,
-        "pages": [asobj(page) for page in pdf.pages],
-        "objects": [asobj(obj) for obj in pdf.objects],
-    }
+    doc = Document(
+        pdf_version=pdf.pdf_version,
+        is_printable=pdf.is_printable,
+        is_modifiable=pdf.is_modifiable,
+        is_extractable=pdf.is_extractable,
+        pages=[asobj(page) for page in pdf.pages],
+        objects=[asobj(obj) for obj in pdf.objects],
+    )
     if pdf.encryption is not None:
         ids, encrypt = pdf.encryption
         ids = ["<%s>" % binascii.hexlify(b).decode("ascii") for b in ids]
