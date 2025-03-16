@@ -216,16 +216,13 @@ def test_is_tagged() -> None:
 
 
 def test_objects_decrypted() -> None:
-    try:
-        with playa.open(TESTDIR / "encryption" / "rc4-40.pdf", password="foo") as doc:
-            info = None
-            for obj in doc.objects:
-                if obj.objid == 10:
-                    info = obj
-            assert info is not None
-            # Make sure strings are decrypted in both cases
-            assert info.obj == doc[10]
-            assert isinstance(info.obj, dict)
-            assert info.obj["CreationDate"] == b"D:20140509193727+02'00'"
-    except playa.PDFEncryptionError:
-        pytest.skip("cryptography package not installed")
+    with playa.open(TESTDIR / "encryption" / "rc4-40.pdf", password="foo") as doc:
+        info = None
+        for obj in doc.objects:
+            if obj.objid == 10:
+                info = obj
+        assert info is not None
+        # Make sure strings are decrypted in both cases
+        assert info.obj == doc[10]
+        assert isinstance(info.obj, dict)
+        assert info.obj["CreationDate"] == b"D:20140509193727+02'00'"
