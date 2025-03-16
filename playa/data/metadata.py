@@ -75,14 +75,12 @@ class Dest(TypedDict, total=False):
 
 
 class StructElement(TypedDict, total=False):
-    """Element or root node of logical structure tree.
-
-    Contrary to the PDF standard, we create a root node to make
-    navigation over the tree easier.
-    """
+    """Node in logical structure tree."""
 
     type: str
     """Type of structure element (or "StructTreeRoot" for root)"""
+    children: List["StructElement"]
+    """Children of this node."""
 
 
 class StructTree(TypedDict, total=False):
@@ -146,14 +144,23 @@ class Font(TypedDict, total=False):
     type: str
     """Font type (Type1, Type0, TrueType, Type3, etc)."""
     vertical: bool
+    """Uses vertical writing mode."""
     multibyte: bool
+    """Uses multi-byte characters (actually this is always true for CID fonts)."""
     ascent: float
+    """Ascent in glyph space units."""
     descent: float
+    """Descent in glyph space units."""
     italic_angle: float
+    """Italic angle."""
     default_width: float
+    """Default character width in glyph space units."""
     leading: float
+    """Leading in glyph space units."""
     bbox: Rect
+    """Bounding box in glyph space units."""
     matrix: Matrix
+    """Matrix mapping glyph space to text space (Type3 fonts only)."""
 
 
 @asobj.register(_Page)
