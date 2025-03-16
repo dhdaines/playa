@@ -56,6 +56,7 @@ __all__ = [
     "TextState",
     "Token",
     "ObjRef",
+    "PDFEncryptionError",
     "PDFException",
     "PDFPasswordIncorrect",
     "asobj",
