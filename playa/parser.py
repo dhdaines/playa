@@ -688,7 +688,6 @@ class IndirectObjectParser:
                 if isinstance(obj, ContentStream):
                     obj.objid = objid
                     obj.genno = genno
-                del self.objstack[:]
                 return pos, IndirectObject(objid, genno, obj)
             elif obj is KEYWORD_STREAM:
                 # PDF 1.7 sec 7.3.8.1: A stream shall consist of a
