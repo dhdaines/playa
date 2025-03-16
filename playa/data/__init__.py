@@ -141,7 +141,7 @@ def asobj_document(pdf: _Document) -> Document:
     )
     if pdf.encryption is not None:
         ids, encrypt = pdf.encryption
-        doc["encryption"] = Encryption(ids=asobj(ids), encrypt=asobj(encrypt))
+        doc["encryption"] = Encryption(ids=[asobj(b) for b in ids], encrypt=asobj(encrypt))
     return doc
 
 
