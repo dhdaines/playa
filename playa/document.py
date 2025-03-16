@@ -302,7 +302,9 @@ class Document:
     def objects(self) -> Iterator[IndirectObject]:
         """Iterate over all indirect objects (including, then expanding object
         streams)"""
-        for pos, obj in IndirectObjectParser(self.buffer, self):
+        for pos, obj in IndirectObjectParser(
+            self.buffer, self, strict=self.parser.strict
+        ):
             yield obj
             if (
                 isinstance(obj.obj, ContentStream)

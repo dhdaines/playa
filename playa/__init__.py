@@ -22,7 +22,7 @@ from typing import Union
 from playa.worker import _init_worker, _init_worker_buffer
 from playa.color import Color, ColorSpace
 from playa.document import Document, PageList
-from playa.exceptions import PDFException, PDFPasswordIncorrect
+from playa.exceptions import PDFException, PDFPasswordIncorrect, PDFEncryptionError
 from playa.data import asobj
 from playa.page import (
     Page,
