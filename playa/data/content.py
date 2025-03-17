@@ -72,7 +72,7 @@ class Tag(TypedDict, total=False):
     name: str
 
 
-@asobj.register(_TextObject)
+@asobj.register
 def asobj_text(text: _TextObject) -> Text:
     return Text(
         chars=text.chars,

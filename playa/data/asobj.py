@@ -3,10 +3,10 @@
 import base64
 import dataclasses
 import functools
-from typing import TypeVar
+from typing import TypeVar, Union
 
 from playa.parser import PSLiteral
-from playa.pdftypes import ContentStream, ObjRef, literal_name
+from playa.pdftypes import ObjRef, literal_name
 
 
 @functools.singledispatch
@@ -34,10 +34,9 @@ asobj.register(int, asobj_simple)
 asobj.register(float, asobj_simple)
 asobj.register(bool, asobj_simple)
 asobj.register(str, asobj_simple)
-asobj.register(tuple, asobj_simple)
 
 
-@asobj.register(bytes)
+@asobj.register
 def asobj_bytes(obj: bytes) -> str:
     # Reimplement decode_text here as we want to be stricter about
     # what we consider a text string.  PDFDocEncoding is impossible to
@@ -52,27 +51,23 @@ def asobj_bytes(obj: bytes) -> str:
         return "base64:" + base64.b64encode(obj).decode("ascii")
 
 
-@asobj.register(PSLiteral)
+@asobj.register
 def asobj_literal(obj: PSLiteral) -> str:
     return literal_name(obj)
 
 
-@asobj.register(dict)
+@asobj.register
 def asobj_dict(obj: dict) -> dict:
     return {k: asobj(v) for k, v in obj.items()}
 
 
 @asobj.register(list)
-def asobj_list(obj: list) -> list:
+@asobj.register(tuple)
+def asobj_list(obj: Union[list, tuple]) -> list:
     return [asobj(v) for v in obj]
 
 
-@asobj.register(ContentStream)
-def asobj_stream(obj: ContentStream) -> dict:
-    return asobj(obj.attrs)
-
-
-@asobj.register(ObjRef)
+@asobj.register
 def asobj_ref(obj: ObjRef) -> str:
     # This is the same as repr() but we want it defined separately
     return f"<ObjRef:{obj.objid}>"

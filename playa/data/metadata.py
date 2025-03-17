@@ -19,6 +19,7 @@ from playa.page import Page as _Page
 from playa.document import DeviceSpace
 from playa.utils import Rect, Matrix
 from playa.parser import IndirectObject as _IndirectObject
+from playa.pdftypes import ContentStream as _ContentStream
 
 
 class Document(TypedDict, total=False):
@@ -109,7 +110,7 @@ class Page(TypedDict, total=False):
     """Page resources."""
     annotations: "Annotations"
     """Page annotations."""
-    contents: List["ContentStream"]
+    contents: List["StreamObject"]
     """Metadata for content streams."""
 
 
@@ -121,8 +122,17 @@ class Annotations(TypedDict, total=False):
     pass
 
 
-class ContentStream(TypedDict, total=False):
-    pass
+class StreamObject(TypedDict, total=False):
+    objid: int
+    """Indirect object ID."""
+    genno: int
+    """Generation number."""
+    filters: List[str]
+    """List of filters."""
+    params: List[dict]
+    """Filter parameters."""
+    attrs: dict
+    """Other attributes."""
 
 
 class IndirectObject(TypedDict, total=False):
@@ -163,7 +173,7 @@ class Font(TypedDict, total=False):
     """Matrix mapping glyph space to text space (Type3 fonts only)."""
 
 
-@asobj.register(_Page)
+@asobj.register
 def asobj_page(page: _Page) -> Page:
     return Page(
         objid=page.pageid,
@@ -172,10 +182,29 @@ def asobj_page(page: _Page) -> Page:
         mediabox=page.mediabox,
         cropbox=page.cropbox,
         rotate=page.rotate,
+        contents=[asobj(stream) for stream in page.streams],
     )
 
 
-@asobj.register(_IndirectObject)
+@asobj.register
+def asobj_stream(obj: _ContentStream) -> StreamObject:
+    # These really cannot be None!
+    assert obj.objid is not None
+    assert obj.genno is not None
+    cs = StreamObject(objid=obj.objid,
+                      genno=obj.genno,
+                      attrs=asobj(obj.attrs))
+    fps = obj.get_filters()
+    if fps:
+        filters, params = zip(*fps)
+        if any(filters):
+            cs["filters"] = asobj(filters)
+        if any(params):
+            cs["params"] = asobj(params)
+    return cs
+
+
+@asobj.register
 def asobj_obj(obj: _IndirectObject) -> IndirectObject:
     return IndirectObject(
         objid=obj.objid,
@@ -185,7 +214,7 @@ def asobj_obj(obj: _IndirectObject) -> IndirectObject:
     )
 
 
-@asobj.register(_Document)
+@asobj.register
 def asobj_document(pdf: _Document) -> Document:
     doc = Document(
         pdf_version=pdf.pdf_version,
@@ -198,5 +227,5 @@ def asobj_document(pdf: _Document) -> Document:
     if pdf.encryption is not None:
         ids, encrypt = pdf.encryption
         a, b = ids
-        doc["encryption"] = Encryption(ids=(asobj(a), asobj(b)), encrypt=asobj(encrypt))
+        doc["encryption"] = Encryption(ids=asobj(ids), encrypt=asobj(encrypt))
     return doc

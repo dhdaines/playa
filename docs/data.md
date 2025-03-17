@@ -13,7 +13,7 @@ Many PLAYA objects are already `dataclass` or `NamedTuple` so they
 have a function or method to convert them to `dict`, but for a variety
 of reasons you shouldn't actually use this function.  See [here for
 `dataclasses.asdict` and its many
-pitfalls](https://stackoverflow.com/questions/52229521/why-is-dataclasses-asdictobj-10x-slower-than-obj-dict)
+pitfalls](https://stackoverflow.com/questions/52229521/why-is-dataclasses-asdictobj-10x-slower-than-obj-dict).
 
 The distinction between "metadata" and "content" is admittedly not
 very clear for PDF.  Metadata, represented by the schemas in
@@ -33,6 +33,12 @@ Content, represented by the schemas in `playa.data.content`, is:
 - marked content sections (as these cannot be created without actually
   parsing the content streams)
 
+Note that the CLI doesn't exactly break things down along those lines.
+In particular, the default metadata output doesn't include outlines,
+logical structure trees, or annotations.  In general, if you have
+performance concerns you are always better off using the lazy API,
+then calling `asobj` on specific objects as needed, as extracting all
+the metadata (not even the content) may be fairly slow.
 
 ## Data and Metadata Objects
 
