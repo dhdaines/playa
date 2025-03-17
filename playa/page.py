@@ -244,12 +244,10 @@ class Page:
             except (TypeError, ValueError):
                 log.warning("Invalid Rect in annotation: %r", annot)
                 continue
-            contents = resolve1(annot.get("Contents"))
             yield Annotation(
                 _pageref=self.pageref,
                 subtype=literal_name(subtype),
                 rect=rect,
-                contents=contents,
                 props=annot,
             )
 
@@ -508,7 +506,6 @@ class Annotation:
       subtype: Type of annotation.
       rect: Annotation rectangle (location on page) in *default user space*
       bbox: Annotation rectangle in *device space*
-      contents: Text contents.
       props: Annotation dictionary containing all other properties
              (PDF 1.7 sec. 12.5.2).
     """
@@ -516,13 +513,42 @@ class Annotation:
     _pageref: PageRef
     subtype: str
     rect: Rect
-    contents: Union[str, None]
     props: Dict[str, PDFObject]
 
     @property
     def page(self) -> Page:
         """Containing page for this annotation."""
         return _deref_page(self._pageref)
+
+    @property
+    def contents(self) -> Union[str, None]:
+        """Text contents of annotation."""
+        contents = resolve1(self.props.get("Contents"))
+        if contents is None:
+            return None
+        return decode_text(contents)
+
+    @property
+    def name(self) -> Union[str, None]:
+        """Annotation name, uniquely identifying this annotation."""
+        name = resolve1(self.props.get("NM"))
+        if name is None:
+            return None
+        return decode_text(name)
+
+    @property
+    def mtime(self) -> Union[str, None]:
+        """String describing date and time when annotation was most recently
+        modified.
+
+        The date *should* be in the format `D:YYYYMMDDHHmmSSOHH'mm`
+        but this is in no way required (and unlikely to be implemented
+        consistently, if history is any guide).
+        """
+        mtime = resolve1(self.props.get("M"))
+        if mtime is None:
+            return None
+        return decode_text(mtime)
 
 
 @dataclass

@@ -15,7 +15,7 @@ except ImportError:
 
 from playa.data.asobj import asobj
 from playa.document import Document as _Document, Destinations as _Destinations
-from playa.page import Page as _Page
+from playa.page import Page as _Page, Annotation as _Annotation
 from playa.document import DeviceSpace
 from playa.outline import Outline as _Outline, Destination as _Destination
 from playa.parser import IndirectObject as _IndirectObject
@@ -126,7 +126,14 @@ class Resources(TypedDict, total=False):
 
 
 class Annotation(TypedDict, total=False):
-    pass
+    subtype: str
+    """Type of annotation."""
+    rect: Rect
+    """Annotation rectangle in default user space."""
+    contents: str
+    """Text contents."""
+    attrs: Dict
+    """Other attributes."""
 
 
 class StreamObject(TypedDict, total=False):
@@ -189,8 +196,21 @@ def asobj_page(page: _Page) -> Page:
         mediabox=page.mediabox,
         cropbox=page.cropbox,
         rotate=page.rotate,
+        resources=asobj(page.resources),
+        annotations=[asobj(annot) for annot in page.annotations],
         contents=[asobj(stream) for stream in page.streams],
     )
+
+
+@asobj.register
+def asobj_annotation(obj: _Annotation) -> Annotation:
+    annot = Annotation(subtype=obj.subtype,
+                       rect=obj.rect)
+    for attr in "contents", "name", "mtime":
+        val = getattr(obj, attr)
+        if val is not None:
+            annot[attr] = asobj(val)
+    return annot
 
 
 @asobj.register
@@ -222,12 +242,10 @@ def asobj_obj(obj: _IndirectObject) -> IndirectObject:
 @asobj.register
 def asobj_outline(obj: _Outline) -> Outline:
     out = Outline()
-    if obj.title is not None:
-        out["title"] = obj.title
-    if obj.destination is not None:
-        out["destination"] = asobj(obj.destination)
-    if obj.element is not None:
-        out["element"] = asobj(obj.element)
+    for attr in "title", "destination", "element":
+        val = getattr(obj, attr)
+        if val is not None:
+            out[attr] = asobj(val)
     children = list(obj)
     if children:
         out["children"] = asobj(children)

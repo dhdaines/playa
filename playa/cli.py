@@ -139,6 +139,11 @@ def make_argparse() -> argparse.ArgumentParser:
         help="Extract logical structure tree as JSON",
     )
     parser.add_argument(
+        "--outline",
+        action="store_true",
+        help="Extract document outline as JSON",
+    )
+    parser.add_argument(
         "-o",
         "--outfile",
         help="File to write output (or - for standard output)",
@@ -390,6 +395,16 @@ def extract_structure(doc: Document, args: argparse.Namespace) -> None:
     print("]", file=args.outfile)
 
 
+def extract_outline(doc: Document, args: argparse.Namespace) -> None:
+    """Extract logical outline as JSON."""
+    if doc.outline is None:
+        LOG.info("Document has no logical structure")
+        print("{}", file=args.outfile)
+        return
+    metadata = asobj(doc.outline)
+    json.dump(metadata, args.outfile, indent=2, ensure_ascii=False)
+
+
 def main(argv: Union[List[str], None] = None) -> None:
     parser = make_argparse()
     args = parser.parse_args(argv)
@@ -430,6 +445,8 @@ def main(argv: Union[List[str], None] = None) -> None:
                 extract_text(doc, args)
             elif args.structure:
                 extract_structure(doc, args)
+            elif args.outline:
+                extract_outline(doc, args)
             else:
                 extract_metadata(doc, args)
             doc.close()
