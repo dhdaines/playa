@@ -315,20 +315,6 @@ class Document:
         return (tok for pos, tok in Lexer(self.buffer))
 
     @property
-    def structtree(self) -> StructTree:
-        """Return the PDF structure tree.
-
-        Danger: Deprecated
-            This interface is deprecated.  It will be removed in PLAYA 1.0.
-        """
-        warnings.warn(
-            "The `structtree` property is deprecated and will be removed in PLAYA 1.0."
-            "  Use `structure` instead. ",
-            DeprecationWarning,
-        )
-        return StructTree(self)
-
-    @property
     def structure(self) -> Union[Tree, None]:
         """Logical structure of this document, if any.
 
@@ -522,38 +508,6 @@ class Document:
         return self._outline
 
     @property
-    def outlines(self) -> Iterator["OutlineItem"]:
-        """Iterate over the PDF document outline.
-
-        Danger: Deprecated
-            This interface is deprecated.  It will be removed in PLAYA 1.0.
-        """
-        warnings.warn(
-            "The `outlines` property is deprecated and will be removed in PLAYA 1.0.",
-            DeprecationWarning,
-        )
-        if "Outlines" not in self.catalog:
-            raise KeyError
-
-        def search(entry: object, level: int) -> Iterator["OutlineItem"]:
-            entry = dict_value(entry)
-            if "Title" in entry:
-                if "A" in entry or "Dest" in entry:
-                    title = decode_text(str_value(entry["Title"]))
-                    dest = entry.get("Dest")
-                    action = entry.get("A")
-                    se = entry.get("SE")
-                    yield OutlineItem(
-                        level, title, resolve1(dest), resolve1(action), se
-                    )
-            if "First" in entry and "Last" in entry:
-                yield from search(entry["First"], level + 1)
-            if "Next" in entry:
-                yield from search(entry["Next"], level)
-
-        return search(self.catalog["Outlines"], 0)
-
-    @property
     def page_labels(self) -> Iterator[str]:
         """Generate page label strings for the PDF document.
 
@@ -664,46 +618,6 @@ class Document:
         if self._destinations is None:
             self._destinations = Destinations(self)
         return self._destinations
-
-    @property
-    def dests(self) -> Iterable[Tuple[str, list]]:
-        """Iterable of named destinations as (name, destination) tuples
-        (PDF 1.7 sec 12.3.2).
-
-        Note that we assume the names of destinations are either "name
-        objects" (that's PDF for UTF-8) or "text strings", since the
-        PDF spec says (p. 367):
-
-        > The keys in the name tree may be treated as text strings for
-        > display purposes.
-
-        therefore, you get them as `str`.
-
-        Danger: Deprecated
-            This interface is deprecated.  It will be removed in PLAYA 1.0.
-
-        Raises:
-          KeyError: if no destination tree exists
-        """
-        warnings.warn(
-            "The `dests` property is deprecated and will be removed in PLAYA 1.0.",
-            DeprecationWarning,
-        )
-        try:
-            # PDF-1.2 or later
-            dests = (
-                (decode_text(k), resolve1(v)) for k, v in NameTree(self.names["Dests"])
-            )
-        except KeyError:
-            # PDF-1.1 or prior
-            dests = (
-                (k, resolve1(v)) for k, v in dict_value(self.catalog["Dests"]).items()
-            )
-        for name, dest in dests:
-            if isinstance(dest, dict):
-                yield name, resolve1(dest["D"])
-            else:
-                yield name, dest
 
     def _find_xref(self) -> int:
         """Internal function used to locate the first XRef."""
@@ -1063,17 +977,3 @@ class Destinations:
     def doc(self) -> "Document":
         """Get associated document if it exists."""
         return _deref_document(self._docref)
-
-
-class OutlineItem(NamedTuple):
-    """The most relevant fields of an outline item dictionary.
-
-    Danger: Deprecated
-        This interface is deprecated.  It will be removed in PLAYA 1.0.
-    """
-
-    level: int
-    title: str
-    dest: Union[PSLiteral, bytes, list, None]
-    action: Union[dict, None]
-    se: Union[ObjRef, None]
