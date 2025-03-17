@@ -1,11 +1,11 @@
 from playa.data.asobj import asobj
 from playa.data.content import GraphicState, Tag, Text, TextState
 from playa.data.metadata import (
-    Dest,
+    Destination,
     Document,
     Encryption,
     IndirectObject,
-    Outlines,
+    Outline,
     Page,
     StructElement,
     StructTree,
@@ -16,11 +16,11 @@ __all__ = [
     "Tag",
     "Text",
     "TextState",
-    "Dest",
+    "Destination",
     "Document",
     "Encryption",
     "IndirectObject",
-    "Outlines",
+    "Outline",
     "Page",
     "StructElement",
     "StructTree",

@@ -63,6 +63,8 @@ class Destination:
                 page_idx = doc.pages.by_id(pageobj.objid).page_idx
             except KeyError:
                 LOG.warning("Invalid page object in destination: %r", pageobj)
+        else:
+            LOG.warning("Unrecognized page in destination object: %r", pageobj)
         if not isinstance(display, PSLiteral):
             LOG.warning("Unknown display type: %r", display)
             display = None

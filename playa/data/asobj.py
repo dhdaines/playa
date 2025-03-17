@@ -12,6 +12,9 @@ from playa.pdftypes import ObjRef, literal_name
 @functools.singledispatch
 def asobj(obj):
     """JSON serializable representation of PDF object metadata."""
+    # functools.singledispatch can't register None
+    if obj is None:
+        return None
     # Catch dataclasses that don't have a specific serializer
     if dataclasses.is_dataclass(obj) and not isinstance(obj, type):
         return {k: asobj(v) for k, v in obj.__dict__.items()}

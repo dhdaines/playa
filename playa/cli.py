@@ -83,6 +83,7 @@ from typing import Any, Deque, Dict, Iterable, Iterator, List, TextIO, Tuple, Un
 
 import playa
 from playa import Document, Page, asobj, PDFPasswordIncorrect
+from playa.data.metadata import asobj_document
 from playa.pdftypes import ContentStream, ObjRef, resolve1
 from playa.structure import Element, ContentObject as StructContentObject, ContentItem
 from playa.utils import decode_text
@@ -222,7 +223,7 @@ def extract_catalog(doc: Document, args: argparse.Namespace) -> None:
 
 def extract_metadata(doc: Document, args: argparse.Namespace) -> None:
     """Extract random metadata."""
-    metadata = asobj(doc)
+    metadata = asobj_document(doc, exclude={"structure", "outline"})
     json.dump(metadata, args.outfile, indent=2, ensure_ascii=False)
 
 

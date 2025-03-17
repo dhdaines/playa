@@ -1003,7 +1003,7 @@ class Destinations:
                 self.dests_tree = NameTree(dests)
 
     def __iter__(self) -> Iterator[str]:
-        """Iterate over named destinations.
+        """Iterate over names of destinations.
 
         Danger: Beware of corrupted PDFs
             This simply iterates over the names listed in the PDF, nad
@@ -1018,6 +1018,22 @@ class Destinations:
             for kb, _ in self.dests_tree:
                 ks = decode_text(kb)
                 yield ks
+
+    def items(self) -> Iterator[Tuple[str, Destination]]:
+        """Iterate over named destnations."""
+        if self.dests_dict is not None:
+            for name, dest in self.dests_dict.items():
+                if name not in self.dests:
+                    dest = resolve1(self.dests_dict[name])
+                    self.dests[name] = self._create_dest(dest, name)
+                yield name, self.dests[name]
+        elif self.dests_tree is not None:
+            for k, v in self.dests_tree:
+                name = decode_text(k)
+                if name not in self.dests:
+                    dest = resolve1(v)
+                    self.dests[name] = self._create_dest(v, name)
+                yield name, self.dests[name]
 
     def __getitem__(self, name: Union[bytes, str, PSLiteral]) -> Destination:
         """Get a named destination.
@@ -1040,29 +1056,28 @@ class Destinations:
             # This will raise KeyError or TypeError if necessary, so
             # we don't have to do it explicitly
             dest = resolve1(self.dests_dict[name])
-            if isinstance(dest, list):
-                self.dests[name] = Destination.from_list(self.doc, dest)
-            elif isinstance(dest, dict) and "D" in dest:
-                destlist = resolve1(dest["D"])
-                if not isinstance(destlist, list):
-                    raise TypeError("Invalid destination for %s: %r", name, dest)
-                self.dests[name] = Destination.from_list(self.doc, destlist)
-            else:
-                raise TypeError("Invalid destination for %s: %r", name, dest)
+            self.dests[name] = self._create_dest(dest, name)
         elif self.dests_tree is not None:
             # This is not at all efficient, but we need to decode
             # the keys (and we cache the result...)
             for k, v in self.dests_tree:
                 if decode_text(k) == name:
                     dest = resolve1(v)
-                    if isinstance(dest, list):
-                        self.dests[name] = Destination.from_list(self.doc, dest)
-                    elif isinstance(dest, dict):
-                        dest = list_value(resolve1(dest["D"]))
-                        self.dests[name] = Destination.from_list(self.doc, dest)
+                    self.dests[name] = self._create_dest(v, name)
                     break
         # This will also raise KeyError if necessary
         return self.dests[name]
+
+    def _create_dest(self, dest: PDFObject, name: str) -> Destination:
+        if isinstance(dest, list):
+            return Destination.from_list(self.doc, dest)
+        elif isinstance(dest, dict) and "D" in dest:
+            destlist = resolve1(dest["D"])
+            if not isinstance(destlist, list):
+                raise TypeError("Invalid destination for %s: %r", name, dest)
+            return Destination.from_list(self.doc, destlist)
+        else:
+            raise TypeError("Invalid destination for %s: %r", name, dest)
 
     @property
     def doc(self) -> "Document":

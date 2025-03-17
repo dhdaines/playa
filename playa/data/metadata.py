@@ -5,7 +5,7 @@ PLAYA objects.
 
 """
 
-from typing import Dict, List, Tuple, Union
+from typing import Dict, List, Set, Tuple, Union
 
 try:
     # We only absolutely need this when using Pydantic TypeAdapter
@@ -14,12 +14,13 @@ except ImportError:
     from typing import TypedDict
 
 from playa.data.asobj import asobj
-from playa.document import Document as _Document
+from playa.document import Document as _Document, Destinations as _Destinations
 from playa.page import Page as _Page
 from playa.document import DeviceSpace
-from playa.utils import Rect, Matrix
+from playa.outline import Outline as _Outline, Destination as _Destination
 from playa.parser import IndirectObject as _IndirectObject
 from playa.pdftypes import ContentStream as _ContentStream
+from playa.utils import Rect, Matrix
 
 
 class Document(TypedDict, total=False):
@@ -37,9 +38,9 @@ class Document(TypedDict, total=False):
     """Device space for this document."""
     encryption: "Encryption"
     """Encryption information for this document."""
-    outlines: "Outlines"
+    outline: "Outline"
     """Outline hierarchy for this document."""
-    destinations: Dict[str, "Dest"]
+    destinations: Dict[str, "Destination"]
     """Named destinations for this document."""
     structure: "StructTree"
     """Logical structure for this document.."""
@@ -58,21 +59,27 @@ class Encryption(TypedDict, total=False):
     """Encryption properties."""
 
 
-class Outlines(TypedDict, total=False):
+class Outline(TypedDict, total=False):
     """Outline hierarchy for a PDF document."""
 
     title: str
     """Title of this outline entry."""
-    destination: "Dest"
+    destination: "Destination"
     """Destination (or target of GoTo action)."""
     element: "StructElement"
     """Structure element asociated with this entry."""
-    children: List["Outlines"]
+    children: List["Outline"]
     """Children of this entry."""
 
 
-class Dest(TypedDict, total=False):
+class Destination(TypedDict, total=False):
     """Destination for an outline entry or annotation."""
+    page_idx: int
+    """Zero-based index of destination page."""
+    display: str
+    """How to display the destination on that page."""
+    coords: List[Union[float, None]]
+    """List of coordinates (meaning depends on display)."""
 
 
 class StructElement(TypedDict, total=False):
@@ -108,7 +115,7 @@ class Page(TypedDict, total=False):
     """Page rotation in degrees."""
     resources: "Resources"
     """Page resources."""
-    annotations: "Annotations"
+    annotations: List["Annotation"]
     """Page annotations."""
     contents: List["StreamObject"]
     """Metadata for content streams."""
@@ -118,7 +125,7 @@ class Resources(TypedDict, total=False):
     pass
 
 
-class Annotations(TypedDict, total=False):
+class Annotation(TypedDict, total=False):
     pass
 
 
@@ -191,9 +198,7 @@ def asobj_stream(obj: _ContentStream) -> StreamObject:
     # These really cannot be None!
     assert obj.objid is not None
     assert obj.genno is not None
-    cs = StreamObject(objid=obj.objid,
-                      genno=obj.genno,
-                      attrs=asobj(obj.attrs))
+    cs = StreamObject(objid=obj.objid, genno=obj.genno, attrs=asobj(obj.attrs))
     fps = obj.get_filters()
     if fps:
         filters, params = zip(*fps)
@@ -215,17 +220,57 @@ def asobj_obj(obj: _IndirectObject) -> IndirectObject:
 
 
 @asobj.register
-def asobj_document(pdf: _Document) -> Document:
+def asobj_outline(obj: _Outline) -> Outline:
+    out = Outline()
+    if obj.title is not None:
+        out["title"] = obj.title
+    if obj.destination is not None:
+        out["destination"] = asobj(obj.destination)
+    if obj.element is not None:
+        out["element"] = asobj(obj.element)
+    children = list(obj)
+    if children:
+        out["children"] = asobj(children)
+    return out
+
+
+@asobj.register
+def asobj_destinations(obj: _Destinations) -> Dict[str, Destination]:
+    return {name: asobj(dest) for name, dest in obj.items()}
+
+
+@asobj.register
+def asobj_destination(obj: _Destination) -> Destination:
+    dest = Destination()
+    if obj.page_idx is not None:
+        dest["page_idx"] = obj.page_idx
+    if obj.display is not None:
+        dest["display"] = asobj(obj.display)
+    if obj.coords:
+        dest["coords"] = asobj(obj.coords)
+    return dest
+
+
+@asobj.register
+def asobj_document(pdf: _Document, exclude: Set[str] = set()) -> Document:
     doc = Document(
         pdf_version=pdf.pdf_version,
         is_printable=pdf.is_printable,
         is_modifiable=pdf.is_modifiable,
         is_extractable=pdf.is_extractable,
-        pages=[asobj(page) for page in pdf.pages],
-        objects=[asobj(obj) for obj in pdf.objects],
     )
     if pdf.encryption is not None:
         ids, encrypt = pdf.encryption
         a, b = ids
         doc["encryption"] = Encryption(ids=asobj(ids), encrypt=asobj(encrypt))
+    if "pages" not in exclude:
+        doc["pages"] = [asobj(page) for page in pdf.pages]
+    if "objects" not in exclude:
+        doc["objects"] = [asobj(obj) for obj in pdf.objects]
+    if "outline" not in exclude:
+        doc["outline"] = asobj(pdf.outline)
+        doc["destinations"] = asobj(pdf.destinations)
+    if "structure" not in exclude:
+        doc["structure"] = asobj(pdf.structure)
+
     return doc
