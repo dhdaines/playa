@@ -74,6 +74,7 @@ class Outline(TypedDict, total=False):
 
 class Destination(TypedDict, total=False):
     """Destination for an outline entry or annotation."""
+
     page_idx: int
     """Zero-based index of destination page."""
     display: str
@@ -132,8 +133,11 @@ class Annotation(TypedDict, total=False):
     """Annotation rectangle in default user space."""
     contents: str
     """Text contents."""
-    attrs: Dict
-    """Other attributes."""
+    name: str
+    """Annotation name, uniquely identifying this annotation."""
+    mtime: str
+    """String describing date and time when annotation was most recently
+    modified."""
 
 
 class StreamObject(TypedDict, total=False):
@@ -204,8 +208,7 @@ def asobj_page(page: _Page) -> Page:
 
 @asobj.register
 def asobj_annotation(obj: _Annotation) -> Annotation:
-    annot = Annotation(subtype=obj.subtype,
-                       rect=obj.rect)
+    annot = Annotation(subtype=obj.subtype, rect=obj.rect)
     for attr in "contents", "name", "mtime":
         val = getattr(obj, attr)
         if val is not None:
