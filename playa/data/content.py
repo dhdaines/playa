@@ -5,6 +5,7 @@ PLAYA objects.
 
 """
 
+from copy import copy
 from typing import List
 
 try:
@@ -14,8 +15,14 @@ except ImportError:
     from typing import TypedDict
 
 from playa.data.asobj import asobj
-from playa.utils import Rect, Matrix
-from playa.page import TextObject as _TextObject
+from playa.data.metadata import Font
+from playa.utils import Point, Rect, Matrix, MATRIX_IDENTITY
+from playa.page import (
+    TextObject as _TextObject,
+    GraphicState as _GraphicState,
+    TextState as _TextState,
+    MarkedContent,
+)
 
 
 class Text(TypedDict, total=False):
@@ -25,6 +32,8 @@ class Text(TypedDict, total=False):
     """Unicode string representation of text."""
     bbox: Rect
     """Bounding rectangle for all glyphs in text."""
+    ctm: Matrix
+    """Coordinate transformation matrix, default if not present is `[1 0 0 1 0 0 0]`."""
     textstate: "TextState"
     """Text state."""
     gstate: "GraphicState"
@@ -34,32 +43,30 @@ class Text(TypedDict, total=False):
 
 
 class TextState(TypedDict, total=False):
-    """Text state."""
-
-    matrix: Matrix
-    """Text matrix for current glyph."""
     line_matrix: Matrix
-    """Text matrix for start of current line."""
-    font: str
-    """Name of current font (properties can be found in the page metadata)."""
-    font_size: float
-    """Font size in unscaled text space units (**not** in points, can
-    be scaled using `text_matrix` to obtain default user space units)"""
-    char_space: float
-    """Character spacing in unscaled text space units."""
-    word_space: float
-    """Word spacing in unscaled text space units."""
+    """Coordinate transformation matrix for start of current line."""
+    glyph_offset: Point
+    """Offset of text object in relation to current line, in default text
+    space units, default if not present is (0, 0)."""
+    font: Font
+    """Descriptor of current font."""
+    fontsize: float
+    """Font size in unscaled text space units (**not** in points, can be
+    scaled using `line_matrix` to obtain user space units), default if
+    not present is 1.0."""
+    charspace: float
+    """Character spacing in unscaled text space units, default if not present is 0."""
+    wordspace: float
+    """Word spacing in unscaled text space units, default if not present is 0."""
     scaling: float
-    """Horizontal scaling factor multiplied by 100."""
+    """Horizontal scaling factor multiplied by 100, default if not present is 100."""
     leading: float
-    """Leading in unscaled text space units."""
+    """Leading in unscaled text space units, default if not present is 0."""
     render_mode: int
-    """Text rendering mode (PDF 1.7 Table 106)"""
+    """Text rendering mode (PDF 1.7 Table 106), default if not present is 0."""
     rise: float
     """Text rise (for super and subscript) in unscaled text space
-    units."""
-    knockout: bool
-    """Text knockout (PDF 1.7 sec 9.3.8)"""
+    units, default if not present is 0."""
 
 
 class GraphicState(TypedDict, total=False):
@@ -70,14 +77,59 @@ class Tag(TypedDict, total=False):
     """Marked content section."""
 
     name: str
+    """Tag name."""
+    mcid: int
+    """Marked content section ID."""
+    props: dict
+    """Marked content property dictionary (without MCID)."""
 
 
 @asobj.register
-def asobj_text(text: _TextObject) -> Text:
-    return Text(
-        chars=text.chars,
-        bbox=text.bbox,
-        textstate=asobj(text.textstate),
-        gstate=asobj(text.gstate),
-        mcstack=[asobj(mcs) for mcs in text.mcstack],
+def asobj_textstate(obj: _TextState) -> TextState:
+    assert obj.font is not None
+    tstate = TextState(font=obj.font,
+                       line_matrix=obj.line_matrix)
+    if obj.glyph_offset != (0, 0):
+        tstate["glyph_offset"] = obj.glyph_offset
+    if obj.fontsize != 1:
+        tstate["fontsize"] = 1
+    if obj.scaling != 100:
+        tstate["scaling"] = 100
+    for attr in "charspace", "wordspace", "leading", "render_mode", "rise":
+        val = getattr(obj, attr, 0)
+        if val:
+            tstate[attr] = val
+    return tstate
+
+
+@asobj.register
+def asobj_gstate(obj: _GraphicState) -> GraphicState:
+    gstate = GraphicState()
+    return gstate
+
+
+@asobj.register
+def asobj_mcs(obj: MarkedContent) -> Tag:
+    props = {k: v for k, v in obj.props.items() if k != "MCID"}
+    tag = Tag(name=obj.tag)
+    if obj.mcid is not None:
+        tag["mcid"] = obj.mcid
+    if props:
+        tag["props"] = props
+    return tag
+
+
+@asobj.register
+def asobj_text(obj: _TextObject) -> Text:
+    # Copy because of footguns in API (accessing chars or bbox updates textstate)
+    textstate = copy(obj.textstate)
+    text = Text(
+        chars=obj.chars,
+        bbox=obj.bbox,
+        textstate=textstate,
+        gstate=asobj(obj.gstate),
+        mcstack=[asobj(mcs) for mcs in obj.mcstack],
     )
+    if obj.ctm is not MATRIX_IDENTITY:
+        text["ctm"] = obj.ctm
+    return text
