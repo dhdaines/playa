@@ -5,7 +5,7 @@ PLAYA objects.
 
 """
 
-from typing import Dict, List, Set, Tuple, Union
+from typing import Any, Dict, List, Set, Tuple, Union
 
 try:
     # We only absolutely need this when using Pydantic TypeAdapter
@@ -15,11 +15,12 @@ except ImportError:
 
 from playa.data.asobj import asobj
 from playa.document import Document as _Document, Destinations as _Destinations
+from playa.font import Font as _Font
 from playa.page import Page as _Page, Annotation as _Annotation
 from playa.document import DeviceSpace
 from playa.outline import Outline as _Outline, Destination as _Destination
 from playa.parser import IndirectObject as _IndirectObject
-from playa.pdftypes import ContentStream as _ContentStream
+from playa.pdftypes import ContentStream as _ContentStream, resolve1, ObjRef
 from playa.utils import Rect, Matrix
 
 
@@ -102,12 +103,12 @@ class StructTree(TypedDict, total=False):
 class Page(TypedDict, total=False):
     """Metadata for a PDF page."""
 
-    objid: int
-    """Indirect object ID."""
-    index: int
+    page_idx: int
     """0-based page number."""
-    label: Union[str, None]
+    page_label: Union[str, None]
     """Page label (could be roman numerals, letters, etc)."""
+    page_id: int
+    """Indirect object ID."""
     mediabox: Rect
     """Extent of physical page, in base units (1/72 inch)."""
     cropbox: Rect
@@ -120,10 +121,6 @@ class Page(TypedDict, total=False):
     """Page annotations."""
     contents: List["StreamObject"]
     """Metadata for content streams."""
-
-
-class Resources(TypedDict, total=False):
-    pass
 
 
 class Annotation(TypedDict, total=False):
@@ -141,16 +138,16 @@ class Annotation(TypedDict, total=False):
 
 
 class StreamObject(TypedDict, total=False):
-    objid: int
+    stream_id: int
     """Indirect object ID."""
     genno: int
     """Generation number."""
+    length: int
+    """Length of raw stream data."""
     filters: List[str]
     """List of filters."""
     params: List[dict]
     """Filter parameters."""
-    attrs: dict
-    """Other attributes."""
 
 
 class IndirectObject(TypedDict, total=False):
@@ -165,16 +162,12 @@ class IndirectObject(TypedDict, total=False):
 
 
 class Font(TypedDict, total=False):
-    """Font"""
-
     name: str
     """Font name."""
     type: str
     """Font type (Type1, Type0, TrueType, Type3, etc)."""
     vertical: bool
     """Uses vertical writing mode."""
-    multibyte: bool
-    """Uses multi-byte characters (actually this is always true for CID fonts)."""
     ascent: float
     """Ascent in glyph space units."""
     descent: float
@@ -191,16 +184,73 @@ class Font(TypedDict, total=False):
     """Matrix mapping glyph space to text space (Type3 fonts only)."""
 
 
+RESOURCE_DICTS = {
+    "ext_gstates": "ExtGState",
+    "color_spaces": "ColorSpace",
+    "patterns": "Pattern",
+    "shadings": "Shading",
+    "properties": "Properties",
+}
+
+
+class Resources(TypedDict, total=False):
+    ext_gstates: Dict[str, dict]
+    """Extended graphic state dictionaries."""
+    color_spaces: Dict[str, Any]
+    """Color space descriptors."""
+    patterns: Dict[str, Any]
+    """Pattern objects."""
+    shadings: Dict[str, dict]
+    """Shading dictionaries."""
+    xobjects: Dict[str, "StreamObject"]
+    """XObject streams."""
+    fonts: Dict[str, "Font"]
+    """Font dictionaries."""
+    procsets: List[str]
+    """Procedure set names."""
+    properties: Dict[str, dict]
+    """property dictionaires."""
+
+
+def resources_from_page(page: _Page) -> Resources:
+    res = Resources()
+    for attr in "ext_gstates", "color_spaces", "patterns", "shadings", "properties":
+        key = RESOURCE_DICTS[attr]
+        d = resolve1(page.resources.get(key))
+        if d and isinstance(d, dict):
+            res[attr] = {k: asobj(resolve1(v)) for k, v in d.items()}
+    d = resolve1(page.resources.get("XObject"))
+    if d and isinstance(d, dict):
+        res["xobjects"] = {k: asobj(resolve1(v)) for k, v in d.items()}
+    p = resolve1(page.resources.get("ProcSet"))
+    if p and isinstance(p, list):
+        res["procsets"] = asobj(p)
+    d = resolve1(page.resources.get("Font"))
+    if d and isinstance(d, dict):
+        fonts = {}
+        for k, v in d.items():
+            if not isinstance(v, ObjRef):
+                continue
+            spec = resolve1(v)
+            if not isinstance(spec, dict):
+                continue
+            font = page.doc.get_font(v.objid, spec)
+            fonts[k] = asobj(font)
+        if fonts:
+            res["fonts"] = fonts
+    return res
+
+
 @asobj.register
 def asobj_page(page: _Page) -> Page:
     return Page(
-        objid=page.pageid,
-        index=page.page_idx,
-        label=page.label,
+        page_idx=page.page_idx,
+        page_label=page.label,
+        page_id=page.pageid,
         mediabox=page.mediabox,
         cropbox=page.cropbox,
         rotate=page.rotate,
-        resources=asobj(page.resources),
+        resources=resources_from_page(page),
         annotations=[asobj(annot) for annot in page.annotations],
         contents=[asobj(stream) for stream in page.streams],
     )
@@ -217,11 +267,35 @@ def asobj_annotation(obj: _Annotation) -> Annotation:
 
 
 @asobj.register
+def asobj_font(obj: _Font) -> Font:
+    font = Font(
+        name=obj.fontname,
+        type=obj.__class__.__name__.replace("Font", ""),
+        vertical=obj.vertical,
+    )
+    for attr in (
+        "ascent",
+        "descent",
+        "italic_angle",
+        "default_width",
+        "leading",
+        "matrix",
+    ):
+        val = getattr(obj, attr, None)
+        if val:
+            font[attr] = val
+    if obj.bbox != (0, 0, 0, 0):
+        font["bbox"] = obj.bbox
+    return font
+
+
+@asobj.register
 def asobj_stream(obj: _ContentStream) -> StreamObject:
     # These really cannot be None!
     assert obj.objid is not None
     assert obj.genno is not None
-    cs = StreamObject(objid=obj.objid, genno=obj.genno, attrs=asobj(obj.attrs))
+    length = resolve1(obj.attrs["Length"])
+    cs = StreamObject(stream_id=obj.objid, genno=obj.genno, length=length)
     fps = obj.get_filters()
     if fps:
         filters, params = zip(*fps)
