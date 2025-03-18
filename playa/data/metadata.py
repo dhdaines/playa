@@ -193,12 +193,31 @@ class Font(TypedDict, total=False):
     """Font stretch value (e.g. Condensed, Expanded)."""
     weight: float
     """Numeric weight value (100, 200, 300... 900)"""
+    flags: List[str]
+    """Set of flags (e.g. FixedPitch, Script, etc) for this font."""
     bbox: Rect
     """Bounding box in glyph space units."""
     matrix: Matrix
     """Matrix mapping glyph space to text space (Type3 fonts only)."""
     cidfont: "Font"
     """Descendant CIDFont (Type0 fonts only)."""
+
+
+FONT_FLAGS = {
+    "FixedPitch": 1,
+    "Serif": 2,
+    "Symbolic": 3,
+    "Script": 4,
+    "Nonsymbolic": 6,
+    "Italic": 7,
+    "AllCap": 17,
+    "SmallCap": 18,
+    "ForceBold": 19,
+}
+
+
+def flags_to_list(flags: int) -> List[str]:
+    return [k for k, v in FONT_FLAGS.items() if flags & (1 << v)]
 
 
 FONT_ATTRS = {
@@ -248,6 +267,11 @@ def font_from_spec(spec: Dict[str, Any]) -> Font:
             val = desc.get(key)
             if val:
                 font[attr] = asobj(val)
+        flags = resolve1(desc.get("Flags", 0))
+        if flags:
+            flaglist = flags_to_list(flags)
+            if flaglist:
+                font["flags"] = flaglist
     sub = resolve1(spec.get("DescendantFonts"))
     if sub and isinstance(sub, list):
         font["cidfont"] = font_from_spec(resolve1(sub[0]))
