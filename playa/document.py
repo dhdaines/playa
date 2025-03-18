@@ -1032,7 +1032,7 @@ class Destinations:
                 name = decode_text(k)
                 if name not in self.dests:
                     dest = resolve1(v)
-                    self.dests[name] = self._create_dest(v, name)
+                    self.dests[name] = self._create_dest(dest, name)
                 yield name, self.dests[name]
 
     def __getitem__(self, name: Union[bytes, str, PSLiteral]) -> Destination:
@@ -1063,7 +1063,7 @@ class Destinations:
             for k, v in self.dests_tree:
                 if decode_text(k) == name:
                     dest = resolve1(v)
-                    self.dests[name] = self._create_dest(v, name)
+                    self.dests[name] = self._create_dest(dest, name)
                     break
         # This will also raise KeyError if necessary
         return self.dests[name]
