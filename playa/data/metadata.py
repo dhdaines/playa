@@ -138,6 +138,23 @@ class Annotation(TypedDict, total=False):
     modified."""
 
 
+class XObject(TypedDict, total=False):
+    subtype: str
+    """Type of XObject."""
+    xobjid: int
+    """Indirect object ID."""
+    genno: int
+    """Generation number."""
+    length: int
+    """Length of raw stream data."""
+    filters: List[str]
+    """List of filters."""
+    params: List[dict]
+    """Filter parameters."""
+    resources: "Resources"
+    """Resources specific to this XObject, if any."""
+
+
 class StreamObject(TypedDict, total=False):
     stream_id: int
     """Indirect object ID."""
@@ -287,7 +304,7 @@ class Resources(TypedDict, total=False):
     """Pattern objects."""
     shadings: Dict[str, dict]
     """Shading dictionaries."""
-    xobjects: Dict[str, "StreamObject"]
+    xobjects: Dict[str, "XObject"]
     """XObject streams."""
     fonts: Dict[str, Font]
     """Font dictionaries."""
@@ -295,6 +312,24 @@ class Resources(TypedDict, total=False):
     """Procedure set names."""
     properties: Dict[str, dict]
     """property dictionaires."""
+
+
+def xobject_from_stream(obj: _ContentStream) -> XObject:
+    stream = asobj(obj)
+    xobj = XObject(
+        xobjid=stream["stream_id"],
+        genno=stream["genno"],
+        length=stream["length"],
+        subtype=asobj(obj.attrs["Subtype"]),
+    )
+    if "filters" in stream:
+        xobj["filters"] = stream["filters"]
+    if "params" in stream:
+        xobj["params"] = stream["params"]
+    resources = resolve1(obj.attrs.get("Resources"))
+    if resources:
+        xobj["resources"] = resources_from_dict(resources)
+    return xobj
 
 
 RESOURCE_DICTS = {
@@ -306,20 +341,20 @@ RESOURCE_DICTS = {
 }
 
 
-def resources_from_page(page: _Page) -> Resources:
+def resources_from_dict(resources: Dict[str, Any]) -> Resources:
     res = Resources()
     for attr in "ext_gstates", "color_spaces", "patterns", "shadings", "properties":
         key = RESOURCE_DICTS[attr]
-        d = resolve1(page.resources.get(key))
+        d = resolve1(resources.get(key))
         if d and isinstance(d, dict):
             res[attr] = {k: asobj(resolve1(v)) for k, v in d.items()}
-    d = resolve1(page.resources.get("XObject"))
+    d = resolve1(resources.get("XObject"))
     if d and isinstance(d, dict):
-        res["xobjects"] = {k: asobj(resolve1(v)) for k, v in d.items()}
-    p = resolve1(page.resources.get("ProcSet"))
+        res["xobjects"] = {k: xobject_from_stream(resolve1(v)) for k, v in d.items()}
+    p = resolve1(resources.get("ProcSet"))
     if p and isinstance(p, list):
         res["procsets"] = asobj(p)
-    d = resolve1(page.resources.get("Font"))
+    d = resolve1(resources.get("Font"))
     if d and isinstance(d, dict):
         res["fonts"] = {k: font_from_spec(resolve1(v)) for k, v in d.items()}
     return res
@@ -334,7 +369,7 @@ def asobj_page(page: _Page) -> Page:
         mediabox=page.mediabox,
         cropbox=page.cropbox,
         rotate=page.rotate,
-        resources=resources_from_page(page),
+        resources=resources_from_dict(page.resources),
         annotations=[asobj(annot) for annot in page.annotations],
         contents=[asobj(stream) for stream in page.streams],
     )
