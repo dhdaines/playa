@@ -141,7 +141,7 @@ class Annotation(TypedDict, total=False):
 class XObject(TypedDict, total=False):
     subtype: str
     """Type of XObject."""
-    xobjid: int
+    xobject_id: int
     """Indirect object ID."""
     genno: int
     """Generation number."""
@@ -315,9 +315,9 @@ class Resources(TypedDict, total=False):
 
 
 def xobject_from_stream(obj: _ContentStream) -> XObject:
-    stream = asobj(obj)
+    stream = stream_metadata(obj)
     xobj = XObject(
-        xobjid=stream["stream_id"],
+        xobject_id=stream["stream_id"],
         genno=stream["genno"],
         length=stream["length"],
         subtype=asobj(obj.attrs["Subtype"]),
@@ -360,6 +360,22 @@ def resources_from_dict(resources: Dict[str, Any]) -> Resources:
     return res
 
 
+def stream_metadata(obj: _ContentStream) -> StreamObject:
+    # These really cannot be None!
+    assert obj.objid is not None
+    assert obj.genno is not None
+    length = resolve1(obj.attrs["Length"])
+    cs = StreamObject(stream_id=obj.objid, genno=obj.genno, length=length)
+    fps = obj.get_filters()
+    if fps:
+        filters, params = zip(*fps)
+        if any(filters):
+            cs["filters"] = asobj(filters)
+        if any(params):
+            cs["params"] = asobj(params)
+    return cs
+
+
 @asobj.register
 def asobj_page(page: _Page) -> Page:
     return Page(
@@ -371,7 +387,7 @@ def asobj_page(page: _Page) -> Page:
         rotate=page.rotate,
         resources=resources_from_dict(page.resources),
         annotations=[asobj(annot) for annot in page.annotations],
-        contents=[asobj(stream) for stream in page.streams],
+        contents=[stream_metadata(stream) for stream in page.streams],
     )
 
 
@@ -414,23 +430,6 @@ def asobj_font(obj: _Font) -> Font:
 
 
 @asobj.register
-def asobj_stream(obj: _ContentStream) -> StreamObject:
-    # These really cannot be None!
-    assert obj.objid is not None
-    assert obj.genno is not None
-    length = resolve1(obj.attrs["Length"])
-    cs = StreamObject(stream_id=obj.objid, genno=obj.genno, length=length)
-    fps = obj.get_filters()
-    if fps:
-        filters, params = zip(*fps)
-        if any(filters):
-            cs["filters"] = asobj(filters)
-        if any(params):
-            cs["params"] = asobj(params)
-    return cs
-
-
-@asobj.register
 def asobj_obj(obj: _IndirectObject) -> IndirectObject:
     return IndirectObject(
         objid=obj.objid,
@@ -438,6 +437,11 @@ def asobj_obj(obj: _IndirectObject) -> IndirectObject:
         type=type(obj.obj).__name__,
         obj=asobj(obj.obj),
     )
+
+
+@asobj.register
+def asobj_stream(obj: _ContentStream) -> Dict:
+    return asobj(obj.attrs)
 
 
 @asobj.register
