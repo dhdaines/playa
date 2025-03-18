@@ -25,6 +25,7 @@ from playa.pdftypes import (
     ObjRef,
     PSKeyword,
     PSLiteral,
+    decipher_all,
     int_value,
     literal_name,
     name_str,
@@ -626,6 +627,7 @@ class IndirectObjectParser:
         self.trailer: List[Tuple[int, Union[PDFObject, ContentStream]]] = []
         self.docref = None if doc is None else _ref_document(doc)
         self.strict = strict
+        self.decipher = None if doc is None else doc.decipher
 
     @property
     def doc(self) -> Union["Document", None]:
@@ -668,7 +670,16 @@ class IndirectObjectParser:
                 if isinstance(obj, ContentStream):
                     obj.objid = objid
                     obj.genno = genno
-                return pos, IndirectObject(objid, genno, obj)
+                # Decrypt indirect objects at top level (inside object streams
+                # they are handled by ObjectStreamParser)
+                if self.decipher:
+                    return pos, IndirectObject(
+                        objid,
+                        genno,
+                        decipher_all(self.decipher, objid, genno, obj),
+                    )
+                else:
+                    return pos, IndirectObject(objid, genno, obj)
             elif obj is KEYWORD_STREAM:
                 # PDF 1.7 sec 7.3.8.1: A stream shall consist of a
                 # dictionary followed by zero or more bytes bracketed
