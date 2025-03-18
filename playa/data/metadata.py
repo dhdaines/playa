@@ -14,15 +14,19 @@ except ImportError:
     from typing import TypedDict
 
 from playa.data.asobj import asobj
-from playa.document import Document as _Document, Destinations as _Destinations
+from playa.document import Destinations as _Destinations
+from playa.document import DeviceSpace
+from playa.document import Document as _Document
 from playa.font import Font as _Font
 from playa.fontmetrics import FONT_METRICS
-from playa.page import Page as _Page, Annotation as _Annotation
-from playa.document import DeviceSpace
-from playa.outline import Outline as _Outline, Destination as _Destination
+from playa.outline import Destination as _Destination
+from playa.outline import Outline as _Outline
+from playa.page import Annotation as _Annotation
+from playa.page import Page as _Page
 from playa.parser import IndirectObject as _IndirectObject
-from playa.pdftypes import ContentStream as _ContentStream, resolve1
-from playa.utils import Rect, Matrix
+from playa.pdftypes import ContentStream as _ContentStream
+from playa.pdftypes import resolve1
+from playa.utils import Matrix, Rect
 
 
 class Document(TypedDict, total=False):

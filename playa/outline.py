@@ -7,13 +7,13 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Dict, Iterator, Sequence, Tuple, Union
 
 from playa.parser import PDFObject, PSLiteral
-from playa.pdftypes import dict_value, ObjRef, LIT, resolve1
+from playa.pdftypes import LIT, ObjRef, dict_value, resolve1
 from playa.structure import Element
 from playa.utils import decode_text
 from playa.worker import (
     DocumentRef,
-    _ref_document,
     _deref_document,
+    _ref_document,
 )
 
 if TYPE_CHECKING:

@@ -32,13 +32,14 @@ from playa.exceptions import (
     PDFSyntaxError,
 )
 from playa.font import CIDFont, Font, TrueTypeFont, Type1Font, Type3Font
+from playa.outline import Destination, Outline
 from playa.page import (
-    Page,
     DeviceSpace,
+    Page,
 )
 from playa.parser import (
-    KEYWORD_XREF,
     KEYWORD_OBJ,
+    KEYWORD_XREF,
     LIT,
     IndirectObject,
     IndirectObjectParser,
@@ -64,23 +65,22 @@ from playa.pdftypes import (
     stream_value,
 )
 from playa.security import SECURITY_HANDLERS
+from playa.structtree import StructTree
+from playa.structure import Tree
 from playa.utils import (
     decode_text,
     format_int_alpha,
     format_int_roman,
 )
-from playa.structtree import StructTree
-from playa.structure import Tree
-from playa.outline import Outline, Destination
 from playa.worker import (
-    _set_document,
-    _ref_document,
+    PageRef,
     _deref_document,
     _deref_page,
+    _ref_document,
+    _set_document,
     in_worker,
-    PageRef,
 )
-from playa.xref import XRef, XRefFallback, XRefTable, XRefStream
+from playa.xref import XRef, XRefFallback, XRefStream, XRefTable
 
 log = logging.getLogger(__name__)
 

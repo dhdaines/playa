@@ -19,10 +19,10 @@ from playa.exceptions import (
 )
 from playa.parser import (
     KEYWORD_TRAILER,
+    LIT,
     IndirectObjectParser,
     ObjectParser,
     reverse_iter_lines,
-    LIT,
 )
 from playa.pdftypes import (
     ContentStream,
@@ -34,7 +34,6 @@ from playa.utils import (
     choplist,
     nunpack,
 )
-
 
 log = logging.getLogger(__name__)
 LITERAL_OBJSTM = LIT("ObjStm")

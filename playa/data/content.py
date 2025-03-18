@@ -16,13 +16,13 @@ except ImportError:
 
 from playa.data.asobj import asobj
 from playa.data.metadata import Font
-from playa.utils import Point, Rect, Matrix, MATRIX_IDENTITY
+from playa.page import GraphicState as _GraphicState
 from playa.page import (
-    TextObject as _TextObject,
-    GraphicState as _GraphicState,
-    TextState as _TextState,
     MarkedContent,
 )
+from playa.page import TextObject as _TextObject
+from playa.page import TextState as _TextState
+from playa.utils import MATRIX_IDENTITY, Matrix, Point, Rect
 
 
 class Text(TypedDict, total=False):
@@ -33,7 +33,8 @@ class Text(TypedDict, total=False):
     bbox: Rect
     """Bounding rectangle for all glyphs in text."""
     ctm: Matrix
-    """Coordinate transformation matrix, default if not present is `[1 0 0 1 0 0 0]`."""
+    """Coordinate transformation matrix, default if not present is the
+    identity matrix `[1 0 0 1 0 0]`."""
     textstate: "TextState"
     """Text state."""
     gstate: "GraphicState"
@@ -87,8 +88,7 @@ class Tag(TypedDict, total=False):
 @asobj.register
 def asobj_textstate(obj: _TextState) -> TextState:
     assert obj.font is not None
-    tstate = TextState(font=obj.font,
-                       line_matrix=obj.line_matrix)
+    tstate = TextState(font=asobj(obj.font), line_matrix=obj.line_matrix)
     if obj.glyph_offset != (0, 0):
         tstate["glyph_offset"] = obj.glyph_offset
     if obj.fontsize != 1:
@@ -121,8 +121,9 @@ def asobj_mcs(obj: MarkedContent) -> Tag:
 
 @asobj.register
 def asobj_text(obj: _TextObject) -> Text:
-    # Copy because of footguns in API (accessing chars or bbox updates textstate)
-    textstate = copy(obj.textstate)
+    # Convert (and copy) right away because of footguns in API
+    # (accessing chars or bbox updates textstate)
+    textstate = asobj(obj.textstate)
     text = Text(
         chars=obj.chars,
         bbox=obj.bbox,

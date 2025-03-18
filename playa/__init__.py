@@ -15,28 +15,30 @@ Basic usage:
 
 import builtins
 from concurrent.futures import ProcessPoolExecutor
-from os import PathLike
 from multiprocessing.context import BaseContext
+from os import PathLike
 from typing import Union
 
-from playa.worker import _init_worker, _init_worker_buffer
+from playa._version import __version__
 from playa.color import Color, ColorSpace
-from playa.document import Document, PageList
-from playa.exceptions import PDFException, PDFPasswordIncorrect, PDFEncryptionError
 from playa.data import asobj
+from playa.document import Document, PageList
+from playa.exceptions import PDFEncryptionError, PDFException, PDFPasswordIncorrect
 from playa.page import (
-    Page,
-    DeviceSpace,
     ContentObject,
-    MarkedContent,
-    PathSegment,
+    DeviceSpace,
     GraphicState,
+    MarkedContent,
+    Page,
+    PathSegment,
     TextState,
 )
 from playa.parser import Token
-from playa.pdftypes import resolve1 as resolve, resolve_all, ContentStream, ObjRef
+from playa.pdftypes import ContentStream, ObjRef
+from playa.pdftypes import resolve1 as resolve
+from playa.pdftypes import resolve_all
 from playa.utils import Matrix, Point, Rect
-from playa._version import __version__
+from playa.worker import _init_worker, _init_worker_buffer
 
 __all__ = [
     "Document",

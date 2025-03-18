@@ -13,12 +13,12 @@ from typing import (
     Iterable,
     Iterator,
     List,
-    Union,
     Pattern,
+    Union,
 )
 
-from playa.parser import PDFObject, LIT
-from playa.pdftypes import ContentStream, ObjRef, resolve1, stream_value, literal_name
+from playa.parser import LIT, PDFObject
+from playa.pdftypes import ContentStream, ObjRef, literal_name, resolve1, stream_value
 from playa.worker import (
     DocumentRef,
     PageRef,

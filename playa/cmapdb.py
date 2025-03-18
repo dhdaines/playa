@@ -9,7 +9,6 @@ More information is available on:
 
 """
 
-from bisect import bisect_left
 import functools
 import gzip
 import logging
@@ -18,6 +17,7 @@ import os.path
 import pickle as pickle
 import struct
 import sys
+from bisect import bisect_left
 from typing import (
     Any,
     Dict,
