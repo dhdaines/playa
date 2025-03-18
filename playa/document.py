@@ -56,7 +56,6 @@ from playa.pdftypes import (
     ContentStream,
     DecipherCallable,
     ObjRef,
-    decipher_all,
     dict_value,
     int_value,
     list_value,
@@ -293,10 +292,16 @@ class Document:
         assert self.parser is not None
         # Ensure that no extra data leaks into encrypted streams
         self.parser.strict = True
+        self.parser.decipher = self.decipher
 
     def __iter__(self) -> Iterator[IndirectObject]:
         """Iterate over top-level `IndirectObject` (does not expand object streams)"""
-        return (obj for pos, obj in IndirectObjectParser(self.buffer, self))
+        return (
+            obj
+            for pos, obj in IndirectObjectParser(
+                self.buffer, self, strict=self.parser.strict
+            )
+        )
 
     @property
     def objects(self) -> Iterator[IndirectObject]:
@@ -422,8 +427,6 @@ class Document:
             (_, obj) = next(self.parser)
         if obj.objid != objid:
             raise PDFSyntaxError(f"objid mismatch: {obj.objid!r}={objid!r}")
-        if self.decipher:
-            return decipher_all(self.decipher, obj.objid, obj.genno, obj.obj)
         return obj.obj
 
     def __getitem__(self, objid: int) -> PDFObject:
