@@ -16,11 +16,12 @@ except ImportError:
 from playa.data.asobj import asobj
 from playa.document import Document as _Document, Destinations as _Destinations
 from playa.font import Font as _Font
+from playa.fontmetrics import FONT_METRICS
 from playa.page import Page as _Page, Annotation as _Annotation
 from playa.document import DeviceSpace
 from playa.outline import Outline as _Outline, Destination as _Destination
 from playa.parser import IndirectObject as _IndirectObject
-from playa.pdftypes import ContentStream as _ContentStream, resolve1, ObjRef
+from playa.pdftypes import ContentStream as _ContentStream, resolve1
 from playa.utils import Rect, Matrix
 
 
@@ -166,8 +167,6 @@ class Font(TypedDict, total=False):
     """Font name."""
     type: str
     """Font type (Type1, Type0, TrueType, Type3, etc)."""
-    vertical: bool
-    """Uses vertical writing mode."""
     ascent: float
     """Ascent in glyph space units."""
     descent: float
@@ -178,19 +177,81 @@ class Font(TypedDict, total=False):
     """Default character width in glyph space units."""
     leading: float
     """Leading in glyph space units."""
+    cap_height: float
+    """Top of capital letters, in glyph space units."""
+    xheight: float
+    """Top of flat nonascending lowercase letters, in glyph space units."""
+    stem_v: float
+    """Thickness of dominant vertical stems."""
+    stem_h: float
+    """Thickness of dominant horizontal stems."""
+    avg_width: float
+    """Average width of glyphs in glyph space units."""
+    max_width: float
+    """Maximum width of glyphs in glyph space units."""
+    stretch: str
+    """Font stretch value (e.g. Condensed, Expanded)."""
+    weight: float
+    """Numeric weight value (100, 200, 300... 900)"""
     bbox: Rect
     """Bounding box in glyph space units."""
     matrix: Matrix
     """Matrix mapping glyph space to text space (Type3 fonts only)."""
+    cidfont: "Font"
+    """Descendant CIDFont (Type0 fonts only)."""
 
 
-RESOURCE_DICTS = {
-    "ext_gstates": "ExtGState",
-    "color_spaces": "ColorSpace",
-    "patterns": "Pattern",
-    "shadings": "Shading",
-    "properties": "Properties",
+FONT_ATTRS = {
+    "ascent": "Ascent",
+    "descent": "Descent",
+    "italic_angle": "ItalicAngle",
+    "default_width": "MissingWidth",
+    "leading": "Leading",
+    "cap_height": "CapHeight",
+    "xheight": "XHeight",
+    "stem_v": "StemV",
+    "stem_h": "StemH",
+    "avg_width": "AvgWidth",
+    "max_width": "MaxWidth",
+    "stretch": "FontStretch",
+    "weight": "FontWeight",
 }
+
+
+def font_from_spec(spec: Dict[str, Any]) -> Font:
+    basefont = asobj(resolve1(spec.get("BaseFont", spec.get("Name"))))
+    font = Font(
+        name=basefont,
+        type=asobj(resolve1(spec.get("Subtype"))),
+    )
+    if basefont in FONT_METRICS:
+        desc, _ = FONT_METRICS[basefont]
+    else:
+        desc = resolve1(spec.get("FontDescriptor"))
+    if desc is not None:
+        for attr in (
+            "ascent",
+            "descent",
+            "italic_angle",
+            "default_width",
+            "leading",
+            "cap_height",
+            "xheight",
+            "stem_v",
+            "stem_h",
+            "avg_width",
+            "max_width",
+            "stretch",
+            "weight",
+        ):
+            key = FONT_ATTRS[attr]
+            val = desc.get(key)
+            if val:
+                font[attr] = asobj(val)
+    sub = resolve1(spec.get("DescendantFonts"))
+    if sub and isinstance(sub, list):
+        font["cidfont"] = font_from_spec(resolve1(sub[0]))
+    return font
 
 
 class Resources(TypedDict, total=False):
@@ -204,12 +265,21 @@ class Resources(TypedDict, total=False):
     """Shading dictionaries."""
     xobjects: Dict[str, "StreamObject"]
     """XObject streams."""
-    fonts: Dict[str, "Font"]
+    fonts: Dict[str, Font]
     """Font dictionaries."""
     procsets: List[str]
     """Procedure set names."""
     properties: Dict[str, dict]
     """property dictionaires."""
+
+
+RESOURCE_DICTS = {
+    "ext_gstates": "ExtGState",
+    "color_spaces": "ColorSpace",
+    "patterns": "Pattern",
+    "shadings": "Shading",
+    "properties": "Properties",
+}
 
 
 def resources_from_page(page: _Page) -> Resources:
@@ -227,17 +297,7 @@ def resources_from_page(page: _Page) -> Resources:
         res["procsets"] = asobj(p)
     d = resolve1(page.resources.get("Font"))
     if d and isinstance(d, dict):
-        fonts = {}
-        for k, v in d.items():
-            if not isinstance(v, ObjRef):
-                continue
-            spec = resolve1(v)
-            if not isinstance(spec, dict):
-                continue
-            font = page.doc.get_font(v.objid, spec)
-            fonts[k] = asobj(font)
-        if fonts:
-            res["fonts"] = fonts
+        res["fonts"] = {k: font_from_spec(resolve1(v)) for k, v in d.items()}
     return res
 
 
@@ -266,12 +326,17 @@ def asobj_annotation(obj: _Annotation) -> Annotation:
     return annot
 
 
+# Note this is not actually used for font resources, since for the
+# moment the Font class we inherited from pdfminer.six lacks various
+# metadata.  It's here anyway in case you call asobj() on a Font.
 @asobj.register
 def asobj_font(obj: _Font) -> Font:
+    font_type = obj.__class__.__name__
+    if font_type != "CIDFont":
+        font_type = font_type.replace("Font", "")
     font = Font(
         name=obj.fontname,
-        type=obj.__class__.__name__.replace("Font", ""),
-        vertical=obj.vertical,
+        type=font_type,
     )
     for attr in (
         "ascent",
@@ -283,7 +348,7 @@ def asobj_font(obj: _Font) -> Font:
     ):
         val = getattr(obj, attr, None)
         if val:
-            font[attr] = val
+            font[attr] = asobj(val)
     if obj.bbox != (0, 0, 0, 0):
         font["bbox"] = obj.bbox
     return font
