@@ -567,9 +567,7 @@ class TextState:
         not correspond to an actual line because PDF is a presentation
         format.
       glyph_offset: The offset of the current glyph with relation to
-        the line matrix (in user space).  To get this in device space
-        you may use `playa.utils.apply_matrix_norm` with
-        `TextObject.ctm`.
+        the line matrix, in text space units.
       font: The current font.
       fontsize: The current font size, **in text space units**.
         This is often just 1.0 as it relies on the text matrix (you
