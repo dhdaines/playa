@@ -370,7 +370,8 @@ def resources_from_dict(
                 stream = stream_value(v)
                 if stream.objid in seen:
                     raise ValueError("Circular reference in XObject: %s => %r" % (k, v,))
-                seen.add(stream.objid)
+                if stream.objid is not None:
+                    seen.add(stream.objid)
                 xobjects[k] = xobject_from_stream(stream, seen)
             except Exception as e:
                 log.warning("Failed to get XObject %s: %s", k, e)
