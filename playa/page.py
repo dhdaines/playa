@@ -1050,6 +1050,8 @@ class GlyphObject(ContentObject):
       matrix: rendering matrix for this glyph, which transforms text
               space (*not glyph space!*) coordinates to device space.
       bbox: glyph bounding box in device space.
+      text_space_bbox: glyph bounding box in text space (i.e. before
+                       any possible coordinate transformation)
       corners: Is the transformed bounding box rotated or skewed such
                that all four corners need to be calculated (derived
                from matrix but precomputed for speed)
@@ -1069,24 +1071,7 @@ class GlyphObject(ContentObject):
 
     @property
     def bbox(self) -> Rect:
-        tstate = self.textstate
-        font = tstate.font
-        assert font is not None
-        if font.vertical:
-            textdisp = font.char_disp(self.cid)
-            assert isinstance(textdisp, tuple)
-            (vx, vy) = textdisp
-            if vx is None:
-                vx = tstate.fontsize * 0.5
-            else:
-                vx = vx * tstate.fontsize * 0.001
-            vy = (1000 - vy) * tstate.fontsize * 0.001
-            x0, y0 = (-vx, vy + tstate.rise + self.adv)
-            x1, y1 = (-vx + tstate.fontsize, vy + tstate.rise)
-        else:
-            x0, y0 = (0, tstate.descent + tstate.rise)
-            x1, y1 = (self.adv, tstate.descent + tstate.rise + tstate.fontsize)
-
+        x0, y0, x1, y1 = self.text_space_bbox
         if self.corners:
             return get_bound(
                 (
@@ -1105,6 +1090,27 @@ class GlyphObject(ContentObject):
                 y0, y1 = y1, y0
             return (x0, y0, x1, y1)
 
+    @property
+    def text_space_bbox(self):
+        tstate = self.textstate
+        font = tstate.font
+        assert font is not None
+        if font.vertical:
+            textdisp = font.char_disp(self.cid)
+            assert isinstance(textdisp, tuple)
+            (vx, vy) = textdisp
+            if vx is None:
+                vx = tstate.fontsize * 0.5
+            else:
+                vx = vx * tstate.fontsize * 0.001
+            vy = (1000 - vy) * tstate.fontsize * 0.001
+            x0, y0 = (-vx, vy + tstate.rise + self.adv)
+            x1, y1 = (-vx + tstate.fontsize, vy + tstate.rise)
+        else:
+            x0, y0 = (0, tstate.descent + tstate.rise)
+            x1, y1 = (self.adv, tstate.descent + tstate.rise + tstate.fontsize)
+        return (x0, y0, x1, y1)
+
 
 @dataclass
 class TextObject(ContentObject):
@@ -1115,11 +1121,16 @@ class TextObject(ContentObject):
         object and you should not expect it to be valid outside the
         context of iteration over the parent `TextObject`.
       args: Strings or position adjustments
+      bbox: Text bounding box in device space.
+      text_space_bbox: Text bounding box in text space (i.e. before
+                       any possible coordinate transformation)
     """
 
     textstate: TextState
     args: List[Union[bytes, float]]
     _chars: Union[List[str], None] = None
+    _bbox: Union[Rect, None] = None
+    _text_space_bbox: Union[Rect, None] = None
 
     def __iter__(self) -> Iterator[GlyphObject]:
         """Generate glyphs for this text object"""
@@ -1148,7 +1159,7 @@ class TextObject(ContentObject):
             wordspace = 0
         (x, y) = tstate.glyph_offset
         pos = y if vert else x
-        needcharspace = False
+        needcharspace = False  # Only for first glyph
         for obj in self.args:
             if isinstance(obj, (int, float)):
                 dxscale = 0.001 * tstate.fontsize * scaling
@@ -1158,10 +1169,9 @@ class TextObject(ContentObject):
                 for cid, text in font.decode(obj):
                     if needcharspace:
                         pos += charspace
-                    tstate.glyph_offset = (x, pos) if vert else (pos, y)
                     textwidth = font.char_width(cid)
                     adv = textwidth * tstate.fontsize * scaling
-                    x, y = tstate.glyph_offset
+                    x, y = tstate.glyph_offset = (x, pos) if vert else (pos, y)
                     glyph = GlyphObject(
                         _pageref=self._pageref,
                         gstate=self.gstate,
@@ -1181,6 +1191,86 @@ class TextObject(ContentObject):
                         pos += wordspace
                     needcharspace = True
         tstate.glyph_offset = (x, pos) if vert else (pos, y)
+
+    @property
+    def text_space_bbox(self):
+        if self._text_space_bbox is not None:
+            return self._text_space_bbox
+        # No need to save tstate as we do not update it below
+        tstate = self.textstate
+        font = tstate.font
+        if font is None:
+            log.warning(
+                "No font is set, will not update text state or output text: %r TJ",
+                self.args,
+            )
+            self._text_space_bbox = BBOX_NONE
+            return self._text_space_bbox
+        if len(self.args) == 0:
+            self._text_space_bbox = BBOX_NONE
+            return self._text_space_bbox
+        scaling = tstate.scaling * 0.01
+        charspace = tstate.charspace * scaling
+        wordspace = tstate.wordspace * scaling
+        vert = font.vertical
+        if font.multibyte:
+            wordspace = 0
+        (x, y) = tstate.glyph_offset
+        pos = y if vert else x
+        needcharspace = False  # Only for first glyph
+        if vert:
+            x0 = x1 = x
+            y0 = y1 = y
+        else:
+            # These do not change!
+            x0 = x
+            y0 = y + tstate.descent + tstate.rise
+            y1 = y0 + tstate.fontsize
+        for obj in self.args:
+            if isinstance(obj, (int, float)):
+                dxscale = 0.001 * tstate.fontsize * scaling
+                pos -= obj * dxscale
+                needcharspace = True
+            else:
+                for cid, _ in font.decode(obj):
+                    if needcharspace:
+                        pos += charspace
+                    textwidth = font.char_width(cid)
+                    adv = textwidth * tstate.fontsize * scaling
+                    x, y = (x, pos) if vert else (pos, y)
+                    if vert:
+                        textdisp = font.char_disp(cid)
+                        assert isinstance(textdisp, tuple)
+                        (vx, vy) = textdisp
+                        if vx is None:
+                            vx = tstate.fontsize * 0.5
+                        else:
+                            vx = vx * tstate.fontsize * 0.001
+                        vy = (1000 - vy) * tstate.fontsize * 0.001
+                        x0 = min(x0, x - vx)
+                        y0 = min(y0, y + vy + tstate.rise + adv)
+                        x1 = max(x1, x - vx + tstate.fontsize)
+                        y1 = max(y1, y + vy + tstate.rise)
+                    else:
+                        x1 = x + adv
+                    pos += adv
+                    if cid == 32 and wordspace:
+                        pos += wordspace
+                    needcharspace = True
+        self._text_space_bbox = (x0, y0, x1, y1)
+        return self._text_space_bbox
+
+    @property
+    def bbox(self) -> Rect:
+        # We specialize this to avoid it having side effects on the
+        # text state (already it's a bit of a footgun that __iter__
+        # does that...), but also because we know all glyphs have the
+        # same text matrix and thus we can avoid a lot of multiply
+        if self._bbox is not None:
+            return self._bbox
+        matrix = mult_matrix(self.textstate.line_matrix, self.ctm)
+        self._bbox = get_transformed_bound(matrix, self.text_space_bbox)
+        return self._bbox
 
     @property
     def chars(self) -> str:
