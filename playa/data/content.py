@@ -5,7 +5,6 @@ PLAYA objects.
 
 """
 
-from copy import copy
 from typing import List
 
 try:
@@ -121,13 +120,10 @@ def asobj_mcs(obj: MarkedContent) -> Tag:
 
 @asobj.register
 def asobj_text(obj: _TextObject) -> Text:
-    # Convert (and copy) right away because of footguns in API
-    # (accessing chars or bbox updates textstate)
-    textstate = asobj(obj.textstate)
     text = Text(
         chars=obj.chars,
         bbox=obj.bbox,
-        textstate=textstate,
+        textstate=asobj(obj.textstate),
         gstate=asobj(obj.gstate),
         mcstack=[asobj(mcs) for mcs in obj.mcstack],
     )
