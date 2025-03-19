@@ -1247,6 +1247,7 @@ class TextObject(ContentObject):
         if self._next_tstate is not None:
             return self._next_tstate
         _ = self.text_space_bbox
+        assert self._next_tstate is not None
         return self._next_tstate
 
     @property
@@ -1575,6 +1576,7 @@ class LazyInterpreter:
             if has_text:
                 return obj
             # Even without text, TJ can still update the line matrix (ugh!)
+            assert isinstance(obj, TextObject)
             self.textstate = obj.next_textstate
         return None
 
