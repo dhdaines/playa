@@ -18,9 +18,6 @@ def asobj(obj):
     # Catch dataclasses that don't have a specific serializer
     if dataclasses.is_dataclass(obj) and not isinstance(obj, type):
         return {k: asobj(v) for k, v in obj.__dict__.items()}
-    # Catch NamedTuples that don't have a specific serializer
-    if hasattr(obj, "_asdict"):
-        return {k: asobj(v) for k, v in obj._asdict().items()}
     return repr(obj)
 
 
@@ -64,9 +61,16 @@ def asobj_dict(obj: dict) -> dict:
     return {k: asobj(v) for k, v in obj.items()}
 
 
-@asobj.register(list)
+@asobj.register
+def asobj_list(obj: list) -> list:
+    return [asobj(v) for v in obj]
+
+
 @asobj.register(tuple)
-def asobj_list(obj: Union[list, tuple]) -> list:
+def asobj_tuple(obj: tuple) -> Union[list, dict]:
+    # Catch NamedTuples that don't have a specific serializer
+    if hasattr(obj, "_asdict"):
+        return {k: asobj(v) for k, v in obj._asdict().items()}
     return [asobj(v) for v in obj]
 
 
