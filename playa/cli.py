@@ -137,6 +137,11 @@ def make_argparse() -> argparse.ArgumentParser:
         help="Extract content objects as JSON",
     )
     parser.add_argument(
+        "--explode-text",
+        action="store_true",
+        help="Explode text objects into constituent glyphs (are you sure?)",
+    )
+    parser.add_argument(
         "-x",
         "--text-objects",
         action="store_true",
@@ -267,9 +272,18 @@ def decode_page_spec(doc: Document, spec: str) -> Iterator[int]:
         yield from pages
 
 
-def get_text_json(page: Page) -> List[str]:
+def flatten_harder(itor: Iterator[ContentObject]) -> Iterator[ContentObject]:
+    for obj in itor:
+        if isinstance(obj, TextObject):
+            yield from obj
+        else:
+            yield obj
+
+
+def get_text_json(page: Page, explode_text: bool = False) -> List[str]:
     objs = []
-    for text in page.texts:
+    itor = flatten_harder(page.texts) if explode_text else page.texts
+    for text in itor:
         objs.append(
             json.dumps(asobj(text), indent=2, ensure_ascii=False, default=asobj)
         )
@@ -281,7 +295,11 @@ def extract_text_objects(doc: Document, args: argparse.Namespace) -> None:
     pages = decode_page_spec(doc, args.pages)
     print("[", file=args.outfile)
     last = None
-    for obj in itertools.chain.from_iterable(doc.pages[pages].map(get_text_json)):
+    for obj in itertools.chain.from_iterable(
+        doc.pages[pages].map(
+            functools.partial(get_text_json, explode_text=args.explode_text)
+        )
+    ):
         if last is not None:
             print(last, end=",\n", sep="", file=args.outfile)
         last = obj
@@ -290,17 +308,10 @@ def extract_text_objects(doc: Document, args: argparse.Namespace) -> None:
     print("]", file=args.outfile)
 
 
-def flatten_harder(page) -> Iterator[ContentObject]:
-    for obj in page.flatten():
-        if isinstance(obj, TextObject):
-            yield from obj
-        else:
-            yield obj
-
-
-def get_content_json(page: Page) -> List[str]:
+def get_content_json(page: Page, explode_text: bool = False) -> List[str]:
     objs = []
-    for obj in flatten_harder(page):
+    itor = flatten_harder(page.flatten()) if explode_text else page.flatten()
+    for obj in itor:
         objdict = asobj(obj)
         objdict["object_type"] = obj.object_type
         objs.append(json.dumps(objdict, indent=2, ensure_ascii=False, default=asobj))
@@ -312,7 +323,11 @@ def extract_content_objects(doc: Document, args: argparse.Namespace) -> None:
     pages = decode_page_spec(doc, args.pages)
     print("[", file=args.outfile)
     last = None
-    for obj in itertools.chain.from_iterable(doc.pages[pages].map(get_content_json)):
+    for obj in itertools.chain.from_iterable(
+        doc.pages[pages].map(
+            functools.partial(get_content_json, explode_text=args.explode_text)
+        )
+    ):
         if last is not None:
             print(last, end=",\n", sep="", file=args.outfile)
         last = obj
