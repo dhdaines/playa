@@ -1009,7 +1009,7 @@ class Destinations:
         """Iterate over names of destinations.
 
         Danger: Beware of corrupted PDFs
-            This simply iterates over the names listed in the PDF, nad
+            This simply iterates over the names listed in the PDF, and
             does not attempt to actually parse the destinations
             (because that's pretty slow).  If the PDF is broken, you
             may encounter exceptions when actually trying to access
@@ -1023,7 +1023,7 @@ class Destinations:
                 yield ks
 
     def items(self) -> Iterator[Tuple[str, Destination]]:
-        """Iterate over named destnations."""
+        """Iterate over named destinations."""
         if self.dests_dict is not None:
             for name, dest in self.dests_dict.items():
                 if name not in self.dests:

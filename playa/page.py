@@ -160,12 +160,20 @@ class Page:
         except TypeError:
             log.warning("Resources missing or invalid from Page id %d", pageid)
             self.resources = {}
-        if "MediaBox" in self.attrs:
+        try:
             self.mediabox = normalize_rect(parse_rect(self.attrs["MediaBox"]))
-        else:
+        except KeyError:
             log.warning(
                 "MediaBox missing from Page id %d (and not inherited),"
                 " defaulting to US Letter (612x792)",
+                pageid,
+            )
+            self.mediabox = (0, 0, 612, 792)
+        except (ValueError, PDFSyntaxError):
+            log.warning(
+                "MediaBox %r invalid in Page id %d,"
+                " defaulting to US Letter (612x792)",
+                self.attrs["MediaBox"],
                 pageid,
             )
             self.mediabox = (0, 0, 612, 792)
@@ -173,8 +181,11 @@ class Page:
         if "CropBox" in self.attrs:
             try:
                 self.cropbox = normalize_rect(parse_rect(self.attrs["CropBox"]))
-            except ValueError:
-                log.warning("Invalid CropBox in /Page, defaulting to MediaBox")
+            except (ValueError, PDFSyntaxError):
+                log.warning(
+                    "Invalid CropBox %r in /Page, defaulting to MediaBox",
+                    self.attrs["CropBox"],
+                )
 
         self.rotate = (int_value(self.attrs.get("Rotate", 0)) + 360) % 360
         (x0, y0, x1, y1) = self.mediabox
@@ -241,7 +252,7 @@ class Page:
                 continue
             try:
                 rect = parse_rect(annot.get("Rect"))
-            except (TypeError, ValueError):
+            except (TypeError, ValueError, PDFSyntaxError):
                 log.warning("Invalid Rect in annotation: %r", annot)
                 continue
             yield Annotation(
@@ -517,7 +528,11 @@ class Annotation:
         contents = resolve1(self.props.get("Contents"))
         if contents is None:
             return None
-        return decode_text(contents)
+        try:
+            return decode_text(contents)
+        except TypeError:
+            log.warning("Invalid annotation contents: %r", contents)
+            return None
 
     @property
     def name(self) -> Union[str, None]:

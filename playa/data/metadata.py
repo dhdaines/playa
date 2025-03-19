@@ -291,7 +291,7 @@ def font_from_spec(spec: Dict[str, Any]) -> Font:
             if flaglist:
                 font["flags"] = flaglist
     sub = resolve1(spec.get("DescendantFonts"))
-    if sub and isinstance(sub, list):
+    if sub and isinstance(sub, list) and sub[0] is not None:
         font["cidfont"] = font_from_spec(resolve1(sub[0]))
     return font
 
@@ -357,7 +357,9 @@ def resources_from_dict(resources: Dict[str, Any]) -> Resources:
         res["procsets"] = asobj(p)
     d = resolve1(resources.get("Font"))
     if d and isinstance(d, dict):
-        res["fonts"] = {k: font_from_spec(resolve1(v)) for k, v in d.items()}
+        res["fonts"] = {
+            k: font_from_spec(resolve1(v)) for k, v in d.items() if v is not None
+        }
     return res
 
 
