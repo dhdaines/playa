@@ -315,26 +315,17 @@ class Page:
     @property
     def paths(self) -> Iterator["PathObject"]:
         """Iterator over lazy path objects."""
-        return cast(
-            Iterator["PathObject"],
-            iter(LazyInterpreter(self, self._contents, filter_class=PathObject)),
-        )
+        return self.flatten(PathObject)
 
     @property
     def images(self) -> Iterator["ImageObject"]:
         """Iterator over lazy image objects."""
-        return cast(
-            Iterator["ImageObject"],
-            iter(LazyInterpreter(self, self._contents, filter_class=ImageObject)),
-        )
+        return self.flatten(ImageObject)
 
     @property
     def texts(self) -> Iterator["TextObject"]:
         """Iterator over lazy text objects."""
-        return cast(
-            Iterator["TextObject"],
-            iter(LazyInterpreter(self, self._contents, filter_class=TextObject)),
-        )
+        return self.flatten(TextObject)
 
     @property
     def xobjects(self) -> Iterator["XObjectObject"]:
