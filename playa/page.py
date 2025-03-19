@@ -797,7 +797,7 @@ class TagObject(ContentObject):
         return 0
 
     @property
-    def mcs(self) -> Union[MarkedContent, None]:
+    def mcs(self) -> MarkedContent:
         """The marked content tag for this object."""
         return self._mcs
 
