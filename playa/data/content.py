@@ -344,14 +344,13 @@ def asobj_path(obj: _PathObject) -> Path:
 def asobj_path_segment(obj: _PathSegment) -> PathSegment:
     seg = PathSegment(operator=obj.operator)
     if obj.points:
-        seg["points"] = obj.points
+        seg["points"] = list(obj.points)
     return seg
 
 
 @asobj.register
 def asobj_glyph(obj: _GlyphObject) -> Glyph:
     glyph = Glyph(
-        text=obj.text,
         cid=obj.cid,
         bbox=obj.bbox,
         # There is no default textstate
@@ -361,6 +360,8 @@ def asobj_glyph(obj: _GlyphObject) -> Glyph:
     gstate = asobj(obj.gstate)
     if gstate:
         glyph["gstate"] = gstate
+    if obj.text:
+        glyph["text"] = obj.text
     mcstack = [asobj(mcs) for mcs in obj.mcstack]
     if mcstack:
         glyph["mcstack"] = mcstack
