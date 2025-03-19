@@ -470,10 +470,11 @@ def get_images(page: Page, imgdir: Path) -> List[Tuple[Path, Image]]:
         imgpath = imgdir / imgname
         # FIXME: only really support plain JPEG for now...
         fp = img.stream.get_filters()
-        filters, params = zip(*fp)
-        for f in filters:
-            if f in LITERALS_DCT_DECODE:
-                imgpath = imgpath.with_suffix(".jpg")
+        if fp:
+            filters, params = zip(*fp)
+            for f in filters:
+                if f in LITERALS_DCT_DECODE:
+                    imgpath = imgpath.with_suffix(".jpg")
         if imgpath.suffix == "":
             imgpath = imgpath.with_suffix(".dat")
         with open(imgpath, "wb") as outfh:
