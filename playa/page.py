@@ -1117,9 +1117,7 @@ class TextObject(ContentObject):
     """Text object (contains one or more glyphs).
 
     Attributes:
-      textstate: Text state for this object.  This is a **mutable**
-        object and you should not expect it to be valid outside the
-        context of iteration over the parent `TextObject`.
+      textstate: Text state for this object.
       args: Strings or position adjustments
       bbox: Text bounding box in device space.
       text_space_bbox: Text bounding box in text space (i.e. before
@@ -1131,10 +1129,11 @@ class TextObject(ContentObject):
     _chars: Union[List[str], None] = None
     _bbox: Union[Rect, None] = None
     _text_space_bbox: Union[Rect, None] = None
+    _next_tstate: Union[TextState, None] = None
 
     def __iter__(self) -> Iterator[GlyphObject]:
         """Generate glyphs for this text object"""
-        tstate = self.textstate
+        tstate = copy(self.textstate)
         font = tstate.font
         # If no font is set, we cannot do anything, since even calling
         # TJ with a displacement and no text effects requires us at
@@ -1144,6 +1143,7 @@ class TextObject(ContentObject):
                 "No font is set, will not update text state or output text: %r TJ",
                 self.args,
             )
+            self._next_tstate = tstate
             return
         assert self.ctm is not None
         # Extract all the elements so we can translate efficiently
@@ -1191,6 +1191,8 @@ class TextObject(ContentObject):
                         pos += wordspace
                     needcharspace = True
         tstate.glyph_offset = (x, pos) if vert else (pos, y)
+        if self._next_tstate is None:
+            self._next_tstate = tstate
 
     @property
     def text_space_bbox(self):
@@ -1205,9 +1207,11 @@ class TextObject(ContentObject):
                 self.args,
             )
             self._text_space_bbox = BBOX_NONE
+            self._next_tstate = tstate
             return self._text_space_bbox
         if len(self.args) == 0:
             self._text_space_bbox = BBOX_NONE
+            self._next_tstate = tstate
             return self._text_space_bbox
         scaling = tstate.scaling * 0.01
         charspace = tstate.charspace * scaling
@@ -1223,7 +1227,7 @@ class TextObject(ContentObject):
             y0 = y1 = y
         else:
             # These do not change!
-            x0 = x
+            x0 = x1 = x
             y0 = y + tstate.descent + tstate.rise
             y1 = y0 + tstate.fontsize
         for obj in self.args:
@@ -1257,8 +1261,19 @@ class TextObject(ContentObject):
                     if cid == 32 and wordspace:
                         pos += wordspace
                     needcharspace = True
+        if self._next_tstate is None:
+            self._next_tstate = copy(tstate)
+            self._next_tstate.glyph_offset = (x, pos) if vert else (pos, y)
         self._text_space_bbox = (x0, y0, x1, y1)
         return self._text_space_bbox
+
+    @property
+    def next_textstate(self) -> TextState:
+        if self._next_tstate is not None:
+            return self._next_tstate
+        _ = self.text_space_bbox
+        assert self._next_tstate is not None
+        return self._next_tstate
 
     @property
     def bbox(self) -> Rect:
@@ -1457,6 +1472,8 @@ class LazyInterpreter:
                         co = method()
                     if co is not None:
                         yield co
+                    if isinstance(co, TextObject):
+                        self.textstate = co.next_textstate
                 else:
                     # TODO: This can get very verbose
                     log.warning("Unknown operator: %r", obj)
@@ -1580,13 +1597,12 @@ class LazyInterpreter:
                     "Ignoring non-string/number %r in text object %r", s, strings
                 )
         obj = self.create(TextObject, textstate=self.textstate, args=args)
-        if has_text:
-            return obj
-        else:
+        if obj is not None:
+            if has_text:
+                return obj
             # Even without text, TJ can still update the line matrix (ugh!)
-            if obj is not None:
-                for _ in obj:
-                    pass
+            assert isinstance(obj, TextObject)
+            self.textstate = obj.next_textstate
         return None
 
     def do_Tj(self, s: PDFObject) -> Union[ContentObject, None]:

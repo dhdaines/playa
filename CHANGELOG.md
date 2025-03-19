@@ -9,6 +9,7 @@
 ## PLAYA 0.3.2: 2025-03-18
 - Decrypt objects in `Document.objects` iterator
 - Remove disastrous side-effects from `TextObject.bbox`
+- Remove frustrating side-effects from `TextObject.__iter__`
 - Speed up `TextObject.bbox` and add `text_space_bbox` properties
 
 ## PLAYA 0.3.1: 2025-02-28
