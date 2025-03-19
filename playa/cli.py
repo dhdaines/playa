@@ -470,6 +470,7 @@ def extract_outline(doc: Document, args: argparse.Namespace) -> None:
         LOG.info("Document has no logical structure")
         print("{}", file=args.outfile)
         return
+    # FIXME: Do this incrementally as with structure above
     metadata = asobj(doc.outline)
     json.dump(metadata, args.outfile, indent=2, ensure_ascii=False)
 

@@ -26,7 +26,10 @@ from playa.page import Page as _Page
 from playa.parser import IndirectObject as _IndirectObject
 from playa.pdftypes import ContentStream as _ContentStream
 from playa.pdftypes import resolve1, stream_value
-from playa.utils import Matrix, Rect
+from playa.structure import Tree as _Tree, Element as _Element
+from playa.structure import ContentItem as _StructContentItem
+from playa.structure import ContentObject as _StructContentObject
+from playa.utils import Matrix, Rect, decode_text
 
 log = logging.getLogger(__name__)
 
@@ -89,11 +92,39 @@ class Destination(TypedDict, total=False):
     """List of coordinates (meaning depends on display)."""
 
 
+class StructContentObject(TypedDict, total=False):
+    page_idx: int
+    """Page index of content object."""
+    props: dict
+    """Properties of content object."""
+
+
+class StructContentItem(TypedDict, total=False):
+    page_idx: int
+    """Page index of content object."""
+    mcid: int
+    """Marked content section ID."""
+    stream: "StreamObject"
+    """Content stream, if any."""
+
+
 class StructElement(TypedDict, total=False):
     """Node in logical structure tree."""
 
     type: str
-    """Type of structure element (or "StructTreeRoot" for root)"""
+    """Type of structure element (or "StructTreeRoot" for root)."""
+    page_idx: int
+    """Page on which this structure element's content begins."""
+    title: str
+    """Title of structure element."""
+    language: str
+    """Language of structure element."""
+    alternate_description: str
+    """Alternate description."""
+    abbreviation_expansion: str
+    """Abbreviation expansion."""
+    actual_text: str
+    """Unicode text content."""
     children: List["StructElement"]
     """Children of this node."""
 
@@ -259,7 +290,9 @@ FONT_ATTRS = {
 
 
 def font_from_spec(spec: Dict[str, Any]) -> Font:
-    basefont = asobj(resolve1(spec.get("BaseFont", spec.get("Name"))))
+    basefont = asobj(resolve1(spec.get("BaseFont")))
+    if basefont is None:
+        basefont = asobj(resolve1(spec.get("Name")))
     font = Font(
         name=basefont,
         type=asobj(resolve1(spec.get("Subtype"))),
@@ -386,7 +419,9 @@ def resources_from_dict(
         fonts = {}
         for k, v in d.items():
             spec = resolve1(v)
-            if spec is not None:
+            if not isinstance(spec, dict):
+                log.warning("Invalid font specification: %r", spec)
+            else:
                 fonts[k] = font_from_spec(spec)
         if fonts:
             res["fonts"] = fonts
@@ -518,6 +553,54 @@ def asobj_destination(obj: _Destination) -> Destination:
 
 
 @asobj.register
+def asobj_content_item(obj: _StructContentItem) -> StructContentItem:
+    item = StructContentItem(mcid=obj.mcid)
+    page = obj.page
+    if page is not None:
+        item["page_idx"] = page.page_idx
+    if obj.stream is not None:
+        item["stream"] = stream_metadata(obj.stream)
+    return item
+
+
+@asobj.register
+def asobj_content_object(obj: _StructContentObject) -> StructContentObject:
+    item = StructContentObject(props=asobj(obj.props))
+    page = obj.page
+    if page is not None:
+        item["page_idx"] = page.page_idx
+    return item
+
+
+@asobj.register
+def asobj_structelement(obj: _Element) -> StructElement:
+    el = StructElement()
+    page = obj.page
+    if page is not None:
+        el["page_idx"] = page.page_idx
+    if "T" in obj.props:
+        el["title"] = decode_text(resolve1(obj.props["T"]))
+    if "Lang" in obj.props:
+        el["language"] = decode_text(resolve1(obj.props["Lang"]))
+    if "Alt" in obj.props:
+        el["alternate_description"] = decode_text(resolve1(obj.props["Alt"]))
+    if "E" in obj.props:
+        el["abbreviation_expansion"] = decode_text(resolve1(obj.props["E"]))
+    if "ActualText" in obj.props:
+        el["actual_text"] = decode_text(resolve1(obj.props["ActualText"]))
+    children = [asobj(el) for el in obj]
+    if children:
+        el["children"] = children
+    return el
+
+
+@asobj.register
+def asobj_structtree(obj: _Tree) -> StructTree:
+    root = StructElement(type="StructTreeRoot", children=[asobj(el) for el in obj])
+    return StructTree(root=root)
+
+
+@asobj.register
 def asobj_document(pdf: _Document, exclude: Set[str] = set()) -> Document:
     doc = Document(
         pdf_version=pdf.pdf_version,
@@ -534,9 +617,12 @@ def asobj_document(pdf: _Document, exclude: Set[str] = set()) -> Document:
     if "objects" not in exclude:
         doc["objects"] = [asobj(obj) for obj in pdf.objects]
     if "outline" not in exclude:
-        doc["outline"] = asobj(pdf.outline)
-        doc["destinations"] = asobj(pdf.destinations)
-    if "structure" not in exclude:
+        if pdf.outline is not None:
+            doc["outline"] = asobj(pdf.outline)
+        dests = asobj(pdf.destinations)
+        if dests:
+            doc["destinations"] = dests
+    if "structure" not in exclude and pdf.structure is not None:
         doc["structure"] = asobj(pdf.structure)
 
     return doc
