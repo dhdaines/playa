@@ -7,8 +7,8 @@ from pathlib import Path
 import pytest
 
 from playa import PDFPasswordIncorrect
-from playa.exceptions import PDFEncryptionError
 from playa.cli import main
+from playa.exceptions import PDFEncryptionError
 from tests.data import ALLPDFS, PASSWORDS, XFAILS
 
 

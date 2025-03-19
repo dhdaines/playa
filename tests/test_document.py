@@ -8,10 +8,11 @@ import pytest
 
 import playa
 from playa.data_structures import NameTree
-from playa.document import _open_input, Document, XRefTable
+from playa.document import Document, XRefTable, _open_input
 from playa.page import TextObject
 from playa.parser import LIT
 from playa.utils import decode_text
+
 from .data import CONTRIB, TESTDIR
 
 

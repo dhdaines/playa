@@ -9,7 +9,8 @@ try:
 except ImportError:
     pdfminer = None  # type: ignore
 import playa
-from .data import TESTDIR, CONTRIB
+
+from .data import CONTRIB, TESTDIR
 
 
 def test_weakrefs() -> None:

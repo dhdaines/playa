@@ -2,8 +2,8 @@
 Lists of data files and directories to be shared by various tests.
 """
 
-from pathlib import Path
 import json
+from pathlib import Path
 
 TESTDIR = Path(__file__).parent.parent / "samples"
 SUBDIRS = ["acroform", "encryption", "scancode"]

@@ -11,9 +11,9 @@ import pytest
 import playa
 from playa.color import PREDEFINED_COLORSPACE, Color
 from playa.exceptions import PDFEncryptionError
-from playa.utils import get_transformed_bound, get_bound, apply_matrix_pt, Matrix
+from playa.utils import Matrix, apply_matrix_pt, get_bound, get_transformed_bound
 
-from .data import TESTDIR, ALLPDFS, PASSWORDS, XFAILS, CONTRIB
+from .data import ALLPDFS, CONTRIB, PASSWORDS, TESTDIR, XFAILS
 
 
 @pytest.mark.skipif(not CONTRIB.exists(), reason="contrib samples not present")
