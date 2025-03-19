@@ -34,14 +34,20 @@ def test_outline():
 
 
 def expand(outline: Outline) -> List:
-    def expand_one(child):
+    def expand_one(child, level = 1):
         out = [child.title, child.destination, child.element]
+        # Limit depth to avoid taking all memory
+        if level == 3:
+            return out
         for c in child:
-            out.append(expand_one(c))
+            out.append(expand_one(c, level + 1))
         return out
 
     out = []
-    for child in outline:
+    for idx, child in enumerate(outline):
+        # Limit number to avoid taking all memory
+        if idx == 10:
+            break
         out.extend(expand_one(child))
     return out
 

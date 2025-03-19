@@ -23,7 +23,13 @@ def test_specific_structure():
 
 
 def walk_structure(el: Union[Tree, Element], indent=0):
-    for k in el:
+    for idx, k in enumerate(el):
+        # Limit depth to avoid taking forever
+        if indent >= 6:
+            break
+        # Limit number to avoid going forever
+        if idx == 10:
+            break
         print(" " * indent, asdict(k))
         if isinstance(k, Element):
             walk_structure(k, indent + 2)
