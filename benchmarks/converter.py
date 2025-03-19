@@ -6,7 +6,8 @@ import logging
 import sys
 import time
 from pathlib import Path
-from tests.data import BASEPDFS, PASSWORDS, XFAILS, PDFMINER_BUGS
+
+from tests.data import BASEPDFS, PASSWORDS, PDFMINER_BUGS, XFAILS
 
 LOG = logging.getLogger("benchmark-convert")
 

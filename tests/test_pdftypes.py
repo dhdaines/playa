@@ -3,8 +3,8 @@ Test PDF types and data structures.
 """
 
 from playa.data_structures import NameTree, NumberTree
-from playa.runlength import rldecode
 from playa.pdftypes import ObjRef, resolve1, resolve_all
+from playa.runlength import rldecode
 from playa.worker import _ref_document
 
 NUMTREE1 = {

@@ -1,4 +1,4 @@
-# **P**arallel and **LA**z**Y** **A**nalyzer for **PDF** 🏖️
+# **P**arallel and/or **LA**z**Y** **A**nalyzer for **PDF** 🏖️
 
 ## About
 
@@ -17,6 +17,29 @@ would be specifically one of these things and nothing else:
 The purpose of PLAYA is to provide an efficent, parallel and
 parallelizable, pure-Python and Pythonic (for its author's definition
 of the term), lazy interface to the internals of PDF files.
+
+But, it does more than that!  It also includes a command-line
+interface which can dump out various types of PDF data and metadata
+quickly.  For instance, you might want to dump out all the PDF
+operators in all the content streams on all the pages:
+
+    playa --content-streams my-awesome-document.pdf
+
+Or you could look at the document outline or logical structure tree:
+
+    playa --outline some-interesting-stuff.pdf
+    playa --structure tagged-pdf-wow.pdf
+
+And, yes, it does extract text, or also text objects (with associated
+metadata):
+
+    playa --text fascinating-research-paper.pdf
+    playa --text-objects colorful-presentation.pdf
+
+Or images (no format conversion will be done for anything other than
+JPEG at the moment, you're on your own):
+
+    playa --images splashy-resume.pdf --imgdir imagedir
 
 If you just want to extract text from a PDF, there are better and/or
 faster tools and libraries out there, notably

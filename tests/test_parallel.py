@@ -8,8 +8,8 @@ import pytest
 import playa
 import playa.document
 from playa.page import Page, XObjectObject
-from playa.worker import in_worker, _get_document
-from tests.data import TESTDIR, CONTRIB
+from playa.worker import _get_document, in_worker
+from tests.data import CONTRIB, TESTDIR
 
 
 def has_one_true_pdf() -> int:

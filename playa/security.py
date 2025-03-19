@@ -7,9 +7,9 @@ from typing import (
     Callable,
     Dict,
     Optional,
+    Sequence,
     Tuple,
 )
-from typing import Sequence
 
 try:
     from cryptography.hazmat.backends import default_backend
@@ -25,9 +25,9 @@ from playa.exceptions import (
 from playa.pdftypes import (
     dict_value,
     int_value,
+    literal_name,
     str_value,
     uint_value,
-    literal_name,
 )
 
 PASSWORD_PADDING = (

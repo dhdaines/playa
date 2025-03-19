@@ -2,8 +2,8 @@
 Lists of data files and directories to be shared by various tests.
 """
 
-from pathlib import Path
 import json
+from pathlib import Path
 
 TESTDIR = Path(__file__).parent.parent / "samples"
 SUBDIRS = ["acroform", "encryption", "scancode"]
@@ -46,11 +46,6 @@ XFAILS = {
     # really rather broken.
     "issue9418.pdf",
     "bug1250079.pdf",
-    # FIXME: There are many others like this - invalid stream lengths
-    # lead to missing objects in fallback xref parsing
-    "bug1130815.pdf",
-    # FIXME: Empty text objects have no bbox, leading to exception
-    "issue15139.pdf",
     # FIXME: These seem to be due to problems in the Unicode mappings
     # we inherited from pdfminer.six
     "JST2007-5.pdf",

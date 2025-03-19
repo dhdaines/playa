@@ -1,7 +1,7 @@
-from typing import Dict, NamedTuple, Union, Tuple
+from typing import Dict, NamedTuple, Tuple, Union
 
 from playa.parser import LIT, PDFObject, PSLiteral
-from playa.pdftypes import num_value, list_value, literal_name, stream_value, resolve1
+from playa.pdftypes import list_value, literal_name, num_value, resolve1, stream_value
 
 LITERAL_DEVICE_GRAY = LIT("DeviceGray")
 LITERAL_DEVICE_RGB = LIT("DeviceRGB")

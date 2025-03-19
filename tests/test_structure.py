@@ -2,10 +2,12 @@ from dataclasses import asdict
 from typing import Union
 
 import pytest
+
 import playa
 from playa.exceptions import PDFEncryptionError
 from playa.structure import Element, Tree
-from .data import ALLPDFS, TESTDIR, XFAILS, PASSWORDS
+
+from .data import ALLPDFS, PASSWORDS, TESTDIR, XFAILS
 
 
 def test_specific_structure():

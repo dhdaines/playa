@@ -100,3 +100,6 @@ extra-dependencies = [
 ]
 [tool.hatch.envs.types.scripts]
 check = "mypy --install-types --non-interactive {args:playa tests benchmarks}"
+
+[tool.hatch.envs.schema]
+extra-dependencies = [ "pydantic > 2" ]

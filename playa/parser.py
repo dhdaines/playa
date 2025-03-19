@@ -1,3 +1,4 @@
+import itertools
 import logging
 import mmap
 import re
@@ -15,7 +16,6 @@ from typing import (
     Union,
 )
 
-from playa.worker import _ref_document, _deref_document
 from playa.exceptions import PDFSyntaxError
 from playa.pdftypes import (
     KWD,
@@ -25,11 +25,13 @@ from playa.pdftypes import (
     ObjRef,
     PSKeyword,
     PSLiteral,
+    decipher_all,
     int_value,
     literal_name,
     name_str,
 )
 from playa.utils import choplist
+from playa.worker import _deref_document, _ref_document
 
 log = logging.getLogger(__name__)
 if TYPE_CHECKING:
@@ -623,9 +625,10 @@ class IndirectObjectParser:
     ) -> None:
         self._parser = ObjectParser(data, doc, strict=strict)
         self.buffer = data
-        self.trailer: List[Tuple[int, Union[PDFObject, ContentStream]]] = []
+        self.objstack: List[Tuple[int, Union[PDFObject, ContentStream]]] = []
         self.docref = None if doc is None else _ref_document(doc)
         self.strict = strict
+        self.decipher = None if doc is None else doc.decipher
 
     @property
     def doc(self) -> Union["Document", None]:
@@ -642,114 +645,155 @@ class IndirectObjectParser:
         while True:
             try:
                 pos, obj = next(self._parser)
-            except PDFSyntaxError as e:
-                if self.strict:
-                    raise e
-                log.warning("Syntax error near position %d: %s", pos, e)
-            if obj is KEYWORD_OBJ:
-                pass
-            elif isinstance(obj, PSKeyword) and obj.name.startswith(b"endobj"):
-                # Some broken PDFs omit the space after `endobj`...
-                if obj is not KEYWORD_ENDOBJ:
-                    self._parser.seek(pos + len(b"endobj"))
-                # objid genno "obj" (skipped) ... and the object
-                (_, obj) = self.trailer.pop()
-                (_, genno) = self.trailer.pop()
-                (pos, objid) = self.trailer.pop()
-                try:
-                    objid = int_value(objid)
-                    genno = int_value(genno)
-                except TypeError as e:
-                    raise PDFSyntaxError(
-                        f"Object numbers must be integers, got {objid!r} {genno!r}"
-                    ) from e
-                # ContentStream is *special* and needs these
-                # internally for decryption.
-                if isinstance(obj, ContentStream):
-                    obj.objid = objid
-                    obj.genno = genno
-                return pos, IndirectObject(objid, genno, obj)
-            elif obj is KEYWORD_STREAM:
-                # PDF 1.7 sec 7.3.8.1: A stream shall consist of a
-                # dictionary followed by zero or more bytes bracketed
-                # between the keywords `stream` (followed by newline)
-                # and `endstream`
-                (_, dic) = self.trailer.pop()
-                if not isinstance(dic, dict):
-                    # sec 7.3.8.1: the stream dictionary shall be a
-                    # direct object.
-                    raise PDFSyntaxError("Incorrect type for stream dictionary %r", dic)
-                try:
-                    # sec 7.3.8.2: Every stream dictionary shall have
-                    # a Length entry that indicates how many bytes of
-                    # the PDF file are used for the stream’s data
-                    objlen = int_value(dic["Length"])
-                except KeyError:
-                    log.warning("/Length is undefined in stream dictionary %r", dic)
-                    objlen = 0
-                except ValueError:
-                    log.warning("/Length reference cannot be resolved %r", dic)
-                    objlen = 0
-                # sec 7.3.8.1: The keyword `stream` that follows the stream
-                # dictionary shall be followed by an end-of-line
-                # marker consisting of either a CARRIAGE RETURN and a
-                # LINE FEED or just a LINE FEED, and not by a CARRIAGE
-                # RETURN alone.
-                self._parser.seek(pos)
-                _, line = self._parser.nextline()
-                assert line.strip() == b"stream"
-                pos = self._parser.tell()
-                # Because PDFs do not follow the spec, we will read
-                # *at least* the specified number of bytes, which
-                # could be zero (particularly if not specified!), up
-                # until the "endstream" tag.  In most cases it is
-                # expected that this extra data will be included in
-                # the stream anyway, but for encrypted streams you
-                # probably don't want that (LOL @ PDF "security")
-                data = self._parser.read(objlen)
-                # sec 7.3.8.1: There should be an end-of-line
-                # marker after the data and before endstream; this
-                # marker shall not be included in the stream length.
-                linepos, line = self._parser.nextline()
-                if self.strict:
-                    # In reality there usually is no end-of-line
-                    # marker.  We will nonetheless warn if there's
-                    # something other than 'endstream'.
-                    if line not in (
-                        b"\r",
-                        b"\n",
-                        b"\r\n",
-                        b"endstream\n",
-                        b"endstream\r\n",
-                    ):
-                        log.warning("Expected newline or 'endstream', got %r", line)
+                if isinstance(obj, PSKeyword) and obj.name.startswith(b"endobj"):
+                    return self._endobj(pos, obj)
+                elif obj is KEYWORD_STREAM:
+                    stream = self._stream(pos, obj)
+                    self.objstack.append((pos, stream))
+                elif obj is KEYWORD_ENDSTREAM:
+                    if not isinstance(self.objstack[-1][1], ContentStream):
+                        log.warning("Got endstream without a stream, ignoring!")
+                elif isinstance(obj, PSKeyword) and obj.name.startswith(b"endstream"):
+                    # Some broken PDFs have junk after "endstream"
+                    errmsg = "Expected 'endstream', got %r" % (obj,)
+                    raise PDFSyntaxError(errmsg)
                 else:
-                    # Reuse that line and read more if necessary
-                    while True:
-                        if b"endstream" in line:
-                            idx = line.index(b"endstream")
-                            objlen += idx
-                            data += line[:idx]
-                            self._parser.seek(pos + objlen)
-                            break
-                        objlen += len(line)
-                        data += line
-                        linepos, line = self._parser.nextline()
-                        if line == b"":  # Means EOF
-                            log.warning(
-                                "Incorrect length for stream, no 'endstream' found"
-                            )
-                            break
-                doc = self.doc
-                stream = ContentStream(
-                    dic, bytes(data), None if doc is None else doc.decipher
+                    self.objstack.append((pos, obj))
+            except StopIteration:
+                raise
+            except Exception as e:
+                errmsg = "Syntax error near position %d: %s" % (pos, e)
+                if self.strict:
+                    raise PDFSyntaxError(errmsg) from e
+                else:
+                    log.warning(errmsg)
+                    continue
+
+    def _endobj(self, pos: int, obj: PDFObject) -> Tuple[int, IndirectObject]:
+        # Some broken PDFs omit the space after `endobj`...
+        if obj is not KEYWORD_ENDOBJ:
+            self._parser.seek(pos + len(b"endobj"))
+        # objid genno "obj" (skipped) ... and the object
+        (_, obj) = self.objstack.pop()
+        (kpos, kwd) = self.objstack.pop()
+        if kwd is not KEYWORD_OBJ:
+            errmsg = "Expected 'obj' at %d, got %r" % (kpos, kwd)
+            raise PDFSyntaxError(errmsg)
+        (_, genno) = self.objstack.pop()
+        # Update pos to be the beginning of the indirect object
+        (pos, objid) = self.objstack.pop()
+        try:
+            objid = int_value(objid)
+            genno = int_value(genno)
+        except TypeError as e:
+            objs = " ".join(
+                repr(obj)
+                for obj in itertools.chain(
+                    (x[1] for x in self.objstack), (objid, genno, obj)
                 )
-                self.trailer.append((pos, stream))
-            elif obj is KEYWORD_ENDSTREAM:
-                if not isinstance(self.trailer[-1][1], ContentStream):
-                    log.warning("Got endstream without a stream, ignoring!")
-            else:
-                self.trailer.append((pos, obj))
+            )
+            errmsg = (
+                f"Failed to parse indirect object at {pos}: "
+                f"got: {objs} "
+                f"before 'endobj'"
+            )
+            raise PDFSyntaxError(errmsg) from e
+        # ContentStream is *special* and needs these
+        # internally for decryption.
+        if isinstance(obj, ContentStream):
+            obj.objid = objid
+            obj.genno = genno
+        # Decrypt indirect objects at top level (inside object streams
+        # they are handled by ObjectStreamParser)
+        if self.decipher:
+            return pos, IndirectObject(
+                objid,
+                genno,
+                decipher_all(self.decipher, objid, genno, obj),
+            )
+        else:
+            return pos, IndirectObject(objid, genno, obj)
+
+    def _stream(self, pos: int, obj: PDFObject) -> ContentStream:
+        # PDF 1.7 sec 7.3.8.1: A stream shall consist of a
+        # dictionary followed by zero or more bytes bracketed
+        # between the keywords `stream` (followed by newline)
+        # and `endstream`
+        (_, dic) = self.objstack.pop()
+        if not isinstance(dic, dict):
+            # sec 7.3.8.1: the stream dictionary shall be a
+            # direct object.
+            raise PDFSyntaxError("Incorrect type for stream dictionary %r", dic)
+        try:
+            # sec 7.3.8.2: Every stream dictionary shall have
+            # a Length entry that indicates how many bytes of
+            # the PDF file are used for the stream’s data
+            # FIXME: This call is **not** thread-safe as we currently
+            # reuse the same IndirectObjectParser to resolve references
+            objlen = int_value(dic["Length"])
+        except KeyError:
+            log.warning("/Length is undefined in stream dictionary %r", dic)
+            objlen = 0
+        except ValueError:
+            # FIXME: This warning should be suppressed in fallback
+            # xref parsing, since we obviously can't resolve any
+            # references yet.  Either that or fallback xref parsing
+            # should just run a regex over the PDF and not try to
+            # actually parse the objects (probably a better solution)
+            log.warning("/Length reference cannot be resolved %r", dic)
+            objlen = 0
+        # sec 7.3.8.1: The keyword `stream` that follows the stream
+        # dictionary shall be followed by an end-of-line
+        # marker consisting of either a CARRIAGE RETURN and a
+        # LINE FEED or just a LINE FEED, and not by a CARRIAGE
+        # RETURN alone.
+        self._parser.seek(pos)
+        _, line = self._parser.nextline()
+        assert line.strip() == b"stream"
+        pos = self._parser.tell()
+        # Because PDFs do not follow the spec, we will read
+        # *at least* the specified number of bytes, which
+        # could be zero (particularly if not specified!), up
+        # until the "endstream" tag.  In most cases it is
+        # expected that this extra data will be included in
+        # the stream anyway, but for encrypted streams you
+        # probably don't want that (LOL @ PDF "security")
+        data = self._parser.read(objlen)
+        # sec 7.3.8.1: There should be an end-of-line
+        # marker after the data and before endstream; this
+        # marker shall not be included in the stream length.
+        linepos, line = self._parser.nextline()
+        if self.strict:
+            # In reality there usually is no end-of-line
+            # marker.  We will nonetheless warn if there's
+            # something other than 'endstream'.
+            if line not in (
+                b"\r",
+                b"\n",
+                b"\r\n",
+                b"endstream\n",
+                b"endstream\r\n",
+            ):
+                raise PDFSyntaxError(
+                    "Expected newline or 'endstream', got %r" % (line,)
+                )
+        else:
+            # Reuse that line and read more if necessary
+            while True:
+                if b"endstream" in line:
+                    idx = line.index(b"endstream")
+                    objlen += idx
+                    data += line[:idx]
+                    self._parser.seek(pos + objlen)
+                    break
+                objlen += len(line)
+                data += line
+                linepos, line = self._parser.nextline()
+                if line == b"":  # Means EOF
+                    log.warning("Incorrect length for stream, no 'endstream' found")
+                    break
+        doc = self.doc
+        return ContentStream(dic, bytes(data), None if doc is None else doc.decipher)
 
     # Delegation follows
     def seek(self, pos: int) -> None:

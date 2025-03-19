@@ -4,8 +4,9 @@ Test document outline.
 
 from typing import List
 
-import playa
 import pytest
+
+import playa
 from playa.exceptions import PDFEncryptionError
 from playa.outline import Outline
 

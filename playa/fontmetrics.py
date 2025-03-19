@@ -26,7 +26,7 @@ The following data were extracted from the AFM files:
 
 ###  END Verbatim copy of the license part
 
-from typing import Dict, Tuple, Any
+from typing import Any, Dict, Tuple
 
 
 def convert_font_metrics(path: str) -> None:
