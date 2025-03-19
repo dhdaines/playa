@@ -87,10 +87,10 @@ from typing import Any, Deque, Dict, Iterable, Iterator, List, TextIO, Tuple, Un
 
 import playa
 from playa import Document, Page, PDFPasswordIncorrect, asobj
-from playa.data.metadata import asobj_document
 from playa.data.content import Image
-from playa.page import ContentObject, TextObject, ImageObject
-from playa.pdftypes import ContentStream, ObjRef, resolve1, LITERALS_DCT_DECODE
+from playa.data.metadata import asobj_document
+from playa.page import ContentObject, ImageObject, TextObject
+from playa.pdftypes import LITERALS_DCT_DECODE, ContentStream, ObjRef, resolve1
 from playa.structure import ContentItem
 from playa.structure import ContentObject as StructContentObject
 from playa.structure import Element

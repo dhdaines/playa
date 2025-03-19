@@ -6,7 +6,6 @@ import itertools
 import logging
 import re
 import textwrap
-import warnings
 from copy import copy
 from dataclasses import dataclass
 from typing import (
@@ -54,7 +53,6 @@ from playa.pdftypes import (
     resolve1,
     stream_value,
 )
-from playa.structtree import StructTree
 from playa.utils import (
     MATRIX_IDENTITY,
     Matrix,
@@ -263,34 +261,6 @@ class Page:
             )
 
     @property
-    def annots(self) -> Union[List[Dict], None]:
-        """
-        Danger: Deprecated
-            This interface is deprecated.  It will be removed or
-            modified in PLAYA 1.0.
-        """
-        warnings.warn(
-            "The `annots` property is deprecated and will be removed in PLAYA 1.0.  "
-            "Use `page.attrs['Annots']` instead.",
-            DeprecationWarning,
-        )
-        return self.attrs.get("Annots")
-
-    @property
-    def beads(self) -> Union[List[Dict], None]:
-        """
-        Danger: Deprecated
-            This interface is deprecated.  It will be removed or
-            modified in PLAYA 1.0.
-        """
-        warnings.warn(
-            "The `beads` property is deprecated and will be removed in PLAYA 1.0.  "
-            "Use `page.attrs['B']` instead.",
-            DeprecationWarning,
-        )
-        return self.attrs.get("B")
-
-    @property
     def doc(self) -> "Document":
         """Get associated document if it exists."""
         return _deref_document(self.docref)
@@ -369,22 +339,6 @@ class Page:
             except StopIteration:
                 return
             yield tok
-
-    @property
-    def structtree(self) -> StructTree:
-        """Return the subset of the structure tree for a page.
-
-        Danger: Deprecated
-            This interface is deprecated.  It will be removed or
-            modified in PLAYA 1.0.
-        """
-        warnings.warn(
-            "The `structtree` property is deprecated and will be removed in PLAYA 1.0."
-            "  Use `structure` instead. ",
-            DeprecationWarning,
-        )
-        doc = _deref_document(self.docref)
-        return StructTree(doc, (self,))
 
     def __repr__(self) -> str:
         return f"<Page: Resources={self.resources!r}, MediaBox={self.mediabox!r}>"

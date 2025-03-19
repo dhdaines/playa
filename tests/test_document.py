@@ -140,14 +140,6 @@ def test_names():
         assert names == ["382901691/01_UBL.xml", "382901691/02_EAN_UCC.xml"]
 
 
-@pytest.mark.filterwarnings("ignore::DeprecationWarning")
-@pytest.mark.skipif(not CONTRIB.exists(), reason="contrib samples not present")
-def test_dests():
-    with playa.open(CONTRIB / "issue620f.pdf") as doc:
-        names = [name for name, _ in doc.dests]
-        assert names == ["Page.1", "Page.2"]
-
-
 @pytest.mark.skipif(not CONTRIB.exists(), reason="contrib samples not present")
 def test_destinations():
     with playa.open(CONTRIB / "issue620f.pdf") as doc:
@@ -158,23 +150,6 @@ def test_destinations():
         assert names == ["Page.1", "Page.2"]
 
 
-@pytest.mark.filterwarnings("ignore::DeprecationWarning")
-@pytest.mark.skipif(not CONTRIB.exists(), reason="contrib samples not present")
-def test_outlines():
-    with playa.open(
-        CONTRIB / "2023-04-06-ODJ et Résolutions-séance xtra 6 avril 2023.pdf"
-    ) as doc:
-        titles = [o.title for o in doc.outlines]
-        assert titles == [
-            "2023-04-06-ODJ_xtra-6 avril 2023.pdf",
-            "1.1 - Réso - Adop ODJ-6 avril 2023",
-            "6.1 - Réso - Aut signature-PRACIM",
-            "11.1 - Réso - Adop du règlement 1330-1",
-            "15 - Résolution - Levée de la séance",
-        ]
-
-
-@pytest.mark.filterwarnings("ignore::DeprecationWarning")
 @pytest.mark.skipif(not CONTRIB.exists(), reason="contrib samples not present")
 def test_xobjects() -> None:
     with playa.open(CONTRIB / "basicapi.pdf") as doc:
