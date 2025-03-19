@@ -1089,6 +1089,7 @@ class GlyphObject(ContentObject):
             x1, y1 = (self.adv, tstate.descent + tstate.rise + tstate.fontsize)
         return (x0, y0, x1, y1)
 
+
 @dataclass
 class TextObject(ContentObject):
     """Text object (contains one or more glyphs).
@@ -1136,7 +1137,7 @@ class TextObject(ContentObject):
             wordspace = 0
         (x, y) = tstate.glyph_offset
         pos = y if vert else x
-        needcharspace = False
+        needcharspace = False  # Only for first glyph
         for obj in self.args:
             if isinstance(obj, (int, float)):
                 dxscale = 0.001 * tstate.fontsize * scaling
@@ -1146,10 +1147,9 @@ class TextObject(ContentObject):
                 for cid, text in font.decode(obj):
                     if needcharspace:
                         pos += charspace
-                    tstate.glyph_offset = (x, pos) if vert else (pos, y)
                     textwidth = font.char_width(cid)
                     adv = textwidth * tstate.fontsize * scaling
-                    x, y = tstate.glyph_offset
+                    x, y = tstate.glyph_offset = (x, pos) if vert else (pos, y)
                     glyph = GlyphObject(
                         _pageref=self._pageref,
                         gstate=self.gstate,
@@ -1174,15 +1174,62 @@ class TextObject(ContentObject):
     def text_space_bbox(self):
         if self._text_space_bbox is not None:
             return self._text_space_bbox
+        # No need to save tstate as we do not update it below
         tstate = self.textstate
-        self.textstate = copy(tstate)
-        # Calculate the bbox in text space
+        font = tstate.font
+        if font is None:
+            log.warning(
+                "No font is set, will not update text state or output text: %r TJ",
+                self.args,
+            )
+            self._text_space_bbox = BBOX_NONE
+            return self._text_space_bbox
+        scaling = tstate.scaling * 0.01
+        charspace = tstate.charspace * scaling
+        wordspace = tstate.wordspace * scaling
+        vert = font.vertical
+        if font.multibyte:
+            wordspace = 0
+        (x, y) = tstate.glyph_offset
+        pos = y if vert else x
+        needcharspace = False  # Only for first glyph
         points = []
-        for glyph in self:
-            x0, y0, x1, y1 = glyph.text_space_bbox
-            points.append((x0, y0))
-            points.append((x1, y1))
-        self.textstate = tstate
+        for obj in self.args:
+            if isinstance(obj, (int, float)):
+                dxscale = 0.001 * tstate.fontsize * scaling
+                pos -= obj * dxscale
+                needcharspace = True
+            else:
+                for cid, _ in font.decode(obj):
+                    if needcharspace:
+                        pos += charspace
+                    textwidth = font.char_width(cid)
+                    adv = textwidth * tstate.fontsize * scaling
+                    x, y = (x, pos) if vert else (pos, y)
+                    # FIXME: duplicate code from glyph, refactor...
+                    if vert:
+                        textdisp = font.char_disp(cid)
+                        assert isinstance(textdisp, tuple)
+                        (vx, vy) = textdisp
+                        if vx is None:
+                            vx = tstate.fontsize * 0.5
+                        else:
+                            vx = vx * tstate.fontsize * 0.001
+                        vy = (1000 - vy) * tstate.fontsize * 0.001
+                        points.append((x - vx, y + vy + tstate.rise + adv))
+                        points.append((x - vx + tstate.fontsize, y + vy + tstate.rise))
+                    else:
+                        points.append((x, y + tstate.descent + tstate.rise))
+                        points.append(
+                            (
+                                x + adv,
+                                y + tstate.descent + tstate.rise + tstate.fontsize,
+                            )
+                        )
+                    pos += adv
+                    if cid == 32 and wordspace:
+                        pos += wordspace
+                    needcharspace = True
         if not points:
             self._text_space_bbox = BBOX_NONE
         else:

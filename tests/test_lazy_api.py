@@ -101,6 +101,22 @@ def test_rotated_glyphs() -> None:
         assert "".join(chars) == "R18,00"
 
 
+def test_rotated_text_objects() -> None:
+    """Verify specializations of bbox for text."""
+    with playa.open(TESTDIR / "rotated.pdf") as pdf:
+        # Ensure that the text bbox is the same as the bounds of the
+        # glyph bboxes (this will also ensure no side effects)
+        for text in pdf.pages[0].texts:
+            bbox = text.bbox
+            points = []
+            for glyph in text:
+                x0, y0, x1, y1 = glyph.bbox
+                print(glyph.text, ":", glyph.bbox)
+                points.append((x0, y0))
+                points.append((x1, y1))
+            assert bbox == pytest.approx(get_bound(points))
+
+
 def test_rotated_bboxes() -> None:
     """Verify that rotated bboxes are correctly calculated."""
     points = ((0, 0), (0, 100), (100, 100), (100, 0))
