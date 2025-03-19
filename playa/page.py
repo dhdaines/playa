@@ -28,16 +28,14 @@ from typing import (
 )
 
 from playa.color import (
-    PREDEFINED_COLORSPACE,
-    LITERAL_RELATIVE_COLORIMETRIC,
     BASIC_BLACK,
+    LITERAL_RELATIVE_COLORIMETRIC,
+    PREDEFINED_COLORSPACE,
     Color,
     ColorSpace,
     get_colorspace,
 )
-from playa.exceptions import (
-    PDFSyntaxError,
-)
+from playa.exceptions import PDFSyntaxError
 from playa.font import Font
 
 # FIXME: PDFObject needs to go in pdftypes somehow
@@ -56,6 +54,7 @@ from playa.pdftypes import (
     resolve1,
     stream_value,
 )
+from playa.structtree import StructTree
 from playa.utils import (
     MATRIX_IDENTITY,
     Matrix,
@@ -68,8 +67,7 @@ from playa.utils import (
     mult_matrix,
     normalize_rect,
 )
-from playa.structtree import StructTree
-from playa.worker import _deref_document, _ref_document, _ref_page, _deref_page, PageRef
+from playa.worker import PageRef, _deref_document, _deref_page, _ref_document, _ref_page
 
 if TYPE_CHECKING:
     from playa.document import Document
@@ -246,12 +244,10 @@ class Page:
             except (TypeError, ValueError):
                 log.warning("Invalid Rect in annotation: %r", annot)
                 continue
-            contents = resolve1(annot.get("Contents"))
             yield Annotation(
                 _pageref=self.pageref,
                 subtype=literal_name(subtype),
                 rect=rect,
-                contents=contents,
                 props=annot,
             )
 
@@ -319,26 +315,17 @@ class Page:
     @property
     def paths(self) -> Iterator["PathObject"]:
         """Iterator over lazy path objects."""
-        return cast(
-            Iterator["PathObject"],
-            iter(LazyInterpreter(self, self._contents, filter_class=PathObject)),
-        )
+        return self.flatten(PathObject)
 
     @property
     def images(self) -> Iterator["ImageObject"]:
         """Iterator over lazy image objects."""
-        return cast(
-            Iterator["ImageObject"],
-            iter(LazyInterpreter(self, self._contents, filter_class=ImageObject)),
-        )
+        return self.flatten(ImageObject)
 
     @property
     def texts(self) -> Iterator["TextObject"]:
         """Iterator over lazy text objects."""
-        return cast(
-            Iterator["TextObject"],
-            iter(LazyInterpreter(self, self._contents, filter_class=TextObject)),
-        )
+        return self.flatten(TextObject)
 
     @property
     def xobjects(self) -> Iterator["XObjectObject"]:
@@ -510,7 +497,6 @@ class Annotation:
       subtype: Type of annotation.
       rect: Annotation rectangle (location on page) in *default user space*
       bbox: Annotation rectangle in *device space*
-      contents: Text contents.
       props: Annotation dictionary containing all other properties
              (PDF 1.7 sec. 12.5.2).
     """
@@ -518,13 +504,42 @@ class Annotation:
     _pageref: PageRef
     subtype: str
     rect: Rect
-    contents: Union[str, None]
     props: Dict[str, PDFObject]
 
     @property
     def page(self) -> Page:
         """Containing page for this annotation."""
         return _deref_page(self._pageref)
+
+    @property
+    def contents(self) -> Union[str, None]:
+        """Text contents of annotation."""
+        contents = resolve1(self.props.get("Contents"))
+        if contents is None:
+            return None
+        return decode_text(contents)
+
+    @property
+    def name(self) -> Union[str, None]:
+        """Annotation name, uniquely identifying this annotation."""
+        name = resolve1(self.props.get("NM"))
+        if name is None:
+            return None
+        return decode_text(name)
+
+    @property
+    def mtime(self) -> Union[str, None]:
+        """String describing date and time when annotation was most recently
+        modified.
+
+        The date *should* be in the format `D:YYYYMMDDHHmmSSOHH'mm`
+        but this is in no way required (and unlikely to be implemented
+        consistently, if history is any guide).
+        """
+        mtime = resolve1(self.props.get("M"))
+        if mtime is None:
+            return None
+        return decode_text(mtime)
 
 
 @dataclass
@@ -543,9 +558,7 @@ class TextState:
         not correspond to an actual line because PDF is a presentation
         format.
       glyph_offset: The offset of the current glyph with relation to
-        the line matrix (in user space).  To get this in device space
-        you may use `playa.utils.apply_matrix_norm` with
-        `TextObject.ctm`.
+        the line matrix, in text space units.
       font: The current font.
       fontsize: The current font size, **in text space units**.
         This is often just 1.0 as it relies on the text matrix (you
@@ -606,6 +619,9 @@ class DashPattern(NamedTuple):
             return f"{self.dash} {self.phase}"
 
 
+SOLID_LINE = DashPattern((), 0)
+
+
 @dataclass
 class GraphicState:
     """PDF Graphics state (PDF 1.7 section 8.4)
@@ -622,23 +638,19 @@ class GraphicState:
       scolor: Colour used for stroking operations
       scs: Colour space used for stroking operations
       ncolor: Colour used for non-stroking operations
-      scs: Colour space used for non-stroking operations
+      ncs: Colour space used for non-stroking operations
     """
 
-    linewidth: float = 0
+    linewidth: float = 1
     linecap: int = 0
     linejoin: int = 0
     miterlimit: float = 10
-    dash: DashPattern = DashPattern((), 0)
+    dash: DashPattern = SOLID_LINE
     intent: PSLiteral = LITERAL_RELATIVE_COLORIMETRIC
     flatness: float = 1
-    # stroking color
     scolor: Color = BASIC_BLACK
-    # stroking color space
     scs: ColorSpace = PREDEFINED_COLORSPACE["DeviceGray"]
-    # non stroking color
     ncolor: Color = BASIC_BLACK
-    # non stroking color space
     ncs: ColorSpace = PREDEFINED_COLORSPACE["DeviceGray"]
 
 
@@ -785,7 +797,7 @@ class TagObject(ContentObject):
         return 0
 
     @property
-    def mcs(self) -> Union[MarkedContent, None]:
+    def mcs(self) -> MarkedContent:
         """The marked content tag for this object."""
         return self._mcs
 

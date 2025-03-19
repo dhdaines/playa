@@ -20,8 +20,8 @@ from typing import (
 )
 
 from playa.data_structures import NumberTree
-from playa.parser import KEYWORD_NULL, PSLiteral, PDFObject
-from playa.pdftypes import ObjRef, resolve1, dict_value, list_value
+from playa.parser import KEYWORD_NULL, PDFObject, PSLiteral
+from playa.pdftypes import ObjRef, dict_value, list_value, resolve1
 from playa.utils import decode_text
 
 logger = logging.getLogger(__name__)

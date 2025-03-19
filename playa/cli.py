@@ -25,8 +25,12 @@ following keys (but will probably contain more in the future):
     - `objid`: the object number
     - `genno`: the generation number
     - `type`: the type of object this is
-    - `repr`: an arbitrary string representation of the object, **do not
-        depend too closely on the contents of this as it will change**
+    - `obj`: a best-effort JSON serialization of the object's
+      metadata.  In the case of simple objects like strings,
+      dictionaries, or lists, this is the object itself.  Object
+      references are converted to a string representation of the form
+      "<ObjRef:OBJID>", while content streams are reprented by their
+      properties dictionary.
 
 Bucking the trend of the last 20 years towards horribly slow
 Click-addled CLIs with deeply nested subcommands, anything else is
@@ -69,6 +73,7 @@ reading order, and so we can actually really extract the text from it
 
 import argparse
 import functools
+import getpass
 import itertools
 import json
 import logging
@@ -77,11 +82,15 @@ from pathlib import Path
 from typing import Any, Deque, Dict, Iterable, Iterator, List, TextIO, Tuple, Union
 
 import playa
-from playa import Document, Page
+from playa import Document, Page, PDFPasswordIncorrect, asobj
+from playa.data.metadata import asobj_document
+from playa.page import ContentObject, TextObject
 from playa.pdftypes import ContentStream, ObjRef, resolve1
-from playa.structure import Element, ContentObject as StructContentObject, ContentItem
+from playa.structure import ContentItem
+from playa.structure import ContentObject as StructContentObject
+from playa.structure import Element
 from playa.utils import decode_text
-from playa.worker import _deref_page, PageRef
+from playa.worker import PageRef, _deref_page
 
 LOG = logging.getLogger(__name__)
 
@@ -118,6 +127,11 @@ def make_argparse() -> argparse.ArgumentParser:
         help="Decode content streams into raw bytes",
     )
     parser.add_argument(
+        "--content-objects",
+        action="store_true",
+        help="Extract content objects as JSON",
+    )
+    parser.add_argument(
         "-x",
         "--text-objects",
         action="store_true",
@@ -133,6 +147,11 @@ def make_argparse() -> argparse.ArgumentParser:
         help="Extract logical structure tree as JSON",
     )
     parser.add_argument(
+        "--outline",
+        action="store_true",
+        help="Extract document outline as JSON",
+    )
+    parser.add_argument(
         "-o",
         "--outfile",
         help="File to write output (or - for standard output)",
@@ -145,6 +164,18 @@ def make_argparse() -> argparse.ArgumentParser:
         type=int,
         help="Maximum number of worker processes to use",
         default=1,
+    )
+    parser.add_argument(
+        "--password",
+        help="Password for an encrypted PDF.  If not supplied, "
+        "will be read from the console.",
+        type=str,
+        default="",
+    )
+    parser.add_argument(
+        "--non-interactive",
+        help="Do not attempt to read a password from the console.",
+        action="store_true",
     )
     parser.add_argument(
         "--debug",
@@ -199,43 +230,14 @@ def extract_catalog(doc: Document, args: argparse.Namespace) -> None:
         args.outfile,
         indent=2,
         ensure_ascii=False,
-        default=repr,
+        default=asobj,
     )
 
 
 def extract_metadata(doc: Document, args: argparse.Namespace) -> None:
     """Extract random metadata."""
-    stuff = {
-        "pdf_version": doc.pdf_version,
-        "is_printable": doc.is_printable,
-        "is_modifiable": doc.is_modifiable,
-        "is_extractable": doc.is_extractable,
-    }
-    pages = []
-    for page in doc.pages:
-        pages.append(
-            {
-                "objid": page.pageid,
-                "label": page.label,
-                "mediabox": page.mediabox,
-                "cropbox": page.cropbox,
-                "rotate": page.rotate,
-            }
-        )
-    stuff["pages"] = pages
-    objects = []
-    for obj in doc.objects:
-        # TODO: Add method to JSON serialize indirect objects
-        objects.append(
-            {
-                "objid": obj.objid,
-                "genno": obj.genno,
-                "type": type(obj.obj).__name__,
-                "repr": repr(obj.obj),
-            }
-        )
-    stuff["objects"] = objects
-    json.dump(stuff, args.outfile, indent=2, ensure_ascii=False, default=repr)
+    metadata = asobj_document(doc, exclude={"structure", "outline"})
+    json.dump(metadata, args.outfile, indent=2, ensure_ascii=False)
 
 
 def decode_page_spec(doc: Document, spec: str) -> Iterator[int]:
@@ -253,33 +255,9 @@ def decode_page_spec(doc: Document, spec: str) -> Iterator[int]:
 def get_text_json(page: Page) -> List[str]:
     objs = []
     for text in page.texts:
-        tstate = text.textstate
-        # Prune these objects somewhat (FIXME: need a method that will
-        # serialize only non-default values and run _asdict as needed)
-        textstate = {
-            "line_matrix": tstate.line_matrix,
-            "fontsize": tstate.fontsize,
-            "render_mode": tstate.render_mode,
-        }
-        if tstate.font is not None:
-            textstate["font"] = {
-                "fontname": tstate.font.fontname,
-                "vertical": tstate.font.vertical,
-            }
-        gstate = {
-            "scs": text.gstate.scs._asdict(),
-            "scolor": text.gstate.scolor._asdict(),
-            "ncs": text.gstate.ncs._asdict(),
-            "ncolor": text.gstate.ncolor._asdict(),
-        }
-        obj = {
-            "chars": text.chars,
-            "bbox": text.bbox,
-            "textstate": textstate,
-            "gstate": gstate,
-            "mcstack": [mcs._asdict() for mcs in text.mcstack],
-        }
-        objs.append(json.dumps(obj, indent=2, ensure_ascii=False, default=repr))
+        objs.append(
+            json.dumps(asobj(text), indent=2, ensure_ascii=False, default=asobj)
+        )
     return objs
 
 
@@ -289,6 +267,37 @@ def extract_text_objects(doc: Document, args: argparse.Namespace) -> None:
     print("[", file=args.outfile)
     last = None
     for obj in itertools.chain.from_iterable(doc.pages[pages].map(get_text_json)):
+        if last is not None:
+            print(last, ",", sep="", file=args.outfile)
+        last = obj
+    if last is not None:
+        print(last, file=args.outfile)
+    print("]", file=args.outfile)
+
+
+def flatten_harder(page) -> Iterator[ContentObject]:
+    for obj in page.flatten():
+        if isinstance(obj, TextObject):
+            yield from obj
+        else:
+            yield obj
+
+
+def get_content_json(page: Page) -> List[str]:
+    objs = []
+    for obj in flatten_harder(page):
+        objdict = asobj(obj)
+        objdict["object_type"] = obj.object_type
+        objs.append(json.dumps(objdict, indent=2, ensure_ascii=False, default=asobj))
+    return objs
+
+
+def extract_content_objects(doc: Document, args: argparse.Namespace) -> None:
+    """Extract content objects as JSON."""
+    pages = decode_page_spec(doc, args.pages)
+    print("[", file=args.outfile)
+    last = None
+    for obj in itertools.chain.from_iterable(doc.pages[pages].map(get_content_json)):
         if last is not None:
             print(last, ",", sep="", file=args.outfile)
         last = obj
@@ -353,7 +362,7 @@ def _extract_content_object(
     kid: StructContentObject, indent: int, outfh: TextIO
 ) -> bool:
     ws = " " * indent
-    text = json.dumps(kid.props, default=repr)
+    text = json.dumps(kid.props, default=asobj)
     print(f"{ws}{text}", end="", file=outfh)
     return True
 
@@ -425,9 +434,19 @@ def extract_structure(doc: Document, args: argparse.Namespace) -> None:
     print("]", file=args.outfile)
 
 
-def main() -> None:
+def extract_outline(doc: Document, args: argparse.Namespace) -> None:
+    """Extract logical outline as JSON."""
+    if doc.outline is None:
+        LOG.info("Document has no logical structure")
+        print("{}", file=args.outfile)
+        return
+    metadata = asobj(doc.outline)
+    json.dump(metadata, args.outfile, indent=2, ensure_ascii=False)
+
+
+def main(argv: Union[List[str], None] = None) -> None:
     parser = make_argparse()
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
     if args.version:
         print(playa.__version__)
         return
@@ -436,21 +455,42 @@ def main() -> None:
     logging.basicConfig(level=logging.DEBUG if args.debug else logging.WARNING)
     try:
         for path in args.pdfs:
-            with playa.open(path, space="default", max_workers=args.max_workers) as doc:
-                if args.stream is not None:  # it can't be zero either though
-                    extract_stream(doc, args)
-                elif args.content_streams:
-                    extract_page_contents(doc, args)
-                elif args.catalog:
-                    extract_catalog(doc, args)
-                elif args.text_objects:
-                    extract_text_objects(doc, args)
-                elif args.text:
-                    extract_text(doc, args)
-                elif args.structure:
-                    extract_structure(doc, args)
-                else:
-                    extract_metadata(doc, args)
+            try:
+                doc = playa.open(
+                    path,
+                    space="default",
+                    max_workers=args.max_workers,
+                    password=args.password,
+                )
+            except PDFPasswordIncorrect:
+                if args.non_interactive:
+                    raise
+                password = getpass.getpass(prompt=f"Password for {path}: ")
+                doc = playa.open(
+                    path,
+                    space="default",
+                    max_workers=args.max_workers,
+                    password=password,
+                )
+            if args.stream is not None:  # it can't be zero either though
+                extract_stream(doc, args)
+            elif args.content_streams:
+                extract_page_contents(doc, args)
+            elif args.catalog:
+                extract_catalog(doc, args)
+            elif args.content_objects:
+                extract_content_objects(doc, args)
+            elif args.text_objects:
+                extract_text_objects(doc, args)
+            elif args.text:
+                extract_text(doc, args)
+            elif args.structure:
+                extract_structure(doc, args)
+            elif args.outline:
+                extract_outline(doc, args)
+            else:
+                extract_metadata(doc, args)
+            doc.close()
     except RuntimeError as e:
         parser.error(f"Something went wrong:\n{e}")
 

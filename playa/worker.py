@@ -2,10 +2,10 @@
 
 import weakref
 from pathlib import Path
-from typing import Tuple, Union, TYPE_CHECKING
+from typing import TYPE_CHECKING, Tuple, Union
 
 if TYPE_CHECKING:
-    from playa.document import Document, DeviceSpace
+    from playa.document import DeviceSpace, Document
     from playa.page import Page
 
 # Type signature of document reference

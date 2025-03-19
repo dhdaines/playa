@@ -19,10 +19,10 @@ from playa.exceptions import (
 )
 from playa.parser import (
     KEYWORD_TRAILER,
+    LIT,
     IndirectObjectParser,
     ObjectParser,
     reverse_iter_lines,
-    LIT,
 )
 from playa.pdftypes import (
     ContentStream,
@@ -34,7 +34,6 @@ from playa.utils import (
     choplist,
     nunpack,
 )
-
 
 log = logging.getLogger(__name__)
 LITERAL_OBJSTM = LIT("ObjStm")
@@ -54,8 +53,10 @@ class XRef(Protocol):
 
     @property
     def trailer(self) -> Dict[str, Any]: ...
+
     @property
     def objids(self) -> Iterable[int]: ...
+
     def get_pos(self, objid: int) -> XRefPos: ...
 
 
@@ -152,8 +153,22 @@ class XRefFallback:
         assert doc is not None
         # Get all the objects
         for pos, obj in parser:
-            log.debug("Indirect object %d %d at %d", obj.objid, obj.genno, pos)
-            self.offsets[obj.objid] = XRefPos(None, pos, obj.genno)
+            log.debug(
+                "Indirect object %d %d at %d: %r", obj.objid, obj.genno, pos, obj.obj
+            )
+            prev_genno = -1
+            if obj.objid in self.offsets:
+                prev_genno = self.offsets[obj.objid].genno
+                if obj.genno == prev_genno:
+                    log.warning(
+                        "Duplicate object %d %d at %d: %r",
+                        obj.objid,
+                        obj.genno,
+                        pos,
+                        obj.obj,
+                    )
+            if obj.genno >= prev_genno:
+                self.offsets[obj.objid] = XRefPos(None, pos, obj.genno)
             # Expand any object streams right away
             if (
                 isinstance(obj.obj, ContentStream)
@@ -172,17 +187,9 @@ class XRefFallback:
                 for index in range(n):
                     objid1 = objs[index * 2]
                     self.offsets[objid1] = XRefPos(obj.objid, index, 0)
-        # Now get the trailer
-        itor = iter(parser.trailer)
-        s1 = next(itor)
-        for s2 in itor:
-            _, token = s1
-            if token is KEYWORD_TRAILER:
-                _, dic = s2
-                self.trailer.update(dict_value(dic))
-                return
-            s1 = s2
-        # If not, then try harder
+        # Now get the trailer.  Maybe there are multiple trailers.
+        # Because this is a salvage operation, we will simply
+        # agglomerate them...
         for pos, line in reverse_iter_lines(parser.buffer):
             line = line.strip()
             if line == b"trailer":
@@ -190,10 +197,10 @@ class XRefFallback:
                     ObjectParser(parser.buffer, doc, pos + len(b"trailer"))
                 )
                 if not isinstance(trailer, dict):
-                    break
+                    continue
                 self.trailer.update(trailer)
-                return
-        log.warning("b'trailer' not found in document or invalid")
+        if not self.trailer:
+            log.warning("b'trailer' not found in document or invalid")
 
     @property
     def objids(self) -> Iterable[int]:

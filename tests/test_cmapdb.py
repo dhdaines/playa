@@ -7,8 +7,9 @@ from pathlib import Path
 import pytest
 
 import playa
-from playa.cmapdb import parse_tounicode, parse_encoding
+from playa.cmapdb import parse_encoding, parse_tounicode
 from playa.font import Type1FontHeaderParser
+
 from .data import TESTDIR
 
 THISDIR = Path(__file__).parent

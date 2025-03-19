@@ -21,10 +21,10 @@ from playa.cmapdb import (
     CMap,
     CMapBase,
     CMapDB,
-    parse_tounicode,
-    parse_encoding,
-    UnicodeMap,
     ToUnicodeMap,
+    UnicodeMap,
+    parse_encoding,
+    parse_tounicode,
 )
 from playa.encodingdb import EncodingDB, name2unicode
 from playa.fontmetrics import FONT_METRICS
@@ -32,10 +32,10 @@ from playa.parser import (
     KWD,
     LIT,
     Lexer,
+    PDFObject,
     PSLiteral,
     Token,
     literal_name,
-    PDFObject,
 )
 from playa.pdftypes import (
     ContentStream,
@@ -53,8 +53,8 @@ from playa.utils import (
     Rect,
     apply_matrix_norm,
     choplist,
-    nunpack,
     decode_text,
+    nunpack,
 )
 
 log = logging.getLogger(__name__)
