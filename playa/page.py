@@ -1028,6 +1028,8 @@ class GlyphObject(ContentObject):
       matrix: rendering matrix for this glyph, which transforms text
               space (*not glyph space!*) coordinates to device space.
       bbox: glyph bounding box in device space.
+      text_space_bbox: glyph bounding box in text space (i.e. before
+                       any possible coordinate transformation)
       corners: Is the transformed bounding box rotated or skewed such
                that all four corners need to be calculated (derived
                from matrix but precomputed for speed)
@@ -1047,24 +1049,7 @@ class GlyphObject(ContentObject):
 
     @property
     def bbox(self) -> Rect:
-        tstate = self.textstate
-        font = tstate.font
-        assert font is not None
-        if font.vertical:
-            textdisp = font.char_disp(self.cid)
-            assert isinstance(textdisp, tuple)
-            (vx, vy) = textdisp
-            if vx is None:
-                vx = tstate.fontsize * 0.5
-            else:
-                vx = vx * tstate.fontsize * 0.001
-            vy = (1000 - vy) * tstate.fontsize * 0.001
-            x0, y0 = (-vx, vy + tstate.rise + self.adv)
-            x1, y1 = (-vx + tstate.fontsize, vy + tstate.rise)
-        else:
-            x0, y0 = (0, tstate.descent + tstate.rise)
-            x1, y1 = (self.adv, tstate.descent + tstate.rise + tstate.fontsize)
-
+        x0, y0, x1, y1 = self.text_space_bbox
         if self.corners:
             return get_bound(
                 (
@@ -1083,6 +1068,26 @@ class GlyphObject(ContentObject):
                 y0, y1 = y1, y0
             return (x0, y0, x1, y1)
 
+    @property
+    def text_space_bbox(self):
+        tstate = self.textstate
+        font = tstate.font
+        assert font is not None
+        if font.vertical:
+            textdisp = font.char_disp(self.cid)
+            assert isinstance(textdisp, tuple)
+            (vx, vy) = textdisp
+            if vx is None:
+                vx = tstate.fontsize * 0.5
+            else:
+                vx = vx * tstate.fontsize * 0.001
+            vy = (1000 - vy) * tstate.fontsize * 0.001
+            x0, y0 = (-vx, vy + tstate.rise + self.adv)
+            x1, y1 = (-vx + tstate.fontsize, vy + tstate.rise)
+        else:
+            x0, y0 = (0, tstate.descent + tstate.rise)
+            x1, y1 = (self.adv, tstate.descent + tstate.rise + tstate.fontsize)
+        return (x0, y0, x1, y1)
 
 @dataclass
 class TextObject(ContentObject):
@@ -1093,11 +1098,16 @@ class TextObject(ContentObject):
         object and you should not expect it to be valid outside the
         context of iteration over the parent `TextObject`.
       args: Strings or position adjustments
+      bbox: Text bounding box in device space.
+      text_space_bbox: Text bounding box in text space (i.e. before
+                       any possible coordinate transformation)
     """
 
     textstate: TextState
     args: List[Union[bytes, float]]
     _chars: Union[List[str], None] = None
+    _bbox: Union[Rect, None] = None
+    _text_space_bbox: Union[Rect, None] = None
 
     def __iter__(self) -> Iterator[GlyphObject]:
         """Generate glyphs for this text object"""
@@ -1159,6 +1169,37 @@ class TextObject(ContentObject):
                         pos += wordspace
                     needcharspace = True
         tstate.glyph_offset = (x, pos) if vert else (pos, y)
+
+    @property
+    def text_space_bbox(self):
+        if self._text_space_bbox is not None:
+            return self._text_space_bbox
+        tstate = self.textstate
+        self.textstate = copy(tstate)
+        # Calculate the bbox in text space
+        points = []
+        for glyph in self:
+            x0, y0, x1, y1 = glyph.text_space_bbox
+            points.append((x0, y0))
+            points.append((x1, y1))
+        self.textstate = tstate
+        if not points:
+            self._text_space_bbox = BBOX_NONE
+        else:
+            self._text_space_bbox = get_bound(points)
+        return self._text_space_bbox
+
+    @property
+    def bbox(self) -> Rect:
+        # We specialize this to avoid it having side effects on the
+        # text state (already it's a bit of a footgun that __iter__
+        # does that...), but also because we know all glyphs have the
+        # same text matrix and thus we can avoid a lot of multiply
+        if self._bbox is not None:
+            return self._bbox
+        matrix = mult_matrix(self.textstate.line_matrix, self.ctm)
+        self._bbox = get_transformed_bound(matrix, self.text_space_bbox)
+        return self._bbox
 
     @property
     def chars(self) -> str:
