@@ -22,8 +22,12 @@ PDFJS = TESTDIR / "3rdparty" / "pdf.js" / "test"
 try:
     with open(PDFJS / "test_manifest.json", encoding="utf-8") as infh:
         manifest = json.load(infh)
+    seen = set()
     for entry in manifest:
         path = PDFJS / entry["file"]
+        if entry["file"] in seen:
+            continue
+        seen.add(entry["file"])
         if path.exists():
             ALLPDFS.append(path)
 except FileNotFoundError:
