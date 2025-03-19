@@ -5,6 +5,7 @@ PLAYA objects.
 
 """
 
+import logging
 from typing import Any, Dict, List, Set, Tuple, Union
 
 try:
@@ -24,8 +25,10 @@ from playa.page import Annotation as _Annotation
 from playa.page import Page as _Page
 from playa.parser import IndirectObject as _IndirectObject
 from playa.pdftypes import ContentStream as _ContentStream
-from playa.pdftypes import resolve1
+from playa.pdftypes import resolve1, stream_value
 from playa.utils import Matrix, Rect
+
+log = logging.getLogger(__name__)
 
 
 class Document(TypedDict, total=False):
@@ -315,8 +318,14 @@ class Resources(TypedDict, total=False):
     """property dictionaires."""
 
 
-def xobject_from_stream(obj: _ContentStream) -> XObject:
+def xobject_from_stream(
+    obj: _ContentStream, seen: Union[Set[int], None] = None
+) -> XObject:
+    if seen is None:
+        seen = set()
     stream = stream_metadata(obj)
+    if stream["stream_id"] in seen:
+        raise ValueError("Circular reference to Indirect Object %d" % stream["stream_id"])
     xobj = XObject(
         xobject_id=stream["stream_id"],
         genno=stream["genno"],
@@ -342,7 +351,11 @@ RESOURCE_DICTS = {
 }
 
 
-def resources_from_dict(resources: Dict[str, Any]) -> Resources:
+def resources_from_dict(
+    resources: Dict[str, Any], seen: Union[Set[int], None] = None
+) -> Resources:
+    if seen is None:
+        seen = set()
     res = Resources()
     for attr in "ext_gstates", "color_spaces", "patterns", "shadings", "properties":
         key = RESOURCE_DICTS[attr]
@@ -351,15 +364,30 @@ def resources_from_dict(resources: Dict[str, Any]) -> Resources:
             res[attr] = {k: asobj(resolve1(v)) for k, v in d.items()}
     d = resolve1(resources.get("XObject"))
     if d and isinstance(d, dict):
-        res["xobjects"] = {k: xobject_from_stream(resolve1(v)) for k, v in d.items()}
+        xobjects = {}
+        for k, v in d.items():
+            try:
+                stream = stream_value(v)
+                if stream.objid in seen:
+                    raise ValueError("Circular reference in XObject: %s => %r" % (k, v,))
+                seen.add(stream.objid)
+                xobjects[k] = xobject_from_stream(stream, seen)
+            except Exception as e:
+                log.warning("Failed to get XObject %s: %s", k, e)
+        if xobjects:
+            res["xobjects"] = xobjects
     p = resolve1(resources.get("ProcSet"))
     if p and isinstance(p, list):
         res["procsets"] = asobj(p)
     d = resolve1(resources.get("Font"))
     if d and isinstance(d, dict):
-        res["fonts"] = {
-            k: font_from_spec(resolve1(v)) for k, v in d.items() if v is not None
-        }
+        fonts = {}
+        for k, v in d.items():
+            spec = resolve1(v)
+            if spec is not None:
+                fonts[k] = font_from_spec(spec)
+        if fonts:
+            res["fonts"] = fonts
     return res
 
 
@@ -380,18 +408,26 @@ def stream_metadata(obj: _ContentStream) -> StreamObject:
 
 
 @asobj.register
-def asobj_page(page: _Page) -> Page:
-    return Page(
-        page_idx=page.page_idx,
-        page_label=page.label,
-        page_id=page.pageid,
-        mediabox=page.mediabox,
-        cropbox=page.cropbox,
-        rotate=page.rotate,
-        resources=resources_from_dict(page.resources),
-        annotations=[asobj(annot) for annot in page.annotations],
-        contents=[stream_metadata(stream) for stream in page.streams],
+def asobj_page(obj: _Page) -> Page:
+    page = Page(
+        page_idx=obj.page_idx,
+        page_label=obj.label,
+        page_id=obj.pageid,
+        mediabox=obj.mediabox,
+        cropbox=obj.cropbox,
+        rotate=obj.rotate,
+        resources=resources_from_dict(obj.resources),
+        annotations=[asobj(annot) for annot in obj.annotations],
     )
+    contents = []
+    for stream in obj.streams:
+        try:
+            contents.append(stream_metadata(stream))
+        except Exception as e:
+            log.warning("Failed to get stream metadata from %r: %s", stream, e)
+    if contents:
+        page["contents"] = contents
+    return page
 
 
 @asobj.register

@@ -299,7 +299,10 @@ class Page:
     def streams(self) -> Iterator[ContentStream]:
         """Return resolved content streams."""
         for obj in self._contents:
-            yield stream_value(obj)
+            try:
+                yield stream_value(obj)
+            except TypeError:
+                log.warning("Found non-stream in contents: %r", obj)
 
     @property
     def width(self) -> float:
