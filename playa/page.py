@@ -6,7 +6,6 @@ import itertools
 import logging
 import re
 import textwrap
-import warnings
 from copy import copy
 from dataclasses import dataclass
 from typing import (
@@ -54,7 +53,6 @@ from playa.pdftypes import (
     resolve1,
     stream_value,
 )
-from playa.structtree import StructTree
 from playa.utils import (
     MATRIX_IDENTITY,
     Matrix,

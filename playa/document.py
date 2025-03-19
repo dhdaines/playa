@@ -7,7 +7,6 @@ import itertools
 import logging
 import mmap
 import re
-import warnings
 from concurrent.futures import Executor
 from typing import (
     Any,
@@ -18,7 +17,6 @@ from typing import (
     Iterator,
     List,
     Mapping,
-    NamedTuple,
     Optional,
     Set,
     Tuple,
@@ -64,7 +62,6 @@ from playa.pdftypes import (
     stream_value,
 )
 from playa.security import SECURITY_HANDLERS
-from playa.structtree import StructTree
 from playa.structure import Tree
 from playa.utils import (
     decode_text,
