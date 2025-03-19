@@ -126,6 +126,11 @@ def make_argparse() -> argparse.ArgumentParser:
         help="Decode content streams into raw bytes",
     )
     parser.add_argument(
+        "--content-objects",
+        action="store_true",
+        help="Extract content objects as JSON",
+    )
+    parser.add_argument(
         "-x",
         "--text-objects",
         action="store_true",
@@ -261,6 +266,29 @@ def extract_text_objects(doc: Document, args: argparse.Namespace) -> None:
     print("[", file=args.outfile)
     last = None
     for obj in itertools.chain.from_iterable(doc.pages[pages].map(get_text_json)):
+        if last is not None:
+            print(last, ",", sep="", file=args.outfile)
+        last = obj
+    if last is not None:
+        print(last, file=args.outfile)
+    print("]", file=args.outfile)
+
+
+def get_content_json(page: Page) -> List[str]:
+    objs = []
+    for obj in page:
+        objs.append(
+            json.dumps(asobj(obj), indent=2, ensure_ascii=False, default=asobj)
+        )
+    return objs
+
+
+def extract_content_objects(doc: Document, args: argparse.Namespace) -> None:
+    """Extract content objects as JSON."""
+    pages = decode_page_spec(doc, args.pages)
+    print("[", file=args.outfile)
+    last = None
+    for obj in itertools.chain.from_iterable(doc.pages[pages].map(get_content_json)):
         if last is not None:
             print(last, ",", sep="", file=args.outfile)
         last = obj
@@ -441,6 +469,8 @@ def main(argv: Union[List[str], None] = None) -> None:
                 extract_page_contents(doc, args)
             elif args.catalog:
                 extract_catalog(doc, args)
+            elif args.content_objects:
+                extract_content_objects(doc, args)
             elif args.text_objects:
                 extract_text_objects(doc, args)
             elif args.text:
