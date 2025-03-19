@@ -1121,6 +1121,7 @@ class TextObject(ContentObject):
                 "No font is set, will not update text state or output text: %r TJ",
                 self.args,
             )
+            self._next_tstate = tstate
             return
         assert self.ctm is not None
         # Extract all the elements so we can translate efficiently
@@ -1184,9 +1185,11 @@ class TextObject(ContentObject):
                 self.args,
             )
             self._text_space_bbox = BBOX_NONE
+            self._next_tstate = tstate
             return self._text_space_bbox
         if len(self.args) == 0:
             self._text_space_bbox = BBOX_NONE
+            self._next_tstate = tstate
             return self._text_space_bbox
         scaling = tstate.scaling * 0.01
         charspace = tstate.charspace * scaling
