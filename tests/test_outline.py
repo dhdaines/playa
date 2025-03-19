@@ -34,7 +34,7 @@ def test_outline():
 
 
 def expand(outline: Outline) -> List:
-    def expand_one(child, level = 1):
+    def expand_one(child, level=1):
         out = [child.title, child.destination, child.element]
         # Limit depth to avoid taking all memory
         if level == 3:

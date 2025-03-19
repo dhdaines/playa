@@ -324,8 +324,7 @@ def xobject_from_stream(
     if seen is None:
         seen = set()
     stream = stream_metadata(obj)
-    if stream["stream_id"] in seen:
-        raise ValueError("Circular reference to Indirect Object %d" % stream["stream_id"])
+    seen.add(stream["stream_id"])
     xobj = XObject(
         xobject_id=stream["stream_id"],
         genno=stream["genno"],
@@ -338,7 +337,7 @@ def xobject_from_stream(
         xobj["params"] = stream["params"]
     resources = resolve1(obj.attrs.get("Resources"))
     if resources:
-        xobj["resources"] = resources_from_dict(resources)
+        xobj["resources"] = resources_from_dict(resources, seen)
     return xobj
 
 
@@ -368,8 +367,10 @@ def resources_from_dict(
         for k, v in d.items():
             try:
                 stream = stream_value(v)
+                # Use a reference if we've already seen it
                 if stream.objid in seen:
-                    raise ValueError("Circular reference in XObject: %s => %r" % (k, v,))
+                    xobjects[k] = asobj(v)
+                    continue
                 if stream.objid is not None:
                     seen.add(stream.objid)
                 xobjects[k] = xobject_from_stream(stream, seen)
