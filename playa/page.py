@@ -1184,6 +1184,9 @@ class TextObject(ContentObject):
             )
             self._text_space_bbox = BBOX_NONE
             return self._text_space_bbox
+        if len(self.args) == 0:
+            self._text_space_bbox = BBOX_NONE
+            return self._text_space_bbox
         scaling = tstate.scaling * 0.01
         charspace = tstate.charspace * scaling
         wordspace = tstate.wordspace * scaling
@@ -1193,7 +1196,14 @@ class TextObject(ContentObject):
         (x, y) = tstate.glyph_offset
         pos = y if vert else x
         needcharspace = False  # Only for first glyph
-        points = []
+        if vert:
+            x0 = x1 = x
+            y0 = y1 = y
+        else:
+            # These do not change!
+            x0 = x
+            y0 = y + tstate.descent + tstate.rise
+            y1 = y0 + tstate.fontsize
         for obj in self.args:
             if isinstance(obj, (int, float)):
                 dxscale = 0.001 * tstate.fontsize * scaling
@@ -1206,7 +1216,6 @@ class TextObject(ContentObject):
                     textwidth = font.char_width(cid)
                     adv = textwidth * tstate.fontsize * scaling
                     x, y = (x, pos) if vert else (pos, y)
-                    # FIXME: duplicate code from glyph, refactor...
                     if vert:
                         textdisp = font.char_disp(cid)
                         assert isinstance(textdisp, tuple)
@@ -1216,24 +1225,17 @@ class TextObject(ContentObject):
                         else:
                             vx = vx * tstate.fontsize * 0.001
                         vy = (1000 - vy) * tstate.fontsize * 0.001
-                        points.append((x - vx, y + vy + tstate.rise + adv))
-                        points.append((x - vx + tstate.fontsize, y + vy + tstate.rise))
+                        x0 = min(x0, x - vx)
+                        y0 = min(y0, y + vy + tstate.rise + adv)
+                        x1 = max(x1, x - vx + tstate.fontsize)
+                        y1 = max(y1, y + vy + tstate.rise)
                     else:
-                        points.append((x, y + tstate.descent + tstate.rise))
-                        points.append(
-                            (
-                                x + adv,
-                                y + tstate.descent + tstate.rise + tstate.fontsize,
-                            )
-                        )
+                        x1 = x + adv
                     pos += adv
                     if cid == 32 and wordspace:
                         pos += wordspace
                     needcharspace = True
-        if not points:
-            self._text_space_bbox = BBOX_NONE
-        else:
-            self._text_space_bbox = get_bound(points)
+        self._text_space_bbox = (x0, y0, x1, y1)
         return self._text_space_bbox
 
     @property
