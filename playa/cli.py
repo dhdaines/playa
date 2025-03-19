@@ -69,6 +69,10 @@ reading order, and so we can actually really extract the text from it
 
     playa --text tagged-foo.pdf
 
+And finally yes you can also extract images (not necessarily useful
+since they are frequently tiled and/or composited):
+
+    playa --images foo.pdf --imgdir outdir
 """
 
 import argparse
@@ -84,8 +88,9 @@ from typing import Any, Deque, Dict, Iterable, Iterator, List, TextIO, Tuple, Un
 import playa
 from playa import Document, Page, PDFPasswordIncorrect, asobj
 from playa.data.metadata import asobj_document
-from playa.page import ContentObject, TextObject
-from playa.pdftypes import ContentStream, ObjRef, resolve1
+from playa.data.content import Image
+from playa.page import ContentObject, TextObject, ImageObject
+from playa.pdftypes import ContentStream, ObjRef, resolve1, LITERALS_DCT_DECODE
 from playa.structure import ContentItem
 from playa.structure import ContentObject as StructContentObject
 from playa.structure import Element
@@ -150,6 +155,16 @@ def make_argparse() -> argparse.ArgumentParser:
         "--outline",
         action="store_true",
         help="Extract document outline as JSON",
+    )
+    parser.add_argument(
+        "--images",
+        action="store_true",
+        help="Extract images as... whatever",
+    )
+    parser.add_argument(
+        "--imgdir",
+        type=Path,
+        help="Extract image files here (default is not to extract).",
     )
     parser.add_argument(
         "-o",
@@ -268,7 +283,7 @@ def extract_text_objects(doc: Document, args: argparse.Namespace) -> None:
     last = None
     for obj in itertools.chain.from_iterable(doc.pages[pages].map(get_text_json)):
         if last is not None:
-            print(last, ",", sep="", file=args.outfile)
+            print(last, end=",\n", sep="", file=args.outfile)
         last = obj
     if last is not None:
         print(last, file=args.outfile)
@@ -299,7 +314,7 @@ def extract_content_objects(doc: Document, args: argparse.Namespace) -> None:
     last = None
     for obj in itertools.chain.from_iterable(doc.pages[pages].map(get_content_json)):
         if last is not None:
-            print(last, ",", sep="", file=args.outfile)
+            print(last, end=",\n", sep="", file=args.outfile)
         last = obj
     if last is not None:
         print(last, file=args.outfile)
@@ -444,6 +459,50 @@ def extract_outline(doc: Document, args: argparse.Namespace) -> None:
     json.dump(metadata, args.outfile, indent=2, ensure_ascii=False)
 
 
+def get_images(page: Page, imgdir: Path) -> List[Tuple[Path, Image]]:
+    images = []
+    for idx, img in enumerate(page.flatten(ImageObject)):
+        if img.xobjid is None:
+            text_bbox = ",".join(str(round(x)) for x in img.bbox)
+            imgname = f"page{page.page_idx}-{idx}-inline-{text_bbox}"
+        else:
+            imgname = f"page{page.page_idx}-{idx}-{img.xobjid}"
+        imgpath = imgdir / imgname
+        # FIXME: only really support plain JPEG for now...
+        fp = img.stream.get_filters()
+        filters, params = zip(*fp)
+        for f in filters:
+            if f in LITERALS_DCT_DECODE:
+                imgpath = imgpath.with_suffix(".jpg")
+        if imgpath.suffix == "":
+            imgpath = imgpath.with_suffix(".dat")
+        with open(imgpath, "wb") as outfh:
+            outfh.write(img.stream.buffer)
+        images.append((imgpath, asobj(img)))
+    return images
+
+
+def extract_images(doc: Document, args: argparse.Namespace) -> None:
+    """Extract images."""
+    pages = decode_page_spec(doc, args.pages)
+    print("[", file=args.outfile, end="")
+    if args.imgdir is not None:
+        args.imgdir.mkdir(exist_ok=True, parents=True)
+    last = None
+    for page, images in enumerate(
+        doc.pages[pages].map(functools.partial(get_images, imgdir=args.imgdir))
+    ):
+        for path, image in images:
+            if last is not None:
+                print(last, end=",\n", sep="", file=args.outfile)
+            image["page_idx"] = page
+            image["path"] = str(path)
+            last = json.dumps(image, indent=2, ensure_ascii=False)
+    if last is not None:
+        print(last, file=args.outfile)
+    print("]", file=args.outfile)
+
+
 def main(argv: Union[List[str], None] = None) -> None:
     parser = make_argparse()
     args = parser.parse_args(argv)
@@ -488,6 +547,8 @@ def main(argv: Union[List[str], None] = None) -> None:
                 extract_structure(doc, args)
             elif args.outline:
                 extract_outline(doc, args)
+            elif args.images:
+                extract_images(doc, args)
             else:
                 extract_metadata(doc, args)
             doc.close()

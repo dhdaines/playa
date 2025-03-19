@@ -17,7 +17,7 @@ except ImportError:
 from playa.color import Color as _Color
 from playa.color import ColorSpace as _ColorSpace
 from playa.data.asobj import asobj
-from playa.data.metadata import Font, StreamObject, stream_metadata
+from playa.data.metadata import Font
 from playa.page import DashPattern as _DashPattern
 from playa.page import GlyphObject as _GlyphObject
 from playa.page import GraphicState as _GraphicState
@@ -153,8 +153,8 @@ class Image(TypedDict, total=False):
     """Number of bits per component, if required (default 1)."""
     imagemask: bool
     """True if the image is a mask."""
-    stream: StreamObject
-    """Content stream with image data."""
+    stream: dict
+    """Content stream dictionary."""
     colorspace: Union[ColorSpace, None]
     """Colour space for this image, if required."""
 
@@ -312,7 +312,7 @@ def asobj_tag(obj: _TagObject) -> Tag:
 
 @asobj.register
 def asobj_image(obj: _ImageObject) -> Image:
-    img = Image(srcsize=obj.srcsize, bbox=obj.bbox, stream=stream_metadata(obj.stream))
+    img = Image(srcsize=obj.srcsize, bbox=obj.bbox, stream=asobj(obj.stream))
     if obj.xobjid is not None:
         img["xobject_name"] = obj.xobjid
     if obj.bits != 1:
