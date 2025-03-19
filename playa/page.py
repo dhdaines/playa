@@ -628,6 +628,9 @@ class DashPattern(NamedTuple):
             return f"{self.dash} {self.phase}"
 
 
+SOLID_LINE = DashPattern((), 0)
+
+
 @dataclass
 class GraphicState:
     """PDF Graphics state (PDF 1.7 section 8.4)
@@ -644,23 +647,19 @@ class GraphicState:
       scolor: Colour used for stroking operations
       scs: Colour space used for stroking operations
       ncolor: Colour used for non-stroking operations
-      scs: Colour space used for non-stroking operations
+      ncs: Colour space used for non-stroking operations
     """
 
-    linewidth: float = 0
+    linewidth: float = 1
     linecap: int = 0
     linejoin: int = 0
     miterlimit: float = 10
-    dash: DashPattern = DashPattern((), 0)
+    dash: DashPattern = SOLID_LINE
     intent: PSLiteral = LITERAL_RELATIVE_COLORIMETRIC
     flatness: float = 1
-    # stroking color
     scolor: Color = BASIC_BLACK
-    # stroking color space
     scs: ColorSpace = PREDEFINED_COLORSPACE["DeviceGray"]
-    # non stroking color
     ncolor: Color = BASIC_BLACK
-    # non stroking color space
     ncs: ColorSpace = PREDEFINED_COLORSPACE["DeviceGray"]
 
 
