@@ -14,20 +14,23 @@ try:
 except ImportError:
     from typing import TypedDict
 
-from playa.color import (
-    Color as _Color,
-    ColorSpace as _ColorSpace,
-)
+from playa.color import Color as _Color
+from playa.color import ColorSpace as _ColorSpace
 from playa.data.asobj import asobj
 from playa.data.metadata import Font
-from playa.page import GraphicState as _GraphicState, DashPattern as _DashPattern
+from playa.page import DashPattern as _DashPattern
+from playa.page import GraphicState as _GraphicState
 from playa.page import (
     MarkedContent,
 )
+from playa.page import ImageObject as _ImageObject
+from playa.page import PathObject as _PathObject
+from playa.page import GlyphObject as _GlyphObject
+from playa.page import TagObject as _TagObject
 from playa.page import TextObject as _TextObject
 from playa.page import TextState as _TextState
+from playa.pdftypes import resolve_all
 from playa.utils import MATRIX_IDENTITY, Matrix, Point, Rect
-from playa.pdftypes import resolve1
 
 
 class Text(TypedDict, total=False):
@@ -125,14 +128,24 @@ class ColorSpace(TypedDict, total=False):
 
 
 class Tag(TypedDict, total=False):
-    """Marked content section."""
-
     name: str
     """Tag name."""
     mcid: int
     """Marked content section ID."""
     props: dict
     """Marked content property dictionary (without MCID)."""
+
+
+class Image(TypedDict, total=False):
+    pass
+
+
+class Path(TypedDict, total=False):
+    pass
+
+
+class Glyph(TypedDict, total=False):
+    pass
 
 
 @asobj.register
@@ -164,7 +177,7 @@ def asobj_color(obj: _Color) -> Color:
 def asobj_colorspace(obj: _ColorSpace) -> ColorSpace:
     cs = ColorSpace(name=obj.name, ncomponents=obj.ncomponents)
     if obj.spec:
-        cs["spec"] = asobj([resolve1(x) for x in obj.spec])
+        cs["spec"] = asobj(resolve_all(obj.spec))
     return cs
 
 
@@ -224,3 +237,23 @@ def asobj_text(obj: _TextObject) -> Text:
     if obj.ctm is not MATRIX_IDENTITY:
         text["ctm"] = obj.ctm
     return text
+
+
+@asobj.register
+def asobj_tag(obj: _TagObject) -> Tag:
+    return asobj(obj.mcs)
+
+
+@asobj.register
+def asobj_image(obj: _ImageObject) -> Image:
+    return Image()
+
+
+@asobj.register
+def asobj_path(obj: _PathObject) -> Path:
+    return Path()
+
+
+@asobj.register
+def asobj_glyph(obj: _GlyphObject) -> Glyph:
+    return Glyph()
