@@ -1,7 +1,6 @@
-## PLAYA 0.4.0: 2025-03-18
+## PLAYA 0.4.0: 2025-03-19
 
 - Cover (nearly) the entire pdf.js testsuite including downloads
-- Decrypt objects correctly in document.objects
 - Refactor CLI output into structured metadata/content API
 - Provide preliminary JSON schemas for metadata and content
 - Remove deprecated APIs
