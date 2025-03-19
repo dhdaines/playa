@@ -84,6 +84,7 @@ from typing import Any, Deque, Dict, Iterable, Iterator, List, TextIO, Tuple, Un
 import playa
 from playa import Document, Page, PDFPasswordIncorrect, asobj
 from playa.data.metadata import asobj_document
+from playa.page import ContentObject, TextObject
 from playa.pdftypes import ContentStream, ObjRef, resolve1
 from playa.structure import ContentItem
 from playa.structure import ContentObject as StructContentObject
@@ -274,12 +275,20 @@ def extract_text_objects(doc: Document, args: argparse.Namespace) -> None:
     print("]", file=args.outfile)
 
 
+def flatten_harder(page) -> Iterator[ContentObject]:
+    for obj in page.flatten():
+        if isinstance(obj, TextObject):
+            yield from obj
+        else:
+            yield obj
+
+
 def get_content_json(page: Page) -> List[str]:
     objs = []
-    for obj in page:
-        objs.append(
-            json.dumps(asobj(obj), indent=2, ensure_ascii=False, default=asobj)
-        )
+    for obj in flatten_harder(page):
+        objdict = asobj(obj)
+        objdict["object_type"] = obj.object_type
+        objs.append(json.dumps(objdict, indent=2, ensure_ascii=False, default=asobj))
     return objs
 
 

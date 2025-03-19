@@ -17,15 +17,14 @@ except ImportError:
 from playa.color import Color as _Color
 from playa.color import ColorSpace as _ColorSpace
 from playa.data.asobj import asobj
-from playa.data.metadata import Font
+from playa.data.metadata import Font, StreamObject, stream_metadata
 from playa.page import DashPattern as _DashPattern
-from playa.page import GraphicState as _GraphicState
-from playa.page import (
-    MarkedContent,
-)
-from playa.page import ImageObject as _ImageObject
-from playa.page import PathObject as _PathObject
 from playa.page import GlyphObject as _GlyphObject
+from playa.page import GraphicState as _GraphicState
+from playa.page import ImageObject as _ImageObject
+from playa.page import MarkedContent as _MarkedContent
+from playa.page import PathObject as _PathObject
+from playa.page import PathSegment as _PathSegment
 from playa.page import TagObject as _TagObject
 from playa.page import TextObject as _TextObject
 from playa.page import TextState as _TextState
@@ -34,12 +33,10 @@ from playa.utils import MATRIX_IDENTITY, Matrix, Point, Rect
 
 
 class Text(TypedDict, total=False):
-    """Text object on a page."""
-
     chars: str
     """Unicode string representation of text."""
     bbox: Rect
-    """Bounding rectangle for all glyphs in text."""
+    """Bounding rectangle for all glyphs in text in default user space."""
     ctm: Matrix
     """Coordinate transformation matrix, default if not present is the
     identity matrix `[1 0 0 1 0 0]`."""
@@ -127,6 +124,15 @@ class ColorSpace(TypedDict, total=False):
     """Specification."""
 
 
+class MarkedContent(TypedDict, total=False):
+    name: str
+    """Marked content section tag name."""
+    mcid: int
+    """Marked content section ID."""
+    props: dict
+    """Marked content property dictionary (without MCID)."""
+
+
 class Tag(TypedDict, total=False):
     name: str
     """Tag name."""
@@ -137,15 +143,63 @@ class Tag(TypedDict, total=False):
 
 
 class Image(TypedDict, total=False):
-    pass
+    xobject_name: str
+    """Name of XObject in page resources, if any."""
+    bbox: Rect
+    """Bounding rectangle for image in default user space."""
+    srcsize: Tuple[int, int]
+    """Size of source image in pixels."""
+    bits: int
+    """Number of bits per component, if required (default 1)."""
+    imagemask: bool
+    """True if the image is a mask."""
+    stream: StreamObject
+    """Content stream with image data."""
+    colorspace: Union[ColorSpace, None]
+    """Colour space for this image, if required."""
 
 
 class Path(TypedDict, total=False):
-    pass
+    stroke: bool
+    """True if the outline of the path is stroked."""
+    fill: bool
+    """True if the path is filled."""
+    evenodd: bool
+    """True if the filling of complex paths uses the even-odd
+    winding rule, False if the non-zero winding number rule is
+    used (PDF 1.7 section 8.5.3.3)"""
+    components: List[List["PathSegment"]]
+    """Subpaths, each of which consists of a list of segments."""
+    gstate: "GraphicState"
+    """Graphic state."""
+    mcstack: List["Tag"]
+    """Stack of enclosing marked content sections."""
+
+
+class PathSegment(TypedDict, total=False):
+    operator: str
+    """Normalized path operator (PDF 1.7 section 8.5.2).  Note that "re"
+    will be expanded into its constituent line segments."""
+    points: List[Point]
+    """Point or control points in default user space for path segment."""
 
 
 class Glyph(TypedDict, total=False):
-    pass
+    text: str
+    """Unicode string representation of glyph, if any."""
+    cid: int
+    """Character ID for glyph in font."""
+    bbox: Rect
+    """Bounding rectangle for all glyphs in text in default user space."""
+    ctm: Matrix
+    """Coordinate transformation matrix, default if not present is the
+    identity matrix `[1 0 0 1 0 0]`."""
+    textstate: "TextState"
+    """Text state."""
+    gstate: "GraphicState"
+    """Graphic state."""
+    mcstack: List["Tag"]
+    """Stack of enclosing marked content sections."""
 
 
 @asobj.register
@@ -215,9 +269,9 @@ def asobj_gstate(obj: _GraphicState) -> GraphicState:
 
 
 @asobj.register
-def asobj_mcs(obj: MarkedContent) -> Tag:
+def asobj_mcs(obj: _MarkedContent) -> MarkedContent:
     props = {k: v for k, v in obj.props.items() if k != "MCID"}
-    tag = Tag(name=obj.tag)
+    tag = MarkedContent(name=obj.tag)
     if obj.mcid is not None:
         tag["mcid"] = obj.mcid
     if props:
@@ -230,10 +284,16 @@ def asobj_text(obj: _TextObject) -> Text:
     text = Text(
         chars=obj.chars,
         bbox=obj.bbox,
+        # There is no default textstate
         textstate=asobj(obj.textstate),
-        gstate=asobj(obj.gstate),
-        mcstack=[asobj(mcs) for mcs in obj.mcstack],
     )
+    # But there is a default graphic state
+    gstate = asobj(obj.gstate)
+    if gstate:
+        text["gstate"] = gstate
+    mcstack = [asobj(mcs) for mcs in obj.mcstack]
+    if mcstack:
+        text["mcstack"] = mcstack
     if obj.ctm is not MATRIX_IDENTITY:
         text["ctm"] = obj.ctm
     return text
@@ -241,19 +301,69 @@ def asobj_text(obj: _TextObject) -> Text:
 
 @asobj.register
 def asobj_tag(obj: _TagObject) -> Tag:
-    return asobj(obj.mcs)
+    props = {k: v for k, v in obj.mcs.props.items() if k != "MCID"}
+    tag = Tag(name=obj.mcs.tag)
+    if obj.mcs.mcid is not None:
+        tag["mcid"] = obj.mcs.mcid
+    if props:
+        tag["props"] = props
+    return tag
 
 
 @asobj.register
 def asobj_image(obj: _ImageObject) -> Image:
-    return Image()
+    img = Image(srcsize=obj.srcsize, bbox=obj.bbox, stream=stream_metadata(obj.stream))
+    if obj.xobjid is not None:
+        img["xobject_name"] = obj.xobjid
+    if obj.bits != 1:
+        img["bits"] = obj.bits
+    if obj.imagemask:
+        img["imagemask"] = True
+    if obj.colorspace is not None:
+        img["colorspace"] = asobj(obj.colorspace)
+    return img
 
 
 @asobj.register
 def asobj_path(obj: _PathObject) -> Path:
-    return Path()
+    path = Path(components=asobj([list(subpath.segments) for subpath in obj]))
+    gstate = asobj(obj.gstate)
+    if gstate:
+        path["gstate"] = gstate
+    mcstack = [asobj(mcs) for mcs in obj.mcstack]
+    if mcstack:
+        path["mcstack"] = mcstack
+    for attr in "stroke", "fill", "evenodd":
+        val = getattr(obj, attr, False)
+        if val:
+            path[attr] = val
+    return path
+
+
+@asobj.register
+def asobj_path_segment(obj: _PathSegment) -> PathSegment:
+    seg = PathSegment(operator=obj.operator)
+    if obj.points:
+        seg["points"] = obj.points
+    return seg
 
 
 @asobj.register
 def asobj_glyph(obj: _GlyphObject) -> Glyph:
-    return Glyph()
+    glyph = Glyph(
+        text=obj.text,
+        cid=obj.cid,
+        bbox=obj.bbox,
+        # There is no default textstate
+        textstate=asobj(obj.textstate),
+    )
+    # But there is a default graphic state
+    gstate = asobj(obj.gstate)
+    if gstate:
+        glyph["gstate"] = gstate
+    mcstack = [asobj(mcs) for mcs in obj.mcstack]
+    if mcstack:
+        glyph["mcstack"] = mcstack
+    if obj.ctm is not MATRIX_IDENTITY:
+        glyph["ctm"] = obj.ctm
+    return glyph

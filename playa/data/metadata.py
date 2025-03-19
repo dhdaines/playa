@@ -15,7 +15,6 @@ except ImportError:
 
 from playa.data.asobj import asobj
 from playa.document import Destinations as _Destinations
-from playa.document import DeviceSpace
 from playa.document import Document as _Document
 from playa.font import Font as _Font
 from playa.fontmetrics import FONT_METRICS
@@ -40,8 +39,6 @@ class Document(TypedDict, total=False):
     """Should the user be allowed to modify?"""
     is_extractable: bool
     """Should the user be allowed to extract text?"""
-    space: DeviceSpace
-    """Device space for this document."""
     encryption: "Encryption"
     """Encryption information for this document."""
     outline: "Outline"
