@@ -445,7 +445,9 @@ def asobj_obj(obj: _IndirectObject) -> IndirectObject:
 
 @asobj.register
 def asobj_stream(obj: _ContentStream) -> Dict:
-    return asobj(obj.attrs)
+    meta = asobj(obj.attrs)
+    meta["stream_id"] = obj.objid
+    return meta
 
 
 @asobj.register

@@ -5,7 +5,8 @@ PLAYA objects.
 
 """
 
-from typing import List
+import dataclasses
+from typing import List, Tuple, Union
 
 try:
     # We only absolutely need this when using Pydantic TypeAdapter
@@ -13,15 +14,20 @@ try:
 except ImportError:
     from typing import TypedDict
 
+from playa.color import (
+    Color as _Color,
+    ColorSpace as _ColorSpace,
+)
 from playa.data.asobj import asobj
 from playa.data.metadata import Font
-from playa.page import GraphicState as _GraphicState
+from playa.page import GraphicState as _GraphicState, DashPattern as _DashPattern
 from playa.page import (
     MarkedContent,
 )
 from playa.page import TextObject as _TextObject
 from playa.page import TextState as _TextState
 from playa.utils import MATRIX_IDENTITY, Matrix, Point, Rect
+from playa.pdftypes import resolve1
 
 
 class Text(TypedDict, total=False):
@@ -70,7 +76,52 @@ class TextState(TypedDict, total=False):
 
 
 class GraphicState(TypedDict, total=False):
-    """Graphic state."""
+    linewidth: float
+    """Line width in user space units (sec. 8.4.3.2), default 1"""
+    linecap: int
+    """Line cap style (sec. 8.4.3.3), default 0 """
+    linejoin: int
+    """Line join style (sec. 8.4.3.4), default 0"""
+    miterlimit: float
+    """Maximum length of mitered line joins (sec. 8.4.3.5), default 10"""
+    dash: "DashPattern"
+    """Dash pattern for stroking (sec 8.4.3.6), default solid line `((), 0)`"""
+    intent: str
+    """Rendering intent (sec. 8.6.5.8), default `RelativeColorimetric`'"""
+    flatness: float
+    """The precision with which curves shall be rendered on
+    the output device (sec. 10.6.2), default 1"""
+    scolor: "Color"
+    """Colour used for stroking operations, default black `((0,), None)`"""
+    scs: "ColorSpace"
+    """Colour space used for stroking operations, default `DeviceGray`"""
+    ncolor: "Color"
+    """Colour used for non-stroking operations, default black `((0,) None)`"""
+    ncs: "ColorSpace"
+    """Colour space used for non-stroking operations, default `DeviceGray`"""
+
+
+class DashPattern(TypedDict, total=False):
+    dash: Tuple[float, ...]
+    """Lengths of dashes and gaps in user space units."""
+    phase: float
+    """Starting position in the dash pattern, default 0."""
+
+
+class Color(TypedDict, total=False):
+    values: Tuple[float, ...]
+    """Component values."""
+    pattern: Union[str, None]
+    """Pattern name in page resources, if any."""
+
+
+class ColorSpace(TypedDict, total=False):
+    name: str
+    """Name of colour space."""
+    ncomponents: int
+    """Number of components."""
+    spec: list
+    """Specification."""
 
 
 class Tag(TypedDict, total=False):
@@ -102,8 +153,51 @@ def asobj_textstate(obj: _TextState) -> TextState:
 
 
 @asobj.register
+def asobj_color(obj: _Color) -> Color:
+    color = Color(values=obj.values)
+    if obj.pattern is not None:
+        color["pattern"] = obj.pattern
+    return color
+
+
+@asobj.register
+def asobj_colorspace(obj: _ColorSpace) -> ColorSpace:
+    cs = ColorSpace(name=obj.name, ncomponents=obj.ncomponents)
+    if obj.spec:
+        cs["spec"] = asobj([resolve1(x) for x in obj.spec])
+    return cs
+
+
+@asobj.register
+def asobj_dashpattern(obj: _DashPattern) -> DashPattern:
+    dash = DashPattern(dash=obj.dash)
+    if obj.phase != 0:
+        dash["phase"] = obj.phase
+    return dash
+
+
+GRAPHICSTATE_DEFAULTS = {f.name: f.default for f in dataclasses.fields(_GraphicState)}
+
+
+@asobj.register
 def asobj_gstate(obj: _GraphicState) -> GraphicState:
     gstate = GraphicState()
+    for field in (
+        "linewidth",
+        "linecap",
+        "linejoin",
+        "miterlimit",
+        "dash",
+        "intent",
+        "flatness",
+        "scolor",
+        "scs",
+        "ncolor",
+        "ncs",
+    ):
+        val = getattr(obj, field)
+        if val != GRAPHICSTATE_DEFAULTS[field]:
+            gstate[field] = asobj(val)
     return gstate
 
 
