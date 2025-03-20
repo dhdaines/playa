@@ -423,7 +423,11 @@ def _extract_element(el: Element, indent: int, outfh: TextIO) -> bool:
         v = json.dumps(v, ensure_ascii=False)
         s.append(f"{ws}{ss}{k}: {v}")
 
-    format_attr("type", el.type)
+    try:
+        format_attr("type", el.type)
+    except KeyError:
+        LOG.warning("Structure element with no type ignored: %r", el)
+        return False
     page = el.page
     if page is not None:
         format_attr("page_idx", page.page_idx)
