@@ -621,9 +621,10 @@ class IndirectObjectParser:
         self,
         data: Union[bytes, mmap.mmap],
         doc: Union["Document", None] = None,
+        pos: int = 0,
         strict: bool = False,
     ) -> None:
-        self._parser = ObjectParser(data, doc, strict=strict)
+        self._parser = ObjectParser(data, doc, pos=pos, strict=strict)
         self.buffer = data
         self.objstack: List[Tuple[int, Union[PDFObject, ContentStream]]] = []
         self.docref = None if doc is None else _ref_document(doc)

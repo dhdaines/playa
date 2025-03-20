@@ -2,7 +2,8 @@
 
 - Correct outlines in CLI
 - Accept UTF-16LE in strings with BOM
-- TODO: Speed up fallback xrefs in pathological PDFs
+- Speed up fallback xrefs in pathological PDFs
+- Detect two PDFs in a trenchcoat
 
 ## PLAYA 0.4.0: 2025-03-19
 

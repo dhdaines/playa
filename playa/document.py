@@ -296,7 +296,7 @@ class Document:
         return (
             obj
             for pos, obj in IndirectObjectParser(
-                self.buffer, self, strict=self.parser.strict
+                self.buffer, self, pos=self.offset, strict=self.parser.strict
             )
         )
 
@@ -305,7 +305,7 @@ class Document:
         """Iterate over all indirect objects (including, then expanding object
         streams)"""
         for pos, obj in IndirectObjectParser(
-            self.buffer, self, strict=self.parser.strict
+            self.buffer, self, pos=self.offset, strict=self.parser.strict
         ):
             yield obj
             if (
@@ -667,6 +667,32 @@ class Document:
             (pos, token) = parser.nexttoken()
         except StopIteration:
             raise ValueError("Unexpected EOF at {start}")
+        if token is not KEYWORD_XREF:
+            # Detect the case where two (or more) PDFs have been
+            # concatenated, or where somebody tried an "incremental
+            # update" without updating the xref table
+            filestart = self.buffer.rfind(b"%%EOF")
+            log.debug("Found ultimate %%EOF at %d", filestart)
+            if filestart != -1:
+                filestart = self.buffer.rfind(b"%%EOF", 0, filestart)
+                log.debug("Found penultimate %%EOF at %d", filestart)
+                filestart += 5
+            if filestart != -1:
+                while self.buffer[filestart] in (10, 13):
+                    filestart += 1
+                parser.seek(filestart + start)
+                try:
+                    (pos, token) = parser.nexttoken()
+                except StopIteration:
+                    raise ValueError("Unexpected EOF at {start}")
+                if token is KEYWORD_XREF:
+                    log.debug(
+                        "Found two PDFs in a trenchcoat at %d (second xref is at %d not %d)",
+                        filestart,
+                        pos,
+                        start,
+                    )
+                    self.offset = filestart
         if token is KEYWORD_XREF:
             parser.nextline()
             xref: XRef = XRefTable(parser, self.offset)
