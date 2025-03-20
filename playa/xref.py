@@ -1,7 +1,6 @@
 """PDF cross-reference tables / streams."""
 
 import logging
-import re
 from typing import (
     Any,
     Dict,
@@ -22,7 +21,6 @@ from playa.parser import (
     LIT,
     IndirectObjectParser,
     ObjectParser,
-    reverse_iter_lines,
 )
 from playa.pdftypes import (
     ContentStream,
@@ -129,9 +127,6 @@ class XRefTable:
         return self.offsets[objid]
 
 
-PDFOBJ_CUE = re.compile(rb"^(\d+)\s+(\d+)\s+obj\b")
-
-
 class XRefFallback:
     """In the case where a file is non-conforming and has no
     `startxref` marker at its end, we will reconstruct a
@@ -159,8 +154,17 @@ class XRefFallback:
             prev_genno = -1
             if obj.objid in self.offsets:
                 prev_genno = self.offsets[obj.objid].genno
+                # Apparently this isn't an error, nothing requires you
+                # to update the generation number!  (what is it good
+                # for anyway then?)  PDF 1.7 section 7.5.6
+                # (Incremental Updates): As shown in Figure 3, a file
+                # that has been updated several times contains several
+                # trailers. Because updates are appended to PDF files,
+                # a file may have several copies of an object with the
+                # same object identifier (object number and generation
+                # number).
                 if obj.genno == prev_genno:
-                    log.warning(
+                    log.debug(
                         "Duplicate object %d %d at %d: %r",
                         obj.objid,
                         obj.genno,
@@ -189,16 +193,24 @@ class XRefFallback:
                     self.offsets[objid1] = XRefPos(obj.objid, index, 0)
         # Now get the trailer.  Maybe there are multiple trailers.
         # Because this is a salvage operation, we will simply
-        # agglomerate them...
-        for pos, line in reverse_iter_lines(parser.buffer):
-            line = line.strip()
-            if line == b"trailer":
-                _, trailer = next(
-                    ObjectParser(parser.buffer, doc, pos + len(b"trailer"))
-                )
-                if not isinstance(trailer, dict):
-                    continue
-                self.trailer.update(trailer)
+        # agglomerate them - due to incremental updates the last one
+        # should be the most recent, but we can't count on it being
+        # complete or correct.
+        pos = 0
+        while True:
+            pos = parser.buffer.find(b"trailer", pos)
+            if pos == -1:
+                break
+            pos += len(b"trailer")
+            log.debug("Found possible trailer at %d", pos)
+            try:
+                _, trailer = next(ObjectParser(parser.buffer, doc, pos))
+            except (TypeError, PDFSyntaxError):
+                continue
+            if not isinstance(trailer, dict):
+                continue
+            log.debug("Trailer: %r", trailer)
+            self.trailer.update(trailer)
         if not self.trailer:
             log.warning("b'trailer' not found in document or invalid")
 

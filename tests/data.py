@@ -78,3 +78,14 @@ PDFMINER_BUGS = {
     "ascii_tounicode.pdf",
     "duplicate_encoding_tounicode.pdf",
 }
+# Broken XRef tables (bogus linearization, concatenation, etc)
+FALLBACKS = {
+    "samples/3rdparty/pdf.js/test/pdfs/issue11230.pdf",
+    "samples/3rdparty/pdf.js/test/pdfs/issue12402.pdf",
+    "samples/3rdparty/pdf.js/test/pdfs/issue13783.pdf",
+    "samples/3rdparty/pdf.js/test/pdfs/issue14269.pdf",
+    "samples/3rdparty/pdf.js/test/pdfs/issue1536.pdf",
+    "samples/3rdparty/pdf.js/test/pdfs/issue7303.pdf",
+    "samples/3rdparty/pdf.js/test/pdfs/issue9129.pdf",
+    "samples/3rdparty/pdf.js/test/pdfs/issue9552.pdf",
+}
