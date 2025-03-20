@@ -521,15 +521,16 @@ def asobj_stream(obj: _ContentStream) -> Dict:
 
 
 @asobj.register
-def asobj_outline(obj: _Outline) -> Outline:
+def asobj_outline(obj: _Outline, recurse: bool = True) -> Outline:
     out = Outline()
     if obj.title is not None:
         out["title"] = decode_text(obj.title)
     if obj.destination is not None:
         out["destination"] = asobj(obj.destination)
-    children = list(obj)
-    if children:
-        out["children"] = asobj(children)
+    if recurse:
+        children = list(obj)
+        if children:
+            out["children"] = asobj(children)
     return out
 
 
@@ -571,7 +572,7 @@ def asobj_content_object(obj: _StructContentObject) -> StructContentObject:
 
 
 @asobj.register
-def asobj_structelement(obj: _Element) -> StructElement:
+def asobj_structelement(obj: _Element, recurse: bool = True) -> StructElement:
     el = StructElement()
     page = obj.page
     if page is not None:
@@ -586,15 +587,19 @@ def asobj_structelement(obj: _Element) -> StructElement:
         el["abbreviation_expansion"] = decode_text(resolve1(obj.props["E"]))
     if "ActualText" in obj.props:
         el["actual_text"] = decode_text(resolve1(obj.props["ActualText"]))
-    children = [asobj(el) for el in obj]
-    if children:
-        el["children"] = children
+    if recurse:
+        children = [asobj(el) for el in obj]
+        if children:
+            el["children"] = children
     return el
 
 
 @asobj.register
-def asobj_structtree(obj: _Tree) -> StructTree:
-    root = StructElement(type="StructTreeRoot", children=[asobj(el) for el in obj])
+def asobj_structtree(obj: _Tree, recurse: bool = True) -> StructTree:
+    root = StructElement(
+        type="StructTreeRoot",
+        children=[asobj_structelement(el, recurse=recurse) for el in obj],
+    )
     return StructTree(root=root)
 
 
