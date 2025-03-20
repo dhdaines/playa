@@ -1412,6 +1412,7 @@ class LazyInterpreter:
             elif isinstance(obj, PSKeyword):
                 if obj in self._dispatch:
                     method, nargs = self._dispatch[obj]
+                    co = None
                     if nargs:
                         args = self.pop(nargs)
                         if len(args) != nargs:
