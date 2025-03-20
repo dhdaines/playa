@@ -89,6 +89,7 @@ import playa
 from playa import Document, Page, PDFPasswordIncorrect, asobj
 from playa.data.content import Image
 from playa.data.metadata import asobj_document
+from playa.outline import Outline
 from playa.page import ContentObject, ImageObject, TextObject
 from playa.pdftypes import LITERALS_DCT_DECODE, ContentStream, ObjRef, resolve1
 from playa.structure import ContentItem
@@ -464,15 +465,46 @@ def extract_structure(doc: Document, args: argparse.Namespace) -> None:
     print("]", file=args.outfile)
 
 
+def _extract_outline_item(item: Outline, indent: int, outfh: TextIO) -> bool:
+    """Extract a single outline item."""
+    ws = " " * indent
+    ss = "  "
+    s = []
+
+    def format_attr(k: Any, v: Any) -> None:
+        k = json.dumps(k, ensure_ascii=False)
+        v = json.dumps(v, ensure_ascii=False)
+        s.append(f"{ws}{ss}{k}: {v}")
+
+    print(f"{ws}{{", file=outfh)
+    if item.title is not None:
+        format_attr("title", decode_text(item.title))
+    if item.destination is not None:
+        format_attr("destination", asobj(item.destination))
+    if s:
+        print(",\n".join(s), end="", file=outfh)
+    children = list(item)
+    if children:
+        if s:
+            print(",", file=outfh)
+        print(f'{ws}{ss}"children": [', file=outfh)
+        comma = False
+        for kid in children:
+            if comma:
+                print(",", file=outfh)
+            comma = _extract_outline_item(kid, indent + 4, outfh)
+        print(f"\n{ws}{ss}]", end="", file=outfh)
+    print(f"\n{ws}}}", end="", file=outfh)
+    return True
+
+
 def extract_outline(doc: Document, args: argparse.Namespace) -> None:
     """Extract logical outline as JSON."""
     if doc.outline is None:
         LOG.info("Document has no outline")
         print("{}", file=args.outfile)
         return
-    # FIXME: Do this incrementally as with structure above
-    metadata = asobj(doc.outline)
-    json.dump(metadata, args.outfile, indent=2, ensure_ascii=False)
+    _extract_outline_item(doc.outline, 0, args.outfile)
 
 
 def get_images(page: Page, imgdir: Path) -> List[Tuple[Path, Image]]:
