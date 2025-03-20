@@ -676,8 +676,8 @@ class Document:
             if filestart != -1:
                 filestart = self.buffer.rfind(b"%%EOF", 0, filestart)
                 log.debug("Found penultimate %%EOF at %d", filestart)
-                filestart += 5
             if filestart != -1:
+                filestart += 5
                 while self.buffer[filestart] in (10, 13):
                     filestart += 1
                 parser.seek(filestart + start)
