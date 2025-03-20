@@ -31,6 +31,7 @@ LOG = logging.getLogger(__name__)
 LITERAL_MCR = LIT("MCR")
 LITERAL_OBJR = LIT("OBJR")
 LITERAL_STRUCTTREEROOT = LIT("StructTreeRoot")
+LITERAL_STRUCTELEM = LIT("StructElem")
 MatchFunc = Callable[["Element"], bool]
 
 if TYPE_CHECKING:
@@ -260,7 +261,9 @@ class Element(Findable):
         # Do not care about StmOwn, we don't do appearances
         yield ContentItem(_pageref=pageref, mcid=mcid, stream=stream)
 
-    def _make_kids_objr(self, k: Dict[str, PDFObject]) -> Iterator[ContentObject]:
+    def _make_kids_objr(
+        self, k: Dict[str, PDFObject]
+    ) -> Iterator[Union[ContentObject, "Element"]]:
         ref = k.get("Obj")
         if not isinstance(ref, ObjRef):
             LOG.warning("'Obj' entry is not an indirect object reference: %r", k)
@@ -269,10 +272,15 @@ class Element(Findable):
         if not isinstance(obj, dict):
             LOG.warning("'Obj' entry does not point to a dict: %r", obj)
             return
-        pageref = self._get_kid_pageref(k)
-        if pageref is None:
-            return
-        yield ContentObject(_pageref=pageref, props=obj)
+        # In theory OBJR is not for elements, but just in case...
+        ktype = obj.get("Type")
+        if ktype is LITERAL_STRUCTELEM:
+            yield Element(_docref=self._docref, props=obj)
+        else:
+            pageref = self._get_kid_pageref(k)
+            if pageref is None:
+                return
+            yield ContentObject(_pageref=pageref, props=obj)
 
     def _get_kid_pageref(self, k: Dict[str, PDFObject]) -> Union[PageRef, None]:
         pg = k.get("Pg")
