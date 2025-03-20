@@ -740,7 +740,11 @@ class IndirectObjectParser:
             # references yet.  Either that or fallback xref parsing
             # should just run a regex over the PDF and not try to
             # actually parse the objects (probably a better solution)
-            log.warning("/Length reference cannot be resolved %r", dic)
+            log.warning("/Length reference cannot be resolved in %r", dic)
+            objlen = 0
+        except TypeError:
+            # FIXME: This may happen with incremental updates
+            log.warning("/Length reference resolves to non-integer in %r", dic)
             objlen = 0
         # sec 7.3.8.1: The keyword `stream` that follows the stream
         # dictionary shall be followed by an end-of-line
