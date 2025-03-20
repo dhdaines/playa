@@ -75,8 +75,6 @@ class Outline(TypedDict, total=False):
     """Title of this outline entry."""
     destination: "Destination"
     """Destination (or target of GoTo action)."""
-    element: "StructElement"
-    """Structure element asociated with this entry."""
     children: List["Outline"]
     """Children of this entry."""
 
@@ -525,10 +523,10 @@ def asobj_stream(obj: _ContentStream) -> Dict:
 @asobj.register
 def asobj_outline(obj: _Outline) -> Outline:
     out = Outline()
-    for attr in "title", "destination", "element":
-        val = getattr(obj, attr)
-        if val is not None:
-            out[attr] = asobj(val)
+    if obj.title is not None:
+        out["title"] = decode_text(obj.title)
+    if obj.destination is not None:
+        out["destination"] = asobj(obj.destination)
     children = list(obj)
     if children:
         out["children"] = asobj(children)

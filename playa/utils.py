@@ -557,7 +557,10 @@ def decode_text(s: Union[str, bytes]) -> str:
     """Decodes a text string (see PDF 1.7 section 7.9.2.2 - it could
     be PDFDocEncoding or UTF-16BE) to a `str`.
     """
-    if isinstance(s, bytes) and s.startswith(b"\xfe\xff"):
+    # Sure, it could be UTF-16LE... \/\/hatever...
+    if isinstance(s, bytes) and (
+        s.startswith(b"\xfe\xff") or s.startswith(b"\xff\xfe")
+    ):
         return s.decode("UTF-16")
     try:
         # FIXME: This seems bad. If it's already a `str` then what are

@@ -172,10 +172,10 @@ class Outline:
 
     @property
     def action(self) -> Union[Action, None]:
-        action = resolve1(self.props.get("A"))
-        if action is None:
+        try:
+            return Action(self._docref, dict_value(self.props["A"]))
+        except (KeyError, TypeError):
             return None
-        return Action(self._docref, dict_value(action))
 
     @property
     def element(self) -> Union[Element, None]:
@@ -185,10 +185,10 @@ class Outline:
         Returns:
             structure element, if one exists.
         """
-        el = self.props.get("SE")
-        if el is None:
+        try:
+            return Element.from_dict(self.doc, dict_value(self.props["SE"]))
+        except (KeyError, TypeError):
             return None
-        return Element.from_dict(self.doc, dict_value(el))
 
     @property
     def parent(self) -> Union["Outline", None]:
