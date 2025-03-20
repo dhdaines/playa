@@ -209,11 +209,12 @@ class Document:
         self.parser.seek(self.offset)
         self._xrefpos: Set[int] = set()
         try:
-            pos = self._find_xref()
-            log.debug("Found xref at %d", pos)
-            self._read_xref_from(pos, self.xrefs)
-        except (ValueError, IndexError, StopIteration, PDFSyntaxError) as e:
-            log.debug("Using fallback XRef parsing: %s", e)
+            self._read_xrefs()
+        except Exception as e:
+            log.debug(
+                "Failed to parse xref table, falling back to object parser: %s",
+                e,
+            )
             newxref = XRefFallback(self.parser)
             self.xrefs.append(newxref)
         # Now find the trailer
@@ -260,6 +261,54 @@ class Document:
         markinfo = resolve1(self.catalog.get("MarkInfo"))
         if isinstance(markinfo, dict):
             self.is_tagged = not not markinfo.get("Marked")
+
+    def _read_xrefs(self):
+        try:
+            xrefpos = self._find_xref()
+        except Exception as e:
+            raise PDFSyntaxError("No xref table found at end of file") from e
+        try:
+            self._read_xref_from(xrefpos, self.xrefs)
+            return
+        except (ValueError, IndexError, StopIteration, PDFSyntaxError) as e:
+            xrefpos = self._detect_concatenation(xrefpos)
+            if xrefpos == -1:
+                raise PDFSyntaxError("Failed to read xref table at end of file") from e
+        try:
+            self._read_xref_from(xrefpos, self.xrefs)
+        except (ValueError, IndexError, StopIteration, PDFSyntaxError) as e:
+            raise PDFSyntaxError(
+                "Failed to read xref table with adjusted offset"
+            ) from e
+
+    def _detect_concatenation(self, xrefpos: int) -> int:
+        # Detect the case where two (or more) PDFs have been
+        # concatenated, or where somebody tried an "incremental
+        # update" without updating the xref table
+        filestart = self.buffer.rfind(b"%%EOF")
+        log.debug("Found ultimate %%EOF at %d", filestart)
+        if filestart != -1:
+            filestart = self.buffer.rfind(b"%%EOF", 0, filestart)
+            log.debug("Found penultimate %%EOF at %d", filestart)
+        if filestart != -1:
+            filestart += 5
+            while self.buffer[filestart] in (10, 13):
+                filestart += 1
+            parser = ObjectParser(self.buffer, self, filestart + xrefpos)
+            try:
+                (pos, token) = parser.nexttoken()
+            except StopIteration:
+                raise ValueError("Unexpected EOF at {start}")
+            if token is KEYWORD_XREF:
+                log.debug(
+                    "Found two PDFs in a trenchcoat at %d (second xref is at %d not %d)",
+                    filestart,
+                    pos,
+                    xrefpos,
+                )
+                self.offset = filestart
+                return pos
+        return -1
 
     def _initialize_password(self, password: str = "") -> None:
         """Initialize the decryption handler with a given password, if any.
@@ -661,38 +710,11 @@ class Document:
         if start in self._xrefpos:
             log.warning("Detected circular xref chain at %d", start)
             return
-        self._xrefpos.add(start)
         parser = ObjectParser(self.buffer, self, start)
         try:
             (pos, token) = parser.nexttoken()
         except StopIteration:
             raise ValueError("Unexpected EOF at {start}")
-        if token is not KEYWORD_XREF:
-            # Detect the case where two (or more) PDFs have been
-            # concatenated, or where somebody tried an "incremental
-            # update" without updating the xref table
-            filestart = self.buffer.rfind(b"%%EOF")
-            log.debug("Found ultimate %%EOF at %d", filestart)
-            if filestart != -1:
-                filestart = self.buffer.rfind(b"%%EOF", 0, filestart)
-                log.debug("Found penultimate %%EOF at %d", filestart)
-            if filestart != -1:
-                filestart += 5
-                while self.buffer[filestart] in (10, 13):
-                    filestart += 1
-                parser.seek(filestart + start)
-                try:
-                    (pos, token) = parser.nexttoken()
-                except StopIteration:
-                    raise ValueError("Unexpected EOF at {start}")
-                if token is KEYWORD_XREF:
-                    log.debug(
-                        "Found two PDFs in a trenchcoat at %d (second xref is at %d not %d)",
-                        filestart,
-                        pos,
-                        start,
-                    )
-                    self.offset = filestart
         if token is KEYWORD_XREF:
             parser.nextline()
             xref: XRef = XRefTable(parser, self.offset)
@@ -710,6 +732,7 @@ class Document:
                 # probably not)
                 parser.seek(pos)
                 xref = XRefTable(parser, self.offset)
+        self._xrefpos.add(start)
         xrefs.append(xref)
         trailer = xref.trailer
         # For hybrid-reference files, an additional set of xrefs as a
