@@ -467,7 +467,7 @@ def extract_structure(doc: Document, args: argparse.Namespace) -> None:
 def extract_outline(doc: Document, args: argparse.Namespace) -> None:
     """Extract logical outline as JSON."""
     if doc.outline is None:
-        LOG.info("Document has no logical structure")
+        LOG.info("Document has no outline")
         print("{}", file=args.outfile)
         return
     # FIXME: Do this incrementally as with structure above
