@@ -595,10 +595,10 @@ def asobj_structelement(obj: _Element, recurse: bool = True) -> StructElement:
 
 
 @asobj.register
-def asobj_structtree(obj: _Tree, recurse: bool = True) -> StructTree:
+def asobj_structtree(obj: _Tree) -> StructTree:
     root = StructElement(
         type="StructTreeRoot",
-        children=[asobj_structelement(el, recurse=recurse) for el in obj],
+        children=[asobj(el) for el in obj],
     )
     return StructTree(root=root)
 
