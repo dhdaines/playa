@@ -428,6 +428,9 @@ def _extract_element(el: Element, indent: int, outfh: TextIO) -> bool:
     except KeyError:
         LOG.warning("Structure element with no type ignored: %r", el)
         return False
+    except TypeError:
+        LOG.warning("Structure element with invalid type ignored: %r", el)
+        return False
     page = el.page
     if page is not None:
         format_attr("page_idx", page.page_idx)
