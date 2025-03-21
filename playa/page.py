@@ -239,26 +239,12 @@ class Page:
         alist = resolve1(self.attrs.get("Annots"))
         if alist is None:
             return
-        for annot in alist:
-            annot = resolve1(annot)
-            if not isinstance(annot, dict):
-                log.warning("Invalid object in Annots: %r", annot)
-                continue
-            subtype = annot.get("Subtype")
-            if subtype is None or not isinstance(subtype, PSLiteral):
-                log.warning("Invalid Subtype in annotation: %r", annot)
-                continue
+        for obj in alist:
             try:
-                rect = parse_rect(annot.get("Rect"))
-            except (TypeError, ValueError, PDFSyntaxError):
-                log.warning("Invalid Rect in annotation: %r", annot)
+                yield Annotation.from_dict(obj, self)
+            except (TypeError, ValueError, PDFSyntaxError) as e:
+                log.warning("Invalid object %r in Annots: %s", obj, e)
                 continue
-            yield Annotation(
-                _pageref=self.pageref,
-                subtype=literal_name(subtype),
-                rect=rect,
-                props=annot,
-            )
 
     @property
     def doc(self) -> "Document":
@@ -477,6 +463,20 @@ class Annotation:
     subtype: str
     rect: Rect
     props: Dict[str, PDFObject]
+
+    @classmethod
+    def from_dict(cls, obj: PDFObject, page: Page) -> "Annotation":
+        annot = dict_value(obj)
+        subtype = annot.get("Subtype")
+        if subtype is None or not isinstance(subtype, PSLiteral):
+            raise PDFSyntaxError("Invalid annotation Subtype %r" % (subtype,))
+        rect = parse_rect(annot.get("Rect"))
+        return Annotation(
+            _pageref=page.pageref,
+            subtype=literal_name(subtype),
+            rect=rect,
+            props=annot,
+        )
 
     @property
     def page(self) -> Page:
