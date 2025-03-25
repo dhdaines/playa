@@ -1,3 +1,6 @@
+## PLAYA 0.4.2: Unreleased
+- Correct `fontsize` and `scaling` in text state
+
 ## PLAYA 0.4.1: 2025-03-20
 
 - Correct outlines in CLI

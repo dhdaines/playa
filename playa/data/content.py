@@ -209,9 +209,9 @@ def asobj_textstate(obj: _TextState) -> TextState:
     if obj.glyph_offset != (0, 0):
         tstate["glyph_offset"] = obj.glyph_offset
     if obj.fontsize != 1:
-        tstate["fontsize"] = 1
+        tstate["fontsize"] = obj.fontsize
     if obj.scaling != 100:
-        tstate["scaling"] = 100
+        tstate["scaling"] = obj.scaling
     for attr in "charspace", "wordspace", "leading", "render_mode", "rise":
         val = getattr(obj, attr, 0)
         if val:
