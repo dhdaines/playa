@@ -29,6 +29,8 @@ from playa.cmapdb import (
 from playa.encodingdb import (
     EncodingDB,
     cid2unicode_from_encoding,
+)
+from playa.encodings import (
     SYMBOL_BUILTIN_ENCODING,
     ZAPFDINGBATS_BUILTIN_ENCODING,
 )
