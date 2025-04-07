@@ -689,8 +689,8 @@ class CFFFontProgram:
             return self.STANDARD_STRINGS[sid]
         return self.string_index[sid - len(self.STANDARD_STRINGS)].decode('ascii')
 
-    def getdict(self, data: bytes) -> Dict[int, List[Union[float, int]]]:
-        d: Dict[int, List[Union[float, int]]] = {}
+    def getdict(self, data: bytes) -> Dict[tuple[int, int] | int, List[Union[float, int]]]:
+        d: Dict[tuple[int, int] | int, List[Union[float, int]]] = {}
         fp = BytesIO(data)
         stack: List[Union[float, int]] = []
         while 1:
@@ -1001,7 +1001,8 @@ class Type1Font(SimpleFont):
             try:
                 cfffont = CFFFontProgram(self.basefont, BytesIO(self.fontfile3.buffer))
                 self.cfffont = cfffont
-                implicit_encoding = {cid: cfffont.gid2name.get(gid) for cid, gid in cfffont.code2gid.items()}
+                implicit_encoding = {cid: cfffont.gid2name[gid] for cid, gid in cfffont.code2gid.items()
+                                     if gid in cfffont.gid2name}
             except Exception as e:
                 log.debug("Failed to parse CFFFont %r: %s", self.fontfile3, e)
                 implicit_encoding = {}
@@ -1047,7 +1048,7 @@ class TrueTypeFont(SimpleFont):
         is_non_symbolic = 32 & int_value(descriptor.get("Flags", 0))
         # For symbolic TrueTypeFont, the map cid -> glyph does not actually go through glyph name
         # making extracting unicode impossible??
-        implicit_encoding = LITERAL_STANDARD_ENCODING if is_non_symbolic else {}
+        implicit_encoding: Union[PSLiteral, Dict[int, str]] = LITERAL_STANDARD_ENCODING if is_non_symbolic else {}
         SimpleFont.__init__(self, descriptor, widths, spec, implicit_encoding)
 
     def __repr__(self) -> str:
