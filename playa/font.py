@@ -239,7 +239,7 @@ class SimpleFont(Font):
         descriptor: Mapping[str, Any],
         widths: Dict[int, float],
         spec: Mapping[str, Any],
-        implicit_encoding: Union[PSLiteral, Dict[int, str]],
+        implicit_encoding: Union[PSLiteral, Dict[int, str], None] = None,
     ) -> None:
         # Font encoding is specified either by a name of
         # built-in encoding or a dictionary that describes
@@ -250,8 +250,11 @@ class SimpleFont(Font):
             if isinstance(encoding, dict):
                 base = encoding.get("BaseEncoding", implicit_encoding)
                 diff = list_value(encoding.get("Differences", []))
-            else:
+            elif isinstance(encoding, PSLiteral):
                 base = encoding
+            else:
+                log.warning("Encoding is neither a dictionary nor a name: %r", encoding)
+                base = implicit_encoding
         else:
             base = implicit_encoding
         self.encoding = EncodingDB.get_encoding(base, diff)
@@ -383,7 +386,7 @@ class Type3Font(SimpleFont):
             descriptor = dict_value(spec["FontDescriptor"])
         else:
             descriptor = {"Ascent": 0, "Descent": 0, "FontBBox": spec["FontBBox"]}
-        SimpleFont.__init__(self, descriptor, widths, spec, implicit_encoding={})
+        SimpleFont.__init__(self, descriptor, widths, spec)
         self.matrix = cast(Matrix, tuple(list_value(spec.get("FontMatrix"))))
         (_, self.descent, _, self.ascent) = self.bbox
         (self.hscale, self.vscale) = apply_matrix_norm(self.matrix, (1, 1))

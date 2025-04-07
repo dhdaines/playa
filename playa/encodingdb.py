@@ -9,7 +9,7 @@ from playa.encodings import (
     WIN_ANSI_ENCODING,
 )
 from playa.glyphlist import glyphname2unicode
-from playa.parser import PSLiteral
+from playa.parser import PSLiteral, PDFObject
 
 HEXADECIMAL = re.compile(r"[0-9a-fA-F]+")
 
@@ -96,14 +96,16 @@ class EncodingDB:
     @classmethod
     def get_encoding(
         cls,
-        base: Union[PSLiteral, Dict[int, str]],
-        diff: Optional[Iterable[object]] = None,
+        base: Union[PSLiteral, Dict[int, str], None] = None,
+        diff: Optional[Iterable[PDFObject]] = None,
     ) -> Dict[int, str]:
-        if isinstance(base, PSLiteral):
+        if base is None:
+            encoding = {}
+        elif isinstance(base, PSLiteral):
             encoding = cls.encodings.get(base.name, {})
         else:
             encoding = base
-        if diff:
+        if diff is not None:
             encoding = encoding.copy()
             cid = 0
             for x in diff:
