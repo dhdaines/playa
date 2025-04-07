@@ -1012,7 +1012,22 @@ class Type1Font(SimpleFont):
         return "<Type1Font: basefont=%r>" % self.basefont
 
 
-class TrueTypeFont(Type1Font):
+class TrueTypeFont(SimpleFont):
+    def __init__(self, spec: Mapping[str, Any]) -> None:
+        try:
+            self.basefont = literal_name(resolve1(spec["BaseFont"]))
+        except KeyError:
+            log.warning("Font spec is missing BaseFont: %r", spec)
+            self.basefont = "unknown"
+
+        widths: Dict[int, float]
+        descriptor = dict_value(spec.get("FontDescriptor", {}))
+        firstchar = int_value(spec.get("FirstChar", 0))
+        # lastchar = int_value(spec.get('LastChar', 255))
+        width_list = list_value(spec.get("Widths", [0] * 256))
+        widths = {i + firstchar: resolve1(w) for (i, w) in enumerate(width_list)}
+        SimpleFont.__init__(self, descriptor, widths, spec)
+
     def __repr__(self) -> str:
         return "<TrueTypeFont: basefont=%r>" % self.basefont
 
