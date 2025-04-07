@@ -1617,11 +1617,11 @@ class CFFFontProgram:
         (encoding_pos,) = self.top_dict.get(16, [0])
         (charstring_pos,) = self.top_dict.get(17, [0])
         # CharStrings
-        self.fp.seek(cast(int, charstring_pos))
+        self.fp.seek(int(charstring_pos))
         self.charstring = self.INDEX(self.fp)
         self.nglyphs = len(self.charstring)
-        self._parse_charset(cast(int, charset_pos))
-        self._parse_encoding(cast(int, encoding_pos))
+        self._parse_charset(int(charset_pos))
+        self._parse_encoding(int(encoding_pos))
 
     def _parse_encoding(self, encoding_pos: int) -> None:
         # Encodings
@@ -1682,10 +1682,7 @@ class CFFFontProgram:
             # Format 0
             n = self.nglyphs - 1
             for gid, sid in enumerate(
-                cast(
-                    Tuple[int, ...], struct.unpack(">" + "H" * n, self.fp.read(2 * n))
-                ),
-                start=1,
+                struct.unpack(">" + "H" * n, self.fp.read(2 * n)), start=1
             ):
                 sidname = self.getstr(sid)
                 self.name2gid[sidname] = gid
