@@ -1,5 +1,6 @@
 ## PLAYA 0.4.2: Unreleased
 - Correct `fontsize` and `scaling` in text state
+- Use CID to index widths of core fonts the way Adobe intended
 
 ## PLAYA 0.4.1: 2025-03-20
 
