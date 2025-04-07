@@ -1,9 +1,8 @@
 import logging
 import re
-from typing import Dict, Iterable, Optional
+from typing import Dict, Iterable, Optional, Union
 
 from playa.glyphlist import glyphname2unicode
-from playa.latin_enc import ENCODING
 from playa.parser import PSLiteral
 
 HEXADECIMAL = re.compile(r"[0-9a-fA-F]+")
@@ -91,45 +90,40 @@ SYMBOL_BUILTIN_ENCODING = {32: 'space', 33: 'exclam', 34: 'universal', 35: 'numb
 ZAPFDINGBATS_BUILTIN_ENCODING = {32: 'space', 33: 'a1', 34: 'a2', 35: 'a202', 36: 'a3', 37: 'a4', 38: 'a5', 39: 'a119', 40: 'a118', 41: 'a117', 42: 'a11', 43: 'a12', 44: 'a13', 45: 'a14', 46: 'a15', 47: 'a16', 48: 'a105', 49: 'a17', 50: 'a18', 51: 'a19', 52: 'a20', 53: 'a21', 54: 'a22', 55: 'a23', 56: 'a24', 57: 'a25', 58: 'a26', 59: 'a27', 60: 'a28', 61: 'a6', 62: 'a7', 63: 'a8', 64: 'a9', 65: 'a10', 66: 'a29', 67: 'a30', 68: 'a31', 69: 'a32', 70: 'a33', 71: 'a34', 72: 'a35', 73: 'a36', 74: 'a37', 75: 'a38', 76: 'a39', 77: 'a40', 78: 'a41', 79: 'a42', 80: 'a43', 81: 'a44', 82: 'a45', 83: 'a46', 84: 'a47', 85: 'a48', 86: 'a49', 87: 'a50', 88: 'a51', 89: 'a52', 90: 'a53', 91: 'a54', 92: 'a55', 93: 'a56', 94: 'a57', 95: 'a58', 96: 'a59', 97: 'a60', 98: 'a61', 99: 'a62', 100: 'a63', 101: 'a64', 102: 'a65', 103: 'a66', 104: 'a67', 105: 'a68', 106: 'a69', 107: 'a70', 108: 'a71', 109: 'a72', 110: 'a73', 111: 'a74', 112: 'a203', 113: 'a75', 114: 'a204', 115: 'a76', 116: 'a77', 117: 'a78', 118: 'a79', 119: 'a81', 120: 'a82', 121: 'a83', 122: 'a84', 123: 'a97', 124: 'a98', 125: 'a99', 126: 'a100', 128: 'a89', 129: 'a90', 130: 'a93', 131: 'a94', 132: 'a91', 133: 'a92', 134: 'a205', 135: 'a85', 136: 'a206', 137: 'a86', 138: 'a87', 139: 'a88', 140: 'a95', 141: 'a96', 161: 'a101', 162: 'a102', 163: 'a103', 164: 'a104', 165: 'a106', 166: 'a107', 167: 'a108', 168: 'a112', 169: 'a111', 170: 'a110', 171: 'a109', 172: 'a120', 173: 'a121', 174: 'a122', 175: 'a123', 176: 'a124', 177: 'a125', 178: 'a126', 179: 'a127', 180: 'a128', 181: 'a129', 182: 'a130', 183: 'a131', 184: 'a132', 185: 'a133', 186: 'a134', 187: 'a135', 188: 'a136', 189: 'a137', 190: 'a138', 191: 'a139', 192: 'a140', 193: 'a141', 194: 'a142', 195: 'a143', 196: 'a144', 197: 'a145', 198: 'a146', 199: 'a147', 200: 'a148', 201: 'a149', 202: 'a150', 203: 'a151', 204: 'a152', 205: 'a153', 206: 'a154', 207: 'a155', 208: 'a156', 209: 'a157', 210: 'a158', 211: 'a159', 212: 'a160', 213: 'a161', 214: 'a163', 215: 'a164', 216: 'a196', 217: 'a165', 218: 'a192', 219: 'a166', 220: 'a167', 221: 'a168', 222: 'a169', 223: 'a170', 224: 'a171', 225: 'a172', 226: 'a173', 227: 'a162', 228: 'a174', 229: 'a175', 230: 'a176', 231: 'a177', 232: 'a178', 233: 'a179', 234: 'a193', 235: 'a180', 236: 'a199', 237: 'a181', 238: 'a200', 239: 'a182', 241: 'a201', 242: 'a183', 243: 'a184', 244: 'a197', 245: 'a185', 246: 'a194', 247: 'a198', 248: 'a186', 249: 'a195', 250: 'a187', 251: 'a188', 252: 'a189', 253: 'a190', 254: 'a191'}
 
 class EncodingDB:
-    std2unicode: Dict[int, str] = {}
-    mac2unicode: Dict[int, str] = {}
-    win2unicode: Dict[int, str] = {}
-    pdf2unicode: Dict[int, str] = {}
-    for name, std, mac, win, pdf in ENCODING:
-        c = name2unicode(name)
-        if std:
-            std2unicode[std] = c
-        if mac:
-            mac2unicode[mac] = c
-        if win:
-            win2unicode[win] = c
-        if pdf:
-            pdf2unicode[pdf] = c
-
     encodings = {
-        "StandardEncoding": std2unicode,
-        "MacRomanEncoding": mac2unicode,
-        "WinAnsiEncoding": win2unicode,
-        "PDFDocEncoding": pdf2unicode,
+        "StandardEncoding": STANDARD_ENCODING,
+        "MacRomanEncoding": MAC_ROMAN_ENCODING,
+        "WinAnsiEncoding": WIN_ANSI_ENCODING,
+        "MacExpertEncoding": MAC_EXPERT_ENCODING,
     }
 
     @classmethod
     def get_encoding(
         cls,
-        name: str,
+        base: Union[PSLiteral, Dict[int, str]],
         diff: Optional[Iterable[object]] = None,
     ) -> Dict[int, str]:
-        cid2unicode = cls.encodings.get(name, cls.std2unicode)
+        if isinstance(base, PSLiteral):
+            encoding = cls.encodings.get(base.name, {})
+        else:
+            encoding = base
         if diff:
-            cid2unicode = cid2unicode.copy()
+            encoding = encoding.copy()
             cid = 0
             for x in diff:
                 if isinstance(x, int):
                     cid = x
                 elif isinstance(x, PSLiteral):
-                    try:
-                        cid2unicode[cid] = name2unicode(x.name)
-                    except (KeyError, ValueError) as e:
-                        log.debug("Failed to get char %r: %s", x, e)
+                    encoding[cid] = x.name
                     cid += 1
-        return cid2unicode
+        return encoding
+
+
+def cid2unicode_from_encoding(encoding: Dict[int, str]) -> Dict[int, str]:
+    cid2unicode = {}
+    for cid, name in encoding.items():
+        try:
+            cid2unicode[cid] = name2unicode(name)
+        except (KeyError, ValueError) as e:
+            log.debug("Failed to get char %s: %s", name, e)
+    return cid2unicode

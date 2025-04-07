@@ -97,8 +97,8 @@ readonly def
 def test_t1header_parser():
     parser = Type1FontHeaderParser(TYPE1DATA)
     assert parser.get_encoding() == {
-        48: "0",
-        49: "1",
+        48: "zero",
+        49: "one",
     }
 
 

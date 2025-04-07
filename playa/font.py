@@ -26,7 +26,7 @@ from playa.cmapdb import (
     parse_encoding,
     parse_tounicode,
 )
-from playa.encodingdb import EncodingDB, name2unicode
+from playa.encodingdb import EncodingDB, cid2unicode_from_encoding, SYMBOL_BUILTIN_ENCODING, ZAPFDINGBATS_BUILTIN_ENCODING
 from playa.fontmetrics import FONT_METRICS
 from playa.parser import (
     KWD,
@@ -118,7 +118,7 @@ KEYWORD_FOR = KWD(b"for")
 class Type1FontHeaderParser:
     def __init__(self, data: bytes) -> None:
         self._lexer = Lexer(data)
-        self._cid2unicode: Dict[int, str] = {}
+        self._encoding: Dict[int, str] = {}
         self._tokq: Deque[Token] = deque([], 2)
 
     def get_encoding(self) -> Dict[int, str]:
@@ -138,15 +138,12 @@ class Type1FontHeaderParser:
         for _, tok in self._lexer:
             # Ignore anything that isn't INT NAME put
             if tok is KEYWORD_PUT:
-                try:
-                    cid, name = self._tokq
-                    if isinstance(cid, int) and isinstance(name, PSLiteral):
-                        self._cid2unicode[cid] = name2unicode(name.name)
-                except KeyError:
-                    log.warning("Unknown CID %d", cid)
+                cid, name = self._tokq
+                if isinstance(cid, int) and isinstance(name, PSLiteral):
+                    self._encoding[cid] = name.name
             else:
                 self._tokq.append(tok)
-        return self._cid2unicode
+        return self._encoding
 
 
 class CFFFontProgram:
@@ -929,20 +926,23 @@ class SimpleFont(Font):
         descriptor: Mapping[str, Any],
         widths: Dict[int, float],
         spec: Mapping[str, Any],
+        implicit_encoding: Union[PSLiteral, Dict[int, str]],
     ) -> None:
         # Font encoding is specified either by a name of
         # built-in encoding or a dictionary that describes
         # the differences.
+        diff = None
         if "Encoding" in spec:
             encoding = resolve1(spec["Encoding"])
+            if isinstance(encoding, dict):
+                base = encoding.get("BaseEncoding", implicit_encoding)
+                diff = list_value(encoding.get("Differences", []))
+            else:
+                base = encoding
         else:
-            encoding = LITERAL_STANDARD_ENCODING
-        if isinstance(encoding, dict):
-            name = literal_name(encoding.get("BaseEncoding", LITERAL_STANDARD_ENCODING))
-            diff = list_value(encoding.get("Differences", []))
-            self.cid2unicode = EncodingDB.get_encoding(name, diff)
-        else:
-            self.cid2unicode = EncodingDB.get_encoding(literal_name(encoding))
+            base = implicit_encoding
+        self.encoding = EncodingDB.get_encoding(base, diff)
+        self.cid2unicode = cid2unicode_from_encoding(self.encoding)
         self.tounicode: Optional[ToUnicodeMap] = None
         if "ToUnicode" in spec:
             strm = stream_value(spec["ToUnicode"])
@@ -955,7 +955,6 @@ class SimpleFont(Font):
                 )
                 self.tounicode.code_lengths = [1]
                 self.tounicode.code_space = [(b"\x00", b"\xff")]
-        if self.tounicode:
             log.debug("ToUnicode: %r", vars(self.tounicode))
         Font.__init__(self, descriptor, widths)
 
@@ -964,7 +963,7 @@ class SimpleFont(Font):
             log.debug("decode with ToUnicodeMap: %r", data)
             return zip(data, self.tounicode.decode(data))
         else:
-            log.debug("decode with BaseEncoding: %r", data)
+            log.debug("decode with Encoding: %r", data)
             return ((cid, self.cid2unicode.get(cid, "")) for cid in data)
 
 
@@ -988,17 +987,36 @@ class Type1Font(SimpleFont):
             # lastchar = int_value(spec.get('LastChar', 255))
             width_list = list_value(spec.get("Widths", [0] * 256))
             widths = {i + firstchar: resolve1(w) for (i, w) in enumerate(width_list)}
-        SimpleFont.__init__(self, descriptor, widths, spec)
-        if "Encoding" not in spec and "FontFile" in descriptor:
+
+        implicit_encoding: Union[PSLiteral, Dict[int, str]]
+        if "FontFile" in descriptor:
             # try to recover the missing encoding info from the font file.
             self.fontfile = stream_value(descriptor.get("FontFile"))
             length1 = int_value(self.fontfile["Length1"])
             data = self.fontfile.buffer[:length1]
             parser = Type1FontHeaderParser(data)
-            self.cid2unicode = parser.get_encoding()
+            implicit_encoding = parser.get_encoding()
+        elif "FontFile3" in descriptor:
+            self.fontfile3 = stream_value(descriptor.get("FontFile3"))
+            try:
+                cfffont = CFFFontProgram(self.basefont, BytesIO(self.fontfile3.buffer))
+                self.cfffont = cfffont
+                implicit_encoding = {cid: cfffont.gid2name.get(gid) for cid, gid in cfffont.code2gid.items()}
+            except Exception as e:
+                log.debug("Failed to parse CFFFont %r: %s", self.fontfile3, e)
+                implicit_encoding = {}
+        elif self.basefont == "Symbol":
+            implicit_encoding = SYMBOL_BUILTIN_ENCODING
+        elif self.basefont == "ZapfDingbats":
+            implicit_encoding = ZAPFDINGBATS_BUILTIN_ENCODING
+        else:
+            implicit_encoding = LITERAL_STANDARD_ENCODING
+        SimpleFont.__init__(self, descriptor, widths, spec, implicit_encoding)
 
     def char_width(self, cid: int) -> float:
         """Get the width of a character from its CID."""
+        # Commit 6e4f36d <- what's the purpose of this? seems very cursed
+        # reverting this would make #76 easy to fix since cid2unicode would only be needed when ToUnicode is absent
         if self.char_widths is not None:
             if cid not in self.cid2unicode:
                 width = self.default_width
@@ -1026,7 +1044,11 @@ class TrueTypeFont(SimpleFont):
         # lastchar = int_value(spec.get('LastChar', 255))
         width_list = list_value(spec.get("Widths", [0] * 256))
         widths = {i + firstchar: resolve1(w) for (i, w) in enumerate(width_list)}
-        SimpleFont.__init__(self, descriptor, widths, spec)
+        is_non_symbolic = 32 & int_value(descriptor.get("Flags", 0))
+        # For symbolic TrueTypeFont, the map cid -> glyph does not actually go through glyph name
+        # making extracting unicode impossible??
+        implicit_encoding = LITERAL_STANDARD_ENCODING if is_non_symbolic else {}
+        SimpleFont.__init__(self, descriptor, widths, spec, implicit_encoding)
 
     def __repr__(self) -> str:
         return "<TrueTypeFont: basefont=%r>" % self.basefont
@@ -1042,7 +1064,7 @@ class Type3Font(SimpleFont):
             descriptor = dict_value(spec["FontDescriptor"])
         else:
             descriptor = {"Ascent": 0, "Descent": 0, "FontBBox": spec["FontBBox"]}
-        SimpleFont.__init__(self, descriptor, widths, spec)
+        SimpleFont.__init__(self, descriptor, widths, spec, implicit_encoding={})
         self.matrix = cast(Matrix, tuple(list_value(spec.get("FontMatrix"))))
         (_, self.descent, _, self.ascent) = self.bbox
         (self.hscale, self.vscale) = apply_matrix_norm(self.matrix, (1, 1))
