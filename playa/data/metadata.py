@@ -296,7 +296,7 @@ def font_from_spec(spec: Dict[str, Any]) -> Font:
         type=asobj(resolve1(spec.get("Subtype"))),
     )
     if basefont in FONT_METRICS:
-        desc, _ = FONT_METRICS[basefont]
+        desc, _, _ = FONT_METRICS[basefont]
     else:
         desc = resolve1(spec.get("FontDescriptor"))
     if desc is not None:
