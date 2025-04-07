@@ -149,56 +149,9 @@ class Type1FontHeaderParser:
         return self._cid2unicode
 
 
-NIBBLES = ("0", "1", "2", "3", "4", "5", "6", "7", "8", "9", ".", "e", "e-", None, "-")
+class CFFFontProgram:
+    NIBBLES = ("0", "1", "2", "3", "4", "5", "6", "7", "8", "9", ".", "e", "e-", None, "-")
 
-
-def getdict(data: bytes) -> Dict[int, List[Union[float, int]]]:
-    d: Dict[int, List[Union[float, int]]] = {}
-    fp = BytesIO(data)
-    stack: List[Union[float, int]] = []
-    while 1:
-        c = fp.read(1)
-        if not c:
-            break
-        b0 = ord(c)
-        if b0 <= 21:
-            d[b0] = stack
-            stack = []
-            continue
-        if b0 == 30:
-            s = ""
-            loop = True
-            while loop:
-                b = ord(fp.read(1))
-                for n in (b >> 4, b & 15):
-                    if n == 15:
-                        loop = False
-                    else:
-                        nibble = NIBBLES[n]
-                        assert nibble is not None
-                        s += nibble
-            value = float(s)
-        elif b0 >= 32 and b0 <= 246:
-            value = b0 - 139
-        else:
-            b1 = ord(fp.read(1))
-            if b0 >= 247 and b0 <= 250:
-                value = ((b0 - 247) << 8) + b1 + 108
-            elif b0 >= 251 and b0 <= 254:
-                value = -((b0 - 251) << 8) - b1 - 108
-            else:
-                b2 = ord(fp.read(1))
-                if b1 >= 128:
-                    b1 -= 256
-                if b0 == 28:
-                    value = b1 << 8 | b2
-                else:
-                    value = b1 << 24 | b2 << 16 | struct.unpack(">H", fp.read(2))[0]
-        stack.append(value)
-    return d
-
-
-class CFFFont:
     STANDARD_STRINGS = (
         ".notdef",
         "space",
@@ -593,11 +546,23 @@ class CFFFont:
         "Semibold",
     )
 
+    STANDARD_ENCODING = (0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,57,58,59,60,61,62,63,64,65,66,67,68,69,70,71,72,73,74,75,76,77,78,79,80,81,82,83,84,85,86,87,88,89,90,91,92,93,94,95,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,96,97,98,99,100,101,102,103,104,105,106,107,108,109,110,0,111,112,113,114,0,115,116,117,118,119,120,121,122,0,123,0,124,125,126,127,128,129,130,131,0,132,133,0,134,135,136,137,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,138,0,139,0,0,0,0,140,141,142,143,0,0,0,0,0,144,0,0,0,145,0,0,146,147,148,149,0,0,0,0)
+    EXPERT_ENCODING = (0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,229,230,0,231,232,233,234,235,236,237,238,13,14,15,99,239,240,241,242,243,244,245,246,247,248,27,28,249,250,251,252,0,253,254,255,256,257,0,0,0,258,0,0,259,260,261,262,0,0,263,264,265,0,266,109,110,267,268,269,0,270,271,272,273,274,275,276,277,278,279,280,281,282,283,284,285,286,287,288,289,290,291,292,293,294,295,296,297,298,299,300,301,302,303,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,304,305,306,0,0,307,308,309,310,311,0,312,0,0,313,0,0,314,315,0,0,316,317,318,0,0,0,158,155,163,319,320,321,322,323,324,325,0,0,326,150,164,169,327,328,329,330,331,332,333,334,335,336,337,338,339,340,341,342,343,344,345,346,347,348,349,350,351,352,353,354,355,356,357,358,359,360,361,362,363,364,365,366,367,368,369,370,371,372,373,374,375,376,377,378)
+    PREDEFINED_ENCODINGS = (STANDARD_ENCODING, EXPERT_ENCODING)
+
+    ISOADOBE_CHARSET = (1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,57,58,59,60,61,62,63,64,65,66,67,68,69,70,71,72,73,74,75,76,77,78,79,80,81,82,83,84,85,86,87,88,89,90,91,92,93,94,95,96,97,98,99,100,101,102,103,104,105,106,107,108,109,110,111,112,113,114,115,116,117,118,119,120,121,122,123,124,125,126,127,128,129,130,131,132,133,134,135,136,137,138,139,140,141,142,143,144,145,146,147,148,149,150,151,152,153,154,155,156,157,158,159,160,161,162,163,164,165,166,167,168,169,170,171,172,173,174,175,176,177,178,179,180,181,182,183,184,185,186,187,188,189,190,191,192,193,194,195,196,197,198,199,200,201,202,203,204,205,206,207,208,209,210,211,212,213,214,215,216,217,218,219,220,221,222,223,224,225,226,227,228)
+    EXPERT_CHARSET = (1,229,230,231,232,233,234,235,236,237,238,13,14,15,99,239,240,241,242,243,244,245,246,247,248,27,28,249,250,251,252,253,254,255,256,257,258,259,260,261,262,263,264,265,266,109,110,267,268,269,270,271,272,273,274,275,276,277,278,279,280,281,282,283,284,285,286,287,288,289,290,291,292,293,294,295,296,297,298,299,300,301,302,303,304,305,306,307,308,309,310,311,312,313,314,315,316,317,318,158,155,163,319,320,321,322,323,324,325,326,150,164,169,327,328,329,330,331,332,333,334,335,336,337,338,339,340,341,342,343,344,345,346,347,348,349,350,351,352,353,354,355,356,357,358,359,360,361,362,363,364,365,366,367,368,369,370,371,372,373,374,375,376,377,378)
+    EXPERT_SUBSET_CHARSET = (1,231,232,235,236,237,238,13,14,15,99,239,240,241,242,243,244,245,246,247,248,27,28,249,250,251,253,254,255,256,257,258,259,260,261,262,263,264,265,266,109,110,267,268,269,270,272,300,301,302,305,314,315,158,155,163,320,321,322,323,324,325,326,150,164,169,327,328,329,330,331,332,333,334,335,336,337,338,339,340,341,342,343,344,345,346)
+    PREDEFINED_CHARSETS = (ISOADOBE_CHARSET, EXPERT_CHARSET, EXPERT_SUBSET_CHARSET)
+
     class INDEX:
         def __init__(self, fp: BinaryIO) -> None:
             self.fp = fp
             self.offsets: List[int] = []
-            (count, offsize) = struct.unpack(">HB", self.fp.read(3))
+            count, = struct.unpack(">H", self.fp.read(2))
+            if count == 0:
+                return
+            offsize, = struct.unpack("B", self.fp.read(1))
             for i in range(count + 1):
                 self.offsets.append(nunpack(self.fp.read(offsize)))
             self.base = self.fp.tell() - 1
@@ -631,75 +596,147 @@ class CFFFont:
         # Global Subr INDEX
         self.subr_index = self.INDEX(self.fp)
         # Top DICT DATA
-        self.top_dict = getdict(self.dict_index[0])
+        self.top_dict = self.getdict(self.dict_index[0])
+        if (12,30) in self.top_dict:
+            raise NotImplementedError("CFF CIDFont not implemented")
         (charset_pos,) = self.top_dict.get(15, [0])
         (encoding_pos,) = self.top_dict.get(16, [0])
         (charstring_pos,) = self.top_dict.get(17, [0])
         # CharStrings
-        self.fp.seek(int(charstring_pos))
+        self.fp.seek(cast(int, charstring_pos))
         self.charstring = self.INDEX(self.fp)
         self.nglyphs = len(self.charstring)
+        self._parse_charset(cast(int, charset_pos))
+        self._parse_encoding(cast(int, encoding_pos))
+
+    def _parse_encoding(self, encoding_pos: int) -> None:
         # Encodings
         self.code2gid = {}
         self.gid2code = {}
-        self.fp.seek(int(encoding_pos))
-        format = self.fp.read(1)
-        if format == b"\x00":
-            # Format 0
-            (n,) = struct.unpack("B", self.fp.read(1))
-            for code, gid in enumerate(struct.unpack("B" * n, self.fp.read(n))):
-                self.code2gid[code] = gid
-                self.gid2code[gid] = code
-        elif format == b"\x01":
-            # Format 1
-            (n,) = struct.unpack("B", self.fp.read(1))
-            code = 0
-            for i in range(n):
-                (first, nleft) = struct.unpack("BB", self.fp.read(2))
-                for gid in range(first, first + nleft + 1):
+        if encoding_pos in (0, 1):
+            for code, sid in enumerate(self.PREDEFINED_ENCODINGS[encoding_pos]):
+                if sid != 0:
+                    gid = self.name2gid[self.getstr(sid)]
                     self.code2gid[code] = gid
                     self.gid2code[gid] = code
-                    code += 1
+            return
+        self.fp.seek(encoding_pos)
+        format, = self.fp.read(1)
+        supp, format = format & 0x80, format & 0x7F
+        self.encoding_format = format
+        if format == 0:
+            # Format 0
+            (n,) = struct.unpack("B", self.fp.read(1))
+            for gid, code in enumerate(struct.unpack("B" * n, self.fp.read(n)), start=1):
+                self.code2gid[code] = gid
+                self.gid2code[gid] = code
+        elif format == 1:
+            # Format 1
+            (n,) = struct.unpack("B", self.fp.read(1))
+            gid = 1
+            for i in range(n):
+                (first, nleft) = struct.unpack("BB", self.fp.read(2))
+                for code in range(first, first + nleft + 1):
+                    self.code2gid[code] = gid
+                    self.gid2code[gid] = code
+                    gid += 1
         else:
             raise ValueError("unsupported encoding format: %r" % format)
+        if supp:
+            n, = struct.unpack("B", self.fp.read(1))
+            for i in range(n):
+                code, sid = struct.unpack(">BH", self.fp.read(3))
+                gid = self.name2gid[self.getstr(sid)]
+                self.code2gid[code] = gid
+
+    def _parse_charset(self, charset_pos: int) -> None:
         # Charsets
         self.name2gid = {}
         self.gid2name = {}
-        self.fp.seek(int(charset_pos))
-        format = self.fp.read(1)
-        if format == b"\x00":
-            # Format 0
-            n = self.nglyphs - 1
-            for gid, sid in enumerate(
-                struct.unpack(">" + "H" * n, self.fp.read(2 * n))
-            ):
-                gid += 1
+        if charset_pos in (0, 1, 2):
+            for gid, sid in enumerate(self.PREDEFINED_CHARSETS[charset_pos], start=1):
                 sidname = self.getstr(sid)
                 self.name2gid[sidname] = gid
                 self.gid2name[gid] = sidname
-        elif format == b"\x01":
-            # Format 1
-            (n,) = struct.unpack("B", self.fp.read(1))
-            sid = 0
-            for i in range(n):
-                (first, nleft) = struct.unpack("BB", self.fp.read(2))
-                for gid in range(first, first + nleft + 1):
+            return
+        self.fp.seek(charset_pos)
+        format, = self.fp.read(1)
+        self.charset_format = format
+        if format == 0:
+            # Format 0
+            n = self.nglyphs - 1
+            for gid, sid in enumerate(
+                cast(Tuple[int, ...], struct.unpack(">" + "H" * n, self.fp.read(2 * n))),
+                start = 1
+            ):
+                sidname = self.getstr(sid)
+                self.name2gid[sidname] = gid
+                self.gid2name[gid] = sidname
+        elif format in (1, 2):
+            # Format 1 & 2
+            range_f = ">HB" if format == 1 else ">HH"
+            range_f_size = struct.calcsize(range_f)
+            gid = 1
+            while gid < self.nglyphs:
+                (first, nleft) = struct.unpack(range_f, self.fp.read(range_f_size))
+                for sid in range(first, first + nleft + 1):
                     sidname = self.getstr(sid)
                     self.name2gid[sidname] = gid
                     self.gid2name[gid] = sidname
-                    sid += 1
-        elif format == b"\x02":
-            # Format 2
-            assert False, str(("Unhandled", format))
+                    gid += 1
         else:
             raise ValueError("unsupported charset format: %r" % format)
 
-    def getstr(self, sid: int) -> Union[str, bytes]:
-        # This returns str for one of the STANDARD_STRINGS but bytes otherwise,
-        # and appears to be a needless source of type complexity.
+    def getstr(self, sid: int) -> str:
         if sid < len(self.STANDARD_STRINGS):
             return self.STANDARD_STRINGS[sid]
-        return self.string_index[sid - len(self.STANDARD_STRINGS)]
+        return self.string_index[sid - len(self.STANDARD_STRINGS)].decode('ascii')
+
+    def getdict(self, data: bytes) -> Dict[int, List[Union[float, int]]]:
+        d: Dict[int, List[Union[float, int]]] = {}
+        fp = BytesIO(data)
+        stack: List[Union[float, int]] = []
+        while 1:
+            c = fp.read(1)
+            if not c:
+                break
+            b0 = ord(c)
+            if b0 <= 21:
+                key = (12, ord(fp.read(1))) if b0 == 12 else b0
+                d[key] = stack
+                stack = []
+                continue
+            if b0 == 30:
+                s = ""
+                loop = True
+                while loop:
+                    b = ord(fp.read(1))
+                    for n in (b >> 4, b & 15):
+                        if n == 15:
+                            loop = False
+                        else:
+                            nibble = self.NIBBLES[n]
+                            assert nibble is not None
+                            s += nibble
+                value = float(s)
+            elif b0 >= 32 and b0 <= 246:
+                value = b0 - 139
+            else:
+                b1 = ord(fp.read(1))
+                if b0 >= 247 and b0 <= 250:
+                    value = ((b0 - 247) << 8) + b1 + 108
+                elif b0 >= 251 and b0 <= 254:
+                    value = -((b0 - 251) << 8) - b1 - 108
+                else:
+                    b2 = ord(fp.read(1))
+                    if b1 >= 128:
+                        b1 -= 256
+                    if b0 == 28:
+                        value = b1 << 8 | b2
+                    else:
+                        value = b1 << 24 | b2 << 16 | struct.unpack(">H", fp.read(2))[0]
+            stack.append(value)
+        return d
 
 
 class TrueTypeFontProgram:
