@@ -941,7 +941,7 @@ class Type1Font(SimpleFont):
 
         widths: Dict[int, float]
         if self.basefont in FONT_METRICS:
-            (descriptor, widths) = FONT_METRICS[self.basefont]
+            (descriptor, widths, _) = FONT_METRICS[self.basefont]
         else:
             descriptor = dict_value(spec.get("FontDescriptor", {}))
             firstchar = int_value(spec.get("FirstChar", 0))
