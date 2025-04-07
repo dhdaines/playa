@@ -932,8 +932,6 @@ class SimpleFont(Font):
 
 
 class Type1Font(SimpleFont):
-    char_widths: Union[Dict[str, int], None] = None
-
     def __init__(self, spec: Mapping[str, Any]) -> None:
         try:
             self.basefont = literal_name(resolve1(spec["BaseFont"]))
@@ -943,8 +941,7 @@ class Type1Font(SimpleFont):
 
         widths: Dict[int, float]
         if self.basefont in FONT_METRICS:
-            (descriptor, self.char_widths) = FONT_METRICS[self.basefont]
-            widths = {}
+            (descriptor, widths) = FONT_METRICS[self.basefont]
         else:
             descriptor = dict_value(spec.get("FontDescriptor", {}))
             firstchar = int_value(spec.get("FirstChar", 0))
@@ -962,13 +959,7 @@ class Type1Font(SimpleFont):
 
     def char_width(self, cid: int) -> float:
         """Get the width of a character from its CID."""
-        if self.char_widths is not None:
-            if cid not in self.cid2unicode:
-                width = self.default_width
-            else:
-                width = self.char_widths.get(self.cid2unicode[cid], self.default_width)
-        else:
-            width = self.widths.get(cid, self.default_width)
+        width = self.widths.get(cid, self.default_width)
         return width * self.hscale
 
     def __repr__(self) -> str:

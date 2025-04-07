@@ -164,17 +164,19 @@ def test_xobjects() -> None:
         boxes = []
         for obj in page.flatten(TextObject):
             assert isinstance(obj, TextObject)
-            boxes.append(tuple(round(x) for x in obj.bbox))
+            boxes.append(obj.bbox)
         # Make sure they are in the right place!
-        assert boxes == [
-            (136, 16, 136, 17),
-            (238, 80, 358, 96),
-            (45, 119, 116, 131),
-            (118, 118, 550, 130),
-            (61, 134, 142, 145),
-            (147, 133, 550, 145),
-            (389, 816, 546, 828),
+        XBOXES = [
+            (136.06, 15.612, 136.338, 16.612),
+            (237.64, 79.742, 357.64, 95.742),
+            (45.35, 119.022, 115.886, 131.022),
+            (117.92, 117.254, 549.92, 129.254),
+            (60.62, 133.816, 141.954, 144.816),
+            (146.72, 132.254, 549.92, 144.254),
+            (389.28, 815.974, 546.072, 827.974),
         ]
+        for xbox, hbox in zip(XBOXES, boxes):
+            assert hbox == pytest.approx(xbox)
 
 
 def test_annotations() -> None:
