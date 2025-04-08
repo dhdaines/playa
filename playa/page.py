@@ -35,7 +35,7 @@ from playa.color import (
     get_colorspace,
 )
 from playa.exceptions import PDFSyntaxError
-from playa.font import Font
+from playa.font import Font, CIDFont
 
 # FIXME: PDFObject needs to go in pdftypes somehow
 from playa.parser import KWD, InlineImage, ObjectParser, PDFObject, Token
@@ -1058,7 +1058,8 @@ class GlyphObject(ContentObject):
         font = tstate.font
         assert font is not None
         if font.vertical:
-            textdisp = font.char_disp(self.cid)
+            assert isinstance(font, CIDFont)
+            textdisp = font.char_position_vec(self.cid)
             assert isinstance(textdisp, tuple)
             (vx, vy) = textdisp
             if vx is None:
@@ -1131,7 +1132,7 @@ class TextObject(ContentObject):
                 for cid, text in font.decode(obj):
                     if needcharspace:
                         pos += charspace
-                    textwidth = font.char_width(cid)
+                    textwidth = font.char_width(cid) * 0.001
                     adv = textwidth * tstate.fontsize * scaling
                     x, y = tstate.glyph_offset = (x, pos) if vert else (pos, y)
                     glyph = GlyphObject(
@@ -1201,11 +1202,12 @@ class TextObject(ContentObject):
                 for cid, _ in font.decode(obj):
                     if needcharspace:
                         pos += charspace
-                    textwidth = font.char_width(cid)
+                    textwidth = font.char_width(cid) * 0.001
                     adv = textwidth * tstate.fontsize * scaling
                     x, y = (x, pos) if vert else (pos, y)
                     if vert:
-                        textdisp = font.char_disp(cid)
+                        assert isinstance(font, CIDFont)
+                        textdisp = font.char_position_vec(cid)
                         assert isinstance(textdisp, tuple)
                         (vx, vy) = textdisp
                         if vx is None:
@@ -1922,7 +1924,7 @@ class LazyInterpreter:
             self.textstate.font = doc.get_font(None, {})
         self.textstate.fontsize = num_value(fontsize)
         self.textstate.descent = (
-            self.textstate.font.get_descent() * self.textstate.fontsize
+            self.textstate.font.descent * 0.001 * self.textstate.fontsize
         )
 
     def do_Tr(self, render: PDFObject) -> None:
