@@ -337,6 +337,15 @@ class Type1Font(SimpleFont):
         """Get the width of a character from its CID."""
         # Commit 6e4f36d <- what's the purpose of this? seems very cursed
         # reverting this would make #76 easy to fix since cid2unicode would only be needed when ToUnicode is absent
+        #
+        # Answer: It exists entirely to support core fonts with a
+        # custom Encoding defined over them (accented characters for
+        # example).  The correct fix is to redo the AFM parsing to:
+        #
+        # - Get the implicit encoding (it's usually LITERAL_STANDARD_ENCODING)
+        # - Index the widths by glyph names, not encoding values
+        #
+        # Then we can construct `self.widths` directly using `self.encoding`.
         if self.char_widths is not None:
             if cid not in self.cid2unicode:
                 width = self.default_width
