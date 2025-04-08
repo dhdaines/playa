@@ -286,9 +286,9 @@ class Type1Font(SimpleFont):
                     for cid, gid in cfffont.code2gid.items()
                     if gid in cfffont.gid2name
                 }
-            except Exception as e:
-                log.debug("Failed to parse CFFFont %r: %s", self.fontfile3, e)
-                return None
+            except Exception:
+                log.debug("Failed to parse CFFFont %r", self.fontfile3, exc_info=True)
+                return LITERAL_STANDARD_ENCODING
         elif self.basefont == "Symbol":
             # FIXME: This (and zapf) can be obtained from the AFM files
             return SYMBOL_BUILTIN_ENCODING

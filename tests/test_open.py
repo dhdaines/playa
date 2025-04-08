@@ -69,4 +69,4 @@ def test_implicit_encoding_cff() -> None:
         assert isinstance(fonts, dict)
         for name, desc in fonts.items():
             font = doc.get_font(desc.objid, desc.resolve())
-            print(name, font.encoding)
+            assert font.encoding
