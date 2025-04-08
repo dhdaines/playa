@@ -87,6 +87,9 @@ def raise_key_error_for_invalid_unicode(unicode_digit: int) -> None:
 
 class EncodingDB:
     encodings = {
+        # NOTE: According to PDF 1.7 Annex D.1, "Conforming readers
+        # shall not have a predefined encoding named
+        # StandardEncoding", but it's not clear why not.
         "StandardEncoding": STANDARD_ENCODING,
         "MacRomanEncoding": MAC_ROMAN_ENCODING,
         "WinAnsiEncoding": WIN_ANSI_ENCODING,

@@ -1,9 +1,11 @@
 import logging
 import struct
+from collections import deque
 from io import BytesIO
-from typing import BinaryIO, Dict, List, Iterator, Tuple, Union
+from typing import BinaryIO, Deque, Dict, List, Iterator, Tuple, Union
 
 from playa.cmapdb import ToUnicodeMap
+from playa.parser import Lexer, Token, KWD, PSLiteral
 from playa.utils import nunpack
 
 log = logging.getLogger(__name__)
@@ -1713,3 +1715,44 @@ class TrueTypeFontProgram:
         for char, gid in char2gid.items():
             tounicode.add_code2code(gid, char, 2)
         return tounicode
+
+
+KEYWORD_BEGIN = KWD(b"begin")
+KEYWORD_END = KWD(b"end")
+KEYWORD_DEF = KWD(b"def")
+KEYWORD_PUT = KWD(b"put")
+KEYWORD_DICT = KWD(b"dict")
+KEYWORD_ARRAY = KWD(b"array")
+KEYWORD_READONLY = KWD(b"readonly")
+KEYWORD_FOR = KWD(b"for")
+
+
+class Type1FontHeaderParser:
+    def __init__(self, data: bytes) -> None:
+        self._lexer = Lexer(data)
+        self._encoding: Dict[int, str] = {}
+        self._tokq: Deque[Token] = deque([], 2)
+
+    def get_encoding(self) -> Dict[int, str]:
+        """Parse the font encoding.
+
+        The Type1 font encoding maps character codes to character names. These
+        character names could either be standard Adobe glyph names, or
+        character names associated with custom CharStrings for this font. A
+        CharString is a sequence of operations that describe how the character
+        should be drawn. Currently, this function returns '' (empty string)
+        for character names that are associated with a CharStrings.
+
+        Reference: Adobe Systems Incorporated, Adobe Type 1 Font Format
+
+        :returns mapping of character identifiers (cid's) to unicode characters
+        """
+        for _, tok in self._lexer:
+            # Ignore anything that isn't INT NAME put
+            if tok is KEYWORD_PUT:
+                cid, name = self._tokq
+                if isinstance(cid, int) and isinstance(name, PSLiteral):
+                    self._encoding[cid] = name.name
+            else:
+                self._tokq.append(tok)
+        return self._encoding

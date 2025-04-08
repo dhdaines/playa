@@ -1,9 +1,7 @@
 import logging
-from collections import deque
 from io import BytesIO
 from typing import (
     Any,
-    Deque,
     Dict,
     Iterable,
     List,
@@ -32,14 +30,11 @@ from playa.encodings import (
     ZAPFDINGBATS_BUILTIN_ENCODING,
 )
 from playa.fontmetrics import FONT_METRICS
-from playa.fontprogram import CFFFontProgram, TrueTypeFontProgram
+from playa.fontprogram import CFFFontProgram, TrueTypeFontProgram, Type1FontHeaderParser
 from playa.parser import (
-    KWD,
     LIT,
-    Lexer,
     PDFObject,
     PSLiteral,
-    Token,
     literal_name,
 )
 from playa.pdftypes import (
@@ -107,47 +102,6 @@ def get_widths2(seq: Iterable[PDFObject]) -> Dict[int, Tuple[float, Point]]:
                     widths[i] = (w, (vx, vy))
                 r = []
     return widths
-
-
-KEYWORD_BEGIN = KWD(b"begin")
-KEYWORD_END = KWD(b"end")
-KEYWORD_DEF = KWD(b"def")
-KEYWORD_PUT = KWD(b"put")
-KEYWORD_DICT = KWD(b"dict")
-KEYWORD_ARRAY = KWD(b"array")
-KEYWORD_READONLY = KWD(b"readonly")
-KEYWORD_FOR = KWD(b"for")
-
-
-class Type1FontHeaderParser:
-    def __init__(self, data: bytes) -> None:
-        self._lexer = Lexer(data)
-        self._encoding: Dict[int, str] = {}
-        self._tokq: Deque[Token] = deque([], 2)
-
-    def get_encoding(self) -> Dict[int, str]:
-        """Parse the font encoding.
-
-        The Type1 font encoding maps character codes to character names. These
-        character names could either be standard Adobe glyph names, or
-        character names associated with custom CharStrings for this font. A
-        CharString is a sequence of operations that describe how the character
-        should be drawn. Currently, this function returns '' (empty string)
-        for character names that are associated with a CharStrings.
-
-        Reference: Adobe Systems Incorporated, Adobe Type 1 Font Format
-
-        :returns mapping of character identifiers (cid's) to unicode characters
-        """
-        for _, tok in self._lexer:
-            # Ignore anything that isn't INT NAME put
-            if tok is KEYWORD_PUT:
-                cid, name = self._tokq
-                if isinstance(cid, int) and isinstance(name, PSLiteral):
-                    self._encoding[cid] = name.name
-            else:
-                self._tokq.append(tok)
-        return self._encoding
 
 
 LITERAL_STANDARD_ENCODING = LIT("StandardEncoding")
@@ -304,9 +258,11 @@ class Type1Font(SimpleFont):
             width_list = list_value(spec.get("Widths", [0] * 256))
             widths = {i + firstchar: resolve1(w) for (i, w) in enumerate(width_list)}
 
+        # PDF 1.7 Table 114: For a font program that is embedded in
+        # the PDF file, the implicit base encoding shall be the font
+        # program’s built-in encoding.
         implicit_encoding: Union[PSLiteral, Dict[int, str]]
         if "FontFile" in descriptor:
-            # try to recover the missing encoding info from the font file.
             self.fontfile = stream_value(descriptor.get("FontFile"))
             length1 = int_value(self.fontfile["Length1"])
             data = self.fontfile.buffer[:length1]
@@ -326,17 +282,22 @@ class Type1Font(SimpleFont):
                 log.debug("Failed to parse CFFFont %r: %s", self.fontfile3, e)
                 implicit_encoding = {}
         elif self.basefont == "Symbol":
+            # FIXME: This (and zapf) can be obtained from the AFM files
             implicit_encoding = SYMBOL_BUILTIN_ENCODING
         elif self.basefont == "ZapfDingbats":
             implicit_encoding = ZAPFDINGBATS_BUILTIN_ENCODING
         else:
+            # PDF 1.7 Table 114: Otherwise, for a nonsymbolic font, it
+            # shall be StandardEncoding, and for a symbolic font, it
+            # shall be the font's built-in encoding (see FIXME above)
             implicit_encoding = LITERAL_STANDARD_ENCODING
         SimpleFont.__init__(self, descriptor, widths, spec, implicit_encoding)
 
     def char_width(self, cid: int) -> float:
         """Get the width of a character from its CID."""
         # Commit 6e4f36d <- what's the purpose of this? seems very cursed
-        # reverting this would make #76 easy to fix since cid2unicode would only be needed when ToUnicode is absent
+        # reverting this would make #76 easy to fix since cid2unicode would only be
+        # needed when ToUnicode is absent
         #
         # Answer: It exists entirely to support core fonts with a
         # custom Encoding defined over them (accented characters for
@@ -344,6 +305,7 @@ class Type1Font(SimpleFont):
         #
         # - Get the implicit encoding (it's usually LITERAL_STANDARD_ENCODING)
         # - Index the widths by glyph names, not encoding values
+        # - As a treat, we can also get the encodings for Symbol and ZapfDingbats
         #
         # Then we can construct `self.widths` directly using `self.encoding`.
         if self.char_widths is not None:
