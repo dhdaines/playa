@@ -1,7 +1,6 @@
 import logging
 from io import BytesIO
 from typing import (
-    Any,
     Dict,
     Iterable,
     List,
@@ -214,17 +213,20 @@ class SimpleFont(Font):
         self.cid2unicode = cid2unicode_from_encoding(self.encoding)
         self.tounicode: Optional[ToUnicodeMap] = None
         if "ToUnicode" in spec:
-            strm = stream_value(spec["ToUnicode"])
-            self.tounicode = parse_tounicode(strm.buffer)
-            if self.tounicode.code_lengths != [1]:
-                log.debug(
-                    "Technical Note #5144 Considered Harmful: A simple font's "
-                    "code space must be single-byte, not %r",
-                    self.tounicode.code_space,
-                )
-                self.tounicode.code_lengths = [1]
-                self.tounicode.code_space = [(b"\x00", b"\xff")]
-            log.debug("ToUnicode: %r", vars(self.tounicode))
+            strm = resolve1(spec["ToUnicode"])
+            if isinstance(strm, ContentStream):
+                self.tounicode = parse_tounicode(strm.buffer)
+                if self.tounicode.code_lengths != [1]:
+                    log.debug(
+                        "Technical Note #5144 Considered Harmful: A simple font's "
+                        "code space must be single-byte, not %r",
+                        self.tounicode.code_space,
+                    )
+                    self.tounicode.code_lengths = [1]
+                    self.tounicode.code_space = [(b"\x00", b"\xff")]
+                log.debug("ToUnicode: %r", vars(self.tounicode))
+            else:
+                log.warning("ToUnicode is not a content stream: %r", strm)
         Font.__init__(self, descriptor, widths)
 
     def get_implicit_encoding(
@@ -241,16 +243,22 @@ class SimpleFont(Font):
             return ((cid, self.cid2unicode.get(cid, "")) for cid in data)
 
 
+def get_basefont(spec: Dict[str, PDFObject]) -> str:
+    if "BaseFont" in spec:
+        basefont = resolve1(spec["BaseFont"])
+        if isinstance(basefont, PSLiteral):
+            return basefont.name
+        elif isinstance(basefont, bytes):
+            return decode_text(basefont)
+    log.warning("Missing or unrecognized BaseFont: %r", spec)
+    return "unknown"
+
+
 class Type1Font(SimpleFont):
     char_widths: Union[Dict[str, int], None] = None
 
     def __init__(self, spec: Dict[str, PDFObject]) -> None:
-        try:
-            self.basefont = literal_name(resolve1(spec["BaseFont"]))
-        except KeyError:
-            log.warning("Font spec is missing BaseFont: %r", spec)
-            self.basefont = "unknown"
-
+        self.basefont = get_basefont(spec)
         widths: Dict[int, float]
         if self.basefont in FONT_METRICS:
             (descriptor, self.char_widths) = FONT_METRICS[self.basefont]
@@ -329,12 +337,7 @@ class Type1Font(SimpleFont):
 
 class TrueTypeFont(SimpleFont):
     def __init__(self, spec: Dict[str, PDFObject]) -> None:
-        try:
-            self.basefont = literal_name(resolve1(spec["BaseFont"]))
-        except KeyError:
-            log.warning("Font spec is missing BaseFont: %r", spec)
-            self.basefont = "unknown"
-
+        self.basefont = get_basefont(spec)
         widths: Dict[int, float]
         descriptor = dict_value(spec.get("FontDescriptor", {}))
         firstchar = int_value(spec.get("FirstChar", 0))
@@ -397,11 +400,7 @@ class CIDFont(Font):
         self,
         spec: Dict[str, PDFObject],
     ) -> None:
-        try:
-            self.basefont = literal_name(spec["BaseFont"])
-        except KeyError:
-            log.warning("Font spec is missing BaseFont: %r", spec)
-            self.basefont = "unknown"
+        self.basefont = get_basefont(spec)
         self.cidsysteminfo = dict_value(spec.get("CIDSystemInfo", {}))
         # These are *supposed* to be ASCII (PDF 1.7 section 9.7.3),
         # but for whatever reason they are sometimes UTF-16BE
