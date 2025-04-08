@@ -371,6 +371,14 @@ class Type3Font(SimpleFont):
         (_, self.descent, _, self.ascent) = self.bbox
         (self.hscale, self.vscale) = apply_matrix_norm(self.matrix, (1, 1))
 
+    def get_implicit_encoding(
+        self, descriptor: Mapping[str, Any]
+    ) -> Union[PSLiteral, Dict[int, str], None]:
+        # PDF 1.7 sec 9.6.6.3: A Type 3 font’s mapping from character
+        # codes to glyph names shall be entirely defined by its
+        # Encoding entry, which is required in this case.
+        return {}
+
     def __repr__(self) -> str:
         return "<Type3Font>"
 
