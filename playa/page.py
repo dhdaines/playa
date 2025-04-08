@@ -968,51 +968,9 @@ class PathObject(ContentObject):
     fill: bool
     evenodd: bool
 
-    def __len__(self):
-        """Number of subpaths."""
-        return min(1, sum(1 for seg in self.raw_segments if seg.operator == "m"))
-
-    def __iter__(self):
-        """Iterate over subpaths.
-
-        If there is only a single subpath, it will still be iterated
-        over.  This means that some care must be taken (for example,
-        checking if `len(path) == 1`) to avoid endless recursion.
-
-        Note: subpaths inherit the values of `fill` and `evenodd` from
-        the parent path, but these values are no longer meaningful
-        since the winding rules must be applied to the composite path
-        as a whole (this is not a bug, just don't rely on them to know
-        which regions are filled or not).
-
-        """
-        # FIXME: Is there an itertool or a more_itertool for this?
-        segs = []
-        for seg in self.raw_segments:
-            if seg.operator == "m" and segs:
-                yield PathObject(
-                    _pageref=self._pageref,
-                    gstate=self.gstate,
-                    ctm=self.ctm,
-                    mcstack=self.mcstack,
-                    raw_segments=segs,
-                    stroke=self.stroke,
-                    fill=self.fill,
-                    evenodd=self.evenodd,
-                )
-                segs = []
-            segs.append(seg)
-        if segs:
-            yield PathObject(
-                _pageref=self._pageref,
-                gstate=self.gstate,
-                ctm=self.ctm,
-                mcstack=self.mcstack,
-                raw_segments=segs,
-                stroke=self.stroke,
-                fill=self.fill,
-                evenodd=self.evenodd,
-            )
+    def __len__(self) -> int:
+        """Does not iterate over subpaths. Do it yourself if you must."""
+        return 0
 
     @property
     def segments(self) -> Iterator[PathSegment]:
