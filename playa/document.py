@@ -16,7 +16,6 @@ from typing import (
     Iterable,
     Iterator,
     List,
-    Mapping,
     Optional,
     Set,
     Tuple,
@@ -505,7 +504,7 @@ class Document:
             self._cached_objs[objid] = obj
         return self._cached_objs[objid]
 
-    def get_font(self, objid: object, spec: Mapping[str, object]) -> Font:
+    def get_font(self, objid: object, spec: Dict[str, PDFObject]) -> Font:
         if objid and objid in self._cached_fonts:
             return self._cached_fonts[objid]
         if spec.get("Type") is not LITERAL_FONT:

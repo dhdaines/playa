@@ -5,7 +5,6 @@ from typing import (
     Dict,
     Iterable,
     List,
-    Mapping,
     Optional,
     Tuple,
     Union,
@@ -114,7 +113,7 @@ class Font:
 
     def __init__(
         self,
-        descriptor: Mapping[str, Any],
+        descriptor: Dict[str, PDFObject],
         widths: Dict[int, float],
         default_width: Optional[float] = None,
     ) -> None:
@@ -191,9 +190,9 @@ class Font:
 class SimpleFont(Font):
     def __init__(
         self,
-        descriptor: Mapping[str, Any],
+        descriptor: Dict[str, PDFObject],
         widths: Dict[int, float],
-        spec: Mapping[str, Any],
+        spec: Dict[str, PDFObject],
     ) -> None:
         # Font encoding is specified either by a name of
         # built-in encoding or a dictionary that describes
@@ -229,7 +228,7 @@ class SimpleFont(Font):
         Font.__init__(self, descriptor, widths)
 
     def get_implicit_encoding(
-        self, descriptor: Mapping[str, Any]
+        self, descriptor: Dict[str, PDFObject]
     ) -> Union[PSLiteral, Dict[int, str], None]:
         raise NotImplementedError()
 
@@ -245,7 +244,7 @@ class SimpleFont(Font):
 class Type1Font(SimpleFont):
     char_widths: Union[Dict[str, int], None] = None
 
-    def __init__(self, spec: Mapping[str, Any]) -> None:
+    def __init__(self, spec: Dict[str, PDFObject]) -> None:
         try:
             self.basefont = literal_name(resolve1(spec["BaseFont"]))
         except KeyError:
@@ -265,7 +264,7 @@ class Type1Font(SimpleFont):
         SimpleFont.__init__(self, descriptor, widths, spec)
 
     def get_implicit_encoding(
-        self, descriptor: Mapping[str, Any]
+        self, descriptor: Dict[str, PDFObject]
     ) -> Union[PSLiteral, Dict[int, str], None]:
         # PDF 1.7 Table 114: For a font program that is embedded in
         # the PDF file, the implicit base encoding shall be the font
@@ -329,7 +328,7 @@ class Type1Font(SimpleFont):
 
 
 class TrueTypeFont(SimpleFont):
-    def __init__(self, spec: Mapping[str, Any]) -> None:
+    def __init__(self, spec: Dict[str, PDFObject]) -> None:
         try:
             self.basefont = literal_name(resolve1(spec["BaseFont"]))
         except KeyError:
@@ -345,7 +344,7 @@ class TrueTypeFont(SimpleFont):
         SimpleFont.__init__(self, descriptor, widths, spec)
 
     def get_implicit_encoding(
-        self, descriptor: Mapping[str, Any]
+        self, descriptor: Dict[str, PDFObject]
     ) -> Union[PSLiteral, Dict[int, str], None]:
         is_non_symbolic = 32 & int_value(descriptor.get("Flags", 0))
         # For symbolic TrueTypeFont, the map cid -> glyph does not actually go through glyph name
@@ -357,7 +356,7 @@ class TrueTypeFont(SimpleFont):
 
 
 class Type3Font(SimpleFont):
-    def __init__(self, spec: Mapping[str, Any]) -> None:
+    def __init__(self, spec: Dict[str, PDFObject]) -> None:
         firstchar = int_value(spec.get("FirstChar", 0))
         # lastchar = int_value(spec.get('LastChar', 0))
         width_list = list_value(spec.get("Widths", [0] * 256))
@@ -372,7 +371,7 @@ class Type3Font(SimpleFont):
         (self.hscale, self.vscale) = apply_matrix_norm(self.matrix, (1, 1))
 
     def get_implicit_encoding(
-        self, descriptor: Mapping[str, Any]
+        self, descriptor: Dict[str, PDFObject]
     ) -> Union[PSLiteral, Dict[int, str], None]:
         # PDF 1.7 sec 9.6.6.3: A Type 3 font’s mapping from character
         # codes to glyph names shall be entirely defined by its
@@ -396,7 +395,7 @@ class CIDFont(Font):
 
     def __init__(
         self,
-        spec: Mapping[str, Any],
+        spec: Dict[str, PDFObject],
     ) -> None:
         try:
             self.basefont = literal_name(spec["BaseFont"])
@@ -494,7 +493,7 @@ class CIDFont(Font):
             default_width = spec.get("DW", 1000)
         Font.__init__(self, descriptor, widths, default_width=default_width)
 
-    def get_cmap_from_spec(self, spec: Mapping[str, Any]) -> CMapBase:
+    def get_cmap_from_spec(self, spec: Dict[str, PDFObject]) -> CMapBase:
         """Get cmap from font specification
 
         For certain PDFs, Encoding Type isn't mentioned as an attribute of
@@ -517,13 +516,13 @@ class CIDFont(Font):
                 return CMap()
 
     @staticmethod
-    def _get_cmap_name(spec: Mapping[str, Any]) -> str:
+    def _get_cmap_name(spec: Dict[str, PDFObject]) -> str:
         """Get cmap name from font specification"""
         cmap_name = "unknown"  # default value
         try:
-            spec_encoding = spec["Encoding"]
-            if hasattr(spec_encoding, "name"):
-                cmap_name = literal_name(spec["Encoding"])
+            spec_encoding = resolve1(spec["Encoding"])
+            if isinstance(spec_encoding, PSLiteral):
+                cmap_name = spec_encoding.name
             else:
                 cmap_name = literal_name(spec_encoding["CMapName"])
         except KeyError:
