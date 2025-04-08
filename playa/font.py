@@ -110,6 +110,7 @@ LITERAL_STANDARD_ENCODING = LIT("StandardEncoding")
 class Font:
     vertical = False
     multibyte = False
+    encoding: Dict[int, str]
 
     def __init__(
         self,
@@ -193,24 +194,23 @@ class SimpleFont(Font):
         descriptor: Mapping[str, Any],
         widths: Dict[int, float],
         spec: Mapping[str, Any],
-        implicit_encoding: Union[PSLiteral, Dict[int, str], None] = None,
     ) -> None:
         # Font encoding is specified either by a name of
         # built-in encoding or a dictionary that describes
         # the differences.
+        base = None
         diff = None
         if "Encoding" in spec:
             encoding = resolve1(spec["Encoding"])
             if isinstance(encoding, dict):
-                base = encoding.get("BaseEncoding", implicit_encoding)
+                base = encoding.get("BaseEncoding")
                 diff = list_value(encoding.get("Differences", []))
             elif isinstance(encoding, PSLiteral):
                 base = encoding
             else:
                 log.warning("Encoding is neither a dictionary nor a name: %r", encoding)
-                base = implicit_encoding
-        else:
-            base = implicit_encoding
+        if base is None:
+            base = self.get_implicit_encoding(descriptor)
         self.encoding = EncodingDB.get_encoding(base, diff)
         self.cid2unicode = cid2unicode_from_encoding(self.encoding)
         self.tounicode: Optional[ToUnicodeMap] = None
@@ -227,6 +227,11 @@ class SimpleFont(Font):
                 self.tounicode.code_space = [(b"\x00", b"\xff")]
             log.debug("ToUnicode: %r", vars(self.tounicode))
         Font.__init__(self, descriptor, widths)
+
+    def get_implicit_encoding(
+        self, descriptor: Mapping[str, Any]
+    ) -> Union[PSLiteral, Dict[int, str], None]:
+        raise NotImplementedError()
 
     def decode(self, data: bytes) -> Iterable[Tuple[int, str]]:
         if self.tounicode is not None:
@@ -257,41 +262,43 @@ class Type1Font(SimpleFont):
             # lastchar = int_value(spec.get('LastChar', 255))
             width_list = list_value(spec.get("Widths", [0] * 256))
             widths = {i + firstchar: resolve1(w) for (i, w) in enumerate(width_list)}
+        SimpleFont.__init__(self, descriptor, widths, spec)
 
+    def get_implicit_encoding(
+        self, descriptor: Mapping[str, Any]
+    ) -> Union[PSLiteral, Dict[int, str], None]:
         # PDF 1.7 Table 114: For a font program that is embedded in
         # the PDF file, the implicit base encoding shall be the font
         # program’s built-in encoding.
-        implicit_encoding: Union[PSLiteral, Dict[int, str]]
         if "FontFile" in descriptor:
             self.fontfile = stream_value(descriptor.get("FontFile"))
             length1 = int_value(self.fontfile["Length1"])
             data = self.fontfile.buffer[:length1]
             parser = Type1FontHeaderParser(data)
-            implicit_encoding = parser.get_encoding()
+            return parser.get_encoding()
         elif "FontFile3" in descriptor:
             self.fontfile3 = stream_value(descriptor.get("FontFile3"))
             try:
                 cfffont = CFFFontProgram(self.basefont, BytesIO(self.fontfile3.buffer))
                 self.cfffont = cfffont
-                implicit_encoding = {
+                return {
                     cid: cfffont.gid2name[gid]
                     for cid, gid in cfffont.code2gid.items()
                     if gid in cfffont.gid2name
                 }
             except Exception as e:
                 log.debug("Failed to parse CFFFont %r: %s", self.fontfile3, e)
-                implicit_encoding = {}
+                return None
         elif self.basefont == "Symbol":
             # FIXME: This (and zapf) can be obtained from the AFM files
-            implicit_encoding = SYMBOL_BUILTIN_ENCODING
+            return SYMBOL_BUILTIN_ENCODING
         elif self.basefont == "ZapfDingbats":
-            implicit_encoding = ZAPFDINGBATS_BUILTIN_ENCODING
+            return ZAPFDINGBATS_BUILTIN_ENCODING
         else:
             # PDF 1.7 Table 114: Otherwise, for a nonsymbolic font, it
             # shall be StandardEncoding, and for a symbolic font, it
             # shall be the font's built-in encoding (see FIXME above)
-            implicit_encoding = LITERAL_STANDARD_ENCODING
-        SimpleFont.__init__(self, descriptor, widths, spec, implicit_encoding)
+            return LITERAL_STANDARD_ENCODING
 
     def char_width(self, cid: int) -> float:
         """Get the width of a character from its CID."""
@@ -335,13 +342,15 @@ class TrueTypeFont(SimpleFont):
         # lastchar = int_value(spec.get('LastChar', 255))
         width_list = list_value(spec.get("Widths", [0] * 256))
         widths = {i + firstchar: resolve1(w) for (i, w) in enumerate(width_list)}
+        SimpleFont.__init__(self, descriptor, widths, spec)
+
+    def get_implicit_encoding(
+        self, descriptor: Mapping[str, Any]
+    ) -> Union[PSLiteral, Dict[int, str], None]:
         is_non_symbolic = 32 & int_value(descriptor.get("Flags", 0))
         # For symbolic TrueTypeFont, the map cid -> glyph does not actually go through glyph name
         # making extracting unicode impossible??
-        implicit_encoding: Union[PSLiteral, Dict[int, str]] = (
-            LITERAL_STANDARD_ENCODING if is_non_symbolic else {}
-        )
-        SimpleFont.__init__(self, descriptor, widths, spec, implicit_encoding)
+        return LITERAL_STANDARD_ENCODING if is_non_symbolic else None
 
     def __repr__(self) -> str:
         return "<TrueTypeFont: basefont=%r>" % self.basefont
