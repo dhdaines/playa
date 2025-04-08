@@ -70,3 +70,6 @@ def test_implicit_encoding_cff() -> None:
         for name, desc in fonts.items():
             font = doc.get_font(desc.objid, desc.resolve())
             assert font.encoding
+        # Verify fallback to StandardEncoding
+        t = page.extract_text()
+        assert t.strip() == "Part I\nClick here to access Part II \non hp.com."

@@ -1,11 +1,9 @@
 import logging
 from io import BytesIO
 from typing import (
-    Any,
     Dict,
     Iterable,
     List,
-    Mapping,
     Optional,
     Tuple,
     Union,
@@ -114,7 +112,7 @@ class Font:
 
     def __init__(
         self,
-        descriptor: Mapping[str, Any],
+        descriptor: Dict[str, PDFObject],
         widths: Dict[int, float],
         default_width: Optional[float] = None,
     ) -> None:
@@ -191,9 +189,9 @@ class Font:
 class SimpleFont(Font):
     def __init__(
         self,
-        descriptor: Mapping[str, Any],
+        descriptor: Dict[str, PDFObject],
         widths: Dict[int, float],
-        spec: Mapping[str, Any],
+        spec: Dict[str, PDFObject],
     ) -> None:
         # Font encoding is specified either by a name of
         # built-in encoding or a dictionary that describes
@@ -215,21 +213,24 @@ class SimpleFont(Font):
         self.cid2unicode = cid2unicode_from_encoding(self.encoding)
         self.tounicode: Optional[ToUnicodeMap] = None
         if "ToUnicode" in spec:
-            strm = stream_value(spec["ToUnicode"])
-            self.tounicode = parse_tounicode(strm.buffer)
-            if self.tounicode.code_lengths != [1]:
-                log.debug(
-                    "Technical Note #5144 Considered Harmful: A simple font's "
-                    "code space must be single-byte, not %r",
-                    self.tounicode.code_space,
-                )
-                self.tounicode.code_lengths = [1]
-                self.tounicode.code_space = [(b"\x00", b"\xff")]
-            log.debug("ToUnicode: %r", vars(self.tounicode))
+            strm = resolve1(spec["ToUnicode"])
+            if isinstance(strm, ContentStream):
+                self.tounicode = parse_tounicode(strm.buffer)
+                if self.tounicode.code_lengths != [1]:
+                    log.debug(
+                        "Technical Note #5144 Considered Harmful: A simple font's "
+                        "code space must be single-byte, not %r",
+                        self.tounicode.code_space,
+                    )
+                    self.tounicode.code_lengths = [1]
+                    self.tounicode.code_space = [(b"\x00", b"\xff")]
+                log.debug("ToUnicode: %r", vars(self.tounicode))
+            else:
+                log.warning("ToUnicode is not a content stream: %r", strm)
         Font.__init__(self, descriptor, widths)
 
     def get_implicit_encoding(
-        self, descriptor: Mapping[str, Any]
+        self, descriptor: Dict[str, PDFObject]
     ) -> Union[PSLiteral, Dict[int, str], None]:
         raise NotImplementedError()
 
@@ -242,16 +243,22 @@ class SimpleFont(Font):
             return ((cid, self.cid2unicode.get(cid, "")) for cid in data)
 
 
+def get_basefont(spec: Dict[str, PDFObject]) -> str:
+    if "BaseFont" in spec:
+        basefont = resolve1(spec["BaseFont"])
+        if isinstance(basefont, PSLiteral):
+            return basefont.name
+        elif isinstance(basefont, bytes):
+            return decode_text(basefont)
+    log.warning("Missing or unrecognized BaseFont: %r", spec)
+    return "unknown"
+
+
 class Type1Font(SimpleFont):
     char_widths: Union[Dict[str, int], None] = None
 
-    def __init__(self, spec: Mapping[str, Any]) -> None:
-        try:
-            self.basefont = literal_name(resolve1(spec["BaseFont"]))
-        except KeyError:
-            log.warning("Font spec is missing BaseFont: %r", spec)
-            self.basefont = "unknown"
-
+    def __init__(self, spec: Dict[str, PDFObject]) -> None:
+        self.basefont = get_basefont(spec)
         widths: Dict[int, float]
         if self.basefont in FONT_METRICS:
             (descriptor, self.char_widths) = FONT_METRICS[self.basefont]
@@ -265,7 +272,7 @@ class Type1Font(SimpleFont):
         SimpleFont.__init__(self, descriptor, widths, spec)
 
     def get_implicit_encoding(
-        self, descriptor: Mapping[str, Any]
+        self, descriptor: Dict[str, PDFObject]
     ) -> Union[PSLiteral, Dict[int, str], None]:
         # PDF 1.7 Table 114: For a font program that is embedded in
         # the PDF file, the implicit base encoding shall be the font
@@ -329,13 +336,8 @@ class Type1Font(SimpleFont):
 
 
 class TrueTypeFont(SimpleFont):
-    def __init__(self, spec: Mapping[str, Any]) -> None:
-        try:
-            self.basefont = literal_name(resolve1(spec["BaseFont"]))
-        except KeyError:
-            log.warning("Font spec is missing BaseFont: %r", spec)
-            self.basefont = "unknown"
-
+    def __init__(self, spec: Dict[str, PDFObject]) -> None:
+        self.basefont = get_basefont(spec)
         widths: Dict[int, float]
         descriptor = dict_value(spec.get("FontDescriptor", {}))
         firstchar = int_value(spec.get("FirstChar", 0))
@@ -345,7 +347,7 @@ class TrueTypeFont(SimpleFont):
         SimpleFont.__init__(self, descriptor, widths, spec)
 
     def get_implicit_encoding(
-        self, descriptor: Mapping[str, Any]
+        self, descriptor: Dict[str, PDFObject]
     ) -> Union[PSLiteral, Dict[int, str], None]:
         is_non_symbolic = 32 & int_value(descriptor.get("Flags", 0))
         # For symbolic TrueTypeFont, the map cid -> glyph does not actually go through glyph name
@@ -357,7 +359,7 @@ class TrueTypeFont(SimpleFont):
 
 
 class Type3Font(SimpleFont):
-    def __init__(self, spec: Mapping[str, Any]) -> None:
+    def __init__(self, spec: Dict[str, PDFObject]) -> None:
         firstchar = int_value(spec.get("FirstChar", 0))
         # lastchar = int_value(spec.get('LastChar', 0))
         width_list = list_value(spec.get("Widths", [0] * 256))
@@ -372,7 +374,7 @@ class Type3Font(SimpleFont):
         (self.hscale, self.vscale) = apply_matrix_norm(self.matrix, (1, 1))
 
     def get_implicit_encoding(
-        self, descriptor: Mapping[str, Any]
+        self, descriptor: Dict[str, PDFObject]
     ) -> Union[PSLiteral, Dict[int, str], None]:
         # PDF 1.7 sec 9.6.6.3: A Type 3 font’s mapping from character
         # codes to glyph names shall be entirely defined by its
@@ -396,13 +398,9 @@ class CIDFont(Font):
 
     def __init__(
         self,
-        spec: Mapping[str, Any],
+        spec: Dict[str, PDFObject],
     ) -> None:
-        try:
-            self.basefont = literal_name(spec["BaseFont"])
-        except KeyError:
-            log.warning("Font spec is missing BaseFont: %r", spec)
-            self.basefont = "unknown"
+        self.basefont = get_basefont(spec)
         self.cidsysteminfo = dict_value(spec.get("CIDSystemInfo", {}))
         # These are *supposed* to be ASCII (PDF 1.7 section 9.7.3),
         # but for whatever reason they are sometimes UTF-16BE
@@ -494,7 +492,7 @@ class CIDFont(Font):
             default_width = spec.get("DW", 1000)
         Font.__init__(self, descriptor, widths, default_width=default_width)
 
-    def get_cmap_from_spec(self, spec: Mapping[str, Any]) -> CMapBase:
+    def get_cmap_from_spec(self, spec: Dict[str, PDFObject]) -> CMapBase:
         """Get cmap from font specification
 
         For certain PDFs, Encoding Type isn't mentioned as an attribute of
@@ -517,13 +515,13 @@ class CIDFont(Font):
                 return CMap()
 
     @staticmethod
-    def _get_cmap_name(spec: Mapping[str, Any]) -> str:
+    def _get_cmap_name(spec: Dict[str, PDFObject]) -> str:
         """Get cmap name from font specification"""
         cmap_name = "unknown"  # default value
         try:
-            spec_encoding = spec["Encoding"]
-            if hasattr(spec_encoding, "name"):
-                cmap_name = literal_name(spec["Encoding"])
+            spec_encoding = resolve1(spec["Encoding"])
+            if isinstance(spec_encoding, PSLiteral):
+                cmap_name = spec_encoding.name
             else:
                 cmap_name = literal_name(spec_encoding["CMapName"])
         except KeyError:
