@@ -51,6 +51,7 @@ from playa.utils import (
     Rect,
     choplist,
     decode_text,
+    get_transformed_bound,
 )
 
 log = logging.getLogger(__name__)
@@ -159,6 +160,16 @@ class Font:
     def char_width(self, cid: int) -> float:
         """Get the width of a character from its CID."""
         return self.widths.get(cid, self.default_width)
+
+    def text_space_char_disp(self, cid: int) -> float:
+        """Get the text space (horizontal or vertical) displacment from CID."""
+        return self.char_width(cid) * 0.001
+
+    def text_space_char_bbox(self, cid: int) -> Rect:
+        """Get the text space bounding box from CID."""
+        _, y0, _, y1 = self.bbox
+        w = self.char_width(cid)
+        return 0, y0 * 0.001, w * 0.001, y1 * 0.001
 
 
 class SimpleFont(Font):
@@ -356,6 +367,19 @@ class Type3Font(SimpleFont):
     def __repr__(self) -> str:
         return "<Type3Font>"
 
+    def text_space_char_disp(self, cid: int) -> float:
+        """Get the text space (horizontal or vertical) displacment from CID."""
+        # PDF 1.7 sec 5.5.3 seems to suggest that the displacement is always either
+        # horizontal or vertical. Does that imply Type 3 font matrix preserves x axis?
+        # I haven't found anything in the reference on this...
+        return self.char_width(cid) * self.matrix[0]
+
+    def text_space_char_bbox(self, cid: int) -> Rect:
+        """Get the text space bounding box from CID."""
+        _, y0, _, y1 = self.bbox
+        w = self.char_width(cid)
+        return get_transformed_bound(self.matrix, (0, y0, w, y1))
+
 
 # Mapping of cmap names. Original cmap name is kept if not in the mapping.
 # (missing reference for why DLIdent is mapped to Identity)
@@ -366,8 +390,6 @@ IDENTITY_ENCODER = {
 
 
 class CIDFont(Font):
-    default_position_vec: Optional[Tuple[Optional[float], float]]
-
     def __init__(
         self,
         spec: Dict[str, PDFObject],
@@ -457,13 +479,13 @@ class CIDFont(Font):
                 cid: (vx, vy) for (cid, (_, (vx, vy))) in widths2.items()
             }
             (vy, w) = resolve1(spec.get("DW2", [880, -1000]))
-            self.default_position_vec = (None, vy)
             self.vertical_disps = {cid: w for (cid, (w, _)) in widths2.items()}
             self.default_vertical_disp = w
+            self.default_position_vec_y = vy
         else:
             # writing mode: horizontal
             self.position_vecs, self.vertical_disps = {}, {}
-            self.default_position_vec = self.default_vertical_disp = None
+            self.default_position_vec_y = self.default_vertical_disp = 0
 
         Font.__init__(self, descriptor, widths, default_width=default_width)
 
@@ -527,12 +549,33 @@ class CIDFont(Font):
     def __repr__(self) -> str:
         return f"<CIDFont: basefont={self.basefont!r}, cidcoding={self.cidcoding!r}>"
 
-    def char_position_vec(self, cid: int) -> Optional[Tuple[Optional[float], float]]:
+    def text_space_char_disp(self, cid: int) -> float:
+        """Get the text space (horizontal or vertical) displacment from CID."""
+        disp = self.char_vertical_disp(cid) if self.vertical else self.char_width(cid)
+        return disp * 0.001
+
+    def text_space_char_bbox(self, cid: int) -> Rect:
+        """Get the text space bounding box from CID."""
+        if self.vertical:
+            wx, wy = self.char_width(cid), self.char_vertical_disp(cid)
+            vx, _ = self.char_position_vec(cid)
+            return -vx * 0.001, wy * 0.001, (wx - vx) * 0.001, 0
+        else:
+            _, y0, _, y1 = self.bbox
+            w = self.char_width(cid)
+            return 0, y0 * 0.001, w * 0.001, y1 * 0.001
+
+    def char_position_vec(self, cid: int) -> Point:
         """Applies only to vertical fonts. Returns position vector from the origin used for
         horizontal writing (origin 0) to the origin used for vertical writing (origin 1).
         """
-        return self.position_vecs.get(cid, self.default_position_vec)
+        assert self.vertical, "Not a vertical font"
+        if cid in self.position_vecs:
+            return self.position_vecs[cid]
+        else:
+            return 0.5 * self.char_width(cid), self.default_position_vec_y
 
-    def char_vertical_disp(self, cid: int) -> Optional[float]:
+    def char_vertical_disp(self, cid: int) -> float:
         """Applies only to vertical fonts. Get the vertical displacement of a character from its CID."""
+        assert self.vertical, "Not a vertical font"
         return self.vertical_disps.get(cid, self.default_vertical_disp)
