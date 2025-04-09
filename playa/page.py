@@ -8,6 +8,7 @@ import re
 import textwrap
 from copy import copy
 from dataclasses import dataclass
+from collections import deque
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -65,6 +66,7 @@ from playa.utils import (
     decode_text,
     get_bound,
     mult_matrix,
+    translate_matrix,
     normalize_rect,
     transform_bbox,
 )
@@ -1094,9 +1096,10 @@ class TextObject(ContentObject):
     _text_space_bbox: Union[Rect, None] = None
     _next_tstate: Union[TextState, None] = None
 
-    def __iter__(self) -> Iterator[GlyphObject]:
-        """Generate glyphs for this text object"""
-        tstate = copy(self.textstate)
+    def _glyph_iter(self) -> Iterator[Tuple[int, str, float, Point]]:
+        """Iterate through and position glyphs without constructing GlyphObject.
+        Also set _next_tstate as side effect when fully consumed."""
+        tstate = self.textstate
         font = tstate.font
         # If no font is set, we cannot do anything, since even calling
         # TJ with a displacement and no text effects requires us at
@@ -1108,11 +1111,6 @@ class TextObject(ContentObject):
             )
             self._next_tstate = tstate
             return
-        assert self.ctm is not None
-        # Extract all the elements so we can translate efficiently
-        a, b, c, d, e, f = mult_matrix(tstate.line_matrix, self.ctm)
-        # Pre-determine if we need to recompute the bound for rotated glyphs
-        corners = b * d < 0 or a * c < 0
         # Apply horizontal scaling
         scaling = tstate.scaling * 0.01
         charspace = tstate.charspace * scaling
@@ -1132,30 +1130,41 @@ class TextObject(ContentObject):
                 for cid, text in font.decode(obj):
                     if needcharspace:
                         pos += charspace
-                    textwidth = font.char_width(cid) * 0.001
+                    textwidth = font.text_space_char_disp(cid)
                     adv = textwidth * tstate.fontsize * scaling
-                    x, y = tstate.glyph_offset = (x, pos) if vert else (pos, y)
-                    glyph = GlyphObject(
-                        _pageref=self._pageref,
-                        gstate=self.gstate,
-                        ctm=self.ctm,
-                        mcstack=self.mcstack,
-                        textstate=tstate,
-                        cid=cid,
-                        text=text,
-                        # Do pre-translation internally (taking rotation into account)
-                        matrix=(a, b, c, d, x * a + y * c + e, x * b + y * d + f),
-                        adv=adv,
-                        corners=corners,
-                    )
-                    yield glyph
+                    x, y = (x, pos) if vert else (pos, y)
+                    yield cid, text, adv, (x, y)
                     pos += adv
                     if cid == 32 and wordspace:
                         pos += wordspace
                     needcharspace = True
-        tstate.glyph_offset = (x, pos) if vert else (pos, y)
         if self._next_tstate is None:
-            self._next_tstate = tstate
+            self._next_tstate = copy(tstate)
+            self._next_tstate.glyph_offset = (x, pos) if vert else (pos, y)
+
+    def __iter__(self) -> Iterator[GlyphObject]:
+        """Generate glyphs for this text object"""
+        tstate = copy(self.textstate)
+        tlm_ctm = mult_matrix(tstate.line_matrix, self.ctm)
+        # Pre-determine if we need to recompute the bound for rotated glyphs
+        a, b, c, d, _, _ = tlm_ctm
+        corners = b * d < 0 or a * c < 0
+        for cid, text, adv, offset in self._glyph_iter():
+            tstate.glyph_offset = offset
+            glyph = GlyphObject(
+                _pageref=self._pageref,
+                gstate=self.gstate,
+                ctm=self.ctm,
+                mcstack=self.mcstack,
+                textstate=tstate,
+                cid=cid,
+                text=text,
+                # Do pre-translation internally (taking rotation into account)
+                matrix=translate_matrix(tlm_ctm, offset),
+                adv=adv,
+                corners=corners,
+            )
+            yield glyph
 
     @property
     def text_space_bbox(self):
@@ -1164,27 +1173,12 @@ class TextObject(ContentObject):
         # No need to save tstate as we do not update it below
         tstate = self.textstate
         font = tstate.font
-        if font is None:
-            log.warning(
-                "No font is set, will not update text state or output text: %r TJ",
-                self.args,
-            )
+        glyph_data = list(self._glyph_iter())
+        if font is None or len(glyph_data) == 0:
             self._text_space_bbox = BBOX_NONE
-            self._next_tstate = tstate
             return self._text_space_bbox
-        if len(self.args) == 0:
-            self._text_space_bbox = BBOX_NONE
-            self._next_tstate = tstate
-            return self._text_space_bbox
-        scaling = tstate.scaling * 0.01
-        charspace = tstate.charspace * scaling
-        wordspace = tstate.wordspace * scaling
         vert = font.vertical
-        if font.multibyte:
-            wordspace = 0
         (x, y) = tstate.glyph_offset
-        pos = y if vert else x
-        needcharspace = False  # Only for first glyph
         if vert:
             x0 = x1 = x
             y0 = y1 = y
@@ -1193,41 +1187,18 @@ class TextObject(ContentObject):
             x0 = x1 = x
             y0 = y + tstate.descent + tstate.rise
             y1 = y0 + tstate.fontsize
-        for obj in self.args:
-            if isinstance(obj, (int, float)):
-                dxscale = 0.001 * tstate.fontsize * scaling
-                pos -= obj * dxscale
-                needcharspace = True
+        for cid, _, adv, (x, y) in glyph_data:
+            if vert:
+                assert isinstance(font, CIDFont)
+                (vx, vy) = font.char_position_vec(cid)
+                vx = vx * tstate.fontsize * 0.001
+                vy = (1000 - vy) * tstate.fontsize * 0.001
+                x0 = min(x0, x - vx)
+                y0 = min(y0, y + vy + tstate.rise + adv)
+                x1 = max(x1, x - vx + tstate.fontsize)
+                y1 = max(y1, y + vy + tstate.rise)
             else:
-                for cid, _ in font.decode(obj):
-                    if needcharspace:
-                        pos += charspace
-                    textwidth = font.char_width(cid) * 0.001
-                    adv = textwidth * tstate.fontsize * scaling
-                    x, y = (x, pos) if vert else (pos, y)
-                    if vert:
-                        assert isinstance(font, CIDFont)
-                        textdisp = font.char_position_vec(cid)
-                        assert isinstance(textdisp, tuple)
-                        (vx, vy) = textdisp
-                        if vx is None:
-                            vx = tstate.fontsize * 0.5
-                        else:
-                            vx = vx * tstate.fontsize * 0.001
-                        vy = (1000 - vy) * tstate.fontsize * 0.001
-                        x0 = min(x0, x - vx)
-                        y0 = min(y0, y + vy + tstate.rise + adv)
-                        x1 = max(x1, x - vx + tstate.fontsize)
-                        y1 = max(y1, y + vy + tstate.rise)
-                    else:
-                        x1 = x + adv
-                    pos += adv
-                    if cid == 32 and wordspace:
-                        pos += wordspace
-                    needcharspace = True
-        if self._next_tstate is None:
-            self._next_tstate = copy(tstate)
-            self._next_tstate.glyph_offset = (x, pos) if vert else (pos, y)
+                x1 = x + adv
         self._text_space_bbox = (x0, y0, x1, y1)
         return self._text_space_bbox
 
@@ -1235,7 +1206,8 @@ class TextObject(ContentObject):
     def next_textstate(self) -> TextState:
         if self._next_tstate is not None:
             return self._next_tstate
-        _ = self.text_space_bbox
+        # CPython deque fast path consume iterator for side effects
+        deque(self._glyph_iter(), maxlen=0)
         assert self._next_tstate is not None
         return self._next_tstate
 
