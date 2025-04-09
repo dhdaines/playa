@@ -104,6 +104,11 @@ def get_widths2(seq: Iterable[PDFObject]) -> Dict[int, Tuple[float, Point]]:
     return widths
 
 
+def apply_default_font_matrix_to_bbox(bbox: Rect) -> Rect:
+    x0, y0, x1, y1 = bbox
+    return x0 * 0.001, y0 * 0.001, x1 * 0.001, y1 * 0.001
+
+
 LITERAL_STANDARD_ENCODING = LIT("StandardEncoding")
 
 
@@ -167,15 +172,14 @@ class Font:
         """Get the width of a character from its CID."""
         return self.widths.get(cid, self.default_width)
 
-    def text_space_char_disp(self, cid: int) -> float:
-        """Get the text space (horizontal or vertical) displacment from CID."""
-        return self.char_width(cid) * 0.001
+    def char_disp(self, cid: int) -> float:
+        """Get the (horizontal or vertical) displacment from CID."""
+        return self.char_width(cid)
 
     def text_space_char_bbox(self, cid: int) -> Rect:
         """Get the text space bounding box from CID."""
-        _, y0, _, y1 = self.bbox
-        w = self.char_width(cid)
-        return 0, y0 * 0.001, w * 0.001, y1 * 0.001
+        bbox = 0, self.descent, self.char_width(cid), self.descent + 1000
+        return apply_default_font_matrix_to_bbox(bbox)
 
 
 class SimpleFont(Font):
@@ -373,18 +377,10 @@ class Type3Font(SimpleFont):
     def __repr__(self) -> str:
         return "<Type3Font>"
 
-    def text_space_char_disp(self, cid: int) -> float:
-        """Get the text space (horizontal or vertical) displacment from CID."""
-        # PDF 1.7 sec 5.5.3 seems to suggest that the displacement is always either
-        # horizontal or vertical. Does that imply Type 3 font matrix preserves x axis?
-        # I haven't found anything in the reference on this...
-        return self.char_width(cid) * self.matrix[0]
-
     def text_space_char_bbox(self, cid: int) -> Rect:
         """Get the text space bounding box from CID."""
-        _, y0, _, y1 = self.bbox
-        w = self.char_width(cid)
-        return get_transformed_bound(self.matrix, (0, y0, w, y1))
+        bbox = 0, self.descent, self.char_width(cid), self.descent + 1000
+        return get_transformed_bound(self.matrix, bbox)
 
 
 # Mapping of cmap names. Original cmap name is kept if not in the mapping.
@@ -569,21 +565,20 @@ class CIDFont(Font):
     def __repr__(self) -> str:
         return f"<CIDFont: basefont={self.basefont!r}, cidcoding={self.cidcoding!r}>"
 
-    def text_space_char_disp(self, cid: int) -> float:
-        """Get the text space (horizontal or vertical) displacment from CID."""
-        disp = self.char_vertical_disp(cid) if self.vertical else self.char_width(cid)
-        return disp * 0.001
+    def char_disp(self, cid: int) -> float:
+        """Get the (horizontal or vertical) displacment from CID."""
+        return self.char_vertical_disp(cid) if self.vertical else self.char_width(cid)
 
     def text_space_char_bbox(self, cid: int) -> Rect:
         """Get the text space bounding box from CID."""
+        bbox: Rect
         if self.vertical:
             wx, wy = self.char_width(cid), self.char_vertical_disp(cid)
             vx, _ = self.char_position_vec(cid)
-            return -vx * 0.001, wy * 0.001, (wx - vx) * 0.001, 0
+            bbox = -vx, wy, wx - vx, 0
         else:
-            _, y0, _, y1 = self.bbox
-            w = self.char_width(cid)
-            return 0, y0 * 0.001, w * 0.001, y1 * 0.001
+            bbox = 0, self.descent, self.char_width(cid), self.descent + 1000
+        return apply_default_font_matrix_to_bbox(bbox)
 
     def char_position_vec(self, cid: int) -> Point:
         """Applies only to vertical fonts. Returns position vector from the origin used for
