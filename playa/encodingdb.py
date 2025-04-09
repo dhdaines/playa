@@ -1,10 +1,15 @@
 import logging
 import re
-from typing import Dict, Iterable, Optional
+from typing import Dict, Iterable, Optional, Union
 
+from playa.encodings import (
+    MAC_EXPERT_ENCODING,
+    MAC_ROMAN_ENCODING,
+    STANDARD_ENCODING,
+    WIN_ANSI_ENCODING,
+)
 from playa.glyphlist import glyphname2unicode
-from playa.latin_enc import ENCODING
-from playa.parser import PSLiteral
+from playa.parser import PSLiteral, PDFObject
 
 HEXADECIMAL = re.compile(r"[0-9a-fA-F]+")
 
@@ -81,45 +86,45 @@ def raise_key_error_for_invalid_unicode(unicode_digit: int) -> None:
 
 
 class EncodingDB:
-    std2unicode: Dict[int, str] = {}
-    mac2unicode: Dict[int, str] = {}
-    win2unicode: Dict[int, str] = {}
-    pdf2unicode: Dict[int, str] = {}
-    for name, std, mac, win, pdf in ENCODING:
-        c = name2unicode(name)
-        if std:
-            std2unicode[std] = c
-        if mac:
-            mac2unicode[mac] = c
-        if win:
-            win2unicode[win] = c
-        if pdf:
-            pdf2unicode[pdf] = c
-
     encodings = {
-        "StandardEncoding": std2unicode,
-        "MacRomanEncoding": mac2unicode,
-        "WinAnsiEncoding": win2unicode,
-        "PDFDocEncoding": pdf2unicode,
+        # NOTE: According to PDF 1.7 Annex D.1, "Conforming readers
+        # shall not have a predefined encoding named
+        # StandardEncoding", but it's not clear why not.
+        "StandardEncoding": STANDARD_ENCODING,
+        "MacRomanEncoding": MAC_ROMAN_ENCODING,
+        "WinAnsiEncoding": WIN_ANSI_ENCODING,
+        "MacExpertEncoding": MAC_EXPERT_ENCODING,
     }
 
     @classmethod
     def get_encoding(
         cls,
-        name: str,
-        diff: Optional[Iterable[object]] = None,
+        base: Union[PSLiteral, Dict[int, str], None] = None,
+        diff: Optional[Iterable[PDFObject]] = None,
     ) -> Dict[int, str]:
-        cid2unicode = cls.encodings.get(name, cls.std2unicode)
-        if diff:
-            cid2unicode = cid2unicode.copy()
+        if base is None:
+            encoding = {}
+        elif isinstance(base, PSLiteral):
+            encoding = cls.encodings.get(base.name, {})
+        else:
+            encoding = base
+        if diff is not None:
+            encoding = encoding.copy()
             cid = 0
             for x in diff:
                 if isinstance(x, int):
                     cid = x
                 elif isinstance(x, PSLiteral):
-                    try:
-                        cid2unicode[cid] = name2unicode(x.name)
-                    except (KeyError, ValueError) as e:
-                        log.debug("Failed to get char %r: %s", x, e)
+                    encoding[cid] = x.name
                     cid += 1
-        return cid2unicode
+        return encoding
+
+
+def cid2unicode_from_encoding(encoding: Dict[int, str]) -> Dict[int, str]:
+    cid2unicode = {}
+    for cid, name in encoding.items():
+        try:
+            cid2unicode[cid] = name2unicode(name)
+        except (KeyError, ValueError) as e:
+            log.debug("Failed to get char %s: %s", name, e)
+    return cid2unicode

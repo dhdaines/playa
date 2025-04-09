@@ -16,7 +16,6 @@ from typing import (
     Iterable,
     Iterator,
     List,
-    Mapping,
     Optional,
     Set,
     Tuple,
@@ -86,6 +85,11 @@ log = logging.getLogger(__name__)
 LITERAL_PDF = LIT("PDF")
 LITERAL_TEXT = LIT("Text")
 LITERAL_FONT = LIT("Font")
+LITERAL_TYPE1 = LIT("Type1")
+LITERAL_MMTYPE1 = LIT("MMType1")
+LITERAL_TYPE0 = LIT("Type0")
+LITERAL_TYPE3 = LIT("Type3")
+LITERAL_TRUETYPE = LIT("TrueType")
 LITERAL_OBJSTM = LIT("ObjStm")
 LITERAL_XREF = LIT("XRef")
 LITERAL_CATALOG = LIT("Catalog")
@@ -505,40 +509,43 @@ class Document:
             self._cached_objs[objid] = obj
         return self._cached_objs[objid]
 
-    def get_font(self, objid: object, spec: Mapping[str, object]) -> Font:
+    def get_font(self, objid: object, spec: Union[Dict[str, PDFObject], None]) -> Font:
         if objid and objid in self._cached_fonts:
             return self._cached_fonts[objid]
+        if spec is None:
+            self._cached_fonts[objid] = Font({}, {})
+            return self._cached_fonts[objid]
+        # Create a Font object, hopefully
+        font: Union[Font, None] = None
         if spec.get("Type") is not LITERAL_FONT:
-            log.warning("Font specification Type is not /Font: %r", spec)
-        # Create a Font object.
-        if "Subtype" in spec:
-            subtype = literal_name(spec["Subtype"])
-        else:
-            log.warning("Font specification Subtype is not specified: %r", spec)
-            subtype = ""
-        if subtype in ("Type1", "MMType1"):
-            # Type1 Font
-            font: Font = Type1Font(spec)
-        elif subtype == "TrueType":
-            # TrueType Font
+            log.warning("Font Type is not /Font: %r", spec)
+        subtype = spec.get("Subtype")
+        if subtype in (LITERAL_TYPE1, LITERAL_MMTYPE1):
+            font = Type1Font(spec)
+        elif subtype is LITERAL_TRUETYPE:
             font = TrueTypeFont(spec)
-        elif subtype == "Type3":
-            # Type3 Font
+        elif subtype == LITERAL_TYPE3:
             font = Type3Font(spec)
-        elif subtype == "Type0":
-            # Type0 Font
-            dfonts = list_value(spec["DescendantFonts"])
-            assert dfonts
-            if len(dfonts) != 1:
-                log.debug("Type 0 font should have 1 descendant, has more: %r", dfonts)
-            subspec = dict_value(dfonts[0]).copy()
-            # Merge the root and descendant font dictionaries
-            for k in ("Encoding", "ToUnicode"):
-                if k in spec:
-                    subspec[k] = resolve1(spec[k])
-            font = CIDFont(subspec)
+        elif subtype == LITERAL_TYPE0:
+            if "DescendantFonts" not in spec:
+                log.warning("Type0 font has no DescendantFonts: %r", spec)
+            else:
+                dfonts = resolve1(spec["DescendantFonts"])
+                if len(dfonts) != 1:
+                    log.debug("Type 0 font should have 1 descendant, has more: %r", dfonts)
+                subspec = resolve1(dfonts[0])
+                if not isinstance(subspec, dict):
+                    log.warning("Invalid descendant font: %r", subspec)
+                else:
+                    subspec = subspec.copy()
+                    # Merge the root and descendant font dictionaries
+                    for k in ("Encoding", "ToUnicode"):
+                        if k in spec:
+                            subspec[k] = resolve1(spec[k])
+                    font = CIDFont(subspec)
         else:
-            log.warning("Invalid Font spec, creating dummy font: %r" % spec)
+            log.warning("Unknown Subtype in font: %r" % spec)
+        if font is None:
             # We need a dummy font object to be able to do *something*
             # (even if it's the wrong thing) with text objects.
             font = Font({}, {})

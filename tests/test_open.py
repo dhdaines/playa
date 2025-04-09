@@ -46,3 +46,30 @@ def test_tiff_predictor() -> None:
         image = next(doc.pages[0].images)
         # Decoded TIFF: 600 x 600 + a header
         assert len(image.stream.buffer) == 360600
+
+
+def test_implicit_encoding_type1() -> None:
+    with playa.open(TESTDIR / "simple5.pdf") as doc:
+        page = doc.pages[0]
+        fonts = page.resources.get("Font")
+        assert fonts is not None
+        assert isinstance(fonts, dict)
+        for name, desc in fonts.items():
+            font = doc.get_font(desc.objid, desc.resolve())
+            assert font is not None
+            if 147 in font.encoding:
+                assert font.encoding[147] == "quotedblleft"
+
+
+def test_implicit_encoding_cff() -> None:
+    with playa.open(CONTRIB / "implicit_cff_encoding.pdf") as doc:
+        page = doc.pages[0]
+        fonts = page.resources.get("Font")
+        assert fonts is not None
+        assert isinstance(fonts, dict)
+        for name, desc in fonts.items():
+            font = doc.get_font(desc.objid, desc.resolve())
+            assert font.encoding
+        # Verify fallback to StandardEncoding
+        t = page.extract_text()
+        assert t.strip() == "Part I\nClick here to access Part II \non hp.com."

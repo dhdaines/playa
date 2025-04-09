@@ -1343,13 +1343,12 @@ class LazyInterpreter:
                     if isinstance(spec, ObjRef):
                         objid = spec.objid
                     try:
-                        spec = dict_value(spec)
-                        self.fontmap[fontid] = doc.get_font(objid, spec)
-                    except TypeError:
+                        self.fontmap[fontid] = doc.get_font(objid, dict_value(spec))
+                    except Exception:
                         log.warning(
-                            "Broken/missing font spec for Font ID %r: %r", fontid, spec
+                            "Invalid font dictionary for Font %r: %r", fontid, spec, exc_info=True
                         )
-                        self.fontmap[fontid] = doc.get_font(objid, {})
+                        self.fontmap[fontid] = doc.get_font(objid, None)
             elif k == "ColorSpace":
                 if not isinstance(mapping, dict):
                     log.warning("ColorSpace mapping not a dict: %r", mapping)
