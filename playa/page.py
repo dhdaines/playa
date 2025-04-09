@@ -551,9 +551,6 @@ class TextState:
         want to use this to detect invisible text.
       rise: The text rise (superscript or subscript position), in text
         space units.
-      descent: The font's descent (scaled by the font size), in text
-        space units (this is not really part of the text state but is
-        kept here to avoid recomputing it on every glyph)
     """
 
     line_matrix: Matrix = MATRIX_IDENTITY
@@ -566,12 +563,15 @@ class TextState:
     leading: float = 0
     render_mode: int = 0
     rise: float = 0
-    descent: float = 0
 
     def reset(self) -> None:
         """Reset the text state"""
         self.line_matrix = MATRIX_IDENTITY
         self.glyph_offset = (0, 0)
+
+    @property
+    def scaling_matrix(self) -> Matrix:
+        return self.fontsize * self.scaling * 0.01, 0, 0, self.fontsize, 0, self.rise
 
 
 class DashPattern(NamedTuple):
@@ -1009,7 +1009,7 @@ class GlyphObject(ContentObject):
         context of iteration over the parent `TextObject`.
       cid: Character ID for this glyph.
       text: Unicode mapping of this glyph, if any.
-      adv: glyph displacement in text space units (horizontal or vertical,
+      adv: glyph displacement in unscaled text space units (horizontal or vertical,
            depending on the writing direction).
       matrix: rendering matrix for this glyph, which transforms text
               space (*not glyph space!*) coordinates to device space.
@@ -1035,7 +1035,8 @@ class GlyphObject(ContentObject):
 
     @property
     def bbox(self) -> Rect:
-        x0, y0, x1, y1 = self.text_space_bbox
+        # If font is None no GlyphObject will be constructed
+        x0, y0, x1, y1 = cast(Font, self.textstate.font).text_space_char_bbox(self.cid)
         if self.corners:
             return get_bound(
                 (
@@ -1054,28 +1055,6 @@ class GlyphObject(ContentObject):
                 y0, y1 = y1, y0
             return (x0, y0, x1, y1)
 
-    @property
-    def text_space_bbox(self):
-        tstate = self.textstate
-        font = tstate.font
-        assert font is not None
-        if font.vertical:
-            assert isinstance(font, CIDFont)
-            textdisp = font.char_position_vec(self.cid)
-            assert isinstance(textdisp, tuple)
-            (vx, vy) = textdisp
-            if vx is None:
-                vx = tstate.fontsize * 0.5
-            else:
-                vx = vx * tstate.fontsize * 0.001
-            vy = (1000 - vy) * tstate.fontsize * 0.001
-            x0, y0 = (-vx, vy + tstate.rise + self.adv)
-            x1, y1 = (-vx + tstate.fontsize, vy + tstate.rise)
-        else:
-            x0, y0 = (0, tstate.descent + tstate.rise)
-            x1, y1 = (self.adv, tstate.descent + tstate.rise + tstate.fontsize)
-        return (x0, y0, x1, y1)
-
 
 @dataclass
 class TextObject(ContentObject):
@@ -1085,8 +1064,8 @@ class TextObject(ContentObject):
       textstate: Text state for this object.
       args: Strings or position adjustments
       bbox: Text bounding box in device space.
-      text_space_bbox: Text bounding box in text space (i.e. before
-                       any possible coordinate transformation)
+      text_space_bbox: Text bounding box in unscaled text space (i.e. before
+                       line matrix and current transform matrix)
     """
 
     textstate: TextState
@@ -1111,11 +1090,17 @@ class TextObject(ContentObject):
             )
             self._next_tstate = tstate
             return
-        # Apply horizontal scaling
-        scaling = tstate.scaling * 0.01
+        vert = font.vertical
+        # Apply horizontal scaling if font is horizontal
+        scaling = 1 if vert else tstate.scaling * 0.01
         charspace = tstate.charspace * scaling
         wordspace = tstate.wordspace * scaling
-        vert = font.vertical
+        # PDF 1.7 sec 5.5.3 seems to suggest that the displacement is always either
+        # horizontal or vertical. Does that imply Type 3 font matrix preserves x axis?
+        # I haven't found anything in the reference on this...
+        hscale, _, _, vscale, _, _ = font.matrix
+        glyph_to_Tm_scale = tstate.fontsize * (vscale if vert else hscale) * scaling
+        Tj_scale = 0.001 * tstate.fontsize * scaling
         if font.multibyte:
             wordspace = 0
         (x, y) = tstate.glyph_offset
@@ -1123,15 +1108,13 @@ class TextObject(ContentObject):
         needcharspace = False  # Only for first glyph
         for obj in self.args:
             if isinstance(obj, (int, float)):
-                dxscale = 0.001 * tstate.fontsize * scaling
-                pos -= obj * dxscale
+                pos -= obj * Tj_scale
                 needcharspace = True
             else:
                 for cid, text in font.decode(obj):
                     if needcharspace:
                         pos += charspace
-                    textwidth = font.text_space_char_disp(cid)
-                    adv = textwidth * tstate.fontsize * scaling
+                    adv = font.char_disp(cid) * glyph_to_Tm_scale
                     x, y = (x, pos) if vert else (pos, y)
                     yield cid, text, adv, (x, y)
                     pos += adv
@@ -1145,12 +1128,13 @@ class TextObject(ContentObject):
     def __iter__(self) -> Iterator[GlyphObject]:
         """Generate glyphs for this text object"""
         tstate = copy(self.textstate)
-        tlm_ctm = mult_matrix(tstate.line_matrix, self.ctm)
+        Tlm_ctm = mult_matrix(tstate.line_matrix, self.ctm)
         # Pre-determine if we need to recompute the bound for rotated glyphs
-        a, b, c, d, _, _ = tlm_ctm
+        a, b, c, d, _, _ = Tlm_ctm
         corners = b * d < 0 or a * c < 0
         for cid, text, adv, offset in self._glyph_iter():
             tstate.glyph_offset = offset
+            matrix = mult_matrix(tstate.scaling_matrix, translate_matrix(Tlm_ctm, offset))
             glyph = GlyphObject(
                 _pageref=self._pageref,
                 gstate=self.gstate,
@@ -1159,8 +1143,7 @@ class TextObject(ContentObject):
                 textstate=tstate,
                 cid=cid,
                 text=text,
-                # Do pre-translation internally (taking rotation into account)
-                matrix=translate_matrix(tlm_ctm, offset),
+                matrix=matrix,
                 adv=adv,
                 corners=corners,
             )
@@ -1180,25 +1163,23 @@ class TextObject(ContentObject):
         vert = font.vertical
         (x, y) = tstate.glyph_offset
         if vert:
+            assert isinstance(font, CIDFont)
             x0 = x1 = x
-            y0 = y1 = y
+            y0 = tstate.rise + y
+            y1 = tstate.rise + self._next_tstate.glyph_offset[1]
+            glyph_to_Tm_scale_x = 0.001 * tstate.fontsize * tstate.scaling * 0.01
+            for cid, _, _, _ in glyph_data:
+                vx, _ = font.char_position_vec(cid)
+                w = font.char_width(cid)
+                glyph_x0 = x - vx * glyph_to_Tm_scale_x
+                glyph_x1 = glyph_x0 + w * glyph_to_Tm_scale_x
+                x0 = min(x0, glyph_x0)
+                x1 = max(x1, glyph_x1)
         else:
-            # These do not change!
-            x0 = x1 = x
-            y0 = y + tstate.descent + tstate.rise
+            x0 = x
+            y0 = y + font.descent * font.matrix[3] * tstate.fontsize + tstate.rise
+            x1 = self._next_tstate.glyph_offset[0]
             y1 = y0 + tstate.fontsize
-        for cid, _, adv, (x, y) in glyph_data:
-            if vert:
-                assert isinstance(font, CIDFont)
-                (vx, vy) = font.char_position_vec(cid)
-                vx = vx * tstate.fontsize * 0.001
-                vy = (1000 - vy) * tstate.fontsize * 0.001
-                x0 = min(x0, x - vx)
-                y0 = min(y0, y + vy + tstate.rise + adv)
-                x1 = max(x1, x - vx + tstate.fontsize)
-                y1 = max(y1, y + vy + tstate.rise)
-            else:
-                x1 = x + adv
         self._text_space_bbox = (x0, y0, x1, y1)
         return self._text_space_bbox
 
@@ -1895,9 +1876,6 @@ class LazyInterpreter:
             doc = _deref_document(self.page.docref)
             self.textstate.font = doc.get_font(None, {})
         self.textstate.fontsize = num_value(fontsize)
-        self.textstate.descent = (
-            self.textstate.font.descent * 0.001 * self.textstate.fontsize
-        )
 
     def do_Tr(self, render: PDFObject) -> None:
         """Set the text rendering mode"""
