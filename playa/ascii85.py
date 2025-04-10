@@ -20,7 +20,7 @@ def ascii85decode(data: bytes) -> bytes:
     stream lengths which mean we only see `~`.  Worse yet, `<` and `>`
     are ASCII85 digits (yes, another genius move on Adobe's part), so
     we can't just strip them out too.  We settle on a compromise where
-    we strip leading `<~` or `~` and trailing `~` or `~>`
+    we strip leading `<~` or `~` and trailing `~` or `~>`.
     """
     data = start_re.sub(b"", data)
     data = end_re.sub(b"", data)
