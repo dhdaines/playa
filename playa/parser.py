@@ -131,6 +131,7 @@ HEXDIGIT = re.compile(rb"#([A-Fa-f\d][A-Fa-f\d])")
 EOLR = re.compile(rb"\r\n?|\n")
 SPC = re.compile(rb"\s")
 EIR = re.compile(rb"(?:\r\n?|\n)EI")
+EIEIR = re.compile(rb"EI")
 A85R = re.compile(rb"\s*~\s*>\s*EI")
 WSEIR = re.compile(rb"\s+EI")
 FURTHESTEIR = re.compile(rb".*EI")
@@ -496,7 +497,8 @@ class ObjectParser:
         #   standard stream syntax."
         # - I guess that means that there must be a newline before
         #   "EI", which should be ignored?  But some PDFs just put
-        #   any old whitespace there, or none at all!
+        #   any old whitespace there (or none at all, which we might
+        #   not be able to handle)!
         # - And there must be "a single whitespace character"
         #   following "ID" (floating in perfume, served in a man's
         #   hat), except in the case of ASCIIHexDecode or
@@ -548,6 +550,8 @@ class ObjectParser:
                 target_re = A85R
                 ignore_whitespace = True
             elif f in LITERALS_ASCIIHEX_DECODE:
+                # No need for newline before EI
+                target_re = EIEIR
                 ignore_whitespace = True
 
         # Find the start of the image data
@@ -581,7 +585,7 @@ class ObjectParser:
             self.seek(m.end(0))
             return InlineImage(dic, data[pos:m.start(0)])
 
-        m = FURTHESTEIR.search(data, pos)
+        m = FURTHESTEIR.match(data, pos)
         if m is not None:
             log.warning("Inline image at %d has no whitespace before EI, "
                         "expect horrible data loss!!!", pos)

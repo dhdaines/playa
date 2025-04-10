@@ -347,6 +347,9 @@ EI
 BI
 /F /AHx
 ID\r4f 4d 47575446\r\n\r\nEI
+BI /F /AHx ID 4f4d47575446EI
+BI ID(OMG)(WTF)
+EI
 BI
 /F /A85
 ID
@@ -358,7 +361,7 @@ ID
 <^BVT:K:=9<E)pd;BS_1:/aSV;ag~
 >
 EI
-BI /F /A85 ID <^BVT:K:=9<E)pd;BS_1:/aSV;ag~>EI
+BI /F /A85 ID<^BVT:K:=9<E)pd;BS_1:/aSV;ag~>EI
 BI
 /OMG (WTF)
 ID
@@ -367,8 +370,10 @@ EI
 BI ID
 OLD MACDONALD EIEIO
 EI
+BI ID OLDMACDONALDEIEIO EI
 BI ID
 OLDMACDONALDEIEIOEI
+(hello world)
 """
 
 
@@ -381,6 +386,12 @@ def test_inline_images():
     pos, img = next(parser)
     assert isinstance(img, InlineImage)
     assert img.buffer == b"OMGWTF"
+    pos, img = next(parser)
+    assert isinstance(img, InlineImage)
+    assert img.buffer == b"OMGWTF"
+    pos, img = next(parser)
+    assert isinstance(img, InlineImage)
+    assert img.buffer == b"(OMG)(WTF)"
     pos, img = next(parser)
     assert isinstance(img, InlineImage)
     assert img.buffer == b"VARIOUS UTTER NONSENSE"
@@ -396,6 +407,9 @@ def test_inline_images():
     pos, img = next(parser)
     assert isinstance(img, InlineImage)
     assert img.buffer == b"OLD MACDONALD EIEIO"
+    pos, img = next(parser)
+    assert isinstance(img, InlineImage)
+    assert img.buffer == b"OLDMACDONALDEIEIO"
     pos, img = next(parser)
     assert isinstance(img, InlineImage)
     assert img.buffer == b"OLDMACDONALDEIEIO"
