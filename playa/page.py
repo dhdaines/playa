@@ -355,7 +355,10 @@ class Page:
         """Iterate over content objects, recursing into form XObjects."""
 
         from typing import Set
-        def flatten_one(itor: Iterable["ContentObject"], parents: Set[str]) -> Iterator["ContentObject"]:
+
+        def flatten_one(
+            itor: Iterable["ContentObject"], parents: Set[str]
+        ) -> Iterator["ContentObject"]:
             for obj in itor:
                 if isinstance(obj, XObjectObject) and obj.xobjid not in parents:
                     yield from flatten_one(obj, parents | {obj.xobjid})
