@@ -497,10 +497,10 @@ class ObjectParser:
             Otherwise, the stream data can, and inevitably will,
             contain the literal bytes `b"EI"`, so no, we can't just
             search for that.  In the case of `ASCII85Decode`, however,
-            you can look for the `"~>"` end-of-data sequence but note
+            you can look for the `b"~>"` end-of-data sequence but note
             that sometimes it... contains whitespace!
 
-            So, we try for `"\\sEI\\b"`, which is not foolproof since
+            So, we try for `b"\\sEI\\b"`, which is not foolproof since
             you could have the pixel values `(32, 69, 73)` in your
             image followed by some other byte... so in that case,
             expect a bunch of nonsense in the logs and possible data
