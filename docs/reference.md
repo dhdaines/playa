@@ -18,6 +18,8 @@
         - '!Interpreter'
         - '!Parser'
 
+::: playa.parser
+
 ::: playa.structure
 
 ::: playa.outline

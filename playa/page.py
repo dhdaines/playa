@@ -1346,7 +1346,10 @@ class LazyInterpreter:
                         self.fontmap[fontid] = doc.get_font(objid, dict_value(spec))
                     except Exception:
                         log.warning(
-                            "Invalid font dictionary for Font %r: %r", fontid, spec, exc_info=True
+                            "Invalid font dictionary for Font %r: %r",
+                            fontid,
+                            spec,
+                            exc_info=True,
                         )
                         self.fontmap[fontid] = doc.get_font(objid, None)
             elif k == "ColorSpace":
