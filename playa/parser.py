@@ -473,7 +473,7 @@ class ObjectParser:
 
         Returns a tuple of the position of the target in the data and
         the image data.  Advances the file pointer to a position after
-        the end of the stream.
+        the "EI" token that (we hope) ends the image.
 
         Note: WELCOME TO THE HELL!!!
             - The PDF standard only specifies that image data must be
