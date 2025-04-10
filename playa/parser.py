@@ -79,6 +79,7 @@ ESC_STRING = {
     b"\\": 92,
 }
 
+
 def reverse_iter_lines(buffer: Union[bytes, mmap.mmap]) -> Iterator[Tuple[int, bytes]]:
     """Iterate backwards over lines starting at the current position.
 
@@ -130,11 +131,6 @@ STRLEXER = re.compile(
 HEXDIGIT = re.compile(rb"#([A-Fa-f\d][A-Fa-f\d])")
 EOLR = re.compile(rb"\r\n?|\n")
 SPC = re.compile(rb"\s")
-EIR = re.compile(rb"(?:\r\n?|\n)EI")
-EIEIR = re.compile(rb"EI")
-A85R = re.compile(rb"\s*~\s*>\s*EI")
-WSEIR = re.compile(rb"\s+EI")
-FURTHESTEIR = re.compile(rb".*EI")
 
 
 class Lexer:
@@ -290,6 +286,10 @@ PDFObject = Union[
     None,
 ]
 StackEntry = Tuple[int, PDFObject]
+EIR = re.compile(rb"\sEI\b")
+EIEIR = re.compile(rb"EI")
+A85R = re.compile(rb"\s*~\s*>\s*EI\b")
+FURTHESTEIR = re.compile(rb".*EI")
 
 
 class ObjectParser:
@@ -414,8 +414,10 @@ class ObjectParser:
                 # Inline images must occur at the top level, otherwise
                 # something is wrong (probably a corrupt file)
                 if top is not None:
-                    raise PDFSyntaxError("Inline image not at top level of stream "
-                                         f"({pos} != {top}, {self.stack})")
+                    raise PDFSyntaxError(
+                        "Inline image not at top level of stream "
+                        f"({pos} != {top}, {self.stack})"
+                    )
                 top = pos
                 self.stack.append((pos, token))
             elif token is KEYWORD_ID:
@@ -462,9 +464,7 @@ class ObjectParser:
                 raise PDFSyntaxError(
                     "Object ID in reference at pos %d cannot be 0" % (pos,)
                 )
-            log.warning(
-                "Ignoring indirect object reference to 0 at %s", pos
-            )
+            log.warning("Ignoring indirect object reference to 0 at %s", pos)
             return None
         return ObjRef(self.docref, objid)
 
@@ -474,8 +474,53 @@ class ObjectParser:
         Returns a tuple of the position of the target in the data and
         the image data.  Advances the file pointer to a position after
         the end of the stream.
+
+        Note: WELCOME TO THE HELL!!!
+            - The PDF standard only specifies that image data must be
+              delimited by `ID` and `EI`, and that "The bytes between
+              the `ID` and `EI` operators shall be treated the same as a
+              stream object’s data, even though they do not follow the
+              standard stream syntax."  What does that even mean?
+            - And, that must be "a single whitespace character"
+              following `ID` (floating in perfume, served in a man's
+              hat), except in the case of `ASCIIHexDecode` or
+              `ASCII85Decode` (in which case there can just be any
+              whitespace you like, or none at all).
+            - It's obviously impossible to determine what a "conforming
+              implementation" of this standard is.
+
+            In the easiest case, if it's `ASCIIHexDecode` data then we
+            can just look for the first instance of `b"EI"`, ignoring all
+            whitespace, since `b"EI"` is thankfully not a valid hex
+            sequence.
+
+            Otherwise, the stream data can, and inevitably will,
+            contain the literal bytes `b"EI"`, so no, we can't just
+            search for that.  In the case of `ASCII85Decode`, however,
+            you can look for the `"~>"` end-of-data sequence but note
+            that sometimes it... contains whitespace!
+
+            So, we try for `"\\sEI\\b"`, which is not foolproof since
+            you could have the pixel values `(32, 69, 73)` in your
+            image followed by some other byte... so in that case,
+            expect a bunch of nonsense in the logs and possible data
+            loss.  Also in the rare case where `b"EI"` was preceded by
+            `b"\\r\\n"`, there will be an extra `\\r` in the image
+            data.  Too bad.
+
+            And finally if that doesn't work then we will try to salvage
+            something by just looking for "EI", somewhere, anywhere.  We
+            take the most distant one, and if this causes you to lose
+            data, well, it's definitely Adobe's fault.
+
+            The moral of the story is that the author of this part of
+            the PDF specification should have considered a career in
+            literally anything else.
+
         """
-        assert token is KEYWORD_ID, f"Not ID: {token!r}"
+        assert (
+            isinstance(token, PSKeyword) and token is KEYWORD_ID
+        ), f"Not ID: {token!r}"
         idpos = pos
         (pos, objs) = self.pop_to(KEYWORD_BI)
         if len(objs) % 2 != 0:
@@ -484,81 +529,30 @@ class ObjectParser:
                 raise TypeError(error_msg)
             else:
                 log.warning(error_msg)
-        dic = {
-            literal_name(k): v for (k, v) in choplist(2, objs) if v is not None
-        }
+        dic = {literal_name(k): v for (k, v) in choplist(2, objs) if v is not None}
 
-        # WELCOME TO THE HELL!!!
-        #
-        # - The PDF standard only specifies that image data must be
-        #   delimited by "ID" and "EI", and that "The bytes between
-        #   the ID and EI operators shall be treated the same as a
-        #   stream object’s data, even though they do not follow the
-        #   standard stream syntax."
-        # - I guess that means that there must be a newline before
-        #   "EI", which should be ignored?  But some PDFs just put
-        #   any old whitespace there (or none at all, which we might
-        #   not be able to handle)!
-        # - And there must be "a single whitespace character"
-        #   following "ID" (floating in perfume, served in a man's
-        #   hat), except in the case of ASCIIHexDecode or
-        #   ASCII85Decode (in which case there can just be any
-        #   whitespace you like, or none at all).
-        # - Also the stream data can, and inevitably will, contain the
-        #   literal bytes "EI".  In the case of ASCII85 you can look
-        #   for the ~> terminator *except* that sometimes
-        #   it... contains whitespace inside it!
-        #
-        # What this means in practice is that even though the spec is
-        # quite silent on this matter, ASCII85 data will inevitably
-        # contain the sequence b"\nEI", so we must absolutely
-        # special-case this *first* to look for the ASCII85 terminator
-        # b"~>" followed by b"EI", ignoring any whitespace.
-        #
-        # Otherwise, we first look for b"\nEI" as this is "standard
-        # stream syntax".  If that doesn't work then, in strict mode,
-        # we will just raise a PDFSyntaxError because this PDF is
-        # clearly bullshit.
-        #
-        # If it's ASCIIHex data then we just look for b"EI" ignoring
-        # all whitespace, since b"EI" is thankfully not a valid hex
-        # sequence.
-        #
-        # Otherwise we try again for b"EI" preceded by some whitespace
-        # which is not foolproof since you could have the pixel values
-        # (32, 69, 73) or whatever in your image... just like you
-        # could have had (10, 69, 73) in "standard stream syntax"!
-        #
-        # And finally if that doesn't work then we will try to salvage
-        # something by just looking for b"EI".  We take the most
-        # distant one to avoid spewing junk everywhere in the logs,
-        # and if this causes you to lose data it's Adobe's fault.
-        #
-        # The moral of the story is that the author of this part of
-        # the PDF specification should have considered a career in
-        # literally anything else.
-
-        # Figure out if we should ignore whitespace (and if there is A85)
-        ignore_whitespace = False
         target_re = EIR
+        initial_whitespace = True
         filters = dic.get("F", [])
         if not isinstance(filters, list):
             filters = [filters]
         for f in filters:
             if f in LITERALS_ASCII85_DECODE:
-                # Special case ASCII85, ugh
+                # ASCII85: look for ~>EI, ignoring all whitespace
+                initial_whitespace = False
                 target_re = A85R
-                ignore_whitespace = True
             elif f in LITERALS_ASCIIHEX_DECODE:
-                # No need for newline before EI
+                # ASCIIHex: just look for EI
+                initial_whitespace = False
                 target_re = EIEIR
-                ignore_whitespace = True
+            else:
+                initial_whitespace = True
 
         # Find the start of the image data
         pos = idpos + len(token.name)
         data = self._lexer.data
-        if not ignore_whitespace:
-            ws = data[pos:pos+1]
+        if initial_whitespace:
+            ws = data[pos : pos + 1]
             if ws.isspace():
                 pos = pos + 1
             else:
@@ -568,29 +562,25 @@ class ObjectParser:
                 else:
                     log.warning(errmsg)
 
-        # Try standard stream syntax (or A85 nonsense)
         m = target_re.search(data, pos)
         if m is not None:
             self.seek(m.end(0))
-            return InlineImage(dic, data[pos:m.start(0)])
+            return InlineImage(dic, data[pos : m.start(0)])
         errmsg = f"Inline image at {pos} not terminated with {target_re}"
         if self.strict:
             raise PDFSyntaxError(errmsg)
         else:
             log.warning(errmsg)
 
-        m = WSEIR.search(data, pos)
-        if m is not None:
-            log.warning("Inline image at %d has non-standard termination %r", pos, m[0])
-            self.seek(m.end(0))
-            return InlineImage(dic, data[pos:m.start(0)])
-
         m = FURTHESTEIR.match(data, pos)
         if m is not None:
-            log.warning("Inline image at %d has no whitespace before EI, "
-                        "expect horrible data loss!!!", pos)
+            log.warning(
+                "Inline image at %d has no whitespace before EI, "
+                "expect horrible data loss!!!",
+                pos,
+            )
             self.seek(m.end(0))
-            return InlineImage(dic, data[pos:m.end(0) - 2])
+            return InlineImage(dic, data[pos : m.end(0) - 2])
         return None
 
     # Delegation follows

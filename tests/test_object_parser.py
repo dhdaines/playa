@@ -1,5 +1,5 @@
 import logging
-from typing import Any, List, Tuple
+from typing import Any, List
 
 import pytest
 
@@ -365,10 +365,9 @@ BI /F /A85 ID<^BVT:K:=9<E)pd;BS_1:/aSV;ag~>EI
 BI
 /OMG (WTF)
 ID
-BLAHEIBLAHBLAH
-EI
+BLAHEIBLAHBLAH\rEI
 BI ID
-OLD MACDONALD EIEIO
+OLD MACDONALD\rEIEIO
 EI
 BI ID OLDMACDONALDEIEIO EI
 BI ID
@@ -406,7 +405,7 @@ def test_inline_images():
     assert img.buffer == b"BLAHEIBLAHBLAH"
     pos, img = next(parser)
     assert isinstance(img, InlineImage)
-    assert img.buffer == b"OLD MACDONALD EIEIO"
+    assert img.buffer == b"OLD MACDONALD\rEIEIO"
     pos, img = next(parser)
     assert isinstance(img, InlineImage)
     assert img.buffer == b"OLDMACDONALDEIEIO"
