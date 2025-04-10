@@ -21,6 +21,7 @@ from playa.pdftypes import (
     KWD,
     LIT,
     LITERALS_ASCII85_DECODE,
+    LITERALS_ASCIIHEX_DECODE,
     ContentStream,
     ObjRef,
     PSKeyword,
@@ -78,7 +79,6 @@ ESC_STRING = {
     b"\\": 92,
 }
 
-
 def reverse_iter_lines(buffer: Union[bytes, mmap.mmap]) -> Iterator[Tuple[int, bytes]]:
     """Iterate backwards over lines starting at the current position.
 
@@ -130,6 +130,10 @@ STRLEXER = re.compile(
 HEXDIGIT = re.compile(rb"#([A-Fa-f\d][A-Fa-f\d])")
 EOLR = re.compile(rb"\r\n?|\n")
 SPC = re.compile(rb"\s")
+EIR = re.compile(rb"(?:\r\n?|\n)EI")
+A85R = re.compile(rb"\s*~\s*>\s*EI")
+WSEIR = re.compile(rb"\s+EI")
+FURTHESTEIR = re.compile(rb".*EI")
 
 
 class Lexer:
@@ -169,44 +173,6 @@ class Lexer:
         else:
             self.pos = m.end()
         return (linepos, self.data[linepos : self.pos])
-
-    def get_inline_data(
-        self, target: bytes = b"EI", try_harder: bool = False
-    ) -> Tuple[int, bytes]:
-        """Get the data for an inline image up to the target
-        end-of-stream marker.
-
-        Returns a tuple of the position of the target in the data and the
-        data *including* the end of stream marker.  Advances the file
-        pointer to a position after the end of the stream.
-
-        The caller is responsible for removing the end-of-stream if
-        necessary (this depends on the filter being used) and parsing
-        the end-of-stream token (likewise) if necessary.
-        """
-        tpos = self.data.find(target, self.pos)
-        if tpos == -1 and try_harder:
-            log.warning(
-                "Inline image at %s not terminated with %s, trying harder",
-                self.pos,
-                target,
-            )
-            # Try it, ignoring whitespace, for **really broken** PDFs
-            # (see https://github.com/mozilla/pdf.js/pull/10615)
-            r = re.compile(rb"\s*".join(re.escape(bytes((c,))) for c in target))
-            m = r.search(self.data, self.pos)
-            if m is not None:
-                log.warning("It was actually terminated with '%r'", m[0])
-                tpos = m.start(0)
-                result = (tpos, self.data[self.pos : tpos] + target)
-                self.pos = m.end(0)
-                return result
-        elif tpos != -1:
-            nextpos = tpos + len(target)
-            result = (tpos, self.data[self.pos : nextpos])
-            self.pos = nextpos
-            return result
-        return (-1, b"")
 
     def __iter__(self) -> Iterator[Tuple[int, Token]]:
         """Iterate over tokens."""
@@ -440,107 +406,22 @@ class ObjectParser:
                     log.warning("Ignoring indirect object reference at top level")
                     self.stack.append((pos, token))
                 else:
-                    try:
-                        _pos, _genno = self.stack.pop()
-                        _pos, objid = self.stack.pop()
-                    except ValueError as e:
-                        if self.strict:
-                            raise PDFSyntaxError(
-                                "Expected generation and object id in indirect object reference"
-                            ) from e
-                        else:
-                            log.warning(
-                                "Expected generation and object id in indirect object reference: %s",
-                                e,
-                            )
-                            continue
-                    objid = int_value(objid)
-                    if objid == 0:
-                        if self.strict:
-                            raise PDFSyntaxError(
-                                "Object ID in reference at pos %d cannot be 0" % (pos,)
-                            )
-                        log.warning(
-                            "Ignoring indirect object reference to 0 at %s", pos
-                        )
-                        continue
-                    obj = ObjRef(self.docref, objid)
-                    self.stack.append((pos, obj))
+                    obj = self.get_object_reference(pos, token)
+                    if obj is not None:
+                        self.stack.append((pos, obj))
             elif token is KEYWORD_BI:
-                if top is None:
-                    top = pos
-                self.stack.append((pos, token))
-            elif token is KEYWORD_ID:
-                idpos = pos
-                (pos, objs) = self.pop_to(KEYWORD_BI)
-                if len(objs) % 2 != 0:
-                    error_msg = f"Invalid dictionary construct: {objs!r}"
-                    if self.strict:
-                        raise TypeError(error_msg)
-                    else:
-                        log.warning(error_msg)
-                dic = {
-                    literal_name(k): v for (k, v) in choplist(2, objs) if v is not None
-                }
-                # First try EI preceded by newline, because some
-                # badly-behaved PDFs contain inline images without
-                # ASCII85Decode encoding but nonetheless with "EI" in
-                # their data.
-                eos = b"\nEI"
-                filter = dic.get("F")
-                if filter is not None:
-                    if not isinstance(filter, list):
-                        filter = [filter]
-                    if filter[0] in LITERALS_ASCII85_DECODE:
-                        eos = b"~>"
-                if eos == b"\nEI":
-                    # PDF 1.7 p. 215: Unless the image uses
-                    # ASCIIHexDecode or ASCII85Decode as one of its
-                    # filters, the ID operator shall be followed by a
-                    # single white-space character, and the next
-                    # character shall be interpreted as the first byte
-                    # of image data.
-                    self.seek(idpos + len(KEYWORD_ID.name) + 1)
-                    (eipos, data) = self.get_inline_data(target=eos, try_harder=False)
-                    if eipos == -1:
-                        # Try again with b" EI"
-                        self.seek(idpos + len(KEYWORD_ID.name) + 1)
-                        (eipos, data) = self.get_inline_data(
-                            target=b" EI", try_harder=False
-                        )
-                    if eipos == -1:
-                        # Try again with just plain b"EI"
-                        self.seek(idpos + len(KEYWORD_ID.name) + 1)
-                        (eipos, data) = self.get_inline_data(
-                            target=b"EI", try_harder=False
-                        )
-                    data = re.sub(rb"(?:\r\n|[\r\n])$", b"", data[: -len(eos)])
-                else:
-                    # Note absence of + 1 here (the "Unless" above)
-                    self.seek(idpos + len(KEYWORD_ID.name))
-                    (eipos, data) = self.get_inline_data(target=eos, try_harder=True)
-                    if eipos == -1:
-                        raise PDFSyntaxError(
-                            "End of inline stream at %d not found" % (idpos,)
-                        )
-                    # There should be an "EI" here
-                    (eipos, token) = self.nexttoken()
-                    if token is not KEYWORD_EI:
-                        log.warning(
-                            "Junk after inline image at %d: got %r instead of EI",
-                            idpos,
-                            token,
-                        )
-                if eipos == -1:
-                    raise PDFSyntaxError("End of inline stream %r not found" % eos)
-                obj = InlineImage(dic, data)
                 # Inline images must occur at the top level, otherwise
                 # something is wrong (probably a corrupt file)
-                assert (
-                    pos == top
-                ), f"Inline image {obj} not at top level of stream ({pos} != {top}, {self.stack})"
-                top = None
-                return pos, obj
+                if top is not None:
+                    raise PDFSyntaxError("Inline image not at top level of stream "
+                                         f"({pos} != {top}, {self.stack})")
+                top = pos
+                self.stack.append((pos, token))
+            elif token is KEYWORD_ID:
+                obj = self.get_inline_image(pos, token)
+                if obj is not None:
+                    top = None
+                    return pos, obj
             else:
                 # Literally anything else, including any other keyword
                 # (will be returned above if top is None, or later if
@@ -558,6 +439,156 @@ class ObjectParser:
             context.append(last)
         raise PDFSyntaxError(f"Unmatched end token {token!r}")
 
+    def get_object_reference(self, pos: int, token: Token) -> Union[ObjRef, None]:
+        """Get an indirect object reference upon finding an "R" token."""
+        try:
+            _pos, _genno = self.stack.pop()
+            _pos, objid = self.stack.pop()
+        except ValueError as e:
+            if self.strict:
+                raise PDFSyntaxError(
+                    "Expected generation and object id in indirect object reference"
+                ) from e
+            else:
+                log.warning(
+                    "Expected generation and object id in indirect object reference: %s",
+                    e,
+                )
+            return None
+        objid = int_value(objid)
+        if objid == 0:
+            if self.strict:
+                raise PDFSyntaxError(
+                    "Object ID in reference at pos %d cannot be 0" % (pos,)
+                )
+            log.warning(
+                "Ignoring indirect object reference to 0 at %s", pos
+            )
+            return None
+        return ObjRef(self.docref, objid)
+
+    def get_inline_image(self, pos: int, token: Token) -> Union[InlineImage, None]:
+        """Get an inline image upon finding an "ID" token.
+
+        Returns a tuple of the position of the target in the data and
+        the image data.  Advances the file pointer to a position after
+        the end of the stream.
+        """
+        assert token is KEYWORD_ID, f"Not ID: {token!r}"
+        idpos = pos
+        (pos, objs) = self.pop_to(KEYWORD_BI)
+        if len(objs) % 2 != 0:
+            error_msg = f"Invalid dictionary construct: {objs!r}"
+            if self.strict:
+                raise TypeError(error_msg)
+            else:
+                log.warning(error_msg)
+        dic = {
+            literal_name(k): v for (k, v) in choplist(2, objs) if v is not None
+        }
+
+        # WELCOME TO THE HELL!!!
+        #
+        # - The PDF standard only specifies that image data must be
+        #   delimited by "ID" and "EI", and that "The bytes between
+        #   the ID and EI operators shall be treated the same as a
+        #   stream object’s data, even though they do not follow the
+        #   standard stream syntax."
+        # - I guess that means that there must be a newline before
+        #   "EI", which should be ignored?  But some PDFs just put
+        #   any old whitespace there, or none at all!
+        # - And there must be "a single whitespace character"
+        #   following "ID" (floating in perfume, served in a man's
+        #   hat), except in the case of ASCIIHexDecode or
+        #   ASCII85Decode (in which case there can just be any
+        #   whitespace you like, or none at all).
+        # - Also the stream data can, and inevitably will, contain the
+        #   literal bytes "EI".  In the case of ASCII85 you can look
+        #   for the ~> terminator *except* that sometimes
+        #   it... contains whitespace inside it!
+        #
+        # What this means in practice is that even though the spec is
+        # quite silent on this matter, ASCII85 data will inevitably
+        # contain the sequence b"\nEI", so we must absolutely
+        # special-case this *first* to look for the ASCII85 terminator
+        # b"~>" followed by b"EI", ignoring any whitespace.
+        #
+        # Otherwise, we first look for b"\nEI" as this is "standard
+        # stream syntax".  If that doesn't work then, in strict mode,
+        # we will just raise a PDFSyntaxError because this PDF is
+        # clearly bullshit.
+        #
+        # If it's ASCIIHex data then we just look for b"EI" ignoring
+        # all whitespace, since b"EI" is thankfully not a valid hex
+        # sequence.
+        #
+        # Otherwise we try again for b"EI" preceded by some whitespace
+        # which is not foolproof since you could have the pixel values
+        # (32, 69, 73) or whatever in your image... just like you
+        # could have had (10, 69, 73) in "standard stream syntax"!
+        #
+        # And finally if that doesn't work then we will try to salvage
+        # something by just looking for b"EI".  We take the most
+        # distant one to avoid spewing junk everywhere in the logs,
+        # and if this causes you to lose data it's Adobe's fault.
+        #
+        # The moral of the story is that the author of this part of
+        # the PDF specification should have considered a career in
+        # literally anything else.
+
+        # Figure out if we should ignore whitespace (and if there is A85)
+        ignore_whitespace = False
+        target_re = EIR
+        filters = dic.get("F", [])
+        if not isinstance(filters, list):
+            filters = [filters]
+        for f in filters:
+            if f in LITERALS_ASCII85_DECODE:
+                # Special case ASCII85, ugh
+                target_re = A85R
+                ignore_whitespace = True
+            elif f in LITERALS_ASCIIHEX_DECODE:
+                ignore_whitespace = True
+
+        # Find the start of the image data
+        pos = idpos + len(token.name)
+        data = self._lexer.data
+        if not ignore_whitespace:
+            ws = data[pos:pos+1]
+            if ws.isspace():
+                pos = pos + 1
+            else:
+                errmsg = f"ID token not followed by whitespace: {ws!r}"
+                if self.strict:
+                    raise PDFSyntaxError(errmsg)
+                else:
+                    log.warning(errmsg)
+
+        # Try standard stream syntax (or A85 nonsense)
+        m = target_re.search(data, pos)
+        if m is not None:
+            self.seek(m.end(0))
+            return InlineImage(dic, data[pos:m.start(0)])
+        errmsg = f"Inline image at {pos} not terminated with {target_re}"
+        if self.strict:
+            raise PDFSyntaxError(errmsg)
+        else:
+            log.warning(errmsg)
+
+        m = WSEIR.search(data, pos)
+        if m is not None:
+            log.warning("Inline image at %d has non-standard termination %r", pos, m[0])
+            self.seek(m.end(0))
+            return InlineImage(dic, data[pos:m.start(0)])
+
+        m = FURTHESTEIR.search(data, pos)
+        if m is not None:
+            log.warning("Inline image at %d has no whitespace before EI, "
+                        "expect horrible data loss!!!", pos)
+            self.seek(m.end(0))
+            return InlineImage(dic, data[pos:m.end(0) - 2])
+        return None
+
     # Delegation follows
     def seek(self, pos: int) -> None:
         """Seek to a position."""
@@ -571,13 +602,6 @@ class ObjectParser:
         """Read data from a specified position, moving the current
         position to the end of this data."""
         return self._lexer.read(objlen)
-
-    def get_inline_data(
-        self, target: bytes = b"EI", try_harder: bool = False
-    ) -> Tuple[int, bytes]:
-        """Get the data for an inline image up to the target
-        end-of-stream marker."""
-        return self._lexer.get_inline_data(target, try_harder)
 
     def nextline(self) -> Tuple[int, bytes]:
         """Read (and do not parse) next line from underlying data."""
