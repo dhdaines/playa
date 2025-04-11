@@ -172,7 +172,8 @@ class Font:
 
     def text_space_char_bbox(self, cid: int) -> Rect:
         """Get the text space bounding box from CID."""
-        bbox = 0, self.descent, self.char_width(cid), self.descent + 1000
+        _, y0, _, y1 = self.bbox
+        bbox = 0, y0, self.char_width(cid), y1
         return apply_default_font_matrix_to_bbox(bbox)
 
 
@@ -373,7 +374,8 @@ class Type3Font(SimpleFont):
 
     def text_space_char_bbox(self, cid: int) -> Rect:
         """Get the text space bounding box from CID."""
-        bbox = 0, self.descent, self.char_width(cid), self.descent + 1000
+        _, y0, _, y1 = self.bbox
+        bbox = 0, y0, self.char_width(cid), y1
         return get_transformed_bound(self.matrix, bbox)
 
 
@@ -557,7 +559,8 @@ class CIDFont(Font):
             vx, _ = self.char_position_vec(cid)
             bbox = -vx, wy, wx - vx, 0
         else:
-            bbox = 0, self.descent, self.char_width(cid), self.descent + 1000
+            _, y0, _, y1 = self.bbox
+            bbox = 0, y0, self.char_width(cid), y1
         return apply_default_font_matrix_to_bbox(bbox)
 
     def char_position_vec(self, cid: int) -> Point:

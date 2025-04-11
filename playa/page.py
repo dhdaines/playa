@@ -1176,10 +1176,11 @@ class TextObject(ContentObject):
                 x0 = min(x0, glyph_x0)
                 x1 = max(x1, glyph_x1)
         else:
+            glyph_to_Tm_scale_y = font.matrix[3] * tstate.fontsize
             x0 = x
-            y0 = y + font.descent * font.matrix[3] * tstate.fontsize + tstate.rise
+            y0 = y + font.bbox[1] * glyph_to_Tm_scale_y + tstate.rise
             x1 = self._next_tstate.glyph_offset[0]
-            y1 = y0 + tstate.fontsize
+            y1 = y + font.bbox[3] * glyph_to_Tm_scale_y + tstate.rise
         self._text_space_bbox = (x0, y0, x1, y1)
         return self._text_space_bbox
 
