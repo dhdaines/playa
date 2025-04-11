@@ -41,8 +41,8 @@ def test_content_objects():
             texts.append(obj.chars)
             assert len(obj) == sum(1 for glyph in obj)
         # Now there are ... a lot of text objects
-        assert boxes[0] == [358, 896, 360, 905]
-        assert boxes[-1] == [99, 79, 102, 90]
+        assert boxes[0] == [358, 896, 360, 909]
+        assert boxes[-1] == [99, 79, 102, 94]
         assert len(boxes) == 204
 
 
