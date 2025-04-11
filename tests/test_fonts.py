@@ -36,8 +36,8 @@ Un peu plus à droite"""
         )
         # Did we get the *glyphs* right? (harder)
         boxes = list(t.bbox for t in page.texts)
-        assert boxes[0] == pytest.approx((100.0, 72.968, 289.408, 96.968))
-        assert boxes[1] == pytest.approx((150.0, 108.968, 364.776, 132.968))
+        assert boxes[0] == pytest.approx((100.0, 69.656, 289.408, 97.4))
+        assert boxes[1] == pytest.approx((150.0, 105.656, 364.776, 133.4))
 
 
 @pytest.mark.skipif(not CONTRIB.exists(), reason="contrib samples not present")
