@@ -202,3 +202,10 @@ def test_objects_decrypted() -> None:
         assert info.obj == doc[10]
         assert isinstance(info.obj, dict)
         assert info.obj["CreationDate"] == b"D:20140509193727+02'00'"
+
+
+def test_evil_xobjects() -> None:
+    """Verify that we do not follow circular references in XObjects."""
+    with playa.open(TESTDIR / "evil_xobjects.pdf") as doc:
+        for _ in doc.pages[0].flatten():
+            pass

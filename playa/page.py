@@ -356,17 +356,21 @@ class Page:
     ) -> Iterator[Union[CO, "ContentObject"]]:
         """Iterate over content objects, recursing into form XObjects."""
 
-        def flatten_one(itor: Iterable["ContentObject"]) -> Iterator["ContentObject"]:
+        from typing import Set
+
+        def flatten_one(
+            itor: Iterable["ContentObject"], parents: Set[str]
+        ) -> Iterator["ContentObject"]:
             for obj in itor:
-                if isinstance(obj, XObjectObject):
-                    yield from flatten_one(obj)
+                if isinstance(obj, XObjectObject) and obj.xobjid not in parents:
+                    yield from flatten_one(obj, parents | {obj.xobjid})
                 else:
                     yield obj
 
         if filter_class is None:
-            yield from flatten_one(self)
+            yield from flatten_one(self, set())
         else:
-            for obj in flatten_one(self):
+            for obj in flatten_one(self, set()):
                 if isinstance(obj, filter_class):
                     yield obj
 
@@ -1302,7 +1306,10 @@ class LazyInterpreter:
                         self.fontmap[fontid] = doc.get_font(objid, dict_value(spec))
                     except Exception:
                         log.warning(
-                            "Invalid font dictionary for Font %r: %r", fontid, spec, exc_info=True
+                            "Invalid font dictionary for Font %r: %r",
+                            fontid,
+                            spec,
+                            exc_info=True,
                         )
                         self.fontmap[fontid] = doc.get_font(objid, None)
             elif k == "ColorSpace":

@@ -1,0 +1,59 @@
+%PDF-1.4
+1 0 obj
+<<
+ /Type /Catalog
+ /Pages 3 0 R
+>>
+endobj
+3 0 obj
+<<
+ /Type /Pages
+ /Kids [ 4 0 R ]
+ /Count 1
+>>
+endobj
+4 0 obj
+<<
+ /Type /Page
+ /Parent 3 0 R
+ /MediaBox [ 0 0 612 792 ]
+ /Contents 5 0 R
+ /Resources <<
+  /ProcSet [ /PDF /Text ]
+  /Font << /F1 7 0 R >>
+ >>
+>>
+endobj
+5 0 obj
+<< /Length 85 >>
+stream
+BT
+/F1 24 Tf
+100 700 Td
+(y'est la mon Bob) Tj
+50 -36 Td
+(Un peu pcus A droite) Tj
+ET
+endstream
+endobj
+7 0 obj
+<<
+ /Type /Font
+ /Subtype /Type1
+ /Name /F1
+ /BaseFont /Helvetica
+ /Encoding <<
+   /Differences [
+   65 /agrave
+   99 /l
+   108 /ccedilla
+   121 /Ccedilla
+   ]
+ >>
+>>
+endobj
+trailer 
+<<
+ /Root 1 0 R
+>>
+%%EOF

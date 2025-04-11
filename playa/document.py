@@ -532,7 +532,9 @@ class Document:
             else:
                 dfonts = resolve1(spec["DescendantFonts"])
                 if len(dfonts) != 1:
-                    log.debug("Type 0 font should have 1 descendant, has more: %r", dfonts)
+                    log.debug(
+                        "Type 0 font should have 1 descendant, has more: %r", dfonts
+                    )
                 subspec = resolve1(dfonts[0])
                 if not isinstance(subspec, dict):
                     log.warning("Invalid descendant font: %r", subspec)

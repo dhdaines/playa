@@ -1,5 +1,5 @@
 import logging
-from typing import Any, List, Tuple
+from typing import Any, List
 
 import pytest
 
@@ -285,54 +285,6 @@ def test_invalid_strings_eof() -> None:
     list_parsers(rb"(abracadab", [])
 
 
-def inline_parsers(
-    data: bytes,
-    expected: Tuple[int, bytes],
-    target: bytes = b"EI",
-    nexttoken: Any = None,
-    try_harder: bool = False,
-) -> None:
-    bp = Lexer(data)
-    assert bp.get_inline_data(target=target, try_harder=try_harder) == expected
-    if nexttoken is not None:
-        assert next(bp) == nexttoken
-
-
-def test_get_inline_data() -> None:
-    kwd_eio = KWD(b"EIO")
-    kwd_omg = KWD(b"OMG")
-    inline_parsers(b"""0123456789""", (-1, b""))
-    inline_parsers(b"""0123456789EI""", (10, b"0123456789EI"))
-    inline_parsers(
-        b"""0123456789EIEIO""", (10, b"0123456789EI"), nexttoken=(12, kwd_eio)
-    )
-    inline_parsers(b"""012EIEIO""", (3, b"012EI"), nexttoken=(5, kwd_eio))
-    inline_parsers(b"""0123012EIEIO""", (7, b"0123012EI"), nexttoken=(9, kwd_eio))
-    inline_parsers(
-        b"""012EIEIOOMG""",
-        (
-            3,
-            b"012EIEIO",
-        ),
-        target=b"EIEIO",
-        nexttoken=(8, kwd_omg),
-    )
-    inline_parsers(
-        b"OMG WTF SRSLY?~> SMH",
-        (14, b"OMG WTF SRSLY?~>"),
-        target=b"~>",
-        nexttoken=(17, KWD(b"SMH")),
-        try_harder=False,
-    )
-    inline_parsers(
-        b"OMG WTF SRSLY?~  > SMH",
-        (14, b"OMG WTF SRSLY?~>"),
-        target=b"~>",
-        nexttoken=(19, KWD(b"SMH")),
-        try_harder=True,
-    )
-
-
 def test_literals():
     """Test the (actually internal) functions for interpreting
     literals as strings"""
@@ -393,10 +345,34 @@ ID
 VARIOUS UTTER NONSENSE
 EI
 BI
+/F /AHx
+ID\r4f 4d 47575446\r\n\r\nEI
+BI /F /AHx ID 4f4d47575446EI
+BI ID(OMG)(WTF)
+EI
+BI
 /F /A85
 ID
 <^BVT:K:=9<E)pd;BS_1:/aSV;ag~>
 EI
+BI
+/F /A85
+ID
+<^BVT:K:=9<E)pd;BS_1:/aSV;ag~
+>
+EI
+BI /F /A85 ID<^BVT:K:=9<E)pd;BS_1:/aSV;ag~>EI
+BI
+/OMG (WTF)
+ID
+BLAHEIBLAHBLAH\rEI
+BI ID
+OLD MACDONALD\rEIEIO
+EI
+BI ID OLDMACDONALDEIEIO EI
+BI ID
+OLDMACDONALDEIEIOEI
+(hello world)
 """
 
 
@@ -408,7 +384,34 @@ def test_inline_images():
     assert img.rawdata == b"VARIOUS UTTER NONSENSE"
     pos, img = next(parser)
     assert isinstance(img, InlineImage)
+    assert img.buffer == b"OMGWTF"
+    pos, img = next(parser)
+    assert isinstance(img, InlineImage)
+    assert img.buffer == b"OMGWTF"
+    pos, img = next(parser)
+    assert isinstance(img, InlineImage)
+    assert img.buffer == b"(OMG)(WTF)"
+    pos, img = next(parser)
+    assert isinstance(img, InlineImage)
     assert img.buffer == b"VARIOUS UTTER NONSENSE"
+    pos, img = next(parser)
+    assert isinstance(img, InlineImage)
+    assert img.buffer == b"VARIOUS UTTER NONSENSE"
+    pos, img = next(parser)
+    assert isinstance(img, InlineImage)
+    assert img.buffer == b"VARIOUS UTTER NONSENSE"
+    pos, img = next(parser)
+    assert isinstance(img, InlineImage)
+    assert img.buffer == b"BLAHEIBLAHBLAH"
+    pos, img = next(parser)
+    assert isinstance(img, InlineImage)
+    assert img.buffer == b"OLD MACDONALD\rEIEIO"
+    pos, img = next(parser)
+    assert isinstance(img, InlineImage)
+    assert img.buffer == b"OLDMACDONALDEIEIO"
+    pos, img = next(parser)
+    assert isinstance(img, InlineImage)
+    assert img.buffer == b"OLDMACDONALDEIEIO"
 
 
 def test_reverse_solidus():

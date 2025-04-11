@@ -77,6 +77,8 @@ PDFMINER_BUGS = {
     "utf16_tounicode.pdf",
     "ascii_tounicode.pdf",
     "duplicate_encoding_tounicode.pdf",
+    # Except this one here where pdfminer.six will just crash
+    "evil_xobjects.pdf",
 }
 # Broken XRef tables (bogus linearization, concatenation, etc)
 FALLBACKS = {

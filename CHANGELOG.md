@@ -1,7 +1,9 @@
 ## PLAYA 0.4.2: Unreleased
 - Correct `fontsize` and `scaling` in text state
+- Correct `ValueError` on incorrect stream lengths for ASCII85 data
 - Correct implicit font encodings for Type1 fonts
 - More fine-grained error handling in font initialization
+- Correct infinite recursion in malicious Form XObjects
 
 ## PLAYA 0.4.1: 2025-03-20
 
