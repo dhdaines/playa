@@ -1489,8 +1489,7 @@ class CFFFontProgram:
         self.gid2code = {}
         if encoding_pos in (0, 1):
             for code, sid in enumerate(self.PREDEFINED_ENCODINGS[encoding_pos]):
-                if sid != 0:
-                    gid = self.name2gid[self.getstr(sid)]
+                if gid := self.name2gid.get(self.getstr(sid)):
                     self.code2gid[code] = gid
                     self.gid2code[gid] = code
             return
