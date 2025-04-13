@@ -536,12 +536,12 @@ class ObjectParser:
         filters = dic.get("F", [])
         if not isinstance(filters, list):
             filters = [filters]
-        for f in filters:
-            if f in LITERALS_ASCII85_DECODE:
+        if filters:
+            if filters[0] in LITERALS_ASCII85_DECODE:
                 # ASCII85: look for ~>EI, ignoring all whitespace
                 initial_whitespace = False
                 target_re = A85R
-            elif f in LITERALS_ASCIIHEX_DECODE:
+            elif filters[0] in LITERALS_ASCIIHEX_DECODE:
                 # ASCIIHex: just look for EI
                 initial_whitespace = False
                 target_re = EIEIR
