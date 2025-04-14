@@ -49,9 +49,9 @@ from playa.utils import (
     Matrix,
     Point,
     Rect,
-    apply_matrix_norm,
     choplist,
     decode_text,
+    get_transformed_bound,
 )
 
 log = logging.getLogger(__name__)
@@ -102,6 +102,11 @@ def get_widths2(seq: Iterable[PDFObject]) -> Dict[int, Tuple[float, Point]]:
     return widths
 
 
+def apply_default_font_matrix_to_bbox(bbox: Rect) -> Rect:
+    x0, y0, x1, y1 = bbox
+    return x0 * 0.001, y0 * 0.001, x1 * 0.001, y1 * 0.001
+
+
 LITERAL_STANDARD_ENCODING = LIT("StandardEncoding")
 
 
@@ -109,6 +114,12 @@ class Font:
     vertical = False
     multibyte = False
     encoding: Dict[int, str]
+    ascent: float
+    descent: float
+    italic_angle: float
+    leading: float
+    bbox: Rect
+    matrix: Matrix = (0.001, 0, 0, 0.001, 0, 0)
 
     def __init__(
         self,
@@ -135,7 +146,6 @@ class Font:
             Rect,
             list_value(resolve_all(descriptor.get("FontBBox", (0, 0, 0, 0)))),
         )
-        self.hscale = self.vscale = 0.001
 
         # PDF RM 9.8.1 specifies /Descent should always be a negative number.
         # PScript5.dll seems to produce Descent with a positive number, but
@@ -152,38 +162,19 @@ class Font:
         log.debug("decode with identity: %r", data)
         return ((cid, chr(cid)) for cid in data)
 
-    def get_ascent(self) -> float:
-        """Ascent above the baseline, in text space units"""
-        return self.ascent * self.vscale
-
-    def get_descent(self) -> float:
-        """Descent below the baseline, in text space units; always negative"""
-        return self.descent * self.vscale
-
-    def get_width(self) -> float:
-        w = self.bbox[2] - self.bbox[0]
-        if w == 0:
-            w = -self.default_width
-        return w * self.hscale
-
-    def get_height(self) -> float:
-        h = self.bbox[3] - self.bbox[1]
-        if h == 0:
-            h = self.ascent - self.descent
-        return h * self.vscale
-
     def char_width(self, cid: int) -> float:
         """Get the width of a character from its CID."""
-        if cid not in self.widths:
-            return self.default_width * self.hscale
-        return self.widths[cid] * self.hscale
+        return self.widths.get(cid, self.default_width)
 
-    def char_disp(self, cid: int) -> Union[float, Tuple[Optional[float], float]]:
-        """Returns an integer for horizontal fonts, a tuple for vertical fonts."""
-        return 0
+    def char_disp(self, cid: int) -> float:
+        """Get the (horizontal or vertical) displacment from CID."""
+        return self.char_width(cid)
 
-    def string_width(self, s: bytes) -> float:
-        return sum(self.char_width(cid) for cid, _ in self.decode(s))
+    def text_space_char_bbox(self, cid: int) -> Rect:
+        """Get the text space bounding box from CID."""
+        _, y0, _, y1 = self.bbox
+        bbox = 0, y0, self.char_width(cid), y1
+        return apply_default_font_matrix_to_bbox(bbox)
 
 
 class SimpleFont(Font):
@@ -329,7 +320,7 @@ class Type1Font(SimpleFont):
                 width = self.char_widths.get(self.cid2unicode[cid], self.default_width)
         else:
             width = self.widths.get(cid, self.default_width)
-        return width * self.hscale
+        return width
 
     def __repr__(self) -> str:
         return "<Type1Font: basefont=%r>" % self.basefont
@@ -364,14 +355,11 @@ class Type3Font(SimpleFont):
         # lastchar = int_value(spec.get('LastChar', 0))
         width_list = list_value(spec.get("Widths", [0] * 256))
         widths = {i + firstchar: w for (i, w) in enumerate(width_list)}
-        if "FontDescriptor" in spec:
-            descriptor = dict_value(spec["FontDescriptor"])
-        else:
-            descriptor = {"Ascent": 0, "Descent": 0, "FontBBox": spec["FontBBox"]}
+        descriptor = dict_value(spec.get("FontDescriptor", {}))
         SimpleFont.__init__(self, descriptor, widths, spec)
         self.matrix = cast(Matrix, tuple(list_value(spec.get("FontMatrix"))))
+        self.bbox = cast(Rect, list_value(spec.get("FontBBox", self.bbox)))
         (_, self.descent, _, self.ascent) = self.bbox
-        (self.hscale, self.vscale) = apply_matrix_norm(self.matrix, (1, 1))
 
     def get_implicit_encoding(
         self, descriptor: Dict[str, PDFObject]
@@ -384,6 +372,12 @@ class Type3Font(SimpleFont):
     def __repr__(self) -> str:
         return "<Type3Font>"
 
+    def text_space_char_bbox(self, cid: int) -> Rect:
+        """Get the text space bounding box from CID."""
+        _, y0, _, y1 = self.bbox
+        bbox = 0, y0, self.char_width(cid), y1
+        return get_transformed_bound(self.matrix, bbox)
+
 
 # Mapping of cmap names. Original cmap name is kept if not in the mapping.
 # (missing reference for why DLIdent is mapped to Identity)
@@ -394,8 +388,6 @@ IDENTITY_ENCODER = {
 
 
 class CIDFont(Font):
-    default_disp: Union[float, Tuple[Optional[float], float]]
-
     def __init__(
         self,
         spec: Dict[str, PDFObject],
@@ -476,20 +468,23 @@ class CIDFont(Font):
 
         self.multibyte = True
         self.vertical = self.cmap.is_vertical()
+        widths = get_widths(list_value(spec.get("W", [])))
+        default_width = num_value(spec.get("DW", 1000))
         if self.vertical:
             # writing mode: vertical
             widths2 = get_widths2(list_value(spec.get("W2", [])))
-            self.disps = {cid: (vx, vy) for (cid, (_, (vx, vy))) in widths2.items()}
+            self.position_vecs = {
+                cid: (vx, vy) for (cid, (_, (vx, vy))) in widths2.items()
+            }
             (vy, w) = resolve1(spec.get("DW2", [880, -1000]))
-            self.default_disp = (None, vy)
-            widths = {cid: w for (cid, (w, _)) in widths2.items()}
-            default_width = w
+            self.vertical_disps = {cid: w for (cid, (w, _)) in widths2.items()}
+            self.default_vertical_disp = w
+            self.default_position_vec_y = vy
         else:
             # writing mode: horizontal
-            self.disps = {}
-            self.default_disp = 0
-            widths = get_widths(list_value(spec.get("W", [])))
-            default_width = spec.get("DW", 1000)
+            self.position_vecs, self.vertical_disps = {}, {}
+            self.default_position_vec_y = self.default_vertical_disp = 0
+
         Font.__init__(self, descriptor, widths, default_width=default_width)
 
     def get_cmap_from_spec(self, spec: Dict[str, PDFObject]) -> CMapBase:
@@ -552,6 +547,33 @@ class CIDFont(Font):
     def __repr__(self) -> str:
         return f"<CIDFont: basefont={self.basefont!r}, cidcoding={self.cidcoding!r}>"
 
-    def char_disp(self, cid: int) -> Union[float, Tuple[Optional[float], float]]:
-        """Returns 0 for horizontal fonts, a tuple for vertical fonts."""
-        return self.disps.get(cid, self.default_disp)
+    def char_disp(self, cid: int) -> float:
+        """Get the (horizontal or vertical) displacment from CID."""
+        return self.char_vertical_disp(cid) if self.vertical else self.char_width(cid)
+
+    def text_space_char_bbox(self, cid: int) -> Rect:
+        """Get the text space bounding box from CID."""
+        bbox: Rect
+        if self.vertical:
+            wx, wy = self.char_width(cid), self.char_vertical_disp(cid)
+            vx, _ = self.char_position_vec(cid)
+            bbox = -vx, wy, wx - vx, 0
+        else:
+            _, y0, _, y1 = self.bbox
+            bbox = 0, y0, self.char_width(cid), y1
+        return apply_default_font_matrix_to_bbox(bbox)
+
+    def char_position_vec(self, cid: int) -> Point:
+        """Applies only to vertical fonts. Returns position vector from the origin used for
+        horizontal writing (origin 0) to the origin used for vertical writing (origin 1).
+        """
+        assert self.vertical, "Not a vertical font"
+        if cid in self.position_vecs:
+            return self.position_vecs[cid]
+        else:
+            return 0.5 * self.char_width(cid), self.default_position_vec_y
+
+    def char_vertical_disp(self, cid: int) -> float:
+        """Applies only to vertical fonts. Get the vertical displacement of a character from its CID."""
+        assert self.vertical, "Not a vertical font"
+        return self.vertical_disps.get(cid, self.default_vertical_disp)
