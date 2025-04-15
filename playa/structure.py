@@ -31,6 +31,7 @@ LOG = logging.getLogger(__name__)
 LITERAL_MCR = LIT("MCR")
 LITERAL_OBJR = LIT("OBJR")
 LITERAL_STRUCTTREEROOT = LIT("StructTreeRoot")
+LITERAL_STRUCTELEM = LIT("StructElem")
 MatchFunc = Callable[["Element"], bool]
 
 if TYPE_CHECKING:
@@ -196,105 +197,124 @@ class Element(Findable):
     def __iter__(self) -> Iterator[Union["Element", ContentItem, ContentObject]]:
         if "K" in self.props:
             kids = resolve1(self.props["K"])
-            yield from self._make_kids(kids)
+            yield from _make_kids(kids, self.page, self._docref)
 
-    @functools.singledispatchmethod
-    def _make_kids(
-        self, k: PDFObject
-    ) -> Iterator[Union["Element", ContentItem, ContentObject]]:
-        """
-        Make a child for this element from its K array.
 
-        K in Element can be (PDF 1.7 Table 323):
-        - a structure element (not a content item)
-        - an integer marked-content ID
-        - a marked-content reference dictionary
-        - an object reference dictionary
-        - an array of one or more of the above
-        """
-        LOG.warning("Unrecognized 'K' element: %r", k)
-        yield from ()
+@functools.singledispatch
+def _make_kids(
+    k: PDFObject, page: Union["Page", None], docref: DocumentRef
+) -> Iterator[Union["Element", ContentItem, ContentObject]]:
+    """
+    Make a child for this element from its K array.
 
-    @_make_kids.register(list)
-    def _make_kids_list(
-        self, k: list
-    ) -> Iterator[Union["Element", ContentItem, ContentObject]]:
-        for el in k:
-            yield from self._make_kids(resolve1(el))
+    K in Element can be (PDF 1.7 Table 323):
+    - a structure element (not a content item)
+    - an integer marked-content ID
+    - a marked-content reference dictionary
+    - an object reference dictionary
+    - an array of one or more of the above
+    """
+    LOG.warning("Unrecognized 'K' element: %r", k)
+    yield from ()
 
-    @_make_kids.register(int)
-    def _make_kids_int(self, k: int) -> Iterator[ContentItem]:
-        page = self.page
-        if page is None:
-            LOG.warning("No page found for marked-content reference: %r", k)
-            return
-        yield ContentItem(_pageref=page.pageref, mcid=k, stream=None)
 
-    @_make_kids.register(dict)
-    def _make_kids_dict(
-        self, k: Dict[str, PDFObject]
-    ) -> Iterator[Union[ContentItem, ContentObject, "Element"]]:
-        ktype = k.get("Type")
-        if ktype is LITERAL_MCR:
-            yield from self._make_kids_mcr(k)
-        elif ktype is LITERAL_OBJR:
-            yield from self._make_kids_objr(k)
-        else:
-            yield Element(_docref=self._docref, props=k)
+@_make_kids.register(list)
+def _make_kids_list(
+    k: list, page: Union["Page", None], docref: DocumentRef
+) -> Iterator[Union["Element", ContentItem, ContentObject]]:
+    for el in k:
+        yield from _make_kids(resolve1(el), page, docref)
 
-    def _make_kids_mcr(self, k: Dict[str, PDFObject]) -> Iterator[ContentItem]:
-        mcid = resolve1(k.get("MCID"))
-        if mcid is None or not isinstance(mcid, int):
-            LOG.warning("'MCID' entry is not an int: %r", k)
-            return
-        stream: Union[ContentStream, None] = None
-        pageref = self._get_kid_pageref(k)
-        if pageref is None:
-            return
-        try:
-            stream = stream_value(k["Stm"])
-        except KeyError:
-            pass
-        except TypeError:
-            LOG.warning("'Stm' entry is not a content stream: %r", k)
-        # Do not care about StmOwn, we don't do appearances
-        yield ContentItem(_pageref=pageref, mcid=mcid, stream=stream)
 
-    def _make_kids_objr(self, k: Dict[str, PDFObject]) -> Iterator[ContentObject]:
-        ref = k.get("Obj")
-        if not isinstance(ref, ObjRef):
-            LOG.warning("'Obj' entry is not an indirect object reference: %r", k)
-            return
-        obj = ref.resolve()
-        if not isinstance(obj, dict):
-            LOG.warning("'Obj' entry does not point to a dict: %r", obj)
-            return
-        pageref = self._get_kid_pageref(k)
+@_make_kids.register(int)
+def _make_kids_int(
+    k: int, page: Union["Page", None], docref: DocumentRef
+) -> Iterator[ContentItem]:
+    if page is None:
+        LOG.warning("No page found for marked-content reference: %r", k)
+        return
+    yield ContentItem(_pageref=page.pageref, mcid=k, stream=None)
+
+
+@_make_kids.register(dict)
+def _make_kids_dict(
+    k: Dict[str, PDFObject], page: Union["Page", None], docref: DocumentRef
+) -> Iterator[Union[ContentItem, ContentObject, "Element"]]:
+    ktype = k.get("Type")
+    if ktype is LITERAL_MCR:
+        yield from _make_kids_mcr(k, page, docref)
+    elif ktype is LITERAL_OBJR:
+        yield from _make_kids_objr(k, page, docref)
+    else:
+        yield Element(_docref=docref, props=k)
+
+
+def _make_kids_mcr(
+    k: Dict[str, PDFObject], page: Union["Page", None], docref: DocumentRef
+) -> Iterator[ContentItem]:
+    mcid = resolve1(k.get("MCID"))
+    if mcid is None or not isinstance(mcid, int):
+        LOG.warning("'MCID' entry is not an int: %r", k)
+        return
+    stream: Union[ContentStream, None] = None
+    pageref = _get_kid_pageref(k, page, docref)
+    if pageref is None:
+        return
+    try:
+        stream = stream_value(k["Stm"])
+    except KeyError:
+        pass
+    except TypeError:
+        LOG.warning("'Stm' entry is not a content stream: %r", k)
+    # Do not care about StmOwn, we don't do appearances
+    yield ContentItem(_pageref=pageref, mcid=mcid, stream=stream)
+
+
+def _make_kids_objr(
+    k: Dict[str, PDFObject], page: Union["Page", None], docref: DocumentRef
+) -> Iterator[Union[ContentObject, "Element"]]:
+    ref = k.get("Obj")
+    if not isinstance(ref, ObjRef):
+        LOG.warning("'Obj' entry is not an indirect object reference: %r", k)
+        return
+    obj = ref.resolve()
+    if not isinstance(obj, dict):
+        LOG.warning("'Obj' entry does not point to a dict: %r", obj)
+        return
+    # In theory OBJR is not for elements, but just in case...
+    ktype = obj.get("Type")
+    if ktype is LITERAL_STRUCTELEM:
+        yield Element(_docref=docref, props=obj)
+    else:
+        pageref = _get_kid_pageref(k, page, docref)
         if pageref is None:
             return
         yield ContentObject(_pageref=pageref, props=obj)
 
-    def _get_kid_pageref(self, k: Dict[str, PDFObject]) -> Union[PageRef, None]:
-        pg = k.get("Pg")
-        page: Union[Page, None] = None
-        if pg is not None:
-            if isinstance(pg, ObjRef):
-                try:
-                    page = self.doc.pages.by_id(pg.objid)
-                except KeyError:
-                    LOG.warning("'Pg' entry not found in document: %r", k)
-                    page = None
-            else:
-                LOG.warning("'Pg' entry is not an indirect object reference: %r", k)
+
+def _get_kid_pageref(
+    k: Dict[str, PDFObject], page: Union["Page", None], docref: DocumentRef
+) -> Union[PageRef, None]:
+    pg = k.get("Pg")
+    if pg is not None:
+        if isinstance(pg, ObjRef):
+            try:
+                doc = _deref_document(docref)
+                page = doc.pages.by_id(pg.objid)
+            except KeyError:
+                LOG.warning("'Pg' entry not found in document: %r", k)
+        else:
+            LOG.warning("'Pg' entry is not an indirect object reference: %r", k)
+    if page is None:
         if page is None:
-            page = self.page
-            if page is None:
-                LOG.warning("No page found for marked-content reference: %r", k)
-                return None
-        return page.pageref
+            LOG.warning("No page found for marked-content reference: %r", k)
+            return None
+    return page.pageref
 
 
-def _iter_structure(doc: "Document") -> Iterator[Element]:
+def _iter_structure(
+    doc: "Document",
+) -> Iterator[Union["Element", ContentItem, ContentObject]]:
     root = resolve1(doc.catalog.get("StructTreeRoot"))
     if root is None:
         return
@@ -316,19 +336,19 @@ def _iter_structure(doc: "Document") -> Iterator[Element]:
         return
     for k in kids:
         k = resolve1(k)
+        # Notwithstanding, we will accept other things in
+        # StructTreeRoot, even though, unlike other things forbidden
+        # by the PDF standard, it seems that this actually never
+        # happens (amazing!).  But we will complain about it.
         if not isinstance(k, dict):
             LOG.warning("'K' entry in StructTreeRoot contains non-element %r", k)
-            continue
-        # Should not happen?!?!?!?
-        if k.get("Type") is LITERAL_OBJR:
+        elif k.get("Type") is LITERAL_OBJR:
             LOG.warning("'K' entry in StructTreeRoot contains object reference %r", k)
-            continue
-        if k.get("Type") is LITERAL_MCR:
+        elif k.get("Type") is LITERAL_MCR:
             LOG.warning(
                 "'K' entry in StructTreeRoot contains marked content reference %r", k
             )
-            continue
-        yield Element.from_dict(doc, k)
+        yield from _make_kids(k, None, _ref_document(doc))
 
 
 class Tree(Findable):
@@ -337,7 +357,7 @@ class Tree(Findable):
     def __init__(self, doc: "Document") -> None:
         self._docref = _ref_document(doc)
 
-    def __iter__(self) -> Iterator[Element]:
+    def __iter__(self) -> Iterator[Union["Element", ContentItem, ContentObject]]:
         doc = _deref_document(self._docref)
         return _iter_structure(doc)
 
