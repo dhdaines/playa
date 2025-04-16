@@ -4,6 +4,7 @@
 - Correct implicit font encodings for Type1 fonts
 - More fine-grained error handling in font initialization
 - Correct infinite recursion in malicious Form XObjects
+- Correct and improve `asobj` on structure trees and annotations
 
 ## PLAYA 0.4.1: 2025-03-20
 

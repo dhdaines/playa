@@ -1,4 +1,3 @@
-from dataclasses import asdict
 from typing import Union
 
 import pytest
@@ -7,19 +6,23 @@ import playa
 from playa.exceptions import PDFEncryptionError
 from playa.structure import Element, Tree
 
-from .data import ALLPDFS, PASSWORDS, TESTDIR, XFAILS
+from .data import ALLPDFS, CONTRIB, PASSWORDS, TESTDIR, XFAILS
 
 
 def test_specific_structure():
     with playa.open(TESTDIR / "pdf_structure.pdf") as pdf:
         tables = list(pdf.structure.find_all("Table"))
         assert len(tables) == 1
+        assert playa.asobj(tables[0])["type"] == "Table"
         lis = list(pdf.structure.find_all("LI"))
         assert len(lis) == 4
+        assert playa.asobj(lis[0])["type"] == "LI"
         table = pdf.structure.find("Table")
         assert table
+        assert playa.asobj(table)["type"] == "Table"
         trs = list(table.find_all("TR"))
         assert len(trs) == 3
+        assert playa.asobj(trs[0])["type"] == "TR"
 
 
 def walk_structure(el: Union[Tree, Element], indent=0):
@@ -30,7 +33,6 @@ def walk_structure(el: Union[Tree, Element], indent=0):
         # Limit number to avoid going forever
         if idx == 10:
             break
-        print(" " * indent, asdict(k))
         if isinstance(k, Element):
             walk_structure(k, indent + 2)
 
