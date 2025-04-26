@@ -9,13 +9,8 @@ from typing import (
     Optional,
     Sequence,
     Tuple,
+    Union,
 )
-
-try:
-    from cryptography.hazmat.backends import default_backend
-    from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
-except ImportError:
-    default_backend = None  # type: ignore
 
 from playa.arcfour import Arcfour
 from playa.exceptions import (
@@ -29,6 +24,13 @@ from playa.pdftypes import (
     str_value,
     uint_value,
 )
+
+default_backend: Union[Callable, None]
+try:
+    from cryptography.hazmat.backends import default_backend
+    from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+except ImportError:
+    default_backend = None
 
 PASSWORD_PADDING = (
     b"(\xbfN^Nu\x8aAd\x00NV\xff\xfa\x01\x08" b"..\x00\xb6\xd0h>\x80/\x0c\xa9\xfedSiz"
@@ -176,18 +178,43 @@ class PDFStandardSecurityHandler:
         return Arcfour(key).decrypt(data)
 
 
+def unpad_aes(padded: bytes) -> bytes:
+    """Remove block padding as described in PDF 1.7 section 7.6.2:
+
+    > For an original message length of M, the pad shall consist of 16 -
+    (M mod 16) bytes whose value shall also be 16 - (M mod 16).
+    > Note that the pad is present when M is evenly divisible by 16;
+    it contains 16 bytes of 0x10.
+    """
+    end = len(padded)
+    if end == 0:
+        return padded
+    if padded[end - 1] <= 16:
+        padding = padded[end - 1]
+        if padding <= end:
+            end -= padding
+            # Validate that it is really padding
+            if all(x == padding for x in padded[end:]):
+                return padded[:end]
+    return padded
+
+
+def raise_missing_cryptography() -> None:
+    if default_backend is None:
+        raise PDFEncryptionError(
+            "Encryption type requires the "
+            "optional `cryptography` package. "
+            "You may install it with `pip install playa-pdf[crypto]`."
+        )
+
+
 class PDFStandardSecurityHandlerV4(PDFStandardSecurityHandler):
     """Security handler for encryption type 4."""
 
     supported_revisions: Tuple[int, ...] = (4,)
 
     def __init__(self, *args, **kwargs) -> None:
-        if default_backend is None:
-            raise PDFEncryptionError(
-                "Encryption type requires the "
-                "optional `cryptography` package. "
-                "You may install it with `pip install playa-pdf[crypto]`."
-            )
+        raise_missing_cryptography()
         super().__init__(*args, **kwargs)
 
     def init_params(self) -> None:
@@ -241,6 +268,7 @@ class PDFStandardSecurityHandlerV4(PDFStandardSecurityHandler):
         return data
 
     def decrypt_aes128(self, objid: int, genno: int, data: bytes) -> bytes:
+        assert default_backend is not None
         assert self.key is not None
         key = (
             self.key
@@ -256,8 +284,9 @@ class PDFStandardSecurityHandlerV4(PDFStandardSecurityHandler):
             algorithms.AES(key),
             modes.CBC(initialization_vector),
             backend=default_backend(),
-        )  # type: ignore
-        return cipher.decryptor().update(ciphertext)  # type: ignore
+        )
+        cleartext = cipher.decryptor().update(ciphertext)
+        return unpad_aes(cleartext)
 
 
 class PDFStandardSecurityHandlerV5(PDFStandardSecurityHandlerV4):
@@ -266,12 +295,7 @@ class PDFStandardSecurityHandlerV5(PDFStandardSecurityHandlerV4):
     supported_revisions = (5, 6)
 
     def __init__(self, *args, **kwargs) -> None:
-        if default_backend is None:
-            raise PDFEncryptionError(
-                "Encryption type requires the "
-                "optional `cryptography` package. "
-                "You may install it with playa[crypto]."
-            )
+        raise_missing_cryptography()
         super().__init__(*args, **kwargs)
 
     def init_params(self) -> None:
@@ -293,6 +317,7 @@ class PDFStandardSecurityHandlerV5(PDFStandardSecurityHandlerV4):
             return None
 
     def authenticate(self, password: str) -> Optional[bytes]:
+        assert default_backend is not None
         password_b = self._normalize_password(password)
         hash = self._password_hash(password_b, self.o_validation_salt, self.u)
         if hash == self.o_hash:
@@ -301,8 +326,8 @@ class PDFStandardSecurityHandlerV5(PDFStandardSecurityHandlerV4):
                 algorithms.AES(hash),
                 modes.CBC(b"\0" * 16),
                 backend=default_backend(),
-            )  # type: ignore
-            return cipher.decryptor().update(self.oe)  # type: ignore
+            )
+            return cipher.decryptor().update(self.oe)
         hash = self._password_hash(password_b, self.u_validation_salt)
         if hash == self.u_hash:
             hash = self._password_hash(password_b, self.u_key_salt)
@@ -310,8 +335,8 @@ class PDFStandardSecurityHandlerV5(PDFStandardSecurityHandlerV4):
                 algorithms.AES(hash),
                 modes.CBC(b"\0" * 16),
                 backend=default_backend(),
-            )  # type: ignore
-            return cipher.decryptor().update(self.ue)  # type: ignore
+            )
+            return cipher.decryptor().update(self.ue)
         return None
 
     def _normalize_password(self, password: str) -> bytes:
@@ -380,10 +405,11 @@ class PDFStandardSecurityHandlerV5(PDFStandardSecurityHandlerV4):
 
     def _aes_cbc_encrypt(self, key: bytes, iv: bytes, data: bytes) -> bytes:
         cipher = Cipher(algorithms.AES(key), modes.CBC(iv))
-        encryptor = cipher.encryptor()  # type: ignore
-        return encryptor.update(data) + encryptor.finalize()  # type: ignore
+        encryptor = cipher.encryptor()
+        return encryptor.update(data) + encryptor.finalize()
 
     def decrypt_aes256(self, objid: int, genno: int, data: bytes) -> bytes:
+        assert default_backend is not None
         initialization_vector = data[:16]
         ciphertext = data[16:]
         assert self.key is not None
@@ -391,8 +417,9 @@ class PDFStandardSecurityHandlerV5(PDFStandardSecurityHandlerV4):
             algorithms.AES(self.key),
             modes.CBC(initialization_vector),
             backend=default_backend(),
-        )  # type: ignore
-        return cipher.decryptor().update(ciphertext)  # type: ignore
+        )
+        cleartext = cipher.decryptor().update(ciphertext)
+        return unpad_aes(cleartext)
 
 
 SECURITY_HANDLERS = {

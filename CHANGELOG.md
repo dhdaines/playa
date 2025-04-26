@@ -4,6 +4,7 @@
 - Correct implicit font encodings for Type1 fonts
 - More fine-grained error handling in font initialization
 - Correct infinite recursion in malicious Form XObjects
+- Correctly remove padding on AES-encrypted strings
 
 ## PLAYA 0.4.1: 2025-03-20
 
