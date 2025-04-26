@@ -884,6 +884,9 @@ class XObjectObject(ContentObject):
     def bbox(self) -> Rect:
         """Get the bounding box of this XObject in device space."""
         # It is a required attribute!
+        if "BBox" not in self.stream:
+            log.debug("XObject %r has no BBox: %r", self.xobjid, self.stream)
+            return self.page.cropbox
         return get_transformed_bound(self.ctm, parse_rect(self.stream["BBox"]))
 
     @property
@@ -1657,7 +1660,7 @@ class LazyInterpreter:
                     page=self.page,
                     xobjid=xobjid,
                     ctm=self.ctm,
-                    graphicstate=self.graphicstate,
+                    gstate=self.graphicstate,
                     mcstack=self.mcstack,
                 )
         elif subtype is LITERAL_IMAGE:
@@ -1673,11 +1676,19 @@ class LazyInterpreter:
         colorspace = (
             None if colorspace is None else get_colorspace(resolve1(colorspace))
         )
+        width = stream.get_any(("W", "Width"))
+        if width is None:
+            log.debug("Image has no Width: %r", stream)
+            width = 1
+        height = stream.get_any(("H", "Height"))
+        if height is None:
+            log.debug("Image has no Height: %r", stream)
+            height = 1
         return self.create(
             ImageObject,
             stream=stream,
             xobjid=xobjid,
-            srcsize=(stream.get_any(("W", "Width")), stream.get_any(("H", "Height"))),
+            srcsize=(width, height),
             imagemask=stream.get_any(("IM", "ImageMask")),
             bits=stream.get_any(("BPC", "BitsPerComponent"), 1),
             colorspace=colorspace,

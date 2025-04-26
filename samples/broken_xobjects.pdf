@@ -1,0 +1,92 @@
+%PDF-1.4
+1 0 obj
+<<
+ /Type /Catalog
+ /Outlines 2 0 R
+ /Pages 3 0 R
+>>
+endobj
+2 0 obj
+<<
+ /Type /Outlines
+ /Count 0
+>>
+endobj
+3 0 obj
+<<
+ /Type /Pages
+ /Kids [ 4 0 R ]
+ /Count 1
+>>
+endobj
+4 0 obj
+<<
+ /Type /Page
+ /Parent 3 0 R
+ /MediaBox [ 0 0 500 300 ]
+ /Contents 5 0 R
+ /Resources <<
+  /ProcSet [ /PDF /Text /ImageC ]
+  /XObject << /X1 6 0 R
+              /X2 612 0 R >>
+ >>
+>>
+endobj
+5 0 obj
+<< /Length 57 >>
+stream
+q
+1 0 0 1 25 200 cm /X1 Do
+Q
+212 0 0 121 25 25 cm /X2 Do
+endstream
+endobj
+6 0 obj
+<< /Subtype /Form
+   /Length 33
+   /Resources <<
+     /ProcSet [ /PDF /Text ]
+     /Font << /F1 7 0 R >>
+   >>
+>>
+stream
+BT
+/F1 24 Tf
+(Hello world) Tj
+ET
+endstream
+endobj
+7 0 obj
+<<
+ /Type /Font
+ /Subtype /Type1
+ /Name /F1
+ /BaseFont /Helvetica
+ /Encoding /MacRomanEncoding
+>>
+endobj
+612 0 obj
+<<
+  /Name /X
+  /Subtype /Image
+  /BitsPerComponent 8
+  /ColorSpace /DeviceRGB
+  /DecodeParms <</BitsPerComponent 8/Colors 3/Columns 3>>
+  /Filter /ASCIIHexDecode
+  /Type /XObject
+  /Length 105
+>>
+stream
+AA2222 22AA22 2222AA
+EEEEEE EEEEEE EEEEEE
+AAAAAA AAAAAA AAAAAA
+EEEEEE EEEEEE EEEEEE
+AAAAAA AAAAAA AAAAAA
+endstream
+endobj
+trailer 
+<<
+ /Size 8
+ /Root 1 0 R
+>>
+%%EOF
