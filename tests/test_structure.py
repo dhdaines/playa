@@ -5,9 +5,10 @@ import pytest
 
 import playa
 from playa.exceptions import PDFEncryptionError
-from playa.structure import Element, Tree
+from playa.page import Annotation
+from playa.structure import Element, Tree, ContentObject
 
-from .data import ALLPDFS, PASSWORDS, TESTDIR, XFAILS
+from .data import ALLPDFS, CONTRIB, PASSWORDS, TESTDIR, XFAILS
 
 
 def test_specific_structure():
@@ -50,6 +51,16 @@ def test_structure(path) -> None:
                     walk_structure(st)
         except PDFEncryptionError:
             pytest.skip("password incorrect or cryptography package not installed")
+
+
+@pytest.mark.skipif(not CONTRIB.exists(), reason="contrib samples not present")
+def test_annotations() -> None:
+    """Verify that we can create annotations from ContentObjects."""
+    with playa.open(CONTRIB / "Rgl-1314-2021-DM-Derogations-mineures.pdf") as pdf:
+        for link in pdf.structure.find_all("Link"):
+            for kid in link:
+                if isinstance(kid, ContentObject):
+                    assert isinstance(kid.obj, Annotation)
 
 
 if __name__ == "__main__":

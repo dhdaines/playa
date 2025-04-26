@@ -17,7 +17,7 @@ from typing import (
     Union,
 )
 
-from playa.parser import LIT, PDFObject
+from playa.parser import LIT, PDFObject, PSLiteral
 from playa.pdftypes import ContentStream, ObjRef, literal_name, resolve1, stream_value
 from playa.worker import (
     DocumentRef,
@@ -28,6 +28,8 @@ from playa.worker import (
 )
 
 LOG = logging.getLogger(__name__)
+LITERAL_ANNOT = LIT("Annot")
+LITERAL_XOBJECT = LIT("XObject")
 LITERAL_MCR = LIT("MCR")
 LITERAL_OBJR = LIT("OBJR")
 LITERAL_STRUCTTREEROOT = LIT("StructTreeRoot")
@@ -36,7 +38,7 @@ MatchFunc = Callable[["Element"], bool]
 
 if TYPE_CHECKING:
     from playa.document import Document
-    from playa.page import Page
+    from playa.page import Page, XObjectObject, Annotation
 
 
 @dataclass
@@ -64,20 +66,48 @@ class ContentItem:
 class ContentObject:
     """Content object in logical structure tree.
 
-    This corresponds to a content item that is an entire PDF
-    (X)Object, and can be used to (lazily) get that object.
+    This corresponds to a content item that is an entire PDF (X)Object
+    (PDF 1.7 section 14.7.43), and can be used to (lazily) get that
+
+    The standard is very unclear on what this could be aside from an
+    `Annotation` or an `XObject`.  An XObject must be a content
+    stream, so that's clear enough... Otherwise, since the `Type` key
+    is not required in an annotation dictionary we presume that this
+    is an annotation if it's not present.
 
     Not to be confused with `playa.page.ContentObject`.
+
     """
 
     _pageref: PageRef
-    props: Dict[str, PDFObject]
+    props: Union[ContentStream, Dict[str, PDFObject]]
 
     @property
-    def page(self) -> Union["Page", None]:
-        """Specific page for this structure tree, if any."""
-        if self._pageref is None:
-            return None
+    def obj(self) -> Union["XObjectObject", "Annotation", None]:
+        """Return the underlying object, if possible."""
+        if isinstance(self.props, ContentStream):
+            from playa.page import XObjectObject
+            return XObjectObject.from_stream(self.props, self.page,
+                                             xobjid=self.props.get("Name", "XObject"))
+        objtype = self.type
+        if objtype is LITERAL_ANNOT:
+            from playa.page import Annotation
+            return Annotation.from_dict(self.props, self.page)
+        return None
+
+    @property
+    def type(self) -> PSLiteral:
+        """Type of this object, usually LITERAL_ANNOT or LITERAL_XOBJECT."""
+        if isinstance(self.props, ContentStream):
+            return LITERAL_XOBJECT
+        objtype = self.props.get("Type")
+        if not isinstance(objtype, PSLiteral):
+            return LITERAL_ANNOT
+        return objtype
+
+    @property
+    def page(self) -> "Page":
+        """Containing page for this content object."""
         return _deref_page(self._pageref)
 
 
@@ -277,13 +307,16 @@ def _make_kids_objr(
     if not isinstance(ref, ObjRef):
         LOG.warning("'Obj' entry is not an indirect object reference: %r", k)
         return
-    obj = ref.resolve()
-    if not isinstance(obj, dict):
-        LOG.warning("'Obj' entry does not point to a dict: %r", obj)
+    obj: Union[Dict[str, PDFObject], ContentStream] = ref.resolve()
+    if not isinstance(obj, (dict, ContentStream)):
+        LOG.warning("'Obj' entry does not point to a dict or ContentStream: %r", obj)
         return
     # In theory OBJR is not for elements, but just in case...
     ktype = obj.get("Type")
     if ktype is LITERAL_STRUCTELEM:
+        if not isinstance(obj, dict):
+            LOG.warning("'Obj' entry does not point to a dict: %r", obj)
+            return
         yield Element(_docref=docref, props=obj)
     else:
         pageref = _get_kid_pageref(k, page, docref)
