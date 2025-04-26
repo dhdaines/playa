@@ -913,6 +913,38 @@ class XObjectObject(ContentObject):
         interp.ctm = self.ctm
         return iter(interp)
 
+    @classmethod
+    def from_stream(
+        cls,
+        stream: ContentStream,
+        page: Page,
+        xobjid: str = "XObject",
+        gstate: Union[GraphicState, None] = None,
+        ctm: Matrix = MATRIX_IDENTITY,
+        mcstack: Tuple[MarkedContent, ...] = (),
+    ) -> "XObjectObject":
+        # Use defaults if not given
+        if gstate is None:
+            gstate = GraphicState()
+        # FIXME: Should validate that it is really a CTM
+        matrix = cast(Matrix, list_value(stream.get("Matrix", MATRIX_IDENTITY)))
+        # According to PDF reference 1.7 section 4.9.1, XObjects in
+        # earlier PDFs (prior to v1.2) use the page's Resources entry
+        # instead of having their own Resources entry.  So, this could
+        # be None, in which case LazyInterpreter will fall back to
+        # page.resources.
+        xobjres = stream.get("Resources")
+        resources = None if xobjres is None else dict_value(xobjres)
+        return cls(
+            _pageref=page.pageref,
+            gstate=gstate,
+            ctm=mult_matrix(matrix, ctm),
+            mcstack=mcstack,
+            xobjid=xobjid,
+            stream=stream,
+            resources=resources,
+        )
+
 
 @dataclass
 class PathObject(ContentObject):
@@ -1618,26 +1650,20 @@ class LazyInterpreter:
             log.debug("Empty or invalid xobject with id %r: %s", xobjid, e)
             return None
         subtype = xobj.get("Subtype")
-        if subtype is LITERAL_FORM and "BBox" in xobj:
-            matrix = cast(Matrix, list_value(xobj.get("Matrix", MATRIX_IDENTITY)))
-            # According to PDF reference 1.7 section 4.9.1, XObjects in
-            # earlier PDFs (prior to v1.2) use the page's Resources entry
-            # instead of having their own Resources entry.
-            xobjres = xobj.get("Resources")
-            resources = None if xobjres is None else dict_value(xobjres)
+        if subtype is LITERAL_FORM:
             if self.filter_class is None or self.filter_class is XObjectObject:
-                return XObjectObject(
-                    _pageref=self.page.pageref,
-                    ctm=mult_matrix(matrix, self.ctm),
-                    mcstack=self.mcstack,
-                    gstate=self.graphicstate,
-                    xobjid=xobjid,
+                return XObjectObject.from_stream(
                     stream=xobj,
-                    resources=resources,
+                    page=self.page,
+                    xobjid=xobjid,
+                    ctm=self.ctm,
+                    graphicstate=self.graphicstate,
+                    mcstack=self.mcstack,
                 )
-        elif subtype is LITERAL_IMAGE and "Width" in xobj and "Height" in xobj:
+        elif subtype is LITERAL_IMAGE:
             return self.render_image(xobjid, xobj)
-        # unsupported xobject type.
+        else:
+            log.debug("Unsupported XObject %r of type %r: %r", xobjid, subtype, xobj)
         return None
 
     def render_image(
