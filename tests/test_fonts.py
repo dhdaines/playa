@@ -53,3 +53,19 @@ def test_implicit_encoding_cff() -> None:
         # Verify fallback to StandardEncoding
         t = page.extract_text()
         assert t.strip() == "Part I\nClick here to access Part II \non hp.com."
+
+
+@pytest.mark.skipif(not CONTRIB.exists(), reason="contrib samples not present")
+def test_implicit_encoding_cff_issue91() -> None:
+    """Ensure that we can properly parse some CFF programs."""
+    with playa.open(CONTRIB / "issue-91.pdf") as doc:
+        page = doc.pages[0]
+        fonts = page.resources.get("Font")
+        assert fonts is not None
+        assert isinstance(fonts, dict)
+        for name, desc in fonts.items():
+            font = doc.get_font(desc.objid, desc.resolve())
+            # Font should have an encoding
+            assert font.encoding
+            # It should *not* be the standard encoding
+            assert 90 not in font.encoding
