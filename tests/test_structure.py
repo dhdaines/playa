@@ -6,7 +6,7 @@ import pytest
 import playa
 from playa.exceptions import PDFEncryptionError
 from playa.page import Annotation
-from playa.structure import Element, Tree, ContentObject
+from playa.structure import Element, Tree, ContentItem, ContentObject
 
 from .data import ALLPDFS, CONTRIB, PASSWORDS, TESTDIR, XFAILS
 
@@ -62,6 +62,19 @@ def test_annotations() -> None:
                 if isinstance(kid, ContentObject):
                     assert isinstance(kid.obj, Annotation)
 
+
+def test_content_xobjects() -> None:
+    """Verify that we can get XObjects from OBJRs (even though it
+    seems this never, ever happens in real PDFs, since it is utterly
+    useless)."""
+    with playa.open(TESTDIR / "structure_xobjects.pdf") as pdf:
+        section = pdf.structure.find("Section")
+        xobj, mcs = section
+        assert isinstance(xobj, ContentObject)
+        text, = xobj.obj
+        assert text.chars == "Hello world"
+        assert isinstance(mcs, ContentItem)
+        assert mcs.mcid == 1
 
 if __name__ == "__main__":
     test_specific_structure()
