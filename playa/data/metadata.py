@@ -573,7 +573,7 @@ def asobj_content_object(obj: _StructContentObject) -> StructContentObject:
 
 @asobj.register
 def asobj_structelement(obj: _Element, recurse: bool = True) -> StructElement:
-    el = StructElement()
+    el = StructElement(type=obj.type)
     page = obj.page
     if page is not None:
         el["page_idx"] = page.page_idx
