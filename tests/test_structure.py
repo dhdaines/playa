@@ -4,7 +4,8 @@ import pytest
 
 import playa
 from playa.exceptions import PDFEncryptionError
-from playa.structure import Element, Tree
+from playa.page import Annotation, XObjectObject, TextObject
+from playa.structure import Element, Tree, ContentItem, ContentObject
 
 from .data import ALLPDFS, CONTRIB, PASSWORDS, TESTDIR, XFAILS
 
@@ -52,6 +53,36 @@ def test_structure(path) -> None:
                     walk_structure(st)
         except PDFEncryptionError:
             pytest.skip("password incorrect or cryptography package not installed")
+
+
+@pytest.mark.skipif(not CONTRIB.exists(), reason="contrib samples not present")
+def test_annotations() -> None:
+    """Verify that we can create annotations from ContentObjects."""
+    with playa.open(CONTRIB / "Rgl-1314-2021-DM-Derogations-mineures.pdf") as pdf:
+        assert pdf.structure is not None
+        for link in pdf.structure.find_all("Link"):
+            for kid in link:
+                if isinstance(kid, ContentObject):
+                    assert isinstance(kid.obj, Annotation)
+
+
+def test_content_xobjects() -> None:
+    """Verify that we can get XObjects from OBJRs (even though it
+    seems this never, ever happens in real PDFs, since it is utterly
+    useless)."""
+    with playa.open(TESTDIR / "structure_xobjects.pdf") as pdf:
+        assert pdf.structure is not None
+        section = pdf.structure.find("Document")
+        assert section is not None
+        xobj, mcs = section
+        assert isinstance(xobj, ContentObject)
+        xobjobj = xobj.obj
+        assert isinstance(xobjobj, XObjectObject)
+        (text,) = xobjobj
+        assert isinstance(text, TextObject)
+        assert text.chars == "Hello world"
+        assert isinstance(mcs, ContentItem)
+        assert mcs.mcid == 1
 
 
 if __name__ == "__main__":

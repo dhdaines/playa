@@ -1489,8 +1489,7 @@ class CFFFontProgram:
         self.gid2code = {}
         if encoding_pos in (0, 1):
             for code, sid in enumerate(self.PREDEFINED_ENCODINGS[encoding_pos]):
-                if sid != 0:
-                    gid = self.name2gid[self.getstr(sid)]
+                if gid := self.name2gid.get(self.getstr(sid)):
                     self.code2gid[code] = gid
                     self.gid2code[gid] = code
             return
@@ -1522,8 +1521,8 @@ class CFFFontProgram:
             (n,) = struct.unpack("B", self.fp.read(1))
             for i in range(n):
                 code, sid = struct.unpack(">BH", self.fp.read(3))
-                gid = self.name2gid[self.getstr(sid)]
-                self.code2gid[code] = gid
+                if gid := self.name2gid.get(self.getstr(sid)):
+                    self.code2gid[code] = gid
 
     def _parse_charset(self, charset_pos: int) -> None:
         # Charsets

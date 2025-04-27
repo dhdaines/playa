@@ -177,3 +177,14 @@ def test_operators_in_text() -> None:
                 assert isinstance(t.mcs.props["ActualText"], bytes)
                 assert t.mcs.props["ActualText"].decode("utf-16") == "x̌"
             assert t.mcid == 0
+
+
+def test_broken_xobjects() -> None:
+    """Verify that we tolerate missing attributes on XObjects."""
+    with playa.open(TESTDIR / "broken_xobjects.pdf") as doc:
+        page = doc.pages[0]
+        for img in page.images:
+            assert img.srcsize == (1, 1)
+            assert img.bbox == (25.0, 154.0, 237.0, 275.0)
+        for xobj in page.xobjects:
+            assert xobj.bbox == page.cropbox
