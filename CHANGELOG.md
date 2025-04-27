@@ -1,4 +1,4 @@
-## PLAYA 0.4.2: Unreleased
+## PLAYA 0.4.2: 2025-04-26
 - Correct `fontsize` and `scaling` in text state
 - Correct `ValueError` on incorrect stream lengths for ASCII85 data
 - Correct implicit font encodings for Type1 fonts
