@@ -87,11 +87,14 @@ class ContentObject:
         """Return the underlying object, if possible."""
         if isinstance(self.props, ContentStream):
             from playa.page import XObjectObject
-            return XObjectObject.from_stream(self.props, self.page,
-                                             xobjid=self.props.get("Name", "XObject"))
+
+            return XObjectObject.from_stream(
+                self.props, self.page, xobjid=self.props.get("Name", "XObject")
+            )
         objtype = self.type
         if objtype is LITERAL_ANNOT:
             from playa.page import Annotation
+
             return Annotation.from_dict(self.props, self.page)
         return None
 
