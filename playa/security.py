@@ -186,16 +186,11 @@ def unpad_aes(padded: bytes) -> bytes:
     > Note that the pad is present when M is evenly divisible by 16;
     it contains 16 bytes of 0x10.
     """
-    end = len(padded)
-    if end == 0:
-        return padded
-    if padded[end - 1] <= 16:
-        padding = padded[end - 1]
-        if padding <= end:
-            end -= padding
-            # Validate that it is really padding
-            if all(x == padding for x in padded[end:]):
-                return padded[:end]
+    if padded and padded[-1] <= 16:
+        padding = padded[-1]
+        if padding <= len(padded):
+            if all(x == padding for x in padded[-padding:]):
+                return padded[:-padding]
     return padded
 
 
