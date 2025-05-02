@@ -5,6 +5,8 @@ Lists of data files and directories to be shared by various tests.
 import json
 from pathlib import Path
 
+import pytest
+
 TESTDIR = Path(__file__).parent.parent / "samples"
 SUBDIRS = ["acroform", "encryption", "scancode"]
 BASEPDFS = list(TESTDIR.glob("*.pdf"))
@@ -12,12 +14,17 @@ for name in SUBDIRS:
     BASEPDFS.extend((TESTDIR / name).glob("*.pdf"))
 CONTRIB = TESTDIR / "contrib"
 if CONTRIB.exists():
-    BASEPDFS.extend(CONTRIB.glob("*.pdf"))
+    BASEPDFS.extend(
+        pytest.param(path, marks=pytest.mark.contrib) for path in CONTRIB.glob("*.pdf")
+    )
 
 ALLPDFS = list(BASEPDFS)
 PLUMBERS = TESTDIR / "3rdparty" / "pdfplumber" / "tests" / "pdfs"
 if PLUMBERS.exists():
-    ALLPDFS.extend(PLUMBERS.glob("*.pdf"))
+    ALLPDFS.extend(
+        pytest.param(path, marks=pytest.mark.thirdparty)
+        for path in PLUMBERS.glob("*.pdf")
+    )
 PDFJS = TESTDIR / "3rdparty" / "pdf.js" / "test"
 try:
     with open(PDFJS / "test_manifest.json", encoding="utf-8") as infh:
@@ -29,7 +36,7 @@ try:
             continue
         seen.add(entry["file"])
         if path.exists():
-            ALLPDFS.append(path)
+            ALLPDFS.append(pytest.param(path, marks=pytest.mark.thirdparty))
 except FileNotFoundError:
     pass
 
