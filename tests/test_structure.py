@@ -85,5 +85,17 @@ def test_content_xobjects() -> None:
         assert mcs.mcid == 1
 
 
+def test_structure_bbox() -> None:
+    """Verify that we can get the bounding box of structure elements."""
+    with playa.open(TESTDIR / "pdf_structure.pdf") as pdf:
+        table = pdf.structure.find("Table")
+        print(table.bbox)
+        li = pdf.structure.find("LI")
+        print(li.bbox)
+    with playa.open(TESTDIR / "image_structure.pdf") as pdf:
+        figure = pdf.structure.find("Figure")
+        print(figure.bbox)
+
+
 if __name__ == "__main__":
     test_specific_structure()

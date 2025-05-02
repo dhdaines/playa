@@ -29,7 +29,7 @@ from playa.pdftypes import (
     rect_value,
     stream_value,
 )
-from playa.utils import transform_bbox
+from playa.utils import transform_bbox, get_bound_rects
 from playa.worker import (
     DocumentRef,
     PageRef,
@@ -273,7 +273,13 @@ class Element(Findable):
             rawbox = rect_value(self.props["BBox"])
             return transform_bbox(page.ctm, rawbox)
         else:
-            pass
+            # NOTE: This is probably somewhat slow
+            mcids = set(item.mcid
+                        for item in self.contents
+                        if item.page is None or item.page is page)
+            return get_bound_rects(obj.bbox
+                                   for obj in page
+                                   if obj.mcid in mcids)
 
     def __iter__(self) -> Iterator[Union["Element", ContentItem, ContentObject]]:
         if "K" in self.props:
