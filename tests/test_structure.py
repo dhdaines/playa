@@ -18,6 +18,9 @@ def test_specific_structure():
         lis = list(pdf.structure.find_all("LI"))
         assert len(lis) == 4
         assert playa.asobj(lis[0])["type"] == "LI"
+        assert len(list(lis[0].find_all())) == 2
+        assert lis[0].find().type == "LBody"
+        assert lis[0].find().find().type == "Text body"
         table = pdf.structure.find("Table")
         assert table
         assert playa.asobj(table)["type"] == "Table"

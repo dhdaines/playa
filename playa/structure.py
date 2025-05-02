@@ -129,11 +129,14 @@ class ContentObject:
 
 def _find_all(
     elements: List["Element"],
-    matcher: Union[str, Pattern[str], MatchFunc],
+    matcher: Union[str, Pattern[str], MatchFunc, None] = None,
 ) -> Iterator["Element"]:
     """
     Common code for `find_all()` in trees and elements.
     """
+
+    def match_all(_: "Element") -> bool:
+        return True
 
     def match_tag(x: "Element") -> bool:
         """Match an element name."""
@@ -143,7 +146,9 @@ def _find_all(
         """Match an element name by regular expression."""
         return matcher.match(x.type)  # type: ignore
 
-    if isinstance(matcher, str):
+    if matcher is None:
+        match_func = match_all
+    elif isinstance(matcher, str):
         match_func = match_tag
     elif isinstance(matcher, re.Pattern):
         match_func = match_regex
@@ -164,24 +169,26 @@ class Findable(Iterable):
     repeating oneself"""
 
     def find_all(
-        self, matcher: Union[str, Pattern[str], MatchFunc]
+        self, matcher: Union[str, Pattern[str], MatchFunc, None] = None
     ) -> Iterator["Element"]:
         """Iterate depth-first over matching elements in subtree.
 
         The `matcher` argument is either an element name, a regular
-        expression, or a function taking a `Element` and
-        returning `True` if the element matches.
+        expression, or a function taking a `Element` and returning
+        `True` if the element matches, or `None` (default) to return
+        all descendants in depth-first order.
         """
         return _find_all(list(self), matcher)
 
     def find(
-        self, matcher: Union[str, Pattern[str], MatchFunc]
+        self, matcher: Union[str, Pattern[str], MatchFunc, None] = None
     ) -> Union["Element", None]:
         """Find the first matching element in subtree.
 
         The `matcher` argument is either an element name, a regular
-        expression, or a function taking a `Element` and
-        returning `True` if the element matches.
+        expression, or a function taking a `Element` and returning
+        `True` if the element matches, or `None` (default) to just get
+        the first child element.
         """
         try:
             return next(_find_all(list(self), matcher))
