@@ -91,7 +91,13 @@ from playa.data.content import Image
 from playa.data.metadata import asobj_document
 from playa.outline import Outline
 from playa.page import ContentObject, ImageObject, TextObject
-from playa.pdftypes import LITERALS_DCT_DECODE, ContentStream, ObjRef, resolve1
+from playa.pdftypes import (
+    LITERALS_DCT_DECODE,
+    ContentStream,
+    ObjRef,
+    str_value,
+    PDFObject,
+)
 from playa.structure import ContentItem
 from playa.structure import ContentObject as StructContentObject
 from playa.structure import Element
@@ -214,7 +220,7 @@ def extract_stream(doc: Document, args: argparse.Namespace) -> None:
     args.outfile.buffer.write(stream.buffer)
 
 
-def resolve_many(x: object, default: object = None) -> Any:
+def resolve_many(x: PDFObject, default: PDFObject = None) -> PDFObject:
     """Resolves many indirect object references inside the given object.
 
     Because there may be circular references (and in the case of a
@@ -435,15 +441,15 @@ def _extract_element(el: Element, indent: int, outfh: TextIO) -> bool:
     if page is not None:
         format_attr("page_idx", page.page_idx)
     if "T" in el.props:
-        format_attr("title", decode_text(resolve1(el.props["T"])))
+        format_attr("title", decode_text(str_value(el.props["T"])))
     if "Lang" in el.props:
-        format_attr("language", decode_text(resolve1(el.props["Lang"])))
+        format_attr("language", decode_text(str_value(el.props["Lang"])))
     if "Alt" in el.props:
-        format_attr("alternate_description", decode_text(resolve1(el.props["Alt"])))
+        format_attr("alternate_description", decode_text(str_value(el.props["Alt"])))
     if "E" in el.props:
-        format_attr("abbreviation_expansion", decode_text(resolve1(el.props["E"])))
+        format_attr("abbreviation_expansion", decode_text(str_value(el.props["E"])))
     if "ActualText" in el.props:
-        format_attr("actual_text", decode_text(resolve1(el.props["ActualText"])))
+        format_attr("actual_text", decode_text(str_value(el.props["ActualText"])))
     print(f"{ws}{{", file=outfh)
     print(",\n".join(s), end="", file=outfh)
     print(f',\n{ws}{ss}"children": [', file=outfh)

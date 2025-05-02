@@ -41,14 +41,14 @@ from playa.pdftypes import (
     int_value,
     list_value,
     num_value,
+    point_value,
+    rect_value,
     resolve1,
-    resolve_all,
     stream_value,
 )
 from playa.utils import (
     Matrix,
     Point,
-    Rect,
     apply_matrix_norm,
     choplist,
     decode_text,
@@ -117,10 +117,14 @@ class Font:
         default_width: Optional[float] = None,
     ) -> None:
         self.descriptor = descriptor
-        self.widths = resolve_all(widths)
-        self.fontname = resolve1(descriptor.get("FontName", "unknown"))
-        if isinstance(self.fontname, PSLiteral):
-            self.fontname = literal_name(self.fontname)
+        self.widths = widths
+        fontname = resolve1(descriptor.get("FontName"))
+        if isinstance(fontname, PSLiteral):
+            self.fontname = literal_name(fontname)
+        elif isinstance(fontname, (bytes, str)):
+            self.fontname = decode_text(fontname)
+        else:
+            self.fontname = "unknown"
         self.flags = int_value(descriptor.get("Flags", 0))
         self.ascent = num_value(descriptor.get("Ascent", 0))
         self.descent = num_value(descriptor.get("Descent", 0))
@@ -129,12 +133,11 @@ class Font:
             self.default_width = num_value(descriptor.get("MissingWidth", 0))
         else:
             self.default_width = default_width
-        self.default_width = resolve1(self.default_width)
         self.leading = num_value(descriptor.get("Leading", 0))
-        self.bbox = cast(
-            Rect,
-            list_value(resolve_all(descriptor.get("FontBBox", (0, 0, 0, 0)))),
-        )
+        if "FontBBox" in descriptor:
+            self.bbox = rect_value(descriptor["FontBBox"])
+        else:
+            self.bbox = (0, 0, 0, 0)
         self.hscale = self.vscale = 0.001
 
         # PDF RM 9.8.1 specifies /Descent should always be a negative number.
@@ -268,7 +271,7 @@ class Type1Font(SimpleFont):
             firstchar = int_value(spec.get("FirstChar", 0))
             # lastchar = int_value(spec.get('LastChar', 255))
             width_list = list_value(spec.get("Widths", [0] * 256))
-            widths = {i + firstchar: resolve1(w) for (i, w) in enumerate(width_list)}
+            widths = {i + firstchar: num_value(w) for (i, w) in enumerate(width_list)}
         SimpleFont.__init__(self, descriptor, widths, spec)
 
     def get_implicit_encoding(
@@ -343,7 +346,7 @@ class TrueTypeFont(SimpleFont):
         firstchar = int_value(spec.get("FirstChar", 0))
         # lastchar = int_value(spec.get('LastChar', 255))
         width_list = list_value(spec.get("Widths", [0] * 256))
-        widths = {i + firstchar: resolve1(w) for (i, w) in enumerate(width_list)}
+        widths = {i + firstchar: num_value(w) for (i, w) in enumerate(width_list)}
         SimpleFont.__init__(self, descriptor, widths, spec)
 
     def get_implicit_encoding(
@@ -404,12 +407,16 @@ class CIDFont(Font):
         self.cidsysteminfo = dict_value(spec.get("CIDSystemInfo", {}))
         # These are *supposed* to be ASCII (PDF 1.7 section 9.7.3),
         # but for whatever reason they are sometimes UTF-16BE
-        cid_registry = decode_text(
-            resolve1(self.cidsysteminfo.get("Registry", b"unknown"))
-        )
-        cid_ordering = decode_text(
-            resolve1(self.cidsysteminfo.get("Ordering", b"unknown"))
-        )
+        cid_registry = resolve1(self.cidsysteminfo.get("Registry"))
+        if isinstance(cid_registry, (str, bytes)):
+            cid_registry = decode_text(cid_registry)
+        else:
+            cid_registry = "unknown"
+        cid_ordering = resolve1(self.cidsysteminfo.get("Ordering"))
+        if isinstance(cid_ordering, (str, bytes)):
+            cid_ordering = decode_text(cid_ordering)
+        else:
+            cid_ordering = "unknown"
         self.cidcoding = f"{cid_registry.strip()}-{cid_ordering.strip()}"
         self.cmap: CMapBase = self.get_cmap_from_spec(spec)
 
@@ -480,7 +487,12 @@ class CIDFont(Font):
             # writing mode: vertical
             widths2 = get_widths2(list_value(spec.get("W2", [])))
             self.disps = {cid: (vx, vy) for (cid, (_, (vx, vy))) in widths2.items()}
-            (vy, w) = resolve1(spec.get("DW2", [880, -1000]))
+            if "DW2" in spec:
+                (vy, w) = point_value(spec["DW2"])
+            else:
+                # FIXME: Where did these values come from?
+                vy = 880
+                w = -1000
             self.default_disp = (None, vy)
             widths = {cid: w for (cid, (w, _)) in widths2.items()}
             default_width = w
@@ -489,7 +501,10 @@ class CIDFont(Font):
             self.disps = {}
             self.default_disp = 0
             widths = get_widths(list_value(spec.get("W", [])))
-            default_width = spec.get("DW", 1000)
+            if "DW" in spec:
+                default_width = num_value(spec["DW"])
+            else:
+                default_width = 1000
         Font.__init__(self, descriptor, widths, default_width=default_width)
 
     def get_cmap_from_spec(self, spec: Dict[str, PDFObject]) -> CMapBase:
@@ -520,12 +535,16 @@ class CIDFont(Font):
         cmap_name = "unknown"  # default value
         try:
             spec_encoding = resolve1(spec["Encoding"])
-            if isinstance(spec_encoding, PSLiteral):
-                cmap_name = spec_encoding.name
+            if spec_encoding is not None:
+                cmap_name = literal_name(spec_encoding)
             else:
-                cmap_name = literal_name(spec_encoding["CMapName"])
+                spec_encoding = resolve1(spec["CMapName"])
+                if spec_encoding is not None:
+                    cmap_name = literal_name(spec_encoding)
         except KeyError:
             log.warning("Font spec is missing Encoding: %r", spec)
+        except TypeError:
+            log.warning("Font spec has invalid Encoding: %r", spec)
         return IDENTITY_ENCODER.get(cmap_name, cmap_name)
 
     def decode(self, data: bytes) -> Iterable[Tuple[int, str]]:

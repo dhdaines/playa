@@ -25,10 +25,11 @@ from playa.page import Annotation as _Annotation
 from playa.page import Page as _Page
 from playa.parser import IndirectObject as _IndirectObject
 from playa.pdftypes import ContentStream as _ContentStream
-from playa.pdftypes import resolve1, stream_value
-from playa.structure import Tree as _Tree, Element as _Element
+from playa.pdftypes import dict_value, int_value, resolve1, str_value, stream_value
 from playa.structure import ContentItem as _StructContentItem
 from playa.structure import ContentObject as _StructContentObject
+from playa.structure import Element as _Element
+from playa.structure import Tree as _Tree
 from playa.utils import Matrix, Rect, decode_text
 
 log = logging.getLogger(__name__)
@@ -297,9 +298,12 @@ def font_from_spec(spec: Dict[str, Any]) -> Font:
     )
     if basefont in FONT_METRICS:
         desc, _ = FONT_METRICS[basefont]
+    elif "FontDescriptor" in spec:
+        desc = dict_value(spec["FontDescriptor"])
     else:
-        desc = resolve1(spec.get("FontDescriptor"))
+        desc = None
     if desc is not None:
+        desc = dict_value(desc)
         for attr in (
             "ascent",
             "descent",
@@ -319,14 +323,14 @@ def font_from_spec(spec: Dict[str, Any]) -> Font:
             val = desc.get(key)
             if val:
                 font[attr] = asobj(val)
-        flags = resolve1(desc.get("Flags", 0))
+        flags = desc.get("Flags", 0)
         if flags:
-            flaglist = flags_to_list(flags)
+            flaglist = flags_to_list(int_value(flags))
             if flaglist:
                 font["flags"] = flaglist
     sub = resolve1(spec.get("DescendantFonts"))
     if sub and isinstance(sub, list) and sub[0] is not None:
-        font["cidfont"] = font_from_spec(resolve1(sub[0]))
+        font["cidfont"] = font_from_spec(dict_value(sub[0]))
     return font
 
 
@@ -368,7 +372,7 @@ def xobject_from_stream(
         xobj["params"] = stream["params"]
     resources = resolve1(obj.attrs.get("Resources"))
     if resources:
-        xobj["resources"] = resources_from_dict(resources, seen)
+        xobj["resources"] = resources_from_dict(dict_value(resources), seen)
     return xobj
 
 
@@ -430,7 +434,7 @@ def stream_metadata(obj: _ContentStream) -> StreamObject:
     # These really cannot be None!
     assert obj.objid is not None
     assert obj.genno is not None
-    length = resolve1(obj.attrs["Length"])
+    length = int_value(obj.attrs["Length"])
     cs = StreamObject(stream_id=obj.objid, genno=obj.genno, length=length)
     fps = obj.get_filters()
     if fps:
@@ -578,15 +582,15 @@ def asobj_structelement(obj: _Element, recurse: bool = True) -> StructElement:
     if page is not None:
         el["page_idx"] = page.page_idx
     if "T" in obj.props:
-        el["title"] = decode_text(resolve1(obj.props["T"]))
+        el["title"] = decode_text(str_value(obj.props["T"]))
     if "Lang" in obj.props:
-        el["language"] = decode_text(resolve1(obj.props["Lang"]))
+        el["language"] = decode_text(str_value(obj.props["Lang"]))
     if "Alt" in obj.props:
-        el["alternate_description"] = decode_text(resolve1(obj.props["Alt"]))
+        el["alternate_description"] = decode_text(str_value(obj.props["Alt"]))
     if "E" in obj.props:
-        el["abbreviation_expansion"] = decode_text(resolve1(obj.props["E"]))
+        el["abbreviation_expansion"] = decode_text(str_value(obj.props["E"]))
     if "ActualText" in obj.props:
-        el["actual_text"] = decode_text(resolve1(obj.props["ActualText"]))
+        el["actual_text"] = decode_text(str_value(obj.props["ActualText"]))
     if recurse:
         children = [asobj(el) for el in obj]
         if children:

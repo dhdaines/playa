@@ -23,7 +23,9 @@ from playa.pdftypes import (
     LITERALS_ASCII85_DECODE,
     LITERALS_ASCIIHEX_DECODE,
     ContentStream,
+    InlineImage,
     ObjRef,
+    PDFObject,
     PSKeyword,
     PSLiteral,
     decipher_all,
@@ -265,26 +267,6 @@ class Lexer:
         return (self._curtokenpos, b"".join(parts))
 
 
-class InlineImage(ContentStream):
-    """Specific class for inline images so the interpreter can
-    recognize them (they are otherwise the same thing as content
-    streams)."""
-
-
-PDFObject = Union[
-    str,
-    float,
-    bool,
-    PSLiteral,
-    bytes,
-    List,
-    Dict,
-    ObjRef,
-    PSKeyword,
-    InlineImage,
-    ContentStream,
-    None,
-]
 StackEntry = Tuple[int, PDFObject]
 EIR = re.compile(rb"\sEI\b")
 EIEIR = re.compile(rb"EI")

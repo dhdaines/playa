@@ -24,7 +24,6 @@ from typing import (
     Iterable,
     Iterator,
     List,
-    MutableMapping,
     Optional,
     TextIO,
     Tuple,
@@ -51,13 +50,13 @@ class CMapError(Exception):
 class CMapBase:
     debug = 0
 
-    def __init__(self, **kwargs: object) -> None:
-        self.attrs: MutableMapping[str, object] = kwargs.copy()
+    def __init__(self, **kwargs: Any) -> None:
+        self.attrs: Dict[str, Any] = kwargs.copy()
 
     def is_vertical(self) -> bool:
         return self.attrs.get("WMode", 0) != 0
 
-    def set_attr(self, k: str, v: object) -> None:
+    def set_attr(self, k: str, v: Any) -> None:
         self.attrs[k] = v
 
     def use_cmap(self, cmap: "CMapBase") -> None:

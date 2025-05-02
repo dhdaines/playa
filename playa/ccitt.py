@@ -23,6 +23,7 @@ from typing import (
     Sequence,
     Union,
 )
+from playa.pdftypes import PDFObject
 
 
 def get_bytes(data: bytes) -> Iterator[int]:
@@ -67,7 +68,7 @@ class BitParser:
             for m in (128, 64, 32, 16, 8, 4, 2, 1):
                 self._parse_bit(byte & m)
 
-    def _parse_bit(self, x: object) -> None:
+    def _parse_bit(self, x: int) -> None:
         if x:
             v = self._state[1]
         else:
@@ -364,7 +365,7 @@ class CCITTG4Parser(BitParser):
             except EOFB:
                 break
 
-    def _parse_mode(self, mode: object) -> BitParserState:
+    def _parse_mode(self, mode: Any) -> BitParserState:
         if mode == "p":
             self._do_pass()
             self._flush_line()
@@ -566,7 +567,7 @@ class CCITTFaxDecoder(CCITTG4Parser):
         self._buf += arr.tobytes()
 
 
-def ccittfaxdecode(data: bytes, params: Dict[str, object]) -> bytes:
+def ccittfaxdecode(data: bytes, params: Dict[str, PDFObject]) -> bytes:
     from playa.pdftypes import int_value
 
     K = params.get("K")

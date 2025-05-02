@@ -16,14 +16,30 @@ from typing import (
     cast,
 )
 
-from playa.ascii85 import ascii85decode, asciihexdecode
-from playa.ccitt import ccittfaxdecode
-from playa.lzw import lzwdecode
-from playa.runlength import rldecode
-from playa.utils import apply_png_predictor, apply_tiff_predictor
 from playa.worker import DocumentRef, _deref_document
 
 logger = logging.getLogger(__name__)
+
+
+PDFObject = Union[
+    str,
+    float,
+    bool,
+    "PSLiteral",
+    bytes,
+    List,
+    Dict,
+    "ObjRef",
+    "PSKeyword",
+    "InlineImage",
+    "ContentStream",
+    None,
+]
+Point = Tuple[float, float]
+Rect = Tuple[float, float, float, float]
+Matrix = Tuple[float, float, float, float, float, float]
+BBOX_NONE = (-1, -1, -1, -1)
+MATRIX_IDENTITY: Matrix = (1, 0, 0, 1, 0, 0)
 
 
 class PSLiteral:
@@ -158,9 +174,6 @@ class DecipherCallable(Protocol):
         raise NotImplementedError
 
 
-_DEFAULT = object()
-
-
 class ObjRef:
     def __init__(
         self,
@@ -178,7 +191,7 @@ class ObjRef:
         self.doc = doc
         self.objid = objid
 
-    def __eq__(self, other: object) -> bool:
+    def __eq__(self, other: Any) -> bool:
         if not isinstance(other, ObjRef):
             raise NotImplementedError("Unimplemented comparison with non-ObjRef")
         if self.doc is None and other.doc is None:
@@ -196,7 +209,7 @@ class ObjRef:
     def __repr__(self) -> str:
         return "<ObjRef:%d>" % (self.objid)
 
-    def resolve(self, default: object = None) -> Any:
+    def resolve(self, default: Any = None) -> Any:
         if self.doc is None:
             return default
         doc = _deref_document(self.doc)
@@ -206,7 +219,7 @@ class ObjRef:
             return default
 
 
-def resolve1(x: object, default: object = None) -> Any:
+def resolve1(x: PDFObject, default: PDFObject = None) -> PDFObject:
     """Resolves an object.
 
     If this is an array or dictionary, it may still contains
@@ -217,7 +230,7 @@ def resolve1(x: object, default: object = None) -> Any:
     return x
 
 
-def resolve_all(x: object, default: object = None) -> Any:
+def resolve_all(x: PDFObject, default: PDFObject = None) -> PDFObject:
     """Resolves all indirect object references inside the given object.
 
     This creates new copies of any lists or dictionaries, so the
@@ -225,7 +238,9 @@ def resolve_all(x: object, default: object = None) -> Any:
     create circular references if they exist, so beware.
     """
 
-    def resolver(x: object, default: object, seen: Dict[int, object]) -> Any:
+    def resolver(
+        x: PDFObject, default: PDFObject, seen: Dict[int, PDFObject]
+    ) -> PDFObject:
         if isinstance(x, ObjRef):
             ref = x
             while isinstance(x, ObjRef):
@@ -242,7 +257,9 @@ def resolve_all(x: object, default: object = None) -> Any:
     return resolver(x, default, {})
 
 
-def decipher_all(decipher: DecipherCallable, objid: int, genno: int, x: object) -> Any:
+def decipher_all(
+    decipher: DecipherCallable, objid: int, genno: int, x: PDFObject
+) -> PDFObject:
     """Recursively deciphers the given object."""
     if isinstance(x, bytes):
         if len(x) == 0:
@@ -255,28 +272,28 @@ def decipher_all(decipher: DecipherCallable, objid: int, genno: int, x: object) 
     return x
 
 
-def int_value(x: object) -> int:
+def int_value(x: PDFObject) -> int:
     x = resolve1(x)
     if not isinstance(x, int):
         raise TypeError("Integer required: %r" % (x,))
     return x
 
 
-def float_value(x: object) -> float:
+def float_value(x: PDFObject) -> float:
     x = resolve1(x)
     if not isinstance(x, float):
         raise TypeError("Float required: %r" % (x,))
     return x
 
 
-def num_value(x: object) -> float:
+def num_value(x: PDFObject) -> float:
     x = resolve1(x)
     if not isinstance(x, (int, float)):  # == utils.isnumber(x)
         raise TypeError("Int or Float required: %r" % x)
     return x
 
 
-def uint_value(x: object, n_bits: int) -> int:
+def uint_value(x: PDFObject, n_bits: int) -> int:
     """Resolve number and interpret it as a two's-complement unsigned number"""
     xi = int_value(x)
     if xi > 0:
@@ -285,32 +302,62 @@ def uint_value(x: object, n_bits: int) -> int:
         return xi + cast(int, 2**n_bits)
 
 
-def str_value(x: object) -> bytes:
+def str_value(x: PDFObject) -> bytes:
     x = resolve1(x)
     if not isinstance(x, bytes):
         raise TypeError("String required: %r" % x)
     return x
 
 
-def list_value(x: object) -> Union[List[Any], Tuple[Any, ...]]:
+def list_value(x: PDFObject) -> Union[List[Any], Tuple[Any, ...]]:
     x = resolve1(x)
     if not isinstance(x, (list, tuple)):
         raise TypeError("List required: %r" % x)
     return x
 
 
-def dict_value(x: object) -> Dict[Any, Any]:
+def dict_value(x: PDFObject) -> Dict[Any, Any]:
     x = resolve1(x)
     if not isinstance(x, dict):
         raise TypeError("Dict required: %r" % x)
     return x
 
 
-def stream_value(x: object) -> "ContentStream":
+def stream_value(x: PDFObject) -> "ContentStream":
     x = resolve1(x)
     if not isinstance(x, ContentStream):
         raise TypeError("ContentStream required: %r" % x)
     return x
+
+
+def point_value(o: PDFObject) -> Point:
+    try:
+        (x, y) = (num_value(x) for x in list_value(o))
+        return x, y
+    except ValueError:
+        raise ValueError("Could not parse point %r" % (o,))
+    except TypeError:
+        raise TypeError("Point contains non-numeric values")
+
+
+def rect_value(o: PDFObject) -> Rect:
+    try:
+        (x0, y0, x1, y1) = (num_value(x) for x in list_value(o))
+        return x0, y0, x1, y1
+    except ValueError:
+        raise ValueError("Could not parse rectangle %r" % (o,))
+    except TypeError:
+        raise TypeError("Rectangle contains non-numeric values")
+
+
+def matrix_value(o: PDFObject) -> Matrix:
+    try:
+        (a, b, c, d, e, f) = (num_value(x) for x in list_value(o))
+        return a, b, c, d, e, f
+    except ValueError:
+        raise ValueError("Could not parse matrix %r" % (o,))
+    except TypeError:
+        raise TypeError("Matrix contains non-numeric values")
 
 
 def decompress_corrupted(data: bytes) -> bytes:
@@ -365,16 +412,16 @@ class ContentStream:
                 self.attrs,
             )
 
-    def __contains__(self, name: object) -> bool:
+    def __contains__(self, name: str) -> bool:
         return name in self.attrs
 
     def __getitem__(self, name: str) -> Any:
         return self.attrs[name]
 
-    def get(self, name: str, default: object = None) -> Any:
+    def get(self, name: str, default: PDFObject = None) -> PDFObject:
         return self.attrs.get(name, default)
 
-    def get_any(self, names: Iterable[str], default: object = None) -> Any:
+    def get_any(self, names: Iterable[str], default: PDFObject = None) -> PDFObject:
         for name in names:
             if name in self.attrs:
                 return self.attrs[name]
@@ -398,6 +445,12 @@ class ContentStream:
         return list(zip(resolved_filters, resolved_params))
 
     def decode(self, strict: bool = False) -> None:
+        from playa.ascii85 import ascii85decode, asciihexdecode
+        from playa.ccitt import ccittfaxdecode
+        from playa.lzw import lzwdecode
+        from playa.runlength import rldecode
+        from playa.utils import apply_png_predictor, apply_tiff_predictor
+
         assert self._data is None and self.rawdata is not None, str(
             (self._data, self.rawdata),
         )
@@ -493,3 +546,9 @@ class ContentStream:
             self.decode()
             assert self._data is not None
         return self._data
+
+
+class InlineImage(ContentStream):
+    """Specific class for inline images so the interpreter can
+    recognize them (they are otherwise the same thing as content
+    streams)."""

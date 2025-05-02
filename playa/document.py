@@ -199,7 +199,7 @@ class Document:
         self.decipher: Optional[DecipherCallable] = None
         self._cached_objs: Dict[int, PDFObject] = {}
         self._parsed_objs: Dict[int, Tuple[List[PDFObject], int]] = {}
-        self._cached_fonts: Dict[object, Font] = {}
+        self._cached_fonts: Dict[int, Font] = {}
         if isinstance(fp, io.TextIOBase):
             raise TypeError("fp is not a binary file")
         self.pdf_version, self.offset, self.buffer = _open_input(fp)
@@ -509,12 +509,13 @@ class Document:
             self._cached_objs[objid] = obj
         return self._cached_objs[objid]
 
-    def get_font(self, objid: object, spec: Union[Dict[str, PDFObject], None]) -> Font:
+    def get_font(
+        self, objid: int = 0, spec: Union[Dict[str, PDFObject], None] = None
+    ) -> Font:
         if objid and objid in self._cached_fonts:
             return self._cached_fonts[objid]
         if spec is None:
-            self._cached_fonts[objid] = Font({}, {})
-            return self._cached_fonts[objid]
+            return Font({}, {})
         # Create a Font object, hopefully
         font: Union[Font, None] = None
         if spec.get("Type") is not LITERAL_FONT:
@@ -530,7 +531,7 @@ class Document:
             if "DescendantFonts" not in spec:
                 log.warning("Type0 font has no DescendantFonts: %r", spec)
             else:
-                dfonts = resolve1(spec["DescendantFonts"])
+                dfonts = list_value(spec["DescendantFonts"])
                 if len(dfonts) != 1:
                     log.debug(
                         "Type 0 font should have 1 descendant, has more: %r", dfonts
@@ -956,8 +957,10 @@ class Destinations:
         self.dests: Dict[str, Destination] = {}
         if "Dests" in doc.catalog:
             # PDF-1.1: dictionary
-            self.dests_dict = resolve1(doc.catalog["Dests"])
-            if not isinstance(self.dests_dict, dict):
+            dests_dict = resolve1(doc.catalog["Dests"])
+            if isinstance(dests_dict, dict):
+                self.dests_dict = dests_dict
+            else:
                 log.warning(
                     "Dests entry in catalog is not dictionary: %r", self.dests_dict
                 )

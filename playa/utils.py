@@ -1,7 +1,9 @@
 """Miscellaneous Routines."""
 
+import itertools
 import string
 from typing import (
+    Any,
     Iterable,
     Iterator,
     List,
@@ -9,6 +11,8 @@ from typing import (
     TypeVar,
     Union,
 )
+
+from playa.pdftypes import Point, Rect, Matrix
 
 # from sys import maxint as INF doesn't work anymore under Python3, but PDF
 # still uses 32 bits ints
@@ -161,15 +165,6 @@ def apply_png_predictor(
     return bytes(buf)
 
 
-Point = Tuple[float, float]
-Rect = Tuple[float, float, float, float]
-Matrix = Tuple[float, float, float, float, float, float]
-
-
-#  Matrix operations
-MATRIX_IDENTITY: Matrix = (1, 0, 0, 1, 0, 0)
-
-
 def normalize_rect(r: Rect) -> Rect:
     (x0, y0, x1, y1) = r
     if x1 < x0:
@@ -228,7 +223,7 @@ def apply_matrix_norm(m: Matrix, v: Point) -> Point:
 #  Utility functions
 
 
-def isnumber(x: object) -> bool:
+def isnumber(x: Any) -> bool:
     return isinstance(x, (int, float))
 
 
@@ -247,6 +242,17 @@ def get_bound(pts: Iterable[Point]) -> Rect:
     x1 = max(xs)
     y1 = max(ys)
     return x0, y0, x1, y1
+
+
+def get_bound_rects(boxes: Iterable[Rect]) -> Rect:
+    """Compute the union of bounding boxes (which need not be normalized)
+
+    Raises:
+      ValueError on empty input (as there is no bounding box).
+    """
+    return get_bound(
+        itertools.chain.from_iterable(((x0, y0), (x1, y1)) for x0, y0, x1, y1 in boxes)
+    )
 
 
 def get_transformed_bound(matrix: Matrix, bbox: Rect) -> Rect:

@@ -28,8 +28,7 @@ from playa.page import PathSegment as _PathSegment
 from playa.page import TagObject as _TagObject
 from playa.page import TextObject as _TextObject
 from playa.page import TextState as _TextState
-from playa.pdftypes import resolve_all
-from playa.utils import MATRIX_IDENTITY, Matrix, Point, Rect
+from playa.pdftypes import resolve_all, MATRIX_IDENTITY, Matrix, Point, Rect
 
 
 class Text(TypedDict, total=False):
