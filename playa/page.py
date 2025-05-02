@@ -65,7 +65,7 @@ from playa.utils import (
     apply_matrix_pt,
     decode_text,
     get_bound,
-    get_transformed_bound,
+    transform_bbox,
     mult_matrix,
     normalize_rect,
 )
@@ -841,7 +841,7 @@ class ImageObject(ContentObject):
         # unit high in user space, regardless of the number of samples
         # in the image. To be painted, an image shall be mapped to a
         # region of the page by temporarily altering the CTM.
-        return get_transformed_bound(self.ctm, (0, 0, 1, 1))
+        return transform_bbox(self.ctm, (0, 0, 1, 1))
 
 
 @dataclass
@@ -885,7 +885,7 @@ class XObjectObject(ContentObject):
         if "BBox" not in self.stream:
             log.debug("XObject %r has no BBox: %r", self.xobjid, self.stream)
             return self.page.cropbox
-        return get_transformed_bound(self.ctm, rect_value(self.stream["BBox"]))
+        return transform_bbox(self.ctm, rect_value(self.stream["BBox"]))
 
     @property
     def buffer(self) -> bytes:
@@ -1031,7 +1031,7 @@ class PathObject(ContentObject):
             itertools.chain.from_iterable(seg.points for seg in self.raw_segments)
         )
         # Transform it and get the new bounding box
-        return get_transformed_bound(self.ctm, bbox)
+        return transform_bbox(self.ctm, bbox)
 
 
 @dataclass
@@ -1283,7 +1283,7 @@ class TextObject(ContentObject):
         if self._bbox is not None:
             return self._bbox
         matrix = mult_matrix(self.textstate.line_matrix, self.ctm)
-        self._bbox = get_transformed_bound(matrix, self.text_space_bbox)
+        self._bbox = transform_bbox(matrix, self.text_space_bbox)
         return self._bbox
 
     @property

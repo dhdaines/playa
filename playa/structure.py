@@ -19,13 +19,17 @@ from typing import (
 
 from playa.parser import LIT, PDFObject, PSLiteral
 from playa.pdftypes import (
+    BBOX_NONE,
     ContentStream,
     ObjRef,
+    Rect,
     dict_value,
     literal_name,
     resolve1,
+    rect_value,
     stream_value,
 )
+from playa.utils import transform_bbox
 from playa.worker import (
     DocumentRef,
     PageRef,
@@ -267,7 +271,7 @@ class Element(Findable):
             return BBOX_NONE
         if "BBox" in self.props:
             rawbox = rect_value(self.props["BBox"])
-            return get_transformed_bound(page.ctm, rawbox)
+            return transform_bbox(page.ctm, rawbox)
         else:
             pass
 

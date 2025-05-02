@@ -255,7 +255,7 @@ def get_bound_rects(boxes: Iterable[Rect]) -> Rect:
     )
 
 
-def get_transformed_bound(matrix: Matrix, bbox: Rect) -> Rect:
+def transform_bbox(matrix: Matrix, bbox: Rect) -> Rect:
     """Transform a bounding box and return the rectangle that covers
     the points of the resulting shape."""
     x0, y0, x1, y1 = bbox
