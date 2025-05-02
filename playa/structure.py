@@ -237,6 +237,40 @@ class Element(Findable):
             return Tree(self.doc)
         return Element.from_dict(self.doc, p)
 
+    @property
+    def contents(self) -> Iterator[ContentItem]:
+        """Iterate over all content items contained in an element."""
+        for kid in self:
+            if isinstance(kid, Element):
+                yield from kid.contents
+            elif isinstance(kid, ContentItem):
+                yield kid
+
+    @property
+    def bbox(self) -> Rect:
+        """Find the bounding box, if any, of this element.
+
+        Elements may explicitly define a `BBox` in default user space,
+        in which case this is used.  Otherwise, the bounding box is
+        the smallest rectangle enclosing all of the content items
+        contained by this element (which may take some time to compute).
+
+        Note: Elements may span multiple pages!
+            In the case of an element (such as a `Document` for
+            instance) that spans multiple pages, the bounding box
+            cannot exist, and `BBOX_NONE` will be returned.  If the
+            `page` attribute is `None`, then `bbox` will be BBOX_NONE.
+
+        """
+        page = self.page
+        if page is None:
+            return BBOX_NONE
+        if "BBox" in self.props:
+            rawbox = rect_value(self.props["BBox"])
+            return get_transformed_bound(page.ctm, rawbox)
+        else:
+            pass
+
     def __iter__(self) -> Iterator[Union["Element", ContentItem, ContentObject]]:
         if "K" in self.props:
             kids = resolve1(self.props["K"])
@@ -407,6 +441,16 @@ class Tree(Findable):
     def __iter__(self) -> Iterator[Union["Element", ContentItem, ContentObject]]:
         doc = _deref_document(self._docref)
         return _iter_structure(doc)
+
+    @property
+    def contents(self) -> Iterator[ContentItem]:
+        """Iterate over all content items in the tree."""
+        for kid in self:
+            if isinstance(kid, Element):
+                yield from kid.contents
+            elif isinstance(kid, ContentItem):
+                # This is not supposed to happen, but we will support it anyway
+                yield kid
 
     @property
     def doc(self) -> "Document":
