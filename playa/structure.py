@@ -19,19 +19,13 @@ from typing import (
 
 from playa.parser import LIT, PDFObject, PSLiteral
 from playa.pdftypes import (
-    BBOX_NONE,
-    Rect,
     ContentStream,
     ObjRef,
     dict_value,
-    int_value,
-    list_value,
     literal_name,
     resolve1,
-    rect_value,
     stream_value,
 )
-from playa.utils import get_transformed_bound
 from playa.worker import (
     DocumentRef,
     PageRef,
@@ -105,9 +99,7 @@ class ContentObject:
                 xobjid = literal_name(self.props["Name"])
             else:
                 xobjid = "XObject"
-            return XObjectObject.from_stream(
-                self.props, self.page, xobjid=xobjid
-            )
+            return XObjectObject.from_stream(self.props, self.page, xobjid=xobjid)
         objtype = self.type
         if objtype is LITERAL_ANNOT:
             from playa.page import Annotation

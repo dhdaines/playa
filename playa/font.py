@@ -44,13 +44,11 @@ from playa.pdftypes import (
     point_value,
     rect_value,
     resolve1,
-    resolve_all,
     stream_value,
 )
 from playa.utils import (
     Matrix,
     Point,
-    Rect,
     apply_matrix_norm,
     choplist,
     decode_text,

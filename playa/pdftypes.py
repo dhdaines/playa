@@ -238,7 +238,9 @@ def resolve_all(x: PDFObject, default: PDFObject = None) -> PDFObject:
     create circular references if they exist, so beware.
     """
 
-    def resolver(x: PDFObject, default: PDFObject, seen: Dict[int, PDFObject]) -> PDFObject:
+    def resolver(
+        x: PDFObject, default: PDFObject, seen: Dict[int, PDFObject]
+    ) -> PDFObject:
         if isinstance(x, ObjRef):
             ref = x
             while isinstance(x, ObjRef):
@@ -255,7 +257,9 @@ def resolve_all(x: PDFObject, default: PDFObject = None) -> PDFObject:
     return resolver(x, default, {})
 
 
-def decipher_all(decipher: DecipherCallable, objid: int, genno: int, x: PDFObject) -> PDFObject:
+def decipher_all(
+    decipher: DecipherCallable, objid: int, genno: int, x: PDFObject
+) -> PDFObject:
     """Recursively deciphers the given object."""
     if isinstance(x, bytes):
         if len(x) == 0:
@@ -446,6 +450,7 @@ class ContentStream:
         from playa.lzw import lzwdecode
         from playa.runlength import rldecode
         from playa.utils import apply_png_predictor, apply_tiff_predictor
+
         assert self._data is None and self.rawdata is not None, str(
             (self._data, self.rawdata),
         )
