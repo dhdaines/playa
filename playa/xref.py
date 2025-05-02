@@ -26,6 +26,7 @@ from playa.pdftypes import (
     ContentStream,
     dict_value,
     int_value,
+    list_value,
     stream_value,
 )
 from playa.utils import (
@@ -247,7 +248,7 @@ class XRefStream:
         ):
             raise ValueError(f"Invalid PDF stream spec {stream!r}")
         size = stream["Size"]
-        index_array = stream.get("Index", (0, size))
+        index_array = list_value(stream.get("Index") or [0, size])
         if len(index_array) % 2 != 0:
             raise PDFSyntaxError("Invalid index number")
         for start, end in choplist(2, index_array):

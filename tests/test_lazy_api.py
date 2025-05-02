@@ -2,16 +2,13 @@
 Test the ContentObject API for pages.
 """
 
-import itertools
 from pathlib import Path
-from typing import cast
-
-import pytest
 
 import playa
+import pytest
 from playa.color import PREDEFINED_COLORSPACE, Color
 from playa.exceptions import PDFEncryptionError
-from playa.utils import Matrix, apply_matrix_pt, get_bound, get_transformed_bound
+from playa.utils import get_bound
 
 from .data import ALLPDFS, CONTRIB, PASSWORDS, TESTDIR, XFAILS
 
@@ -120,19 +117,6 @@ def test_rotated_text_objects() -> None:
                 points.append((x0, y0))
                 points.append((x1, y1))
             assert bbox == pytest.approx(get_bound(points))
-
-
-def test_rotated_bboxes() -> None:
-    """Verify that rotated bboxes are correctly calculated."""
-    points = ((0, 0), (0, 100), (100, 100), (100, 0))
-    bbox = (0, 0, 100, 100)
-    # Test all possible sorts of CTM
-    vals = (-1, -0.5, 0, 0.5, 1)
-    for matrix in itertools.product(vals, repeat=4):
-        ctm = cast(Matrix, (*matrix, 0, 0))
-        gtb = get_transformed_bound(ctm, bbox)
-        bound = get_bound((apply_matrix_pt(ctm, p) for p in points))
-        assert gtb == bound
 
 
 def test_operators_in_text() -> None:

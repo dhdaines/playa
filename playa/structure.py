@@ -18,7 +18,20 @@ from typing import (
 )
 
 from playa.parser import LIT, PDFObject, PSLiteral
-from playa.pdftypes import ContentStream, ObjRef, literal_name, resolve1, stream_value
+from playa.pdftypes import (
+    BBOX_NONE,
+    Rect,
+    ContentStream,
+    ObjRef,
+    dict_value,
+    int_value,
+    list_value,
+    literal_name,
+    resolve1,
+    rect_value,
+    stream_value,
+)
+from playa.utils import get_transformed_bound
 from playa.worker import (
     DocumentRef,
     PageRef,
@@ -38,7 +51,7 @@ MatchFunc = Callable[["Element"], bool]
 
 if TYPE_CHECKING:
     from playa.document import Document
-    from playa.page import Page, XObjectObject, Annotation
+    from playa.page import Annotation, Page, XObjectObject
 
 
 @dataclass
@@ -88,8 +101,12 @@ class ContentObject:
         if isinstance(self.props, ContentStream):
             from playa.page import XObjectObject
 
+            if "Name" in self.props and isinstance(self.props["Name"], PSLiteral):
+                xobjid = literal_name(self.props["Name"])
+            else:
+                xobjid = "XObject"
             return XObjectObject.from_stream(
-                self.props, self.page, xobjid=self.props.get("Name", "XObject")
+                self.props, self.page, xobjid=xobjid
             )
         objtype = self.type
         if objtype is LITERAL_ANNOT:
@@ -223,6 +240,7 @@ class Element(Findable):
         p = resolve1(self.props.get("P"))
         if p is None:
             return None
+        p = dict_value(p)
         if p.get("Type") is LITERAL_STRUCTTREEROOT:
             return Tree(self.doc)
         return Element.from_dict(self.doc, p)
@@ -354,6 +372,7 @@ def _iter_structure(
     root = resolve1(doc.catalog.get("StructTreeRoot"))
     if root is None:
         return
+    root = dict_value(root)
     kids = resolve1(root.get("K"))
     if kids is None:
         LOG.warning("'K' entry in StructTreeRoot could not be resolved: %r", root)

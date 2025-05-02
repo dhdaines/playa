@@ -10,6 +10,7 @@ from copy import copy
 from dataclasses import dataclass
 from typing import (
     TYPE_CHECKING,
+    Any,
     Callable,
     Dict,
     Iterable,
@@ -40,6 +41,11 @@ from playa.font import Font
 # FIXME: PDFObject needs to go in pdftypes somehow
 from playa.parser import KWD, InlineImage, ObjectParser, PDFObject, Token
 from playa.pdftypes import (
+    BBOX_NONE,
+    MATRIX_IDENTITY,
+    Matrix,
+    Point,
+    Rect,
     LIT,
     ContentStream,
     ObjRef,
@@ -49,15 +55,13 @@ from playa.pdftypes import (
     int_value,
     list_value,
     literal_name,
+    matrix_value,
     num_value,
+    rect_value,
     resolve1,
     stream_value,
 )
 from playa.utils import (
-    MATRIX_IDENTITY,
-    Matrix,
-    Point,
-    Rect,
     apply_matrix_pt,
     decode_text,
     get_bound,
@@ -80,17 +84,6 @@ LITERAL_IMAGE = LIT("Image")
 TextSeq = Iterable[Union[int, float, bytes]]
 DeviceSpace = Literal["page", "screen", "default", "user"]
 CO = TypeVar("CO")
-
-
-# FIXME: This should go in utils/pdftypes but there are circular imports
-def parse_rect(o: PDFObject) -> Rect:
-    try:
-        (x0, y0, x1, y1) = (num_value(x) for x in list_value(o))
-        return x0, y0, x1, y1
-    except ValueError:
-        raise ValueError("Could not parse rectangle %r" % (o,))
-    except TypeError:
-        raise PDFSyntaxError("Rectangle contains non-numeric values")
 
 
 # FIXME: This should be a method of TextObject (soon)
@@ -159,7 +152,7 @@ class Page:
             log.warning("Resources missing or invalid from Page id %d", pageid)
             self.resources = {}
         try:
-            self.mediabox = normalize_rect(parse_rect(self.attrs["MediaBox"]))
+            self.mediabox = normalize_rect(rect_value(self.attrs["MediaBox"]))
         except KeyError:
             log.warning(
                 "MediaBox missing from Page id %d (and not inherited),"
@@ -178,7 +171,7 @@ class Page:
         self.cropbox = self.mediabox
         if "CropBox" in self.attrs:
             try:
-                self.cropbox = normalize_rect(parse_rect(self.attrs["CropBox"]))
+                self.cropbox = normalize_rect(rect_value(self.attrs["CropBox"]))
             except (ValueError, PDFSyntaxError):
                 log.warning(
                     "Invalid CropBox %r in /Page, defaulting to MediaBox",
@@ -238,6 +231,9 @@ class Page:
         """Lazily iterate over page annotations."""
         alist = resolve1(self.attrs.get("Annots"))
         if alist is None:
+            return
+        if not isinstance(alist, list):
+            log.warning("Invalid Annots list: %r", alist)
             return
         for obj in alist:
             try:
@@ -470,7 +466,7 @@ class Annotation:
         subtype = annot.get("Subtype")
         if subtype is None or not isinstance(subtype, PSLiteral):
             raise PDFSyntaxError("Invalid annotation Subtype %r" % (subtype,))
-        rect = parse_rect(annot.get("Rect"))
+        rect = rect_value(annot.get("Rect"))
         return Annotation(
             _pageref=page.pageref,
             subtype=literal_name(subtype),
@@ -489,17 +485,19 @@ class Annotation:
         contents = resolve1(self.props.get("Contents"))
         if contents is None:
             return None
-        try:
-            return decode_text(contents)
-        except TypeError:
+        if not isinstance(contents, (bytes, str)):
             log.warning("Invalid annotation contents: %r", contents)
             return None
+        return decode_text(contents)
 
     @property
     def name(self) -> Union[str, None]:
         """Annotation name, uniquely identifying this annotation."""
         name = resolve1(self.props.get("NM"))
         if name is None:
+            return None
+        if not isinstance(name, (bytes, str)):
+            log.warning("Invalid annotation name: %r", name)
             return None
         return decode_text(name)
 
@@ -514,6 +512,9 @@ class Annotation:
         """
         mtime = resolve1(self.props.get("M"))
         if mtime is None:
+            return None
+        if not isinstance(mtime, (bytes, str)):
+            log.warning("Invalid annotation modification date: %r", mtime)
             return None
         return decode_text(mtime)
 
@@ -674,9 +675,6 @@ class ContentParser(ObjectParser):
                     log.warning("Found non-stream in contents: %r", ref)
 
 
-BBOX_NONE = (-1, -1, -1, -1)
-
-
 class MarkedContent(NamedTuple):
     """
     Marked content information for a point or section in a PDF page.
@@ -821,7 +819,7 @@ class ImageObject(ContentObject):
     stream: ContentStream
     colorspace: Union[ColorSpace, None]
 
-    def __contains__(self, name: object) -> bool:
+    def __contains__(self, name: str) -> bool:
         return name in self.stream
 
     def __getitem__(self, name: str) -> PDFObject:
@@ -869,7 +867,7 @@ class XObjectObject(ContentObject):
     stream: ContentStream
     resources: Union[None, Dict[str, PDFObject]]
 
-    def __contains__(self, name: object) -> bool:
+    def __contains__(self, name: str) -> bool:
         return name in self.stream
 
     def __getitem__(self, name: str) -> PDFObject:
@@ -887,7 +885,7 @@ class XObjectObject(ContentObject):
         if "BBox" not in self.stream:
             log.debug("XObject %r has no BBox: %r", self.xobjid, self.stream)
             return self.page.cropbox
-        return get_transformed_bound(self.ctm, parse_rect(self.stream["BBox"]))
+        return get_transformed_bound(self.ctm, rect_value(self.stream["BBox"]))
 
     @property
     def buffer(self) -> bytes:
@@ -929,8 +927,8 @@ class XObjectObject(ContentObject):
         # Use defaults if not given
         if gstate is None:
             gstate = GraphicState()
-        # FIXME: Should validate that it is really a CTM
-        matrix = cast(Matrix, list_value(stream.get("Matrix", MATRIX_IDENTITY)))
+        if "Matrix" in stream:
+            ctm = mult_matrix(matrix_value(stream["Matrix"]), ctm)
         # According to PDF reference 1.7 section 4.9.1, XObjects in
         # earlier PDFs (prior to v1.2) use the page's Resources entry
         # instead of having their own Resources entry.  So, this could
@@ -941,7 +939,7 @@ class XObjectObject(ContentObject):
         return cls(
             _pageref=page.pageref,
             gstate=gstate,
-            ctm=mult_matrix(matrix, ctm),
+            ctm=ctm,
             mcstack=mcstack,
             xobjid=xobjid,
             stream=stream,
@@ -1361,7 +1359,7 @@ class LazyInterpreter:
     def init_resources(self, page: Page, resources: Dict) -> None:
         """Prepare the fonts and XObjects listed in the Resource attribute."""
         self.resources = resources
-        self.fontmap: Dict[object, Font] = {}
+        self.fontmap: Dict[str, Font] = {}
         self.xobjmap = {}
         self.csmap: Dict[str, ColorSpace] = copy(PREDEFINED_COLORSPACE)
         if not self.resources:
@@ -1378,7 +1376,7 @@ class LazyInterpreter:
                     log.warning("Font mapping not a dict: %r", mapping)
                     continue
                 for fontid, spec in mapping.items():
-                    objid = None
+                    objid = 0  # Not a valid object ID (will not cache)
                     if isinstance(spec, ObjRef):
                         objid = spec.objid
                     try:
@@ -1672,10 +1670,7 @@ class LazyInterpreter:
     def render_image(
         self, xobjid: Union[str, None], stream: ContentStream
     ) -> Union[ContentObject, None]:
-        colorspace = stream.get_any(("CS", "ColorSpace"))
-        colorspace = (
-            None if colorspace is None else get_colorspace(resolve1(colorspace))
-        )
+        colorspace = get_colorspace(resolve1(stream.get_any(("CS", "ColorSpace"))))
         width = stream.get_any(("W", "Width"))
         if width is None:
             log.debug("Image has no Width: %r", stream)
@@ -1895,7 +1890,7 @@ class LazyInterpreter:
         """Set color for nonstroking operators"""
         self.do_scn()
 
-    def do_sh(self, name: object) -> None:
+    def do_sh(self, name: Any) -> None:
         """Paint area defined by shading pattern"""
 
     def do_BT(self) -> None:
@@ -1963,7 +1958,7 @@ class LazyInterpreter:
         except KeyError:
             log.warning("Undefined Font id: %r", fontid)
             doc = _deref_document(self.page.docref)
-            self.textstate.font = doc.get_font(None, {})
+            self.textstate.font = doc.get_font()
         self.textstate.fontsize = num_value(fontsize)
         self.textstate.descent = (
             self.textstate.font.get_descent() * self.textstate.fontsize

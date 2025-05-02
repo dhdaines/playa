@@ -97,9 +97,13 @@ class Action:
     @property
     def destination(self) -> Union[Destination, None]:
         """Destination of this action, if any."""
-        if "D" not in self.props:
+        dest = resolve1(self.props.get("D"))
+        if dest is None:
             return None
-        return Destination.from_dest(self.doc, resolve1(self.props["D"]))
+        elif not isinstance(dest, (PSLiteral, bytes, list)):
+            LOG.warning("Unrecognized destination: %r", dest)
+            return None
+        return Destination.from_dest(self.doc, dest)
 
 
 class Outline:
@@ -162,9 +166,11 @@ class Outline:
         dest = resolve1(self.props.get("Dest"))
         if dest is not None:
             try:
-                return Destination.from_dest(self.doc, dest)
+                if isinstance(dest, (PSLiteral, bytes, list)):
+                    return Destination.from_dest(self.doc, dest)
             except KeyError:
-                return None
+                LOG.warning("Unknown named destination: %r", dest)
+        # Fall through to try an Action instead
         action = self.action
         if action is None or action.type is not ACTION_GOTO:
             return None
