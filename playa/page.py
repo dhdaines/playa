@@ -861,6 +861,8 @@ class XObjectObject(ContentObject):
       page: Weak reference to containing page.
       stream: Content stream with PDF operators.
       resources: Resources specific to this XObject, if any.
+      textstate: Required because XObjects may contain TextObjects, but
+        ContentObject does not have a text state.
     """
 
     xobjid: str
