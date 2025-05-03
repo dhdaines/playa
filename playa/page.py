@@ -866,6 +866,7 @@ class XObjectObject(ContentObject):
     xobjid: str
     stream: ContentStream
     resources: Union[None, Dict[str, PDFObject]]
+    textstate: TextState
 
     def __contains__(self, name: str) -> bool:
         return name in self.stream
@@ -911,7 +912,7 @@ class XObjectObject(ContentObject):
 
     def __iter__(self) -> Iterator["ContentObject"]:
         interp = LazyInterpreter(self.page, [self.stream], self.resources)
-        interp.ctm = self.ctm
+        interp.set_current_state((self.ctm, copy(self.textstate), copy(self.gstate)))
         return iter(interp)
 
     @classmethod
@@ -919,14 +920,12 @@ class XObjectObject(ContentObject):
         cls,
         stream: ContentStream,
         page: Page,
-        xobjid: str = "XObject",
-        gstate: Union[GraphicState, None] = None,
-        ctm: Matrix = MATRIX_IDENTITY,
-        mcstack: Tuple[MarkedContent, ...] = (),
+        xobjid: str,
+        gstate: GraphicState,
+        textstate: TextState,
+        ctm: Matrix,
+        mcstack: Tuple[MarkedContent, ...],
     ) -> "XObjectObject":
-        # Use defaults if not given
-        if gstate is None:
-            gstate = GraphicState()
         if "Matrix" in stream:
             ctm = mult_matrix(matrix_value(stream["Matrix"]), ctm)
         # According to PDF reference 1.7 section 4.9.1, XObjects in
@@ -944,6 +943,7 @@ class XObjectObject(ContentObject):
             xobjid=xobjid,
             stream=stream,
             resources=resources,
+            textstate=textstate,
         )
 
 
@@ -1653,12 +1653,19 @@ class LazyInterpreter:
         subtype = xobj.get("Subtype")
         if subtype is LITERAL_FORM:
             if self.filter_class is None or self.filter_class is XObjectObject:
+                # PDF Ref 1.7, # 4.9
+                # When the Do operator is applied to a form XObject, it does the following tasks:
+                # 1. Saves the current graphics state, as if by invoking the q operator
+                # ...
+                # 5. Restores the saved graphics state, as if by invoking the Q operator
+                ctm, tstate, gstate = self.get_current_state()
                 return XObjectObject.from_stream(
                     stream=xobj,
                     page=self.page,
                     xobjid=xobjid,
-                    ctm=self.ctm,
-                    gstate=self.graphicstate,
+                    ctm=ctm,
+                    textstate=tstate,
+                    gstate=gstate,
                     mcstack=self.mcstack,
                 )
         elif subtype is LITERAL_IMAGE:

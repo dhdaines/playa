@@ -93,13 +93,22 @@ class ContentObject:
     def obj(self) -> Union["XObjectObject", "Annotation", None]:
         """Return the underlying object, if possible."""
         if isinstance(self.props, ContentStream):
-            from playa.page import XObjectObject
+            from playa.page import XObjectObject, GraphicState, TextState
+            from playa.pdftypes import MATRIX_IDENTITY
 
             if "Name" in self.props and isinstance(self.props["Name"], PSLiteral):
                 xobjid = literal_name(self.props["Name"])
             else:
                 xobjid = "XObject"
-            return XObjectObject.from_stream(self.props, self.page, xobjid=xobjid)
+            return XObjectObject.from_stream(
+                stream=self.props,
+                page=self.page,
+                xobjid=xobjid,
+                gstate=GraphicState(),
+                textstate=TextState(),
+                ctm=MATRIX_IDENTITY,
+                mcstack=(),
+            )
         objtype = self.type
         if objtype is LITERAL_ANNOT:
             from playa.page import Annotation
