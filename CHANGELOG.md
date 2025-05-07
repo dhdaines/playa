@@ -7,6 +7,8 @@
 - BREAKING: `parent_tree` moved to `playa.structure.Tree`
 - BREAKING: `Point`, `Rect`, `Matrix` and `PDFObject` moved to
   `playa.pdftypes`
+- BREAKING: `PathObject` no longer contains "subpaths", it is safe to
+  recursively descend it now
 
 ## PLAYA 0.4.2: 2025-04-26
 - Correct `fontsize` and `scaling` in text state
