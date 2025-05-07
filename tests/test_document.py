@@ -209,3 +209,10 @@ def test_evil_xobjects() -> None:
     with playa.open(TESTDIR / "evil_xobjects.pdf") as doc:
         for _ in doc.pages[0].flatten():
             pass
+
+
+def test_xobject_graphicstate() -> None:
+    """Verify that XObjects inherits the graphicstate of its surrounding."""
+    with playa.open(TESTDIR / "xobject_graphicstate.pdf") as doc:
+        text = next(doc.pages[0].texts)
+        assert text.textstate.font is not None
