@@ -21,6 +21,10 @@ def test_specific_structure():
         assert len(list(lis[0].find_all())) == 2
         assert lis[0].find().type == "LBody"
         assert lis[0].find().find().type == "Text body"
+        assert lis[0].find().find().role == "P"
+        p = pdf.structure.find("P")
+        assert p is not None
+        assert p.role == "P"
         table = pdf.structure.find("Table")
         assert table
         assert playa.asobj(table)["type"] == "Table"
