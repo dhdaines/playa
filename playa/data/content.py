@@ -167,8 +167,8 @@ class Path(TypedDict, total=False):
     """True if the filling of complex paths uses the even-odd
     winding rule, False if the non-zero winding number rule is
     used (PDF 1.7 section 8.5.3.3)"""
-    components: List[List["PathSegment"]]
-    """Subpaths, each of which consists of a list of segments."""
+    segments: List["PathSegment"]
+    """Path segments."""
     gstate: "GraphicState"
     """Graphic state."""
     mcstack: List["Tag"]
@@ -325,7 +325,7 @@ def asobj_image(obj: _ImageObject) -> Image:
 
 @asobj.register
 def asobj_path(obj: _PathObject) -> Path:
-    path = Path(components=asobj([list(subpath.segments) for subpath in obj]))
+    path = Path(segments=[asobj(seg) for seg in obj.segments])
     gstate = asobj(obj.gstate)
     if gstate:
         path["gstate"] = gstate
