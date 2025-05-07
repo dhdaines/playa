@@ -141,11 +141,11 @@ def _find_all(
 
     def match_tag(x: "Element") -> bool:
         """Match an element name."""
-        return x.type == matcher
+        return x.role == matcher
 
     def match_regex(x: "Element") -> bool:
         """Match an element name by regular expression."""
-        return matcher.match(x.type)  # type: ignore
+        return matcher.match(x.role)  # type: ignore
 
     if matcher is None:
         match_func = match_all
@@ -170,14 +170,21 @@ class Findable(Iterable):
     repeating oneself"""
 
     def find_all(
-        self, matcher: Union[str, Pattern[str], MatchFunc, None] = None
+            self, matcher: Union[str, Pattern[str], MatchFunc, None] = None
     ) -> Iterator["Element"]:
         """Iterate depth-first over matching elements in subtree.
 
-        The `matcher` argument is either an element name, a regular
+        The `matcher` argument is either a string, a regular
         expression, or a function taking a `Element` and returning
         `True` if the element matches, or `None` (default) to return
         all descendants in depth-first order.
+
+        For compatibility with `pdfplumber` and consistent behaviour
+        across documents, names and regular expressions are matched
+        against the `role` attribute.  If you wish to match the "raw"
+        structure type from the `type` attribute, you can do this with
+        a matching function.
+
         """
         return _find_all(list(self), matcher)
 
@@ -186,10 +193,12 @@ class Findable(Iterable):
     ) -> Union["Element", None]:
         """Find the first matching element in subtree.
 
-        The `matcher` argument is either an element name, a regular
-        expression, or a function taking a `Element` and returning
-        `True` if the element matches, or `None` (default) to just get
-        the first child element.
+        The `matcher` argument is either a string or a regular
+        expression to be matched against the `role` attribute, or a
+        function taking a `Element` and returning `True` if the
+        element matches, or `None` (default) to just get the first
+        child element.
+
         """
         try:
             return next(_find_all(list(self), matcher))
