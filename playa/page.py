@@ -42,32 +42,31 @@ from playa.font import Font
 from playa.parser import KWD, InlineImage, ObjectParser, PDFObject, Token
 from playa.pdftypes import (
     BBOX_NONE,
-    MATRIX_IDENTITY,
-    Matrix,
-    Point,
-    Rect,
     LIT,
+    MATRIX_IDENTITY,
     ContentStream,
+    Matrix,
     ObjRef,
+    Point,
     PSKeyword,
     PSLiteral,
+    Rect,
     dict_value,
     int_value,
     list_value,
     literal_name,
     matrix_value,
     num_value,
-    rect_value,
-    resolve1,
-    stream_value,
+    rect_value
 )
+from playa.pdftypes import resolve1, stream_value
 from playa.utils import (
     apply_matrix_pt,
     decode_text,
     get_bound,
-    transform_bbox,
     mult_matrix,
     normalize_rect,
+    transform_bbox,
 )
 from playa.worker import PageRef, _deref_document, _deref_page, _ref_document, _ref_page
 
@@ -75,6 +74,10 @@ if TYPE_CHECKING:
     from playa.document import Document
 
 log = logging.getLogger(__name__)
+
+# some aliases for backwards compatibility
+parse_rect = rect_value
+get_transformed_bound = transform_bbox
 
 # some predefined literals and keywords.
 LITERAL_PAGE = LIT("Page")
