@@ -162,6 +162,7 @@ class Document:
     _pool: Union[Executor, None] = None
     _outline: Union["Outline", None] = None
     _destinations: Union["Destinations", None] = None
+    _structure: Union["Tree", None]
 
     def __enter__(self) -> "Document":
         return self
@@ -357,7 +358,7 @@ class Document:
     def objects(self) -> Iterator[IndirectObject]:
         """Iterate over all indirect objects (including, then expanding object
         streams)"""
-        for pos, obj in IndirectObjectParser(
+        for _, obj in IndirectObjectParser(
             self.buffer, self, pos=self.offset, strict=self.parser.strict
         ):
             yield obj
@@ -366,7 +367,7 @@ class Document:
                 and obj.obj.get("Type") is LITERAL_OBJSTM
             ):
                 parser = ObjectStreamParser(obj.obj, self)
-                for spos, sobj in parser:
+                for _, sobj in parser:
                     yield sobj
 
     @property
@@ -380,26 +381,17 @@ class Document:
 
         In the case where no logical structure tree exists, this will
         be `None`.  Otherwise you may iterate over it, search it, etc.
+        We do this instead of simply returning an empty structure
+        tree because the vast majority of PDFs have no logical
+        structure.
         """
+        if hasattr(self, "_structure"):
+            return self._structure
         if "StructTreeRoot" not in self.catalog:
-            return None
-        return Tree(self)
-
-    @property
-    def parent_tree(self) -> Union[NumberTree, None]:
-        """Parent tree of this document.
-
-        This is a somewhat obscure data structure that links marked
-        content sections to their corresponding structure elements.
-        If you don't know what that means, you probably don't need it,
-        but if you do, here it is.
-        """
-        if "StructTreeRoot" not in self.catalog:
-            return None
-        st = dict_value(self.catalog["StructTreeRoot"])
-        if "ParentTree" not in st:
-            return None
-        return NumberTree(st["ParentTree"])
+            self._structure = None
+        else:
+            self._structure = Tree(self)
+        return self._structure
 
     def _getobj_objstm(
         self, stream: ContentStream, index: int, objid: int

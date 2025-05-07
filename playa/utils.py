@@ -285,8 +285,10 @@ def get_transformed_bound(matrix: Matrix, bbox: Rect) -> Rect:
         This function is deprecated and will be removed in
         PLAYA-PDF 1.0.
     """
-    warnings.warn("get_transformed_bound is deprecated, please use"
-                  "transform_bbox instead now.", DeprecationWarning)
+    warnings.warn(
+        "get_transformed_bound is deprecated, please use" "transform_bbox instead now.",
+        DeprecationWarning,
+    )
     return transform_bbox(matrix, bbox)
 
 

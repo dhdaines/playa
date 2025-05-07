@@ -10,15 +10,15 @@ import pytest
 TESTDIR = Path(__file__).parent.parent / "samples"
 SUBDIRS = ["acroform", "encryption", "scancode"]
 BASEPDFS = list(TESTDIR.glob("*.pdf"))
+ALLPDFS = [pytest.param(path) for path in BASEPDFS]
 for name in SUBDIRS:
-    BASEPDFS.extend((TESTDIR / name).glob("*.pdf"))
+    ALLPDFS.extend(pytest.param(path) for path in (TESTDIR / name).glob("*.pdf"))
 CONTRIB = TESTDIR / "contrib"
 if CONTRIB.exists():
-    BASEPDFS.extend(
+    ALLPDFS.extend(
         pytest.param(path, marks=pytest.mark.contrib) for path in CONTRIB.glob("*.pdf")
     )
 
-ALLPDFS = list(BASEPDFS)
 PLUMBERS = TESTDIR / "3rdparty" / "pdfplumber" / "tests" / "pdfs"
 if PLUMBERS.exists():
     ALLPDFS.extend(

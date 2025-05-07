@@ -17,6 +17,7 @@ from typing import (
     Union,
 )
 
+from playa.data_structures import NumberTree
 from playa.parser import LIT, PDFObject, PSLiteral
 from playa.pdftypes import (
     BBOX_NONE,
@@ -135,7 +136,7 @@ def _find_all(
     Common code for `find_all()` in trees and elements.
     """
 
-    def match_all(_: "Element") -> bool:
+    def match_all(x: "Element") -> bool:
         return True
 
     def match_tag(x: "Element") -> bool:
@@ -243,8 +244,10 @@ class Element(Findable):
         """
         if self._role is not None:
             return self._role
-        # FIXME: This is wildly inefficient
-        return self.doc.structure.role_map.get(self.type, self.type)
+        tree = self.doc.structure
+        if tree is None:  # it could happen!
+            return self.type
+        return tree.role_map.get(self.type, self.type)
 
     @property
     def doc(self) -> "Document":
@@ -275,7 +278,7 @@ class Element(Findable):
             return None
         p = dict_value(p)
         if p.get("Type") is LITERAL_STRUCTTREEROOT:
-            return Tree(self.doc)
+            return self.doc.structure
         return Element.from_dict(self.doc, p)
 
     @property
@@ -497,26 +500,62 @@ class Tree(Findable):
       props: Structure tree root dictionary (PDF 1.7 table 322).
       role_map: Mapping of structure element types (as strings) to
           standard structure types (as strings) (PDF 1.7 section 14.8.4)
-
+      parent_tree: Parent tree linking marked content sections to
+          structure elements (PDF 1.7 section 14.7.4.4)
     """
 
     _docref: DocumentRef
     props: Dict[str, PDFObject]
-    role_map: Dict[str, str]
+    _role_map: Dict[str, str]
+    _parent_tree: NumberTree
 
     def __init__(self, doc: "Document") -> None:
         self._docref = _ref_document(doc)
         self.props = dict_value(doc.catalog["StructTreeRoot"])
-        if "RoleMap" in self.props:
-            self.role_map = {
-                k: literal_name(v) for k, v in self.props["RoleMap"].items()
-            }
-        else:
-            self.role_map = {}
 
     def __iter__(self) -> Iterator[Union["Element", ContentItem, ContentObject]]:
         doc = _deref_document(self._docref)
         return _iter_structure(doc)
+
+    @property
+    def role_map(self) -> Dict[str, str]:
+        """Dictionary mapping some (not necessarily all) element types
+        to their standard equivalents."""
+        if hasattr(self, "_role_map"):
+            return self._role_map
+        self._role_map = {}
+        rm = resolve1(self.props["RoleMap"])
+        if isinstance(rm, dict):
+            for k, v in rm.items():
+                if isinstance(v, PSLiteral):
+                    role = literal_name(v)
+                else:
+                    role = str(v)
+                self._role_map[k] = role
+        return self._role_map
+
+    @property
+    def parent_tree(self) -> NumberTree:
+        """Parent tree for this document.
+
+        This is a somewhat obscure data structure that links marked
+        content sections to their corresponding structure elements.
+        If you don't know what that means, you probably don't need it,
+        but if you do, here it is.
+
+        Unlike the structure tree itself, if there is no parent tree,
+        this will be an empty NumberTree.  This is because the parent
+        tree is required by the spec in the case where structure
+        elements contain marked content, which is nearly all the time.
+
+        """
+        if hasattr(self, "_parent_tree"):
+            return self._parent_tree
+        if "ParentTree" not in self.props:
+            self._parent_tree = NumberTree({})
+        else:
+            self._parent_tree = NumberTree(self.props["StructTreeRoot"])
+        return self._parent_tree
 
     @property
     def contents(self) -> Iterator[ContentItem]:

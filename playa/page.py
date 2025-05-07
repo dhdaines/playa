@@ -57,7 +57,7 @@ from playa.pdftypes import (
     literal_name,
     matrix_value,
     num_value,
-    rect_value
+    rect_value,
 )
 from playa.pdftypes import resolve1, stream_value
 from playa.utils import (

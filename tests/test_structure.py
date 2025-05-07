@@ -91,12 +91,17 @@ def test_content_xobjects() -> None:
 def test_structure_bbox() -> None:
     """Verify that we can get the bounding box of structure elements."""
     with playa.open(TESTDIR / "pdf_structure.pdf") as pdf:
+        assert pdf.structure is not None
         table = pdf.structure.find("Table")
+        assert table is not None
         print(table.bbox)
         li = pdf.structure.find("LI")
+        assert li is not None
         print(li.bbox)
     with playa.open(TESTDIR / "image_structure.pdf") as pdf:
+        assert pdf.structure is not None
         figure = pdf.structure.find("Figure")
+        assert figure is not None
         print(figure.bbox)
 
 
