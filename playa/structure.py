@@ -206,6 +206,7 @@ class Element(Findable):
 
     _docref: DocumentRef
     props: Dict[str, PDFObject]
+    _role: Union[str, None] = None
 
     @classmethod
     def from_dict(cls, doc: "Document", obj: Dict[str, PDFObject]) -> "Element":
@@ -214,7 +215,36 @@ class Element(Findable):
 
     @property
     def type(self) -> str:
+        """Structure type for this element.
+
+        Note: Raw and standard structure types
+            This type is quite likely idiosyncratic and defined by
+            whatever style sheets the author used in their word
+            processor.  Standard structure types (PDF 1.7 section
+            14.8.4) are accessible through the `role_map` attribute of
+            the structure root, or, for convenience (this is slow) via
+            the `role` attribute on elements.
+
+        """
         return literal_name(self.props["S"])
+
+    @property
+    def role(self) -> str:
+        """Standardized structure type.
+
+        Note: Roles are always mapped
+            Since it is common for documents to use standard types
+            directly for some of their structure elements (typically
+            ones with no content) and thus to omit them from the role
+            map, `role` will always return a string in order to
+            facilitate processing.  If you must absolutely know
+            whether an element's type has no entry in the role map
+            then you will need to consult it directly.
+        """
+        if self._role is not None:
+            return self._role
+        # FIXME: This is wildly inefficient
+        return self.doc.structure.role_map.get(self.type, self.type)
 
     @property
     def doc(self) -> "Document":
@@ -281,12 +311,12 @@ class Element(Findable):
             return transform_bbox(page.ctm, rawbox)
         else:
             # NOTE: This is probably somewhat slow
-            mcids = set(item.mcid
-                        for item in self.contents
-                        if item.page is None or item.page is page)
-            return get_bound_rects(obj.bbox
-                                   for obj in page
-                                   if obj.mcid in mcids)
+            mcids = set(
+                item.mcid
+                for item in self.contents
+                if item.page is None or item.page is page
+            )
+            return get_bound_rects(obj.bbox for obj in page if obj.mcid in mcids)
 
     def __iter__(self) -> Iterator[Union["Element", ContentItem, ContentObject]]:
         if "K" in self.props:
@@ -450,10 +480,39 @@ def _iter_structure(
 
 
 class Tree(Findable):
+    """Logical structure tree.
+
+    A structure tree can be iterated over in the same fashion as its
+    elements.  Note that even though it is forbidden for structure
+    tree root to contain content items, PLAYA is robust to this
+    possibility, thus you should not presume that iterating over it
+    will only yield `Element` instances.
+
+    The various attributes (role map, class map, pronunciation
+    dictionary, etc, etc) are accessible through `props` but currently
+    have no particular interpretation aside from the role map which is
+    accessible in normalized form through `role_map`.
+
+    Attributes:
+      props: Structure tree root dictionary (PDF 1.7 table 322).
+      role_map: Mapping of structure element types (as strings) to
+          standard structure types (as strings) (PDF 1.7 section 14.8.4)
+
+    """
+
     _docref: DocumentRef
+    props: Dict[str, PDFObject]
+    role_map: Dict[str, str]
 
     def __init__(self, doc: "Document") -> None:
         self._docref = _ref_document(doc)
+        self.props = dict_value(doc.catalog["StructTreeRoot"])
+        if "RoleMap" in self.props:
+            self.role_map = {
+                k: literal_name(v) for k, v in self.props["RoleMap"].items()
+            }
+        else:
+            self.role_map = {}
 
     def __iter__(self) -> Iterator[Union["Element", ContentItem, ContentObject]]:
         doc = _deref_document(self._docref)
