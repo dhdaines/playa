@@ -376,7 +376,7 @@ class Page:
         prev_end = 0.0
         lines = []
         strings = []
-        for text in self.flatten(TextObject):
+        for text in self.texts:
             line_matrix = text.textstate.line_matrix
             vertical = (
                 False if text.textstate.font is None else text.textstate.font.vertical
@@ -408,7 +408,7 @@ class Page:
         strings: List[str] = []
         at_mcs: Union[MarkedContent, None] = None
         prev_mcid: Union[int, None] = None
-        for text in self.flatten(TextObject):
+        for text in self.texts:
             in_artifact = same_actual_text = reversed_chars = False
             actual_text = None
             for mcs in reversed(text.mcstack):
@@ -1325,10 +1325,6 @@ def make_seg(operator: PathOperator, *points: Point):
     return PathSegment(operator, points)
 
 
-def point_value(x: PDFObject, y: PDFObject) -> Point:
-    return (num_value(x), num_value(y))
-
-
 class LazyInterpreter:
     """Interpret the page yielding lazy objects."""
 
@@ -1749,11 +1745,11 @@ class LazyInterpreter:
 
     def do_m(self, x: PDFObject, y: PDFObject) -> None:
         """Begin new subpath"""
-        self.curpath.append(make_seg("m", point_value(x, y)))
+        self.curpath.append(make_seg("m", (num_value(x), num_value(y))))
 
     def do_l(self, x: PDFObject, y: PDFObject) -> None:
         """Append straight line segment to path"""
-        self.curpath.append(make_seg("l", point_value(x, y)))
+        self.curpath.append(make_seg("l", (num_value(x), num_value(y))))
 
     def do_c(
         self,
@@ -1768,9 +1764,9 @@ class LazyInterpreter:
         self.curpath.append(
             make_seg(
                 "c",
-                point_value(x1, y1),
-                point_value(x2, y2),
-                point_value(x3, y3),
+                (num_value(x1), num_value(y1)),
+                (num_value(x2), num_value(y2)),
+                (num_value(x3), num_value(y3)),
             ),
         )
 
@@ -1779,8 +1775,8 @@ class LazyInterpreter:
         self.curpath.append(
             make_seg(
                 "v",
-                point_value(x2, y2),
-                point_value(x3, y3),
+                (num_value(x2), num_value(y2)),
+                (num_value(x3), num_value(y3)),
             )
         )
 
@@ -1789,8 +1785,8 @@ class LazyInterpreter:
         self.curpath.append(
             make_seg(
                 "y",
-                point_value(x1, y1),
-                point_value(x3, y3),
+                (num_value(x1), num_value(y1)),
+                (num_value(x3), num_value(y3)),
             )
         )
 
@@ -1804,10 +1800,10 @@ class LazyInterpreter:
         y = num_value(y)
         w = num_value(w)
         h = num_value(h)
-        self.curpath.append(make_seg("m", point_value(x, y)))
-        self.curpath.append(make_seg("l", point_value(x + w, y)))
-        self.curpath.append(make_seg("l", point_value(x + w, y + h)))
-        self.curpath.append(make_seg("l", point_value(x, y + h)))
+        self.curpath.append(make_seg("m", (x, y)))
+        self.curpath.append(make_seg("l", (x + w, y)))
+        self.curpath.append(make_seg("l", (x + w, y + h)))
+        self.curpath.append(make_seg("l", (x, y + h)))
         self.curpath.append(make_seg("h"))
 
     def do_n(self) -> None:
