@@ -34,10 +34,9 @@ from playa.page import (
     TextState,
 )
 from playa.parser import Token
-from playa.pdftypes import ContentStream, ObjRef
+from playa.pdftypes import ContentStream, Matrix, ObjRef, Point, Rect
 from playa.pdftypes import resolve1 as resolve
 from playa.pdftypes import resolve_all
-from playa.utils import Matrix, Point, Rect
 from playa.worker import _init_worker, _init_worker_buffer
 
 __all__ = [

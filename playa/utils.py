@@ -2,6 +2,7 @@
 
 import itertools
 import string
+import warnings
 from typing import (
     Any,
     Iterable,
@@ -255,7 +256,7 @@ def get_bound_rects(boxes: Iterable[Rect]) -> Rect:
     )
 
 
-def get_transformed_bound(matrix: Matrix, bbox: Rect) -> Rect:
+def transform_bbox(matrix: Matrix, bbox: Rect) -> Rect:
     """Transform a bounding box and return the rectangle that covers
     the points of the resulting shape."""
     x0, y0, x1, y1 = bbox
@@ -275,6 +276,20 @@ def get_transformed_bound(matrix: Matrix, bbox: Rect) -> Rect:
             apply_matrix_pt(matrix, (x1, y1)),
         )
     )
+
+
+def get_transformed_bound(matrix: Matrix, bbox: Rect) -> Rect:
+    """Deprecated name for transform_bbox.
+
+    Danger: Deprecated
+        This function is deprecated and will be removed in
+        PLAYA-PDF 1.0.
+    """
+    warnings.warn(
+        "get_transformed_bound is deprecated, please use" "transform_bbox instead now.",
+        DeprecationWarning,
+    )
+    return transform_bbox(matrix, bbox)
 
 
 def choplist(n: int, seq: Iterable[_T]) -> Iterator[Tuple[_T, ...]]:

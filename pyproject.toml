@@ -71,6 +71,7 @@ exclude = ["samples/3rdparty"] # why no leading slash?
 
 [tool.pytest.ini_options]
 testpaths = [ "tests" ]
+markers = [ "contrib", "thirdparty" ]
 
 [tool.hatch.envs.hatch-test]
 extra-dependencies = [ "cryptography", "pdfminer.six" ]

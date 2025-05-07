@@ -18,6 +18,13 @@ def test_specific_structure():
         lis = list(pdf.structure.find_all("LI"))
         assert len(lis) == 4
         assert playa.asobj(lis[0])["type"] == "LI"
+        assert len(list(lis[0].find_all())) == 2
+        assert lis[0].find().type == "LBody"
+        assert lis[0].find().find().type == "Text body"
+        assert lis[0].find().find().role == "P"
+        p = pdf.structure.find("P")
+        assert p is not None
+        assert p.role == "P"
         table = pdf.structure.find("Table")
         assert table
         assert playa.asobj(table)["type"] == "Table"
@@ -83,6 +90,23 @@ def test_content_xobjects() -> None:
         assert text.chars == "Hello world"
         assert isinstance(mcs, ContentItem)
         assert mcs.mcid == 1
+
+
+def test_structure_bbox() -> None:
+    """Verify that we can get the bounding box of structure elements."""
+    with playa.open(TESTDIR / "pdf_structure.pdf") as pdf:
+        assert pdf.structure is not None
+        table = pdf.structure.find("Table")
+        assert table is not None
+        print(table.bbox)
+        li = pdf.structure.find("LI")
+        assert li is not None
+        print(li.bbox)
+    with playa.open(TESTDIR / "image_structure.pdf") as pdf:
+        assert pdf.structure is not None
+        figure = pdf.structure.find("Figure")
+        assert figure is not None
+        print(figure.bbox)
 
 
 if __name__ == "__main__":

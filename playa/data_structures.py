@@ -34,7 +34,7 @@ class NumberTree:
         return walk_number_tree(self._obj)
 
     def __contains__(self, num: int) -> bool:
-        for idx, val in walk_number_tree(self._obj, num):
+        for idx, _ in walk_number_tree(self._obj, num):
             if idx == num:
                 return True
         return False

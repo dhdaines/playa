@@ -42,15 +42,15 @@ from playa.font import Font
 from playa.parser import KWD, InlineImage, ObjectParser, PDFObject, Token
 from playa.pdftypes import (
     BBOX_NONE,
-    MATRIX_IDENTITY,
-    Matrix,
-    Point,
-    Rect,
     LIT,
+    MATRIX_IDENTITY,
     ContentStream,
+    Matrix,
     ObjRef,
+    Point,
     PSKeyword,
     PSLiteral,
+    Rect,
     dict_value,
     int_value,
     list_value,
@@ -58,16 +58,15 @@ from playa.pdftypes import (
     matrix_value,
     num_value,
     rect_value,
-    resolve1,
-    stream_value,
 )
+from playa.pdftypes import resolve1, stream_value
 from playa.utils import (
     apply_matrix_pt,
     decode_text,
     get_bound,
-    get_transformed_bound,
     mult_matrix,
     normalize_rect,
+    transform_bbox,
 )
 from playa.worker import PageRef, _deref_document, _deref_page, _ref_document, _ref_page
 
@@ -75,6 +74,10 @@ if TYPE_CHECKING:
     from playa.document import Document
 
 log = logging.getLogger(__name__)
+
+# some aliases for backwards compatibility
+parse_rect = rect_value
+get_transformed_bound = transform_bbox
 
 # some predefined literals and keywords.
 LITERAL_PAGE = LIT("Page")
@@ -373,7 +376,7 @@ class Page:
         prev_end = 0.0
         lines = []
         strings = []
-        for text in self.flatten(TextObject):
+        for text in self.texts:
             line_matrix = text.textstate.line_matrix
             vertical = (
                 False if text.textstate.font is None else text.textstate.font.vertical
@@ -405,7 +408,7 @@ class Page:
         strings: List[str] = []
         at_mcs: Union[MarkedContent, None] = None
         prev_mcid: Union[int, None] = None
-        for text in self.flatten(TextObject):
+        for text in self.texts:
             in_artifact = same_actual_text = reversed_chars = False
             actual_text = None
             for mcs in reversed(text.mcstack):
@@ -841,7 +844,7 @@ class ImageObject(ContentObject):
         # unit high in user space, regardless of the number of samples
         # in the image. To be painted, an image shall be mapped to a
         # region of the page by temporarily altering the CTM.
-        return get_transformed_bound(self.ctm, (0, 0, 1, 1))
+        return transform_bbox(self.ctm, (0, 0, 1, 1))
 
 
 @dataclass
@@ -885,7 +888,7 @@ class XObjectObject(ContentObject):
         if "BBox" not in self.stream:
             log.debug("XObject %r has no BBox: %r", self.xobjid, self.stream)
             return self.page.cropbox
-        return get_transformed_bound(self.ctm, rect_value(self.stream["BBox"]))
+        return transform_bbox(self.ctm, rect_value(self.stream["BBox"]))
 
     @property
     def buffer(self) -> bytes:
@@ -1031,7 +1034,7 @@ class PathObject(ContentObject):
             itertools.chain.from_iterable(seg.points for seg in self.raw_segments)
         )
         # Transform it and get the new bounding box
-        return get_transformed_bound(self.ctm, bbox)
+        return transform_bbox(self.ctm, bbox)
 
 
 @dataclass
@@ -1283,7 +1286,7 @@ class TextObject(ContentObject):
         if self._bbox is not None:
             return self._bbox
         matrix = mult_matrix(self.textstate.line_matrix, self.ctm)
-        self._bbox = get_transformed_bound(matrix, self.text_space_bbox)
+        self._bbox = transform_bbox(matrix, self.text_space_bbox)
         return self._bbox
 
     @property
@@ -1320,10 +1323,6 @@ class TextObject(ContentObject):
 
 def make_seg(operator: PathOperator, *points: Point):
     return PathSegment(operator, points)
-
-
-def point_value(x: PDFObject, y: PDFObject) -> Point:
-    return (num_value(x), num_value(y))
 
 
 class LazyInterpreter:
@@ -1746,11 +1745,11 @@ class LazyInterpreter:
 
     def do_m(self, x: PDFObject, y: PDFObject) -> None:
         """Begin new subpath"""
-        self.curpath.append(make_seg("m", point_value(x, y)))
+        self.curpath.append(make_seg("m", (num_value(x), num_value(y))))
 
     def do_l(self, x: PDFObject, y: PDFObject) -> None:
         """Append straight line segment to path"""
-        self.curpath.append(make_seg("l", point_value(x, y)))
+        self.curpath.append(make_seg("l", (num_value(x), num_value(y))))
 
     def do_c(
         self,
@@ -1765,9 +1764,9 @@ class LazyInterpreter:
         self.curpath.append(
             make_seg(
                 "c",
-                point_value(x1, y1),
-                point_value(x2, y2),
-                point_value(x3, y3),
+                (num_value(x1), num_value(y1)),
+                (num_value(x2), num_value(y2)),
+                (num_value(x3), num_value(y3)),
             ),
         )
 
@@ -1776,8 +1775,8 @@ class LazyInterpreter:
         self.curpath.append(
             make_seg(
                 "v",
-                point_value(x2, y2),
-                point_value(x3, y3),
+                (num_value(x2), num_value(y2)),
+                (num_value(x3), num_value(y3)),
             )
         )
 
@@ -1786,8 +1785,8 @@ class LazyInterpreter:
         self.curpath.append(
             make_seg(
                 "y",
-                point_value(x1, y1),
-                point_value(x3, y3),
+                (num_value(x1), num_value(y1)),
+                (num_value(x3), num_value(y3)),
             )
         )
 
@@ -1801,10 +1800,10 @@ class LazyInterpreter:
         y = num_value(y)
         w = num_value(w)
         h = num_value(h)
-        self.curpath.append(make_seg("m", point_value(x, y)))
-        self.curpath.append(make_seg("l", point_value(x + w, y)))
-        self.curpath.append(make_seg("l", point_value(x + w, y + h)))
-        self.curpath.append(make_seg("l", point_value(x, y + h)))
+        self.curpath.append(make_seg("m", (x, y)))
+        self.curpath.append(make_seg("l", (x + w, y)))
+        self.curpath.append(make_seg("l", (x + w, y + h)))
+        self.curpath.append(make_seg("l", (x, y + h)))
         self.curpath.append(make_seg("h"))
 
     def do_n(self) -> None:

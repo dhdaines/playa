@@ -17,15 +17,20 @@ from typing import (
     Union,
 )
 
+from playa.data_structures import NumberTree
 from playa.parser import LIT, PDFObject, PSLiteral
 from playa.pdftypes import (
+    BBOX_NONE,
     ContentStream,
     ObjRef,
+    Rect,
     dict_value,
     literal_name,
     resolve1,
+    rect_value,
     stream_value,
 )
+from playa.utils import transform_bbox, get_bound_rects
 from playa.worker import (
     DocumentRef,
     PageRef,
@@ -125,21 +130,26 @@ class ContentObject:
 
 def _find_all(
     elements: List["Element"],
-    matcher: Union[str, Pattern[str], MatchFunc],
+    matcher: Union[str, Pattern[str], MatchFunc, None] = None,
 ) -> Iterator["Element"]:
     """
     Common code for `find_all()` in trees and elements.
     """
 
+    def match_all(x: "Element") -> bool:
+        return True
+
     def match_tag(x: "Element") -> bool:
         """Match an element name."""
-        return x.type == matcher
+        return x.role == matcher
 
     def match_regex(x: "Element") -> bool:
         """Match an element name by regular expression."""
-        return matcher.match(x.type)  # type: ignore
+        return matcher.match(x.role)  # type: ignore
 
-    if isinstance(matcher, str):
+    if matcher is None:
+        match_func = match_all
+    elif isinstance(matcher, str):
         match_func = match_tag
     elif isinstance(matcher, re.Pattern):
         match_func = match_regex
@@ -160,24 +170,35 @@ class Findable(Iterable):
     repeating oneself"""
 
     def find_all(
-        self, matcher: Union[str, Pattern[str], MatchFunc]
+            self, matcher: Union[str, Pattern[str], MatchFunc, None] = None
     ) -> Iterator["Element"]:
         """Iterate depth-first over matching elements in subtree.
 
-        The `matcher` argument is either an element name, a regular
-        expression, or a function taking a `Element` and
-        returning `True` if the element matches.
+        The `matcher` argument is either a string, a regular
+        expression, or a function taking a `Element` and returning
+        `True` if the element matches, or `None` (default) to return
+        all descendants in depth-first order.
+
+        For compatibility with `pdfplumber` and consistent behaviour
+        across documents, names and regular expressions are matched
+        against the `role` attribute.  If you wish to match the "raw"
+        structure type from the `type` attribute, you can do this with
+        a matching function.
+
         """
         return _find_all(list(self), matcher)
 
     def find(
-        self, matcher: Union[str, Pattern[str], MatchFunc]
+        self, matcher: Union[str, Pattern[str], MatchFunc, None] = None
     ) -> Union["Element", None]:
         """Find the first matching element in subtree.
 
-        The `matcher` argument is either an element name, a regular
-        expression, or a function taking a `Element` and
-        returning `True` if the element matches.
+        The `matcher` argument is either a string or a regular
+        expression to be matched against the `role` attribute, or a
+        function taking a `Element` and returning `True` if the
+        element matches, or `None` (default) to just get the first
+        child element.
+
         """
         try:
             return next(_find_all(list(self), matcher))
@@ -195,6 +216,7 @@ class Element(Findable):
 
     _docref: DocumentRef
     props: Dict[str, PDFObject]
+    _role: Union[str, None] = None
 
     @classmethod
     def from_dict(cls, doc: "Document", obj: Dict[str, PDFObject]) -> "Element":
@@ -203,7 +225,38 @@ class Element(Findable):
 
     @property
     def type(self) -> str:
+        """Structure type for this element.
+
+        Note: Raw and standard structure types
+            This type is quite likely idiosyncratic and defined by
+            whatever style sheets the author used in their word
+            processor.  Standard structure types (PDF 1.7 section
+            14.8.4) are accessible through the `role_map` attribute of
+            the structure root, or, for convenience (this is slow) via
+            the `role` attribute on elements.
+
+        """
         return literal_name(self.props["S"])
+
+    @property
+    def role(self) -> str:
+        """Standardized structure type.
+
+        Note: Roles are always mapped
+            Since it is common for documents to use standard types
+            directly for some of their structure elements (typically
+            ones with no content) and thus to omit them from the role
+            map, `role` will always return a string in order to
+            facilitate processing.  If you must absolutely know
+            whether an element's type has no entry in the role map
+            then you will need to consult it directly.
+        """
+        if self._role is not None:
+            return self._role
+        tree = self.doc.structure
+        if tree is None:  # it could happen!
+            return self.type
+        return tree.role_map.get(self.type, self.type)
 
     @property
     def doc(self) -> "Document":
@@ -234,8 +287,48 @@ class Element(Findable):
             return None
         p = dict_value(p)
         if p.get("Type") is LITERAL_STRUCTTREEROOT:
-            return Tree(self.doc)
+            return self.doc.structure
         return Element.from_dict(self.doc, p)
+
+    @property
+    def contents(self) -> Iterator[ContentItem]:
+        """Iterate over all content items contained in an element."""
+        for kid in self:
+            if isinstance(kid, Element):
+                yield from kid.contents
+            elif isinstance(kid, ContentItem):
+                yield kid
+
+    @property
+    def bbox(self) -> Rect:
+        """Find the bounding box, if any, of this element.
+
+        Elements may explicitly define a `BBox` in default user space,
+        in which case this is used.  Otherwise, the bounding box is
+        the smallest rectangle enclosing all of the content items
+        contained by this element (which may take some time to compute).
+
+        Note: Elements may span multiple pages!
+            In the case of an element (such as a `Document` for
+            instance) that spans multiple pages, the bounding box
+            cannot exist, and `BBOX_NONE` will be returned.  If the
+            `page` attribute is `None`, then `bbox` will be BBOX_NONE.
+
+        """
+        page = self.page
+        if page is None:
+            return BBOX_NONE
+        if "BBox" in self.props:
+            rawbox = rect_value(self.props["BBox"])
+            return transform_bbox(page.ctm, rawbox)
+        else:
+            # NOTE: This is probably somewhat slow
+            mcids = set(
+                item.mcid
+                for item in self.contents
+                if item.page is None or item.page is page
+            )
+            return get_bound_rects(obj.bbox for obj in page if obj.mcid in mcids)
 
     def __iter__(self) -> Iterator[Union["Element", ContentItem, ContentObject]]:
         if "K" in self.props:
@@ -399,14 +492,89 @@ def _iter_structure(
 
 
 class Tree(Findable):
+    """Logical structure tree.
+
+    A structure tree can be iterated over in the same fashion as its
+    elements.  Note that even though it is forbidden for structure
+    tree root to contain content items, PLAYA is robust to this
+    possibility, thus you should not presume that iterating over it
+    will only yield `Element` instances.
+
+    The various attributes (role map, class map, pronunciation
+    dictionary, etc, etc) are accessible through `props` but currently
+    have no particular interpretation aside from the role map which is
+    accessible in normalized form through `role_map`.
+
+    Attributes:
+      props: Structure tree root dictionary (PDF 1.7 table 322).
+      role_map: Mapping of structure element types (as strings) to
+          standard structure types (as strings) (PDF 1.7 section 14.8.4)
+      parent_tree: Parent tree linking marked content sections to
+          structure elements (PDF 1.7 section 14.7.4.4)
+    """
+
     _docref: DocumentRef
+    props: Dict[str, PDFObject]
+    _role_map: Dict[str, str]
+    _parent_tree: NumberTree
 
     def __init__(self, doc: "Document") -> None:
         self._docref = _ref_document(doc)
+        self.props = dict_value(doc.catalog["StructTreeRoot"])
 
     def __iter__(self) -> Iterator[Union["Element", ContentItem, ContentObject]]:
         doc = _deref_document(self._docref)
         return _iter_structure(doc)
+
+    @property
+    def role_map(self) -> Dict[str, str]:
+        """Dictionary mapping some (not necessarily all) element types
+        to their standard equivalents."""
+        if hasattr(self, "_role_map"):
+            return self._role_map
+        self._role_map = {}
+        rm = resolve1(self.props["RoleMap"])
+        if isinstance(rm, dict):
+            for k, v in rm.items():
+                if isinstance(v, PSLiteral):
+                    role = literal_name(v)
+                else:
+                    role = str(v)
+                self._role_map[k] = role
+        return self._role_map
+
+    @property
+    def parent_tree(self) -> NumberTree:
+        """Parent tree for this document.
+
+        This is a somewhat obscure data structure that links marked
+        content sections to their corresponding structure elements.
+        If you don't know what that means, you probably don't need it,
+        but if you do, here it is.
+
+        Unlike the structure tree itself, if there is no parent tree,
+        this will be an empty NumberTree.  This is because the parent
+        tree is required by the spec in the case where structure
+        elements contain marked content, which is nearly all the time.
+
+        """
+        if hasattr(self, "_parent_tree"):
+            return self._parent_tree
+        if "ParentTree" not in self.props:
+            self._parent_tree = NumberTree({})
+        else:
+            self._parent_tree = NumberTree(self.props["StructTreeRoot"])
+        return self._parent_tree
+
+    @property
+    def contents(self) -> Iterator[ContentItem]:
+        """Iterate over all content items in the tree."""
+        for kid in self:
+            if isinstance(kid, Element):
+                yield from kid.contents
+            elif isinstance(kid, ContentItem):
+                # This is not supposed to happen, but we will support it anyway
+                yield kid
 
     @property
     def doc(self) -> "Document":

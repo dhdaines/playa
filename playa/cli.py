@@ -431,6 +431,7 @@ def _extract_element(el: Element, indent: int, outfh: TextIO) -> bool:
 
     try:
         format_attr("type", el.type)
+        format_attr("role", el.role)
     except KeyError:
         LOG.warning("Structure element with no type ignored: %r", el)
         return False
