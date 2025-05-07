@@ -969,8 +969,8 @@ class PathObject(ContentObject):
     evenodd: bool
 
     def __len__(self) -> int:
-        """Does not iterate over subpaths. Do it yourself if you must."""
-        return 0
+        """Number of segments (beware: not subpaths!)"""
+        return len(self.raw_segments)
 
     @property
     def segments(self) -> Iterator[PathSegment]:
