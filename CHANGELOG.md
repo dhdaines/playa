@@ -1,3 +1,13 @@
+## PLAYA 0.5.0: 2025-05-07
+- Remove use of `object` in type annotations
+- Add support for role map and standard structure types
+- Add `bbox` and `contents` to structure elements
+- BREAKING: `find` and `find_all` in structure search by standard
+  structure types (roles)
+- BREAKING: `parent_tree` moved to `playa.structure.Tree`
+- BREAKING: `Point`, `Rect`, `Matrix` and `PDFObject` moved to
+  `playa.pdftypes`
+
 ## PLAYA 0.4.2: 2025-04-26
 - Correct `fontsize` and `scaling` in text state
 - Correct `ValueError` on incorrect stream lengths for ASCII85 data
