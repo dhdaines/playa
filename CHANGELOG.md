@@ -1,4 +1,4 @@
-## PLAYA 0.5.0: 2025-05-07
+## PLAYA 0.5.0: unreleased
 - Correct ascent, descent, and glyph boxes for Type3 fonts
 - Remove use of `object` in type annotations
 - Add support for role map and standard structure types
