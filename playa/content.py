@@ -4,7 +4,6 @@ PDF content objects created by the interpreter.
 
 import itertools
 import logging
-from copy import copy
 from dataclasses import dataclass
 from typing import (
     TYPE_CHECKING,
@@ -28,7 +27,6 @@ from playa.font import Font
 from playa.parser import ContentParser, Token
 from playa.pdftypes import (
     BBOX_NONE,
-    MATRIX_IDENTITY,
     ContentStream,
     Matrix,
     PDFObject,
@@ -46,34 +44,6 @@ if TYPE_CHECKING:
     from playa.page import Page
 
 log = logging.getLogger(__name__)
-
-
-@dataclass
-class TextState:
-    """Mutable text state.
-
-    Exceptionally, the line matrix and text matrix are represented
-    more compactly with the line matrix itself in `line_matrix`, which
-    gets translated by `glyph_offset` for the current glyph (note:
-    expressed in **user space**), which pdfminer confusingly called
-    `linematrix`, to produce the text matrix.
-
-    Attributes:
-      line_matrix: The text line matrix, which defines (in user
-        space) the start of the current line of text, which may or may
-        not correspond to an actual line because PDF is a presentation
-        format.
-      glyph_offset: The offset of the current glyph with relation to
-        the line matrix, in text space units.
-    """
-
-    line_matrix: Matrix = MATRIX_IDENTITY
-    glyph_offset: Point = (0, 0)
-
-    def reset(self) -> None:
-        """Reset the text state"""
-        self.line_matrix = MATRIX_IDENTITY
-        self.glyph_offset = (0, 0)
 
 
 class DashPattern(NamedTuple):
@@ -409,9 +379,10 @@ class XObjectObject(ContentObject):
 
     def __iter__(self) -> Iterator["ContentObject"]:
         from playa.interp import LazyInterpreter
-        interp = LazyInterpreter(self.page, [self.stream],
-                                 self.resources,
-                                 ctm=self.ctm, gstate=self.gstate)
+
+        interp = LazyInterpreter(
+            self.page, [self.stream], self.resources, ctm=self.ctm, gstate=self.gstate
+        )
         return iter(interp)
 
     @classmethod
@@ -494,15 +465,14 @@ class GlyphObject(ContentObject):
     """Individual glyph on the page.
 
     Attributes:
-      textstate: Text state for this glyph.  This is a **mutable**
-        object and you should not expect it to be valid outside the
-        context of iteration over the parent `TextObject`.
       cid: Character ID for this glyph.
       text: Unicode mapping of this glyph, if any.
       adv: glyph displacement in text space units (horizontal or vertical,
            depending on the writing direction).
       matrix: rendering matrix for this glyph, which transforms text
               space (*not glyph space!*) coordinates to device space.
+      glyph_offset: Offset in user space (not text space) from the
+          origin of the parent TextObject
       bbox: glyph bounding box in device space.
       text_space_bbox: glyph bounding box in text space (i.e. before
                        any possible coordinate transformation)
@@ -512,9 +482,9 @@ class GlyphObject(ContentObject):
 
     """
 
-    textstate: TextState
     cid: int
     text: Union[str, None]
+    glyph_offset: Point
     matrix: Matrix
     adv: float
     corners: bool
@@ -550,9 +520,7 @@ class GlyphObject(ContentObject):
         assert font is not None
         fontsize = self.gstate.fontsize
         rise = self.gstate.rise
-        descent = (
-            font.get_descent() * fontsize
-        )
+        descent = font.get_descent() * fontsize
         if font.vertical:
             textdisp = font.char_disp(self.cid)
             assert isinstance(textdisp, tuple)
@@ -575,23 +543,26 @@ class TextObject(ContentObject):
     """Text object (contains one or more glyphs).
 
     Attributes:
-      textstate: Text state for this object.
+      line_matrix: Text line matrix for this object.
+      glyph_offset: Offset in user space (not text space) for the
+          first glyph in this text object.
       args: Strings or position adjustments
       bbox: Text bounding box in device space.
       text_space_bbox: Text bounding box in text space (i.e. before
                        any possible coordinate transformation)
     """
 
-    textstate: TextState
     args: List[Union[bytes, float]]
+    line_matrix: Matrix
+    glyph_offset: Point
     _chars: Union[List[str], None] = None
     _bbox: Union[Rect, None] = None
     _text_space_bbox: Union[Rect, None] = None
-    _next_tstate: Union[TextState, None] = None
+    _next_glyph_offset: Union[Point, None] = None
 
     def __iter__(self) -> Iterator[GlyphObject]:
         """Generate glyphs for this text object"""
-        tstate = copy(self.textstate)
+        glyph_offset = self.glyph_offset
         font = self.gstate.font
         fontsize = self.gstate.fontsize
         # If no font is set, we cannot do anything, since even calling
@@ -602,11 +573,11 @@ class TextObject(ContentObject):
                 "No font is set, will not update text state or output text: %r TJ",
                 self.args,
             )
-            self._next_tstate = tstate
+            self._next_glyph_offset = glyph_offset
             return
         assert self.ctm is not None
         # Extract all the elements so we can translate efficiently
-        a, b, c, d, e, f = mult_matrix(tstate.line_matrix, self.ctm)
+        a, b, c, d, e, f = mult_matrix(self.line_matrix, self.ctm)
         # Pre-determine if we need to recompute the bound for rotated glyphs
         corners = b * d < 0 or a * c < 0
         # Apply horizontal scaling
@@ -616,7 +587,7 @@ class TextObject(ContentObject):
         vert = font.vertical
         if font.multibyte:
             wordspace = 0
-        (x, y) = tstate.glyph_offset
+        (x, y) = glyph_offset
         pos = y if vert else x
         needcharspace = False  # Only for first glyph
         for obj in self.args:
@@ -630,13 +601,13 @@ class TextObject(ContentObject):
                         pos += charspace
                     textwidth = font.char_width(cid)
                     adv = textwidth * fontsize * scaling
-                    x, y = tstate.glyph_offset = (x, pos) if vert else (pos, y)
+                    x, y = glyph_offset = (x, pos) if vert else (pos, y)
                     glyph = GlyphObject(
                         _pageref=self._pageref,
                         gstate=self.gstate,
                         ctm=self.ctm,
                         mcstack=self.mcstack,
-                        textstate=tstate,
+                        glyph_offset=glyph_offset,
                         cid=cid,
                         text=text,
                         # Do pre-translation internally (taking rotation into account)
@@ -649,33 +620,29 @@ class TextObject(ContentObject):
                     if cid == 32 and wordspace:
                         pos += wordspace
                     needcharspace = True
-        tstate.glyph_offset = (x, pos) if vert else (pos, y)
-        if self._next_tstate is None:
-            self._next_tstate = tstate
+        glyph_offset = (x, pos) if vert else (pos, y)
+        if self._next_glyph_offset is None:
+            self._next_glyph_offset = glyph_offset
 
     @property
     def text_space_bbox(self):
         if self._text_space_bbox is not None:
             return self._text_space_bbox
-        # No need to save tstate as we do not update it below
-        tstate = self.textstate
         font = self.gstate.font
         fontsize = self.gstate.fontsize
         rise = self.gstate.rise
-        descent = (
-            font.get_descent() * fontsize
-        )
+        descent = font.get_descent() * fontsize
         if font is None:
             log.warning(
                 "No font is set, will not update text state or output text: %r TJ",
                 self.args,
             )
             self._text_space_bbox = BBOX_NONE
-            self._next_tstate = tstate
+            self._next_glyph_offset = self.glyph_offset
             return self._text_space_bbox
         if len(self.args) == 0:
             self._text_space_bbox = BBOX_NONE
-            self._next_tstate = tstate
+            self._next_glyph_offset = self.glyph_offset
             return self._text_space_bbox
         scaling = self.gstate.scaling * 0.01
         charspace = self.gstate.charspace * scaling
@@ -683,7 +650,7 @@ class TextObject(ContentObject):
         vert = font.vertical
         if font.multibyte:
             wordspace = 0
-        (x, y) = tstate.glyph_offset
+        (x, y) = self.glyph_offset
         pos = y if vert else x
         needcharspace = False  # Only for first glyph
         if vert:
@@ -725,19 +692,18 @@ class TextObject(ContentObject):
                     if cid == 32 and wordspace:
                         pos += wordspace
                     needcharspace = True
-        if self._next_tstate is None:
-            self._next_tstate = copy(tstate)
-            self._next_tstate.glyph_offset = (x, pos) if vert else (pos, y)
+        if self._next_glyph_offset is None:
+            self._next_glyph_offset = (x, pos) if vert else (pos, y)
         self._text_space_bbox = (x0, y0, x1, y1)
         return self._text_space_bbox
 
     @property
-    def next_textstate(self) -> TextState:
-        if self._next_tstate is not None:
-            return self._next_tstate
+    def next_glyph_offset(self) -> Point:
+        if self._next_glyph_offset is not None:
+            return self._next_glyph_offset
         _ = self.text_space_bbox
-        assert self._next_tstate is not None
-        return self._next_tstate
+        assert self._next_glyph_offset is not None
+        return self._next_glyph_offset
 
     @property
     def bbox(self) -> Rect:
@@ -747,7 +713,7 @@ class TextObject(ContentObject):
         # same text matrix and thus we can avoid a lot of multiply
         if self._bbox is not None:
             return self._bbox
-        matrix = mult_matrix(self.textstate.line_matrix, self.ctm)
+        matrix = mult_matrix(self.line_matrix, self.ctm)
         self._bbox = transform_bbox(matrix, self.text_space_bbox)
         return self._bbox
 

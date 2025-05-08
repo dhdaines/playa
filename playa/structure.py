@@ -17,7 +17,7 @@ from typing import (
     Union,
 )
 
-from playa.content import XObjectObject, GraphicState, TextState
+from playa.content import XObjectObject, GraphicState
 from playa.data_structures import NumberTree
 from playa.parser import LIT, PDFObject, PSLiteral
 from playa.pdftypes import (

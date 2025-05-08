@@ -27,7 +27,6 @@ from playa.content import PathObject as _PathObject
 from playa.content import PathSegment as _PathSegment
 from playa.content import TagObject as _TagObject
 from playa.content import TextObject as _TextObject
-from playa.content import TextState as _TextState
 from playa.pdftypes import resolve_all, MATRIX_IDENTITY, Matrix, Point, Rect
 
 
@@ -39,20 +38,15 @@ class Text(TypedDict, total=False):
     ctm: Matrix
     """Coordinate transformation matrix, default if not present is the
     identity matrix `[1 0 0 1 0 0]`."""
-    textstate: "TextState"
-    """Text state."""
-    gstate: "GraphicState"
-    """Graphic state."""
-    mcstack: List["Tag"]
-    """Stack of enclosing marked content sections."""
-
-
-class TextState(TypedDict, total=False):
     line_matrix: Matrix
     """Coordinate transformation matrix for start of current line."""
     glyph_offset: Point
     """Offset of text object in relation to current line, in default text
     space units, default if not present is (0, 0)."""
+    gstate: "GraphicState"
+    """Graphic state."""
+    mcstack: List["Tag"]
+    """Stack of enclosing marked content sections."""
 
 
 class GraphicState(TypedDict, total=False):
@@ -193,20 +187,13 @@ class Glyph(TypedDict, total=False):
     ctm: Matrix
     """Coordinate transformation matrix, default if not present is the
     identity matrix `[1 0 0 1 0 0]`."""
-    textstate: "TextState"
-    """Text state."""
+    glyph_offset: Point
+    """Offset of glyph in relation to current line, in default text
+    space units, default if not present is (0, 0)."""
     gstate: "GraphicState"
     """Graphic state."""
     mcstack: List["Tag"]
     """Stack of enclosing marked content sections."""
-
-
-@asobj.register
-def asobj_textstate(obj: _TextState) -> TextState:
-    tstate = TextState(line_matrix=obj.line_matrix)
-    if obj.glyph_offset != (0, 0):
-        tstate["glyph_offset"] = obj.glyph_offset
-    return tstate
 
 
 @asobj.register
@@ -279,8 +266,6 @@ def asobj_text(obj: _TextObject) -> Text:
     text = Text(
         chars=obj.chars,
         bbox=obj.bbox,
-        # There is no default textstate
-        textstate=asobj(obj.textstate),
     )
     # But there is a default graphic state
     gstate = asobj(obj.gstate)
@@ -291,6 +276,10 @@ def asobj_text(obj: _TextObject) -> Text:
         text["mcstack"] = mcstack
     if obj.ctm is not MATRIX_IDENTITY:
         text["ctm"] = obj.ctm
+    if obj.line_matrix is not MATRIX_IDENTITY:
+        text["line_matrix"] = obj.ctm
+    if obj.glyph_offset != (0, 0):
+        text["glyph_offset"] = obj.glyph_offset
     return text
 
 
@@ -348,8 +337,6 @@ def asobj_glyph(obj: _GlyphObject) -> Glyph:
     glyph = Glyph(
         cid=obj.cid,
         bbox=obj.bbox,
-        # There is no default textstate
-        textstate=asobj(obj.textstate),
     )
     # But there is a default graphic state
     gstate = asobj(obj.gstate)
@@ -362,4 +349,6 @@ def asobj_glyph(obj: _GlyphObject) -> Glyph:
         glyph["mcstack"] = mcstack
     if obj.ctm is not MATRIX_IDENTITY:
         glyph["ctm"] = obj.ctm
+    if obj.glyph_offset != (0, 0):
+        glyph["glyph_offset"] = obj.glyph_offset
     return glyph

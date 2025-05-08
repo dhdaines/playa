@@ -11,7 +11,6 @@ from playa.data.content import (
     PathSegment,
     Tag,
     Text,
-    TextState,
 )
 from playa.data.metadata import (
     Annotation,
@@ -41,7 +40,6 @@ __all__ = [
     "PathSegment",
     "Tag",
     "Text",
-    "TextState",
     "Annotation",
     "Destination",
     "Document",

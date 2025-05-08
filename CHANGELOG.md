@@ -12,6 +12,9 @@
   recursively descend it now
 - BREAKING: Content objects moved to `playa.content` and interpreter
   to `playa.interp`
+- BREAKING: Text state no longer exists in the public API, text and
+  glyph objects have immutable line matrix and glyph offset now, and
+  everything else is in the graphic state
 
 ## PLAYA 0.4.2: 2025-04-26
 - Correct `fontsize` and `scaling` in text state

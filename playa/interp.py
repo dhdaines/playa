@@ -5,6 +5,7 @@ Interpreter for PDF content streams.
 import logging
 import re
 from copy import copy
+from dataclasses import dataclass
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -31,7 +32,6 @@ from playa.content import (
     PathSegment,
     TagObject,
     TextObject,
-    TextState,
     XObjectObject,
 )
 from playa.font import Font
@@ -71,6 +71,34 @@ TextSeq = Iterable[Union[int, float, bytes]]
 
 def make_seg(operator: PathOperator, *points: Point):
     return PathSegment(operator, points)
+
+
+@dataclass
+class TextState:
+    """Mutable text state (not for public consumption).
+
+    Exceptionally, the line matrix and text matrix are represented
+    more compactly with the line matrix itself in `line_matrix`, which
+    gets translated by `glyph_offset` for the current glyph (note:
+    expressed in **user space**), which pdfminer confusingly called
+    `linematrix`, to produce the text matrix.
+
+    Attributes:
+      line_matrix: The text line matrix, which defines (in user
+        space) the start of the current line of text, which may or may
+        not correspond to an actual line because PDF is a presentation
+        format.
+      glyph_offset: The offset of the current glyph with relation to
+        the line matrix, in text space units.
+    """
+
+    line_matrix: Matrix = MATRIX_IDENTITY
+    glyph_offset: Point = (0, 0)
+
+    def reset(self) -> None:
+        """Reset the text state"""
+        self.line_matrix = MATRIX_IDENTITY
+        self.glyph_offset = (0, 0)
 
 
 class LazyInterpreter:
@@ -217,7 +245,7 @@ class LazyInterpreter:
                     if co is not None:
                         yield co
                     if isinstance(co, TextObject):
-                        self.textstate = co.next_textstate
+                        self.textstate.glyph_offset = co.next_glyph_offset
                 else:
                     # TODO: This can get very verbose
                     log.warning("Unknown operator: %r", obj)
@@ -340,13 +368,18 @@ class LazyInterpreter:
                 log.warning(
                     "Ignoring non-string/number %r in text object %r", s, strings
                 )
-        obj = self.create(TextObject, textstate=self.textstate, args=args)
+        obj = self.create(
+            TextObject,
+            line_matrix=self.textstate.line_matrix,
+            glyph_offset=self.textstate.glyph_offset,
+            args=args,
+        )
         if obj is not None:
             if has_text:
                 return obj
-            # Even without text, TJ can still update the line matrix (ugh!)
+            # Even without text, TJ can still update the glyph offset
             assert isinstance(obj, TextObject)
-            self.textstate = obj.next_textstate
+            self.textstate.glyph_offset = obj.next_glyph_offset
         return None
 
     def do_Tj(self, s: PDFObject) -> Union[ContentObject, None]:
@@ -657,8 +690,7 @@ class LazyInterpreter:
         persist outside a BT/ET pair.
 
         """
-        self.textstate.glyph_offset = (0, 0)
-        self.textstate.line_matrix = MATRIX_IDENTITY
+        self.textstate.reset()
 
     def do_ET(self) -> None:
         """End a text object"""
