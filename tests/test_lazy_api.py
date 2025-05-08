@@ -93,7 +93,7 @@ def test_rotated_glyphs() -> None:
         chars = []
         for text in pdf.pages[0].texts:
             for glyph in text:
-                if 1 not in glyph.textstate.line_matrix:
+                if 1 not in text.line_matrix:
                     if glyph.text is not None:
                         chars.append(glyph.text)
                     x0, y0, x1, y1 = glyph.bbox

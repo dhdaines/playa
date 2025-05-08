@@ -63,7 +63,7 @@ def _extract_text_from_obj(obj: "TextObject", vertical: bool) -> Tuple[str, floa
     chars = []
     prev_end = 0.0
     for glyph in obj:
-        x, y = glyph.textstate.glyph_offset
+        x, y = glyph.glyph_offset
         off = y if vertical else x
         # FIXME: This is a heuristic!!!
         if prev_end and off - prev_end > 0.5:
@@ -345,7 +345,7 @@ class Page:
         lines = []
         strings = []
         for text in self.texts:
-            line_matrix = text.textstate.line_matrix
+            line_matrix = text.line_matrix
             vertical = (
                 False if text.gstate.font is None else text.gstate.font.vertical
             )

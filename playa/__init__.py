@@ -26,7 +26,6 @@ from playa.content import (
     GraphicState,
     MarkedContent,
     PathSegment,
-    TextState,
 )
 from playa.data import asobj
 from playa.document import Document, PageList
@@ -53,7 +52,6 @@ __all__ = [
     "Point",
     "Rect",
     "PathSegment",
-    "TextState",
     "Token",
     "ObjRef",
     "PDFEncryptionError",
