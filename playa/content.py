@@ -379,9 +379,10 @@ class XObjectObject(ContentObject):
 
     def __iter__(self) -> Iterator["ContentObject"]:
         from playa.interp import LazyInterpreter
-        interp = LazyInterpreter(self.page, [self.stream],
-                                 self.resources,
-                                 ctm=self.ctm, gstate=self.gstate)
+
+        interp = LazyInterpreter(
+            self.page, [self.stream], self.resources, ctm=self.ctm, gstate=self.gstate
+        )
         return iter(interp)
 
     @classmethod
@@ -519,9 +520,7 @@ class GlyphObject(ContentObject):
         assert font is not None
         fontsize = self.gstate.fontsize
         rise = self.gstate.rise
-        descent = (
-            font.get_descent() * fontsize
-        )
+        descent = font.get_descent() * fontsize
         if font.vertical:
             textdisp = font.char_disp(self.cid)
             assert isinstance(textdisp, tuple)
@@ -632,9 +631,7 @@ class TextObject(ContentObject):
         font = self.gstate.font
         fontsize = self.gstate.fontsize
         rise = self.gstate.rise
-        descent = (
-            font.get_descent() * fontsize
-        )
+        descent = font.get_descent() * fontsize
         if font is None:
             log.warning(
                 "No font is set, will not update text state or output text: %r TJ",

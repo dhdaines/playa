@@ -346,9 +346,7 @@ class Page:
         strings = []
         for text in self.texts:
             line_matrix = text.line_matrix
-            vertical = (
-                False if text.gstate.font is None else text.gstate.font.vertical
-            )
+            vertical = False if text.gstate.font is None else text.gstate.font.vertical
             lpos = -2 if vertical else -1
             if (
                 prev_line_matrix is not None
