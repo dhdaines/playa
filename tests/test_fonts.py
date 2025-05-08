@@ -2,11 +2,14 @@
 Test various font-related things
 """
 
-from .data import CONTRIB, TESTDIR
-
-import pytest
+from typing import List
 
 import playa
+import pytest
+from playa.pdftypes import Rect, dict_value
+from playa.utils import get_bound_rects
+
+from .data import CONTRIB, TESTDIR
 
 
 def test_implicit_encoding_type1() -> None:
@@ -69,3 +72,32 @@ def test_implicit_encoding_cff_issue91() -> None:
             assert font.encoding
             # It should *not* be the standard encoding
             assert 90 not in font.encoding
+
+
+def test_type3_font_boxes() -> None:
+    """Ensure that we get bounding boxes right for Type3 fonts with
+    mildly exotic FontMatrix (FIXME: it could be much more exotic than
+    this)"""
+    with playa.open(TESTDIR / "type3_fonts.pdf") as doc:
+        font = doc.get_font(5, dict_value(doc[5]))
+        # This font's BBox is really something
+        assert font.bbox == (-164, 493, 1966, -1569)
+        page = doc.pages[0]
+        textor = page.texts
+        line1 = next(textor).bbox
+        assert line1 == pytest.approx(
+            (25.0, 14.3701175326, 246.586936753, 28.3701175326)
+        )
+        boxes: List[Rect] = []
+        for text in textor:
+            bbox = text.bbox
+            # They should be mostly adjacent and aligned
+            if boxes:
+                assert bbox[0] == pytest.approx(boxes[-1][2])
+                assert bbox[1] == pytest.approx(boxes[-1][1])
+                assert bbox[3] == pytest.approx(boxes[-1][3])
+            boxes.append(bbox)
+        line2 = get_bound_rects(boxes)
+        assert line2 == pytest.approx(
+            (25.0, 39.3701175326, 246.58691507160006, 53.3701175326)
+        )
