@@ -7,7 +7,6 @@ from typing import (
     Optional,
     Tuple,
     Union,
-    cast,
 )
 
 from playa.cmapdb import (
@@ -40,6 +39,7 @@ from playa.pdftypes import (
     dict_value,
     int_value,
     list_value,
+    matrix_value,
     num_value,
     point_value,
     rect_value,
@@ -47,9 +47,7 @@ from playa.pdftypes import (
     stream_value,
 )
 from playa.utils import (
-    Matrix,
     Point,
-    apply_matrix_norm,
     choplist,
     decode_text,
 )
@@ -146,6 +144,8 @@ class Font:
         # descent to negative.
         if self.descent > 0:
             self.descent = -self.descent
+        # NOTE: A Type3 font *can* have positive descent because the
+        # FontMatrix might be flipped, this is handled in the subclass
 
     def __repr__(self) -> str:
         return "<Font>"
@@ -367,14 +367,23 @@ class Type3Font(SimpleFont):
         # lastchar = int_value(spec.get('LastChar', 0))
         width_list = list_value(spec.get("Widths", [0] * 256))
         widths = {i + firstchar: w for (i, w) in enumerate(width_list)}
-        if "FontDescriptor" in spec:
-            descriptor = dict_value(spec["FontDescriptor"])
-        else:
-            descriptor = {"Ascent": 0, "Descent": 0, "FontBBox": spec["FontBBox"]}
+        descriptor = dict_value(spec.get("FontDescriptor", {}))
         SimpleFont.__init__(self, descriptor, widths, spec)
-        self.matrix = cast(Matrix, tuple(list_value(spec.get("FontMatrix"))))
-        (_, self.descent, _, self.ascent) = self.bbox
-        (self.hscale, self.vscale) = apply_matrix_norm(self.matrix, (1, 1))
+        if "FontMatrix" in spec:  # it is actually required though
+            self.matrix = matrix_value(spec["FontMatrix"])
+        else:
+            self.matrix = (0.001, 0, 0, 0.001, 0, 0)
+        # FontBBox is in the font dictionary for Type 3 fonts
+        if "FontBBox" in spec:  # it is also required though
+            self.bbox = rect_value(spec["FontBBox"])
+            # otherwise it was set in SimpleFont.__init__
+        # set ascent/descent from the bbox (they *could* be in the
+        # descriptor but this is very unlikely)
+        _, self.descent, _, self.ascent = self.bbox
+        # could have rotation or skewing, but that is undefined
+        # behaviour, so just take a and d as x and y scale (as noted
+        # above in Font.__init__, vscale might be negative here)
+        self.hscale, _, _, self.vscale, _, _ = self.matrix
 
     def get_implicit_encoding(
         self, descriptor: Dict[str, PDFObject]

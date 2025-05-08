@@ -179,7 +179,7 @@ class Findable(Iterable):
     repeating oneself"""
 
     def find_all(
-            self, matcher: Union[str, Pattern[str], MatchFunc, None] = None
+        self, matcher: Union[str, Pattern[str], MatchFunc, None] = None
     ) -> Iterator["Element"]:
         """Iterate depth-first over matching elements in subtree.
 
