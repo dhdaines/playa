@@ -1,3 +1,7 @@
+## PLAYA 0.4.3: 2025-05-09
+- Correct ascent, descent, and glyph boxes for Type3 fonts
+- XObjects inherit graphics state from surrounding content
+
 ## PLAYA 0.4.2: 2025-04-26
 - Correct `fontsize` and `scaling` in text state
 - Correct `ValueError` on incorrect stream lengths for ASCII85 data
