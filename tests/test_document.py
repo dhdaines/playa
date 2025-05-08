@@ -215,4 +215,4 @@ def test_xobject_graphicstate() -> None:
     """Verify that XObjects inherits the graphicstate of its surrounding."""
     with playa.open(TESTDIR / "xobject_graphicstate.pdf") as doc:
         text = next(doc.pages[0].texts)
-        assert text.textstate.font is not None
+        assert text.gstate.font is not None

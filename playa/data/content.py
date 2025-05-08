@@ -53,25 +53,6 @@ class TextState(TypedDict, total=False):
     glyph_offset: Point
     """Offset of text object in relation to current line, in default text
     space units, default if not present is (0, 0)."""
-    font: Font
-    """Descriptor of current font."""
-    fontsize: float
-    """Font size in unscaled text space units (**not** in points, can be
-    scaled using `line_matrix` to obtain user space units), default if
-    not present is 1.0."""
-    charspace: float
-    """Character spacing in unscaled text space units, default if not present is 0."""
-    wordspace: float
-    """Word spacing in unscaled text space units, default if not present is 0."""
-    scaling: float
-    """Horizontal scaling factor multiplied by 100, default if not present is 100."""
-    leading: float
-    """Leading in unscaled text space units, default if not present is 0."""
-    render_mode: int
-    """Text rendering mode (PDF 1.7 Table 106), default if not present is 0."""
-    rise: float
-    """Text rise (for super and subscript) in unscaled text space
-    units, default if not present is 0."""
 
 
 class GraphicState(TypedDict, total=False):
@@ -98,6 +79,25 @@ class GraphicState(TypedDict, total=False):
     """Colour used for non-stroking operations, default black `((0,) None)`"""
     ncs: "ColorSpace"
     """Colour space used for non-stroking operations, default `DeviceGray`"""
+    font: Font
+    """Descriptor of current font."""
+    fontsize: float
+    """Font size in unscaled text space units (**not** in points, can be
+    scaled using `line_matrix` to obtain user space units), default if
+    not present is 1.0."""
+    charspace: float
+    """Character spacing in unscaled text space units, default if not present is 0."""
+    wordspace: float
+    """Word spacing in unscaled text space units, default if not present is 0."""
+    scaling: float
+    """Horizontal scaling factor multiplied by 100, default if not present is 100."""
+    leading: float
+    """Leading in unscaled text space units, default if not present is 0."""
+    render_mode: int
+    """Text rendering mode (PDF 1.7 Table 106), default if not present is 0."""
+    rise: float
+    """Text rise (for super and subscript) in unscaled text space
+    units, default if not present is 0."""
 
 
 class DashPattern(TypedDict, total=False):
@@ -203,18 +203,9 @@ class Glyph(TypedDict, total=False):
 
 @asobj.register
 def asobj_textstate(obj: _TextState) -> TextState:
-    assert obj.font is not None
-    tstate = TextState(font=asobj(obj.font), line_matrix=obj.line_matrix)
+    tstate = TextState(line_matrix=obj.line_matrix)
     if obj.glyph_offset != (0, 0):
         tstate["glyph_offset"] = obj.glyph_offset
-    if obj.fontsize != 1:
-        tstate["fontsize"] = obj.fontsize
-    if obj.scaling != 100:
-        tstate["scaling"] = obj.scaling
-    for attr in "charspace", "wordspace", "leading", "render_mode", "rise":
-        val = getattr(obj, attr, 0)
-        if val:
-            tstate[attr] = val
     return tstate
 
 
@@ -260,6 +251,11 @@ def asobj_gstate(obj: _GraphicState) -> GraphicState:
         "scs",
         "ncolor",
         "ncs",
+        "charspace",
+        "wordspace",
+        "leading",
+        "render_mode",
+        "rise",
     ):
         val = getattr(obj, field)
         if val != GRAPHICSTATE_DEFAULTS[field]:

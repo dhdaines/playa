@@ -38,6 +38,7 @@ from playa.font import Font
 from playa.parser import KWD, ContentParser, InlineImage, PDFObject
 from playa.pdftypes import (
     LIT,
+    MATRIX_IDENTITY,
     ContentStream,
     Matrix,
     ObjRef,
@@ -83,6 +84,8 @@ class LazyInterpreter:
         contents: Iterable[PDFObject],
         resources: Union[Dict, None] = None,
         filter_class: Union[Type[ContentObject], None] = None,
+        ctm: Union[Matrix, None] = None,
+        gstate: Union[GraphicState, None] = None,
     ) -> None:
         self._dispatch: Dict[PSKeyword, Tuple[Callable, int]] = {}
         for name in dir(self):
@@ -100,7 +103,7 @@ class LazyInterpreter:
         self.contents = contents
         self.filter_class = filter_class
         self.init_resources(page, page.resources if resources is None else resources)
-        self.init_state(page.ctm)
+        self.init_state(page.ctm if ctm is None else ctm, gstate)
 
     def init_resources(self, page: "Page", resources: Dict) -> None:
         """Prepare the fonts and XObjects listed in the Resource attribute."""
@@ -153,13 +156,15 @@ class LazyInterpreter:
                 for xobjid, xobjstrm in mapping.items():
                     self.xobjmap[xobjid] = xobjstrm
 
-    def init_state(self, ctm: Matrix) -> None:
-        """Initialize the text and graphic states for rendering a page."""
-        # gstack: stack for graphical states.
-        self.gstack: List[Tuple[Matrix, TextState, GraphicState]] = []
+    def init_state(self, ctm: Matrix, gstate: Union[GraphicState, None] = None) -> None:
+        self.gstack: List[Tuple[Matrix, GraphicState, TextState]] = []
         self.ctm = ctm
-        self.textstate = TextState()
-        self.graphicstate = GraphicState()
+        self.graphicstate = GraphicState() if gstate is None else copy(gstate)
+        # Mutable text state (just the matrices) - this is not
+        # supposed to exist outside BT/ET pairs, but we will tolerate
+        # it.  In PDF 2.0 it gets saved/restored on the stack by q/Q
+        self.textstate: TextState = TextState()
+        # Current path (FIXME: is this in the graphics state too?)
         self.curpath: List[PathSegment] = []
         # argstack: stack for command arguments.
         self.argstack: List[PDFObject] = []
@@ -175,15 +180,6 @@ class LazyInterpreter:
         x = self.argstack[-n:]
         self.argstack = self.argstack[:-n]
         return x
-
-    def get_current_state(self) -> Tuple[Matrix, TextState, GraphicState]:
-        return (self.ctm, copy(self.textstate), copy(self.graphicstate))
-
-    def set_current_state(
-        self,
-        state: Tuple[Matrix, TextState, GraphicState],
-    ) -> None:
-        (self.ctm, self.textstate, self.graphicstate) = state
 
     def __iter__(self) -> Iterator[ContentObject]:
         parser = ContentParser(self.contents)
@@ -400,18 +396,23 @@ class LazyInterpreter:
         if subtype is LITERAL_FORM:
             if self.filter_class is None or self.filter_class is XObjectObject:
                 # PDF Ref 1.7, # 4.9
-                # When the Do operator is applied to a form XObject, it does the following tasks:
+                #
+                # When the Do operator is applied to a form XObject,
+                # it does the following tasks:
+                #
                 # 1. Saves the current graphics state, as if by invoking the q operator
                 # ...
                 # 5. Restores the saved graphics state, as if by invoking the Q operator
-                ctm, tstate, gstate = self.get_current_state()
+                #
+                # The lazy interpretation of this is, obviously, that
+                # we simply create an XObjectObject with a copy of the
+                # current graphics state.
                 return XObjectObject.from_stream(
                     stream=xobj,
                     page=self.page,
                     xobjid=xobjid,
-                    ctm=ctm,
-                    textstate=tstate,
-                    gstate=gstate,
+                    ctm=self.ctm,
+                    gstate=self.graphicstate,
                     mcstack=self.mcstack,
                 )
         elif subtype is LITERAL_IMAGE:
@@ -444,12 +445,12 @@ class LazyInterpreter:
 
     def do_q(self) -> None:
         """Save graphics state"""
-        self.gstack.append(self.get_current_state())
+        self.gstack.append((self.ctm, copy(self.graphicstate), copy(self.textstate)))
 
     def do_Q(self) -> None:
         """Restore graphics state"""
         if self.gstack:
-            self.set_current_state(self.gstack.pop())
+            self.ctm, self.graphicstate, self.textstate = self.gstack.pop()
 
     def do_cm(
         self,
@@ -649,15 +650,18 @@ class LazyInterpreter:
     def do_BT(self) -> None:
         """Begin text object.
 
-        Initializing the text matrix, Tm, and the text line matrix, Tlm, to
-        the identity matrix. Text objects cannot be nested; a second BT cannot
-        appear before an ET.
+        Initializing the text matrix, Tm, and the text line matrix,
+        Tlm, to the identity matrix. Text objects cannot be nested; a
+        second BT cannot appear before an ET.  While Tm and Tlm are
+        saved and restored with the graphics state, they do not
+        persist outside a BT/ET pair.
+
         """
-        self.textstate.reset()
+        self.textstate.glyph_offset = (0, 0)
+        self.textstate.line_matrix = MATRIX_IDENTITY
 
     def do_ET(self) -> None:
         """End a text object"""
-        return None
 
     def do_BX(self) -> None:
         """Begin compatibility section"""
@@ -672,7 +676,7 @@ class LazyInterpreter:
 
         :param space: a number expressed in unscaled text space units.
         """
-        self.textstate.charspace = num_value(space)
+        self.graphicstate.charspace = num_value(space)
 
     def do_Tw(self, space: PDFObject) -> None:
         """Set the word spacing.
@@ -681,14 +685,14 @@ class LazyInterpreter:
 
         :param space: a number expressed in unscaled text space units
         """
-        self.textstate.wordspace = num_value(space)
+        self.graphicstate.wordspace = num_value(space)
 
     def do_Tz(self, scale: PDFObject) -> None:
         """Set the horizontal scaling.
 
         :param scale: is a number specifying the percentage of the normal width
         """
-        self.textstate.scaling = num_value(scale)
+        self.graphicstate.scaling = num_value(scale)
 
     def do_TL(self, leading: PDFObject) -> None:
         """Set the text leading.
@@ -697,7 +701,7 @@ class LazyInterpreter:
 
         :param leading: a number expressed in unscaled text space units
         """
-        self.textstate.leading = num_value(leading)
+        self.graphicstate.leading = num_value(leading)
 
     def do_Tf(self, fontid: PDFObject, fontsize: PDFObject) -> None:
         """Set the text font
@@ -707,26 +711,23 @@ class LazyInterpreter:
         :param fontsize: size is a number representing a scale factor.
         """
         try:
-            self.textstate.font = self.fontmap[literal_name(fontid)]
+            self.graphicstate.font = self.fontmap[literal_name(fontid)]
         except KeyError:
             log.warning("Undefined Font id: %r", fontid)
             doc = _deref_document(self.page.docref)
-            self.textstate.font = doc.get_font()
-        self.textstate.fontsize = num_value(fontsize)
-        self.textstate.descent = (
-            self.textstate.font.get_descent() * self.textstate.fontsize
-        )
+            self.graphicstate.font = doc.get_font()
+        self.graphicstate.fontsize = num_value(fontsize)
 
     def do_Tr(self, render: PDFObject) -> None:
         """Set the text rendering mode"""
-        self.textstate.render_mode = int_value(render)
+        self.graphicstate.render_mode = int_value(render)
 
     def do_Ts(self, rise: PDFObject) -> None:
         """Set the text rise
 
         :param rise: a number expressed in unscaled text space units
         """
-        self.textstate.rise = num_value(rise)
+        self.graphicstate.rise = num_value(rise)
 
     def do_Td(self, tx: PDFObject, ty: PDFObject) -> None:
         """Move to the start of the next line
@@ -785,8 +786,8 @@ class LazyInterpreter:
             b,
             c,
             d,
-            -self.textstate.leading * c + e,
-            -self.textstate.leading * d + f,
+            -self.graphicstate.leading * c + e,
+            -self.graphicstate.leading * d + f,
         )
         self.textstate.glyph_offset = (0, 0)
 

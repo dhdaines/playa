@@ -110,7 +110,6 @@ class ContentObject:
                 page=self.page,
                 xobjid=xobjid,
                 gstate=GraphicState(),
-                textstate=TextState(),
                 ctm=MATRIX_IDENTITY,
                 mcstack=(),
             )
