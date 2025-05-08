@@ -9,6 +9,7 @@ from typing import (
     Any,
     Deque,
     Dict,
+    Iterable,
     Iterator,
     List,
     NamedTuple,
@@ -32,6 +33,7 @@ from playa.pdftypes import (
     int_value,
     literal_name,
     name_str,
+    stream_value,
 )
 from playa.utils import choplist
 from playa.worker import _deref_document, _ref_document
@@ -849,3 +851,47 @@ class ObjectStreamParser:
                     self.first + opos,
                 )
             yield pos, IndirectObject(objid=objid, genno=0, obj=obj)
+
+
+class ContentParser(ObjectParser):
+    """Parse the concatenation of multiple content streams, as
+    described in the spec (PDF 1.7, p.86):
+
+    ...the effect shall be as if all of the streams in the array were
+    concatenated, in order, to form a single stream.  Conforming
+    writers can create image objects and other resources as they
+    occur, even though they interrupt the content stream. The division
+    between streams may occur only at the boundaries between lexical
+    tokens (see 7.2, "Lexical Conventions") but shall be unrelated to
+    the page’s logical content or organization.
+    """
+
+    def __init__(self, streams: Iterable[PDFObject]) -> None:
+        self.streamiter = iter(streams)
+        try:
+            stream = stream_value(next(self.streamiter))
+            super().__init__(stream.buffer)
+        except StopIteration:
+            super().__init__(b"")
+        except TypeError:
+            log.warning("Found non-stream in contents: %r", streams)
+            super().__init__(b"")
+
+    def nexttoken(self) -> Tuple[int, Token]:
+        """Override nexttoken() to continue parsing in subsequent streams.
+
+        TODO: If we want to avoid evil implementation inheritance, we
+        should do this in the lexer instead.
+        """
+        while True:
+            try:
+                return super().nexttoken()
+            except StopIteration:
+                # Will also raise StopIteration if there are no more,
+                # which is exactly what we want
+                try:
+                    ref = next(self.streamiter)
+                    stream = stream_value(ref)
+                    self.newstream(stream.buffer)
+                except TypeError:
+                    log.warning("Found non-stream in contents: %r", ref)

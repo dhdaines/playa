@@ -18,16 +18,16 @@ from playa.color import Color as _Color
 from playa.color import ColorSpace as _ColorSpace
 from playa.data.asobj import asobj
 from playa.data.metadata import Font
-from playa.page import DashPattern as _DashPattern
-from playa.page import GlyphObject as _GlyphObject
-from playa.page import GraphicState as _GraphicState
-from playa.page import ImageObject as _ImageObject
-from playa.page import MarkedContent as _MarkedContent
-from playa.page import PathObject as _PathObject
-from playa.page import PathSegment as _PathSegment
-from playa.page import TagObject as _TagObject
-from playa.page import TextObject as _TextObject
-from playa.page import TextState as _TextState
+from playa.content import DashPattern as _DashPattern
+from playa.content import GlyphObject as _GlyphObject
+from playa.content import GraphicState as _GraphicState
+from playa.content import ImageObject as _ImageObject
+from playa.content import MarkedContent as _MarkedContent
+from playa.content import PathObject as _PathObject
+from playa.content import PathSegment as _PathSegment
+from playa.content import TagObject as _TagObject
+from playa.content import TextObject as _TextObject
+from playa.content import TextState as _TextState
 from playa.pdftypes import resolve_all, MATRIX_IDENTITY, Matrix, Point, Rect
 
 

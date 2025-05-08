@@ -1,4 +1,4 @@
-## PLAYA 0.5.0: 2025-05-07
+## PLAYA 0.5.0: unreleased
 - Correct ascent, descent, and glyph boxes for Type3 fonts
 - Remove use of `object` in type annotations
 - Add support for role map and standard structure types
@@ -10,6 +10,8 @@
   `playa.pdftypes`
 - BREAKING: `PathObject` no longer contains "subpaths", it is safe to
   recursively descend it now
+- BREAKING: Content objects moved to `playa.content` and interpreter
+  to `playa.interp`
 
 ## PLAYA 0.4.2: 2025-04-26
 - Correct `fontsize` and `scaling` in text state
