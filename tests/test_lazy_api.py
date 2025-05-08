@@ -118,34 +118,57 @@ def test_rotated_text_objects() -> None:
             assert bbox == pytest.approx(get_bound(points))
 
 
+TEXTOBJS = [
+    {
+        "chars": "foo",
+        "bbox": [0.0, -4.968, 33.36, 19.032],
+    },
+    {
+        "chars": "A",
+        "bbox": [50.0, 95.032, 66.00800000000001, 119.032],
+    },
+    {
+        "chars": "B",
+        "bbox": [99.012, 142.548, 123.024, 178.548],
+    },
+    {
+        "chars": "C",
+        "bbox": [184.536, 213.822, 223.524, 267.822],
+    },
+    {
+        "chars": "D",
+        "bbox": [223.524, 213.822, 262.51200000000006, 267.822],
+    },
+    {
+        "chars": "BAR",
+        "bbox": [262.51200000000006, 213.822, 373.53600000000006, 267.822],
+    },
+    {
+        "chars": "FOO",
+        "bbox": [0.0, -11.178, 117.01799999999999, 42.822],
+    },
+    {
+        "chars": "Hello World",
+        "bbox": [0.0, 370.032, 124.00800000000004, 394.032],
+    },
+]
+
+
 def test_operators_in_text() -> None:
     """Verify that other operators are properly ordered in text objects."""
-    with playa.open(TESTDIR / "graphics_state_in_text_object.pdf") as pdf:
+    # Verify consistent handling of graphics state and text state
+    with playa.open(
+        TESTDIR / "graphics_state_in_text_object.pdf", space="default"
+    ) as pdf:
         page = pdf.pages[0]
-        itor = iter(page.texts)
-        text = next(itor)
-        # Initial CTM
-        assert text.ctm[0] == 1.0
-        gitor = iter(text)
-        a = next(gitor)
-        assert a.text == "A"
-        assert a.ctm[0] == 1.0
-        text = next(itor)
-        gitor = iter(text)
-        b = next(gitor)
-        assert b.text == "B"
-        assert b.ctm[0] == 1.5
-        assert b.gstate.ncs.name == "DeviceRGB"
-        assert b.gstate.ncolor.values == (0.75, 0.25, 0.25)
-        text = next(itor)
-        gitor = iter(text)
-        c = next(gitor)
-        assert c.text == "C"
+        for text, obj in zip(page.texts, TEXTOBJS):
+            assert text.chars == obj["chars"]
+            assert text.bbox == pytest.approx(obj["bbox"])
+            if text.chars == "B":
+                assert text.ctm[0] == 1.5
+                assert text.gstate.ncs.name == "DeviceRGB"
+                assert text.gstate.ncolor.values == (0.75, 0.25, 0.25)
 
-        text = next(itor)
-        # Text isn't lazy anymore, the gstate was reset
-        assert text.ctm[0] == 1.0
-        assert text.chars == "Hello World"
     # Also verify that calling TJ with no actual text still does something
     with playa.open(TESTDIR / "text_side_effects.pdf") as pdf:
         boxes = [[g.bbox for g in t] for t in pdf.pages[0].texts]

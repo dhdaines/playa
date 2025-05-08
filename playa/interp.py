@@ -38,6 +38,7 @@ from playa.font import Font
 from playa.parser import KWD, ContentParser, InlineImage, PDFObject
 from playa.pdftypes import (
     LIT,
+    MATRIX_IDENTITY,
     ContentStream,
     Matrix,
     ObjRef,
@@ -156,9 +157,14 @@ class LazyInterpreter:
                     self.xobjmap[xobjid] = xobjstrm
 
     def init_state(self, ctm: Matrix, gstate: Union[GraphicState, None] = None) -> None:
-        self.gstack: List[Tuple[Matrix, GraphicState]] = []
+        self.gstack: List[Tuple[Matrix, GraphicState, TextState]] = []
         self.ctm = ctm
         self.graphicstate = GraphicState() if gstate is None else copy(gstate)
+        # Mutable text state (just the matrices) - this is not
+        # supposed to exist outside BT/ET pairs, but we will tolerate
+        # it.  In PDF 2.0 it gets saved/restored on the stack by q/Q
+        self.textstate: TextState = TextState()
+        # Current path (FIXME: is this in the graphics state too?)
         self.curpath: List[PathSegment] = []
         # argstack: stack for command arguments.
         self.argstack: List[PDFObject] = []
@@ -439,12 +445,12 @@ class LazyInterpreter:
 
     def do_q(self) -> None:
         """Save graphics state"""
-        self.gstack.append((self.ctm, copy(self.graphicstate)))
+        self.gstack.append((self.ctm, copy(self.graphicstate), copy(self.textstate)))
 
     def do_Q(self) -> None:
         """Restore graphics state"""
         if self.gstack:
-            (self.ctm, self.graphicstate) = self.gstack.pop()
+            self.ctm, self.graphicstate, self.textstate = self.gstack.pop()
 
     def do_cm(
         self,
@@ -644,15 +650,18 @@ class LazyInterpreter:
     def do_BT(self) -> None:
         """Begin text object.
 
-        Initializing the text matrix, Tm, and the text line matrix, Tlm, to
-        the identity matrix. Text objects cannot be nested; a second BT cannot
-        appear before an ET.
+        Initializing the text matrix, Tm, and the text line matrix,
+        Tlm, to the identity matrix. Text objects cannot be nested; a
+        second BT cannot appear before an ET.  While Tm and Tlm are
+        saved and restored with the graphics state, they do not
+        persist outside a BT/ET pair.
+
         """
-        self.textstate = TextState()
+        self.textstate.glyph_offset = (0, 0)
+        self.textstate.line_matrix = MATRIX_IDENTITY
 
     def do_ET(self) -> None:
         """End a text object"""
-        return None
 
     def do_BX(self) -> None:
         """Begin compatibility section"""

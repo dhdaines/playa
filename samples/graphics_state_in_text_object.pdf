@@ -1,4 +1,4 @@
-%PDF-1.4
+%PDF-2.0
 1 0 obj
 <<
  /Type /Catalog
@@ -32,11 +32,21 @@ endobj
 >>
 endobj
 5 0 obj
-<< /Length 187 >>
+<< /Length 1138 >>
 stream
+% This is invalid and leads to undefined behaviour.  We follow pdf.js
+% which tolerates it and updates the text matrix anyway, thus "Hello
+% world" below is at the top left of the page.
+0 375 Td
+
 q
 BT
 /F1 24 Tf
+
+% Because BT resets (does not save/restore) the text matrix, this
+% will be at the origin.
+(foo) Tj
+
 50 100 Td
 (A) Tj
 1.5 0 0 1.5 0 0 cm
@@ -45,12 +55,36 @@ BT
 1.5 0 0 1.5 0 0 cm
 0.25 0.25 0.75 rg
 (C) Tj
-ET
-BT
+q
+10 10 Td
 Q
-/F1 24 Tf
-120 120 Td
+
+% In PDF 2.0, this should be to the *right* of "C" since
+% the text matrix is saved/restored by q/Q
+(D) Tj
+
+ET
+
+% This is invalid and leads to undefined behaviour, but we follow
+% other implementations and persist the text matrix outside BT/ET
+(BAR) Tj
+
+BT
+% Likewise, the text matrix is reset by BT, so this is at the origin
+% (but big, and blue)
+(FOO) Tj
+
+10 10 Td
 0.75 0.25 0.75 rg
+
+% This is invalid in PDF 2.0 and leads to undefined behaviour.  Does
+% it undo the Td operator above?  How about the rg (and cm, etc)?  We
+% follow pdf.js which will tolerate it and restore the previous text
+% matrix (thus "Hello World" is at the top left of the page)
+Q
+
+/F1 24 Tf
+0.25 0.75 0.25 rg
 (Hello World) Tj
 ET
 endstream
