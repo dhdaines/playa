@@ -2,12 +2,14 @@
 Test various font-related things
 """
 
-from .data import CONTRIB, TESTDIR
-
-import pytest
+from typing import List
 
 import playa
+import pytest
+from playa.pdftypes import Rect, dict_value
 from playa.utils import get_bound_rects
+
+from .data import CONTRIB, TESTDIR
 
 
 def test_implicit_encoding_type1() -> None:
@@ -77,7 +79,7 @@ def test_type3_font_boxes() -> None:
     mildly exotic FontMatrix (FIXME: it could be much more exotic than
     this)"""
     with playa.open(TESTDIR / "type3_fonts.pdf") as doc:
-        font = doc.get_font(5, doc[5])
+        font = doc.get_font(5, dict_value(doc[5]))
         # This font's BBox is really something
         assert font.bbox == (-164, 493, 1966, -1569)
         page = doc.pages[0]
@@ -86,7 +88,7 @@ def test_type3_font_boxes() -> None:
         assert line1 == pytest.approx(
             (25.0, 14.3701175326, 246.586936753, 28.3701175326)
         )
-        boxes = []
+        boxes: List[Rect] = []
         for text in textor:
             bbox = text.bbox
             # They should be mostly adjacent and aligned
