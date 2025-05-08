@@ -50,7 +50,7 @@ log = logging.getLogger(__name__)
 
 @dataclass
 class TextState:
-    """PDF Text State (PDF 1.7 section 9.3.1).
+    """Mutable text state.
 
     Exceptionally, the line matrix and text matrix are represented
     more compactly with the line matrix itself in `line_matrix`, which
@@ -65,40 +65,10 @@ class TextState:
         format.
       glyph_offset: The offset of the current glyph with relation to
         the line matrix, in text space units.
-      font: The current font.
-      fontsize: The current font size, **in text space units**.
-        This is often just 1.0 as it relies on the text matrix (you
-        may use `line_matrix` here) to scale it to the actual size in
-        user space.
-      charspace: Extra spacing to add between each glyph, in
-        text space units.
-      wordspace: The width of a space, defined curiously as `cid==32`
-        (But PDF Is A prESeNTaTion fORmAT sO ThERe maY NOt Be aNY
-        SpACeS!!), in text space units.
-      scaling: The horizontal scaling factor as defined by the PDF
-        standard.
-      leading: The leading as defined by the PDF standard.
-      render_mode: The PDF rendering mode.  The really important one
-        here is 3, which means "don't render the text".  You might
-        want to use this to detect invisible text.
-      rise: The text rise (superscript or subscript position), in text
-        space units.
-      descent: The font's descent (scaled by the font size), in text
-        space units (this is not really part of the text state but is
-        kept here to avoid recomputing it on every glyph)
     """
 
     line_matrix: Matrix = MATRIX_IDENTITY
     glyph_offset: Point = (0, 0)
-    font: Union[Font, None] = None
-    fontsize: float = 0
-    charspace: float = 0
-    wordspace: float = 0
-    scaling: float = 100
-    leading: float = 0
-    render_mode: int = 0
-    rise: float = 0
-    descent: float = 0
 
     def reset(self) -> None:
         """Reset the text state"""
@@ -130,7 +100,23 @@ SOLID_LINE = DashPattern((), 0)
 
 @dataclass
 class GraphicState:
-    """PDF Graphics state (PDF 1.7 section 8.4)
+    """PDF graphics state (PDF 1.7 section 8.4) including text state
+    (PDF 1.7 section 9.3.1), but excluding coordinate transformations.
+
+    Contrary to the pretensions of pdfminer.six, the text state is for
+    the most part not at all separate from the graphics state, and can
+    be updated outside the confines of `BT` and `ET` operators, thus
+    there is no advantage and only confusion that comes from treating
+    it separately.
+
+    The only state that does not persist outside `BT` / `ET` pairs is
+    the text coordinate space (line matrix and text rendering matrix),
+    and it is also the only part that is updated during iteration over
+    a `TextObject`.
+
+    For historical reasons the main coordinate transformation matrix,
+    though it is also part of the graphics state, is also stored
+    separately.
 
     Attributes:
       linewidth: Line width in user space units (sec. 8.4.3.2)
@@ -145,6 +131,25 @@ class GraphicState:
       scs: Colour space used for stroking operations
       ncolor: Colour used for non-stroking operations
       ncs: Colour space used for non-stroking operations
+      font: The current font.
+      fontsize: The current font size, **in text space units**.
+        This is often just 1.0 as it relies on the text matrix (you
+        may use `line_matrix` here) to scale it to the actual size in
+        user space.
+      charspace: Extra spacing to add between each glyph, in
+        text space units.
+      wordspace: The width of a space, defined curiously as `cid==32`
+        (But PDF Is A prESeNTaTion fORmAT sO ThERe maY NOt Be aNY
+        SpACeS!!), in text space units.
+      scaling: The horizontal scaling factor as defined by the PDF
+        standard.
+      leading: The leading as defined by the PDF standard.
+      render_mode: The PDF rendering mode.  The really important one
+        here is 3, which means "don't render the text".  You might
+        want to use this to detect invisible text.
+      rise: The text rise (superscript or subscript position), in text
+        space units.
+
     """
 
     linewidth: float = 1
@@ -158,6 +163,14 @@ class GraphicState:
     scs: ColorSpace = PREDEFINED_COLORSPACE["DeviceGray"]
     ncolor: Color = BASIC_BLACK
     ncs: ColorSpace = PREDEFINED_COLORSPACE["DeviceGray"]
+    font: Union[Font, None] = None
+    fontsize: float = 0
+    charspace: float = 0
+    wordspace: float = 0
+    scaling: float = 100
+    leading: float = 0
+    render_mode: int = 0
+    rise: float = 0
 
 
 class MarkedContent(NamedTuple):
@@ -346,14 +359,11 @@ class XObjectObject(ContentObject):
       page: Weak reference to containing page.
       stream: Content stream with PDF operators.
       resources: Resources specific to this XObject, if any.
-      textstate: Required because XObjects may contain TextObjects, but
-        ContentObject does not have a text state.
     """
 
     xobjid: str
     stream: ContentStream
     resources: Union[None, Dict[str, PDFObject]]
-    textstate: TextState
 
     def __contains__(self, name: str) -> bool:
         return name in self.stream
@@ -399,8 +409,9 @@ class XObjectObject(ContentObject):
 
     def __iter__(self) -> Iterator["ContentObject"]:
         from playa.interp import LazyInterpreter
-        interp = LazyInterpreter(self.page, [self.stream], self.resources)
-        interp.set_current_state((self.ctm, copy(self.textstate), copy(self.gstate)))
+        interp = LazyInterpreter(self.page, [self.stream],
+                                 self.resources,
+                                 ctm=self.ctm, gstate=self.gstate)
         return iter(interp)
 
     @classmethod
@@ -410,7 +421,6 @@ class XObjectObject(ContentObject):
         page: "Page",
         xobjid: str,
         gstate: GraphicState,
-        textstate: TextState,
         ctm: Matrix,
         mcstack: Tuple[MarkedContent, ...],
     ) -> "XObjectObject":
@@ -431,7 +441,6 @@ class XObjectObject(ContentObject):
             xobjid=xobjid,
             stream=stream,
             resources=resources,
-            textstate=textstate,
         )
 
 
@@ -537,23 +546,27 @@ class GlyphObject(ContentObject):
 
     @property
     def text_space_bbox(self):
-        tstate = self.textstate
-        font = tstate.font
+        font = self.gstate.font
         assert font is not None
+        fontsize = self.gstate.fontsize
+        rise = self.gstate.rise
+        descent = (
+            font.get_descent() * fontsize
+        )
         if font.vertical:
             textdisp = font.char_disp(self.cid)
             assert isinstance(textdisp, tuple)
             (vx, vy) = textdisp
             if vx is None:
-                vx = tstate.fontsize * 0.5
+                vx = fontsize * 0.5
             else:
-                vx = vx * tstate.fontsize * 0.001
-            vy = (1000 - vy) * tstate.fontsize * 0.001
-            x0, y0 = (-vx, vy + tstate.rise + self.adv)
-            x1, y1 = (-vx + tstate.fontsize, vy + tstate.rise)
+                vx = vx * fontsize * 0.001
+            vy = (1000 - vy) * fontsize * 0.001
+            x0, y0 = (-vx, vy + rise + self.adv)
+            x1, y1 = (-vx + fontsize, vy + rise)
         else:
-            x0, y0 = (0, tstate.descent + tstate.rise)
-            x1, y1 = (self.adv, tstate.descent + tstate.rise + tstate.fontsize)
+            x0, y0 = (0, descent + rise)
+            x1, y1 = (self.adv, descent + rise + fontsize)
         return (x0, y0, x1, y1)
 
 
@@ -579,7 +592,8 @@ class TextObject(ContentObject):
     def __iter__(self) -> Iterator[GlyphObject]:
         """Generate glyphs for this text object"""
         tstate = copy(self.textstate)
-        font = tstate.font
+        font = self.gstate.font
+        fontsize = self.gstate.fontsize
         # If no font is set, we cannot do anything, since even calling
         # TJ with a displacement and no text effects requires us at
         # least to know the fontsize.
@@ -596,9 +610,9 @@ class TextObject(ContentObject):
         # Pre-determine if we need to recompute the bound for rotated glyphs
         corners = b * d < 0 or a * c < 0
         # Apply horizontal scaling
-        scaling = tstate.scaling * 0.01
-        charspace = tstate.charspace * scaling
-        wordspace = tstate.wordspace * scaling
+        scaling = self.gstate.scaling * 0.01
+        charspace = self.gstate.charspace * scaling
+        wordspace = self.gstate.wordspace * scaling
         vert = font.vertical
         if font.multibyte:
             wordspace = 0
@@ -607,7 +621,7 @@ class TextObject(ContentObject):
         needcharspace = False  # Only for first glyph
         for obj in self.args:
             if isinstance(obj, (int, float)):
-                dxscale = 0.001 * tstate.fontsize * scaling
+                dxscale = 0.001 * fontsize * scaling
                 pos -= obj * dxscale
                 needcharspace = True
             else:
@@ -615,7 +629,7 @@ class TextObject(ContentObject):
                     if needcharspace:
                         pos += charspace
                     textwidth = font.char_width(cid)
-                    adv = textwidth * tstate.fontsize * scaling
+                    adv = textwidth * fontsize * scaling
                     x, y = tstate.glyph_offset = (x, pos) if vert else (pos, y)
                     glyph = GlyphObject(
                         _pageref=self._pageref,
@@ -645,7 +659,12 @@ class TextObject(ContentObject):
             return self._text_space_bbox
         # No need to save tstate as we do not update it below
         tstate = self.textstate
-        font = tstate.font
+        font = self.gstate.font
+        fontsize = self.gstate.fontsize
+        rise = self.gstate.rise
+        descent = (
+            font.get_descent() * fontsize
+        )
         if font is None:
             log.warning(
                 "No font is set, will not update text state or output text: %r TJ",
@@ -658,9 +677,9 @@ class TextObject(ContentObject):
             self._text_space_bbox = BBOX_NONE
             self._next_tstate = tstate
             return self._text_space_bbox
-        scaling = tstate.scaling * 0.01
-        charspace = tstate.charspace * scaling
-        wordspace = tstate.wordspace * scaling
+        scaling = self.gstate.scaling * 0.01
+        charspace = self.gstate.charspace * scaling
+        wordspace = self.gstate.wordspace * scaling
         vert = font.vertical
         if font.multibyte:
             wordspace = 0
@@ -673,11 +692,11 @@ class TextObject(ContentObject):
         else:
             # These do not change!
             x0 = x1 = x
-            y0 = y + tstate.descent + tstate.rise
-            y1 = y0 + tstate.fontsize
+            y0 = y + descent + rise
+            y1 = y0 + fontsize
         for obj in self.args:
             if isinstance(obj, (int, float)):
-                dxscale = 0.001 * tstate.fontsize * scaling
+                dxscale = 0.001 * fontsize * scaling
                 pos -= obj * dxscale
                 needcharspace = True
             else:
@@ -685,21 +704,21 @@ class TextObject(ContentObject):
                     if needcharspace:
                         pos += charspace
                     textwidth = font.char_width(cid)
-                    adv = textwidth * tstate.fontsize * scaling
+                    adv = textwidth * fontsize * scaling
                     x, y = (x, pos) if vert else (pos, y)
                     if vert:
                         textdisp = font.char_disp(cid)
                         assert isinstance(textdisp, tuple)
                         (vx, vy) = textdisp
                         if vx is None:
-                            vx = tstate.fontsize * 0.5
+                            vx = fontsize * 0.5
                         else:
-                            vx = vx * tstate.fontsize * 0.001
-                        vy = (1000 - vy) * tstate.fontsize * 0.001
+                            vx = vx * fontsize * 0.001
+                        vy = (1000 - vy) * fontsize * 0.001
                         x0 = min(x0, x - vx)
-                        y0 = min(y0, y + vy + tstate.rise + adv)
-                        x1 = max(x1, x - vx + tstate.fontsize)
-                        y1 = max(y1, y + vy + tstate.rise)
+                        y0 = min(y0, y + vy + rise + adv)
+                        x1 = max(x1, x - vx + fontsize)
+                        y1 = max(y1, y + vy + rise)
                     else:
                         x1 = x + adv
                     pos += adv
@@ -738,7 +757,7 @@ class TextObject(ContentObject):
         if self._chars is not None:
             return "".join(self._chars)
         self._chars = []
-        font = self.textstate.font
+        font = self.gstate.font
         assert font is not None, "No font was selected"
         for obj in self.args:
             if not isinstance(obj, bytes):
@@ -755,7 +774,7 @@ class TextObject(ContentObject):
         Unicode characters.
         """
         nglyphs = 0
-        font = self.textstate.font
+        font = self.gstate.font
         assert font is not None, "No font was selected"
         for obj in self.args:
             if not isinstance(obj, bytes):

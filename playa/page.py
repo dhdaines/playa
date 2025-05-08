@@ -347,7 +347,7 @@ class Page:
         for text in self.texts:
             line_matrix = text.textstate.line_matrix
             vertical = (
-                False if text.textstate.font is None else text.textstate.font.vertical
+                False if text.gstate.font is None else text.gstate.font.vertical
             )
             lpos = -2 if vertical else -1
             if (
