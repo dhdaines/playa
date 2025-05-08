@@ -21,18 +21,17 @@ from typing import Union
 
 from playa._version import __version__
 from playa.color import Color, ColorSpace
-from playa.data import asobj
-from playa.document import Document, PageList
-from playa.exceptions import PDFEncryptionError, PDFException, PDFPasswordIncorrect
-from playa.page import (
+from playa.content import (
     ContentObject,
-    DeviceSpace,
     GraphicState,
     MarkedContent,
-    Page,
     PathSegment,
     TextState,
 )
+from playa.data import asobj
+from playa.document import Document, PageList
+from playa.exceptions import PDFEncryptionError, PDFException, PDFPasswordIncorrect
+from playa.page import DeviceSpace, Page
 from playa.parser import Token
 from playa.pdftypes import ContentStream, Matrix, ObjRef, Point, Rect
 from playa.pdftypes import resolve1 as resolve

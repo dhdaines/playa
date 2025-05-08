@@ -17,6 +17,7 @@ from typing import (
     Union,
 )
 
+from playa.content import XObjectObject, GraphicState, TextState
 from playa.data_structures import NumberTree
 from playa.parser import LIT, PDFObject, PSLiteral
 from playa.pdftypes import (
@@ -98,7 +99,6 @@ class ContentObject:
     def obj(self) -> Union["XObjectObject", "Annotation", None]:
         """Return the underlying object, if possible."""
         if isinstance(self.props, ContentStream):
-            from playa.page import XObjectObject, GraphicState, TextState
             from playa.pdftypes import MATRIX_IDENTITY
 
             if "Name" in self.props and isinstance(self.props["Name"], PSLiteral):

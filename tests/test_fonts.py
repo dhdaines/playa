@@ -6,6 +6,7 @@ from typing import List
 
 import playa
 import pytest
+from playa.font import Type3Font
 from playa.pdftypes import Rect, dict_value
 from playa.utils import get_bound_rects
 
@@ -82,6 +83,8 @@ def test_type3_font_boxes() -> None:
         font = doc.get_font(5, dict_value(doc[5]))
         # This font's BBox is really something
         assert font.bbox == (-164, 493, 1966, -1569)
+        assert isinstance(font, Type3Font)
+        assert font.matrix == (0.0004882813, 0, 0, -0.0004882813, 0, 0)
         page = doc.pages[0]
         textor = page.texts
         line1 = next(textor).bbox
