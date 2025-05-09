@@ -102,23 +102,28 @@ class GraphicState:
       ncolor: Colour used for non-stroking operations
       ncs: Colour space used for non-stroking operations
       font: The current font.
-      fontsize: The current font size, **in text space units**.
-        This is often just 1.0 as it relies on the text matrix (you
-        may use `line_matrix` here) to scale it to the actual size in
-        user space.
+      fontsize: The "font size" parameter, which is **not** the font
+        size in points as you might understand it, but rather a
+        scaling factor applied to text space (so, it affects not only
+        text size but position as well).  Since most reasonable people
+        find that behaviour rather confusing, this is often just 1.0,
+        and PDFs rely on the text matrix to set the size of text.
       charspace: Extra spacing to add between each glyph, in
-        text space units.
+        "unscaled text space units", which actually just means text
+        space units, that are subsequently scaled by the `fontsize`
+        and `scaling` parameters.
       wordspace: The width of a space, defined curiously as `cid==32`
         (But PDF Is A prESeNTaTion fORmAT sO ThERe maY NOt Be aNY
-        SpACeS!!), in text space units.
+        SpACeS!!), in unscaled text space units.
       scaling: The horizontal scaling factor as defined by the PDF
-        standard.
-      leading: The leading as defined by the PDF standard.
+        standard (divided by 100 then applied along with `fontsize`)
+      leading: The leading as defined by the PDF standard, in unscaled
+        text space units.
       render_mode: The PDF rendering mode.  The really important one
         here is 3, which means "don't render the text".  You might
         want to use this to detect invisible text.
-      rise: The text rise (superscript or subscript position), in text
-        space units.
+      rise: The text rise (superscript or subscript position), in
+        unscaled text space units.
 
     """
 
@@ -471,14 +476,9 @@ class GlyphObject(ContentObject):
            depending on the writing direction).
       matrix: rendering matrix for this glyph, which transforms text
               space (*not glyph space!*) coordinates to device space.
-      glyph_offset: Offset in user space (not text space) from the
-          origin of the parent TextObject
+      glyph_offset: Offset in from the
+          origin of the parent TextObject in some undefined space FIXME.
       bbox: glyph bounding box in device space.
-      text_space_bbox: glyph bounding box in text space (i.e. before
-                       any possible coordinate transformation)
-      corners: Is the transformed bounding box rotated or skewed such
-               that all four corners need to be calculated (derived
-               from matrix but precomputed for speed)
 
     """
 
@@ -487,7 +487,7 @@ class GlyphObject(ContentObject):
     glyph_offset: Point
     matrix: Matrix
     adv: float
-    corners: bool
+    _corners: bool
 
     def __len__(self) -> int:
         """Fool! You cannot iterate over a GlyphObject!"""
@@ -495,27 +495,6 @@ class GlyphObject(ContentObject):
 
     @property
     def bbox(self) -> Rect:
-        x0, y0, x1, y1 = self.text_space_bbox
-        if self.corners:
-            return get_bound(
-                (
-                    apply_matrix_pt(self.matrix, (x0, y0)),
-                    apply_matrix_pt(self.matrix, (x0, y1)),
-                    apply_matrix_pt(self.matrix, (x1, y1)),
-                    apply_matrix_pt(self.matrix, (x1, y0)),
-                )
-            )
-        else:
-            x0, y0 = apply_matrix_pt(self.matrix, (x0, y0))
-            x1, y1 = apply_matrix_pt(self.matrix, (x1, y1))
-            if x1 < x0:
-                x0, x1 = x1, x0
-            if y1 < y0:
-                y0, y1 = y1, y0
-            return (x0, y0, x1, y1)
-
-    @property
-    def text_space_bbox(self):
         font = self.gstate.font
         assert font is not None
         fontsize = self.gstate.fontsize
@@ -535,7 +514,23 @@ class GlyphObject(ContentObject):
         else:
             x0, y0 = (0, descent + rise)
             x1, y1 = (self.adv, descent + rise + fontsize)
-        return (x0, y0, x1, y1)
+        if self._corners:
+            return get_bound(
+                (
+                    apply_matrix_pt(self.matrix, (x0, y0)),
+                    apply_matrix_pt(self.matrix, (x0, y1)),
+                    apply_matrix_pt(self.matrix, (x1, y1)),
+                    apply_matrix_pt(self.matrix, (x1, y0)),
+                )
+            )
+        else:
+            x0, y0 = apply_matrix_pt(self.matrix, (x0, y0))
+            x1, y1 = apply_matrix_pt(self.matrix, (x1, y1))
+            if x1 < x0:
+                x0, x1 = x1, x0
+            if y1 < y0:
+                y0, y1 = y1, y0
+            return (x0, y0, x1, y1)
 
 
 @dataclass
@@ -544,12 +539,11 @@ class TextObject(ContentObject):
 
     Attributes:
       line_matrix: Text line matrix for this object.
-      glyph_offset: Offset in user space (not text space) for the
-          first glyph in this text object.
+      glyph_offset: Offset of the first glyph in this
+          text object, in some undefined space FIXME.
       args: Strings or position adjustments
       bbox: Text bounding box in device space.
-      text_space_bbox: Text bounding box in text space (i.e. before
-                       any possible coordinate transformation)
+
     """
 
     args: List[Union[bytes, float]]
@@ -576,6 +570,7 @@ class TextObject(ContentObject):
             self._next_glyph_offset = glyph_offset
             return
         assert self.ctm is not None
+
         # Extract all the elements so we can translate efficiently
         a, b, c, d, e, f = mult_matrix(self.line_matrix, self.ctm)
         # Pre-determine if we need to recompute the bound for rotated glyphs
@@ -613,7 +608,7 @@ class TextObject(ContentObject):
                         # Do pre-translation internally (taking rotation into account)
                         matrix=(a, b, c, d, x * a + y * c + e, x * b + y * d + f),
                         adv=adv,
-                        corners=corners,
+                        _corners=corners,
                     )
                     yield glyph
                     pos += adv
@@ -624,8 +619,7 @@ class TextObject(ContentObject):
         if self._next_glyph_offset is None:
             self._next_glyph_offset = glyph_offset
 
-    @property
-    def text_space_bbox(self):
+    def _calculate_scaled_text_space_bbox(self):
         if self._text_space_bbox is not None:
             return self._text_space_bbox
         font = self.gstate.font
@@ -701,7 +695,7 @@ class TextObject(ContentObject):
     def next_glyph_offset(self) -> Point:
         if self._next_glyph_offset is not None:
             return self._next_glyph_offset
-        _ = self.text_space_bbox
+        self._calculate_scaled_text_space_bbox()
         assert self._next_glyph_offset is not None
         return self._next_glyph_offset
 
@@ -714,7 +708,7 @@ class TextObject(ContentObject):
         if self._bbox is not None:
             return self._bbox
         matrix = mult_matrix(self.line_matrix, self.ctm)
-        self._bbox = transform_bbox(matrix, self.text_space_bbox)
+        self._bbox = transform_bbox(matrix, self._calculate_scaled_text_space_bbox())
         return self._bbox
 
     @property
