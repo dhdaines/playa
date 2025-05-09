@@ -41,8 +41,8 @@ def test_content_objects():
             texts.append(obj.chars)
             assert len(obj) == sum(1 for glyph in obj)
         # Now there are ... a lot of text objects
-        assert boxes[0] == [358, 896, 360, 905]
-        assert boxes[-1] == [99, 79, 102, 90]
+        assert boxes[0] == [358, 896, 360, 909]
+        assert boxes[-1] == [99, 79, 102, 94]
         assert len(boxes) == 204
 
 
@@ -121,35 +121,35 @@ def test_rotated_text_objects() -> None:
 TEXTOBJS = [
     {
         "chars": "foo",
-        "bbox": [0.0, -4.968, 33.36, 19.032],
+        "bbox": [0.0, -4.968, 33.36, 17.232],
     },
     {
         "chars": "A",
-        "bbox": [50.0, 95.032, 66.00800000000001, 119.032],
+        "bbox": [50.0, 95.032, 66.00800000000001, 117.232],
     },
     {
         "chars": "B",
-        "bbox": [99.012, 142.548, 123.024, 178.548],
+        "bbox": [99.012, 142.548, 123.024, 175.848],
     },
     {
         "chars": "C",
-        "bbox": [184.536, 213.822, 223.524, 267.822],
+        "bbox": [184.536, 213.822, 223.524, 263.772],
     },
     {
         "chars": "D",
-        "bbox": [223.524, 213.822, 262.51200000000006, 267.822],
+        "bbox": [223.524, 213.822, 262.51200000000006, 263.772],
     },
     {
         "chars": "BAR",
-        "bbox": [262.51200000000006, 213.822, 373.53600000000006, 267.822],
+        "bbox": [262.51200000000006, 213.822, 373.53600000000006, 263.772],
     },
     {
         "chars": "FOO",
-        "bbox": [0.0, -11.178, 117.01799999999999, 42.822],
+        "bbox": [0.0, -11.178, 117.01799999999999, 38.772],
     },
     {
         "chars": "Hello World",
-        "bbox": [0.0, 370.032, 124.00800000000004, 394.032],
+        "bbox": [0.0, 370.032, 124.00800000000004, 392.23199999999997],
     },
 ]
 
@@ -194,3 +194,17 @@ def test_broken_xobjects() -> None:
             assert img.bbox == (25.0, 154.0, 237.0, 275.0)
         for xobj in page.xobjects:
             assert xobj.bbox == page.cropbox
+
+
+@pytest.mark.skipif(not CONTRIB.exists(), reason="contrib samples not present")
+def test_glyph_bboxes() -> None:
+    """Verify that we don't think all fonts are 1000 units high."""
+    with playa.open(CONTRIB / "issue-79" / "test.pdf") as doc:
+        page = doc.pages[0]
+        texts = page.texts
+        t = next(texts)
+        _, zh_y0, _, zh_y1 = t.bbox
+        t = next(texts)
+        _, en_y0, _, en_y1 = t.bbox
+        assert en_y0 <= zh_y0
+        assert en_y1 >= zh_y1

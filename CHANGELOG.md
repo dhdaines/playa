@@ -1,5 +1,4 @@
 ## PLAYA 0.5.0: unreleased
-- Correct ascent, descent, and glyph boxes for Type3 fonts
 - Remove use of `object` in type annotations
 - Add support for role map and standard structure types
 - Add `bbox` and `contents` to structure elements
@@ -17,6 +16,10 @@
   everything else is in the graphic state
 - BREAKING: `text_space_` properties are removed since what they
   returned was not actually text space (and maybe not useful either)
+
+## PLAYA 0.4.3: 2025-05-09
+- Correct ascent, descent, and glyph boxes for Type3 fonts
+- XObjects inherit graphics state from surrounding content
 
 ## PLAYA 0.4.2: 2025-04-26
 - Correct `fontsize` and `scaling` in text state

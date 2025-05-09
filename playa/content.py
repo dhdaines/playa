@@ -500,6 +500,7 @@ class GlyphObject(ContentObject):
         fontsize = self.gstate.fontsize
         rise = self.gstate.rise
         descent = font.get_descent() * fontsize
+        ascent = font.get_ascent() * fontsize
         if font.vertical:
             textdisp = font.char_disp(self.cid)
             assert isinstance(textdisp, tuple)
@@ -513,7 +514,7 @@ class GlyphObject(ContentObject):
             x1, y1 = (-vx + fontsize, vy + rise)
         else:
             x0, y0 = (0, descent + rise)
-            x1, y1 = (self.adv, descent + rise + fontsize)
+            x1, y1 = (self.adv, ascent + rise)
         if self._corners:
             return get_bound(
                 (
@@ -626,6 +627,7 @@ class TextObject(ContentObject):
         fontsize = self.gstate.fontsize
         rise = self.gstate.rise
         descent = font.get_descent() * fontsize
+        ascent = font.get_ascent() * fontsize
         if font is None:
             log.warning(
                 "No font is set, will not update text state or output text: %r TJ",
@@ -654,7 +656,7 @@ class TextObject(ContentObject):
             # These do not change!
             x0 = x1 = x
             y0 = y + descent + rise
-            y1 = y0 + fontsize
+            y1 = y + ascent + rise
         for obj in self.args:
             if isinstance(obj, (int, float)):
                 dxscale = 0.001 * fontsize * scaling
