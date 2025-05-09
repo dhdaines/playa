@@ -1,6 +1,7 @@
 import logging
 from io import BytesIO
 from typing import (
+    cast,
     Dict,
     Iterable,
     List,
@@ -39,13 +40,13 @@ from playa.pdftypes import (
     dict_value,
     int_value,
     list_value,
-    matrix_value,
     num_value,
     resolve1,
     resolve_all,
     stream_value,
 )
 from playa.utils import (
+    Matrix,
     Point,
     Rect,
     apply_matrix_norm,
@@ -368,20 +369,18 @@ class Type3Font(SimpleFont):
         descriptor = dict_value(spec.get("FontDescriptor", {}))
         SimpleFont.__init__(self, descriptor, widths, spec)
         if "FontMatrix" in spec:  # it is actually required though
-            self.matrix = matrix_value(spec["FontMatrix"])
+            self.matrix = cast(Matrix, tuple(list_value(spec.get("FontMatrix"))))
         else:
             self.matrix = (0.001, 0, 0, 0.001, 0, 0)
         # FontBBox is in the font dictionary for Type 3 fonts
         if "FontBBox" in spec:  # it is also required though
-            self.bbox = rect_value(spec["FontBBox"])
+            self.bbox = cast(Rect, tuple(list_value(spec["FontBBox"])))
             # otherwise it was set in SimpleFont.__init__
         # set ascent/descent from the bbox (they *could* be in the
         # descriptor but this is very unlikely)
         _, self.descent, _, self.ascent = self.bbox
-        # could have rotation or skewing, but that is undefined
-        # behaviour, so just take a and d as x and y scale (as noted
-        # above in Font.__init__, vscale might be negative here)
-        self.hscale, _, _, self.vscale, _, _ = self.matrix
+        # determine the actual height/width applying transformation
+        (self.hscale, self.vscale) = apply_matrix_norm(self.matrix, (1, 1))
 
     def get_implicit_encoding(
         self, descriptor: Dict[str, PDFObject]

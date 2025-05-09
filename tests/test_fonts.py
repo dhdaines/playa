@@ -6,8 +6,8 @@ from typing import List
 
 import playa
 import pytest
-from playa.pdftypes import Rect, dict_value
-from playa.utils import get_bound_rects
+from playa.pdftypes import dict_value
+from playa.utils import get_bound, Point
 
 from .data import CONTRIB, TESTDIR
 
@@ -88,16 +88,17 @@ def test_type3_font_boxes() -> None:
         assert line1 == pytest.approx(
             (25.0, 14.3701175326, 246.586936753, 28.3701175326)
         )
-        boxes: List[Rect] = []
+        points: List[Point] = []
         for text in textor:
             bbox = text.bbox
             # They should be mostly adjacent and aligned
-            if boxes:
-                assert bbox[0] == pytest.approx(boxes[-1][2])
-                assert bbox[1] == pytest.approx(boxes[-1][1])
-                assert bbox[3] == pytest.approx(boxes[-1][3])
-            boxes.append(bbox)
-        line2 = get_bound_rects(boxes)
+            if points:
+                assert bbox[0] == pytest.approx(points[-1][0])
+                assert bbox[1] == pytest.approx(points[-2][1])
+                assert bbox[3] == pytest.approx(points[-1][1])
+            points.append((bbox[0], bbox[1]))
+            points.append((bbox[2], bbox[3]))
+        line2 = get_bound(points)
         assert line2 == pytest.approx(
             (25.0, 39.3701175326, 246.58691507160006, 53.3701175326)
         )
