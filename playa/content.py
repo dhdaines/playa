@@ -505,10 +505,7 @@ class GlyphObject(ContentObject):
             textdisp = font.char_disp(self.cid)
             assert isinstance(textdisp, tuple)
             (vx, vy) = textdisp
-            if vx is None:
-                vx = fontsize * 0.5
-            else:
-                vx = vx * fontsize * 0.001
+            vx = vx * fontsize * 0.001
             vy = (1000 - vy) * fontsize * 0.001
             x0, y0 = (-vx, vy + rise + self.adv)
             x1, y1 = (-vx + fontsize, vy + rise)
@@ -673,10 +670,7 @@ class TextObject(ContentObject):
                         textdisp = font.char_disp(cid)
                         assert isinstance(textdisp, tuple)
                         (vx, vy) = textdisp
-                        if vx is None:
-                            vx = fontsize * 0.5
-                        else:
-                            vx = vx * fontsize * 0.001
+                        vx = vx * fontsize * 0.001
                         vy = (1000 - vy) * fontsize * 0.001
                         x0 = min(x0, x - vx)
                         y0 = min(y0, y + vy + rise + adv)
