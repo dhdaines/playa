@@ -188,3 +188,17 @@ def test_broken_xobjects() -> None:
             assert img.bbox == (25.0, 154.0, 237.0, 275.0)
         for xobj in page.xobjects:
             assert xobj.bbox == page.cropbox
+
+
+@pytest.mark.skipif(not CONTRIB.exists(), reason="contrib samples not present")
+def test_glyph_bboxes() -> None:
+    """Verify that we don't think all fonts are 1000 units high."""
+    with playa.open(CONTRIB / "issue-79" / "test.pdf") as doc:
+        page = doc.pages[0]
+        texts = page.texts
+        t = next(texts)
+        _, zh_y0, _, zh_y1 = t.bbox
+        t = next(texts)
+        _, en_y0, _, en_y1 = t.bbox
+        assert en_y0 <= zh_y0
+        assert en_y1 >= zh_y1
