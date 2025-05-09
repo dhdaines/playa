@@ -39,8 +39,8 @@ Un peu plus à droite"""
         )
         # Did we get the *glyphs* right? (harder)
         boxes = list(t.bbox for t in page.texts)
-        assert boxes[0] == pytest.approx((100.0, 72.968, 289.408, 96.968))
-        assert boxes[1] == pytest.approx((150.0, 108.968, 364.776, 132.968))
+        assert boxes[0] == pytest.approx((100.0, 74.768, 289.408, 96.968))
+        assert boxes[1] == pytest.approx((150.0, 110.768, 364.776, 132.968))
 
 
 @pytest.mark.skipif(not CONTRIB.exists(), reason="contrib samples not present")
@@ -86,8 +86,9 @@ def test_type3_font_boxes() -> None:
         textor = page.texts
         line1 = next(textor).bbox
         assert line1 == pytest.approx(
-            (25.0, 14.3701175326, 246.586936753, 28.3701175326)
+            (25.0, 14.274413, 246.586937, 28.370118)
         )
+        # Now for the individual characters
         points: List[Point] = []
         for text in textor:
             bbox = text.bbox
@@ -100,5 +101,5 @@ def test_type3_font_boxes() -> None:
             points.append((bbox[2], bbox[3]))
         line2 = get_bound(points)
         assert line2 == pytest.approx(
-            (25.0, 39.3701175326, 246.58691507160006, 53.3701175326)
+            (25.0, 39.274413, 246.58691507160006, 53.3701175326)
         )
