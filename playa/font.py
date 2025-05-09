@@ -184,7 +184,7 @@ class Font:
             return self.default_width * self.hscale
         return self.widths[cid] * self.hscale
 
-    def char_disp(self, cid: int) -> Union[float, Tuple[Optional[float], float]]:
+    def char_disp(self, cid: int) -> Union[float, Tuple[float, float]]:
         """Returns an integer for horizontal fonts, a tuple for vertical fonts."""
         return 0
 
@@ -407,7 +407,7 @@ IDENTITY_ENCODER = {
 
 
 class CIDFont(Font):
-    default_disp: Union[float, Tuple[Optional[float], float]]
+    default_disp: Union[float, Tuple[float, float]]
 
     def __init__(
         self,
@@ -486,12 +486,15 @@ class CIDFont(Font):
                 "using identity mapping: %r",
                 spec,
             )
-
         # FIXME: Verify that self.tounicode's code space corresponds
         # to self.cmap (this is actually quite hard because the code
         # spaces have been lost in the precompiled CMaps...)
 
-        self.multibyte = True
+        widths = get_widths(list_value(spec.get("W", [])))
+        if "DW" in spec:
+            default_width = num_value(spec["DW"])
+        else:
+            default_width = 1000
         self.vertical = self.cmap.is_vertical()
         if self.vertical:
             # writing mode: vertical
@@ -500,21 +503,17 @@ class CIDFont(Font):
             if "DW2" in spec:
                 (vy, w) = point_value(spec["DW2"])
             else:
-                # FIXME: Where did these values come from?
+                # seemingly arbitrary values, but found in PDF 2.0 Table 115
                 vy = 880
                 w = -1000
-            self.default_disp = (None, vy)
+            self.default_disp = (default_width / 2, vy)  # FIXME: verify
             widths = {cid: w for (cid, (w, _)) in widths2.items()}
+            # FIXME: This is *NOT* the width and gets misused somewhere
             default_width = w
         else:
             # writing mode: horizontal
             self.disps = {}
             self.default_disp = 0
-            widths = get_widths(list_value(spec.get("W", [])))
-            if "DW" in spec:
-                default_width = num_value(spec["DW"])
-            else:
-                default_width = 1000
         Font.__init__(self, descriptor, widths, default_width=default_width)
 
     def get_cmap_from_spec(self, spec: Dict[str, PDFObject]) -> CMapBase:
@@ -581,6 +580,6 @@ class CIDFont(Font):
     def __repr__(self) -> str:
         return f"<CIDFont: basefont={self.basefont!r}, cidcoding={self.cidcoding!r}>"
 
-    def char_disp(self, cid: int) -> Union[float, Tuple[Optional[float], float]]:
+    def char_disp(self, cid: int) -> Union[float, Tuple[float, float]]:
         """Returns 0 for horizontal fonts, a tuple for vertical fonts."""
         return self.disps.get(cid, self.default_disp)
