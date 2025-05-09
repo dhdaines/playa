@@ -556,6 +556,9 @@ class TextState:
       descent: The font's descent (scaled by the font size), in text
         space units (this is not really part of the text state but is
         kept here to avoid recomputing it on every glyph)
+      ascent: The font's ascent (scaled by the font size), in text
+        space units (this is not really part of the text state but is
+        kept here to avoid recomputing it on every glyph)
     """
 
     line_matrix: Matrix = MATRIX_IDENTITY
@@ -569,6 +572,7 @@ class TextState:
     render_mode: int = 0
     rise: float = 0
     descent: float = 0
+    ascent: float = 0
 
     def reset(self) -> None:
         """Reset the text state"""
@@ -1111,7 +1115,7 @@ class GlyphObject(ContentObject):
             x1, y1 = (-vx + tstate.fontsize, vy + tstate.rise)
         else:
             x0, y0 = (0, tstate.descent + tstate.rise)
-            x1, y1 = (self.adv, tstate.descent + tstate.rise + tstate.fontsize)
+            x1, y1 = (self.adv, tstate.rise + tstate.ascent)
         return (x0, y0, x1, y1)
 
 
@@ -1232,7 +1236,7 @@ class TextObject(ContentObject):
             # These do not change!
             x0 = x1 = x
             y0 = y + tstate.descent + tstate.rise
-            y1 = y0 + tstate.fontsize
+            y1 = y + tstate.ascent + tstate.rise
         for obj in self.args:
             if isinstance(obj, (int, float)):
                 dxscale = 0.001 * tstate.fontsize * scaling
@@ -1976,6 +1980,9 @@ class LazyInterpreter:
         self.textstate.fontsize = num_value(fontsize)
         self.textstate.descent = (
             self.textstate.font.get_descent() * self.textstate.fontsize
+        )
+        self.textstate.ascent = (
+            self.textstate.font.get_ascent() * self.textstate.fontsize
         )
 
     def do_Tr(self, render: PDFObject) -> None:
