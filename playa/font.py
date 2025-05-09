@@ -380,10 +380,8 @@ class Type3Font(SimpleFont):
         # set ascent/descent from the bbox (they *could* be in the
         # descriptor but this is very unlikely)
         _, self.descent, _, self.ascent = self.bbox
-        # could have rotation or skewing, but that is undefined
-        # behaviour, so just take a and d as x and y scale (as noted
-        # above in Font.__init__, vscale might be negative here)
-        self.hscale, _, _, self.vscale, _, _ = self.matrix
+        # determine the actual height/width applying transformation
+        (self.hscale, self.vscale) = apply_matrix_norm(self.matrix, (1, 1))
 
     def get_implicit_encoding(
         self, descriptor: Dict[str, PDFObject]
