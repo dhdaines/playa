@@ -88,9 +88,7 @@ def test_type3_font_boxes() -> None:
         page = doc.pages[0]
         textor = page.texts
         line1 = next(textor).bbox
-        assert line1 == pytest.approx(
-            (25.0, 14.274413, 246.586937, 28.370118)
-        )
+        assert line1 == pytest.approx((25.0, 14.274413, 246.586937, 28.370118))
         boxes: List[Rect] = []
         for text in textor:
             bbox = text.bbox

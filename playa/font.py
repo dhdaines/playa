@@ -1,7 +1,6 @@
 import logging
 from io import BytesIO
 from typing import (
-    cast,
     Dict,
     Iterable,
     List,
