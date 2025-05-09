@@ -48,6 +48,7 @@ from playa.pdftypes import (
 )
 from playa.utils import (
     Point,
+    apply_matrix_norm,
     choplist,
     decode_text,
 )
