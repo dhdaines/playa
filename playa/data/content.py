@@ -41,8 +41,7 @@ class Text(TypedDict, total=False):
     line_matrix: Matrix
     """Coordinate transformation matrix for start of current line."""
     glyph_offset: Point
-    """Offset of text object in relation to current line, in default text
-    space units, default if not present is (0, 0)."""
+    """Offset of text object in relation to current line FIXME in weird units."""
     gstate: "GraphicState"
     """Graphic state."""
     mcstack: List["Tag"]
@@ -188,8 +187,7 @@ class Glyph(TypedDict, total=False):
     """Coordinate transformation matrix, default if not present is the
     identity matrix `[1 0 0 1 0 0]`."""
     glyph_offset: Point
-    """Offset of glyph in relation to current line, in default text
-    space units, default if not present is (0, 0)."""
+    """Offset of glyph in relation to current line FIXME in weird units."""
     gstate: "GraphicState"
     """Graphic state."""
     mcstack: List["Tag"]
@@ -226,6 +224,10 @@ GRAPHICSTATE_DEFAULTS = {f.name: f.default for f in dataclasses.fields(_GraphicS
 @asobj.register
 def asobj_gstate(obj: _GraphicState) -> GraphicState:
     gstate = GraphicState()
+    if obj.font is not None:
+        gstate["font"] = asobj(obj.font)
+        # fontsize is always defined with font
+        gstate["fontsize"] = obj.fontsize
     for field in (
         "linewidth",
         "linecap",
@@ -277,7 +279,7 @@ def asobj_text(obj: _TextObject) -> Text:
     if obj.ctm is not MATRIX_IDENTITY:
         text["ctm"] = obj.ctm
     if obj.line_matrix is not MATRIX_IDENTITY:
-        text["line_matrix"] = obj.ctm
+        text["line_matrix"] = obj.line_matrix
     if obj.glyph_offset != (0, 0):
         text["glyph_offset"] = obj.glyph_offset
     return text

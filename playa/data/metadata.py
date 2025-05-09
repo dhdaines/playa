@@ -24,8 +24,17 @@ from playa.outline import Outline as _Outline
 from playa.page import Annotation as _Annotation
 from playa.page import Page as _Page
 from playa.parser import IndirectObject as _IndirectObject
+from playa.pdftypes import MATRIX_IDENTITY
 from playa.pdftypes import ContentStream as _ContentStream
-from playa.pdftypes import dict_value, int_value, resolve1, str_value, stream_value
+from playa.pdftypes import (
+    dict_value,
+    int_value,
+    matrix_value,
+    rect_value,
+    resolve1,
+    str_value,
+    stream_value,
+)
 from playa.structure import ContentItem as _StructContentItem
 from playa.structure import ContentObject as _StructContentObject
 from playa.structure import Element as _Element
@@ -323,6 +332,9 @@ def font_from_spec(spec: Dict[str, Any]) -> Font:
             val = desc.get(key)
             if val:
                 font[attr] = asobj(val)
+        bbox = rect_value(desc.get("FontBBox", (0, 0, 0, 0)))
+        if bbox != (0, 0, 0, 0):
+            font["bbox"] = bbox
         flags = desc.get("Flags", 0)
         if flags:
             flaglist = flags_to_list(int_value(flags))
@@ -331,6 +343,14 @@ def font_from_spec(spec: Dict[str, Any]) -> Font:
     sub = resolve1(spec.get("DescendantFonts"))
     if sub and isinstance(sub, list) and sub[0] is not None:
         font["cidfont"] = font_from_spec(dict_value(sub[0]))
+    # For Type3 fonts
+    if "bbox" not in font:
+        bbox = spec.get("FontBBox", (0, 0, 0, 0))
+        if bbox != (0, 0, 0, 0):
+            font["bbox"] = bbox
+    matrix = matrix_value(spec.get("FontMatrix", MATRIX_IDENTITY))
+    if matrix is not MATRIX_IDENTITY:
+        font["matrix"] = matrix
     return font
 
 
@@ -497,13 +517,14 @@ def asobj_font(obj: _Font) -> Font:
         "italic_angle",
         "default_width",
         "leading",
-        "matrix",
     ):
         val = getattr(obj, attr, None)
         if val:
             font[attr] = asobj(val)
     if obj.bbox != (0, 0, 0, 0):
         font["bbox"] = obj.bbox
+    if hasattr(obj, "matrix") and obj.matrix != MATRIX_IDENTITY:
+        font["matrix"] = obj.matrix
     return font
 
 

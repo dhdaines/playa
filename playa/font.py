@@ -104,8 +104,8 @@ LITERAL_STANDARD_ENCODING = LIT("StandardEncoding")
 
 
 class Font:
-    vertical = False
-    multibyte = False
+    vertical: bool = False
+    multibyte: bool = False
     encoding: Dict[int, str]
 
     def __init__(
@@ -164,12 +164,14 @@ class Font:
         return self.descent * self.vscale
 
     def get_width(self) -> float:
+        """Maximum width of a glyph in this font"""
         w = self.bbox[2] - self.bbox[0]
         if w == 0:
             w = -self.default_width
         return w * self.hscale
 
     def get_height(self) -> float:
+        """Maximum height of a glyph in this font"""
         h = self.bbox[3] - self.bbox[1]
         if h == 0:
             h = self.ascent - self.descent
