@@ -15,6 +15,8 @@
 - BREAKING: Text state no longer exists in the public API, text and
   glyph objects have immutable line matrix and glyph offset now, and
   everything else is in the graphic state
+- BREAKING: `text_space_` properties are removed since what they
+  returned was not actually text space (and maybe not useful either)
 
 ## PLAYA 0.4.2: 2025-04-26
 - Correct `fontsize` and `scaling` in text state
