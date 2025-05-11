@@ -37,7 +37,7 @@ from playa.pdftypes import (
     matrix_value,
     rect_value,
 )
-from playa.utils import apply_matrix_pt, get_bound, mult_matrix, transform_bbox
+from playa.utils import apply_matrix_pt, get_bound, mult_matrix, transform_bbox, translate_matrix
 from playa.worker import PageRef, _deref_page
 
 if TYPE_CHECKING:
@@ -497,24 +497,23 @@ class GlyphObject(ContentObject):
     def bbox(self) -> Rect:
         font = self.gstate.font
         assert font is not None
-        fontsize = self.gstate.fontsize
-        rise = self.gstate.rise
-        descent = font.get_descent() * fontsize
-        ascent = font.get_ascent() * fontsize
+        width = font.char_width(self.cid)
+        descent = font.get_descent()
+        ascent = font.get_ascent()
         if font.vertical:
             textdisp = font.char_disp(self.cid)
             assert isinstance(textdisp, tuple)
             (vx, vy) = textdisp
             if vx is None:
-                vx = fontsize * 0.5
+                vx = 0.5
             else:
-                vx = vx * fontsize * 0.001
-            vy = (1000 - vy) * fontsize * 0.001
-            x0, y0 = (-vx, vy + rise + self.adv)
-            x1, y1 = (-vx + fontsize, vy + rise)
+                vx = vx * 0.001
+            vy = (1000 - vy) * 0.001
+            x0, y0 = (-vx, vy + width)
+            x1, y1 = (-vx + 1, vy)
         else:
-            x0, y0 = (0, descent + rise)
-            x1, y1 = (self.adv, ascent + rise)
+            x0, y0 = (0, descent)
+            x1, y1 = (width, ascent)
         if self._corners:
             return get_bound(
                 (
@@ -572,14 +571,15 @@ class TextObject(ContentObject):
             return
         assert self.ctm is not None
 
-        # Extract all the elements so we can translate efficiently
-        a, b, c, d, e, f = mult_matrix(self.line_matrix, self.ctm)
+        tlm_ctm = mult_matrix(self.line_matrix, self.ctm)
         # Pre-determine if we need to recompute the bound for rotated glyphs
+        a, b, c, d, _, _ = tlm_ctm
         corners = b * d < 0 or a * c < 0
         # Apply horizontal scaling
         scaling = self.gstate.scaling * 0.01
         charspace = self.gstate.charspace * scaling
         wordspace = self.gstate.wordspace * scaling
+        scaling_matrix = self.gstate.fontsize * self.gstate.scaling * 0.01, 0, 0, self.gstate.fontsize, 0, self.gstate.rise
         vert = font.vertical
         if font.multibyte:
             wordspace = 0
@@ -598,6 +598,7 @@ class TextObject(ContentObject):
                     textwidth = font.char_width(cid)
                     adv = textwidth * fontsize * scaling
                     x, y = glyph_offset = (x, pos) if vert else (pos, y)
+                    matrix = mult_matrix(scaling_matrix, translate_matrix(tlm_ctm, glyph_offset))
                     glyph = GlyphObject(
                         _pageref=self._pageref,
                         gstate=self.gstate,
@@ -606,8 +607,7 @@ class TextObject(ContentObject):
                         glyph_offset=glyph_offset,
                         cid=cid,
                         text=text,
-                        # Do pre-translation internally (taking rotation into account)
-                        matrix=(a, b, c, d, x * a + y * c + e, x * b + y * d + f),
+                        matrix=matrix,
                         adv=adv,
                         _corners=corners,
                     )
