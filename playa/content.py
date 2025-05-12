@@ -648,8 +648,8 @@ class TextObject(ContentObject):
         if vert:
             assert isinstance(font, CIDFont)
             x0 = x1 = x
-            y0 = self.gstate.rise + y
-            y1 = self.gstate.rise + self._next_glyph_offset[1]
+            y0 = self.gstate.rise + self._next_glyph_offset[1]
+            y1 = self.gstate.rise + y
             scaling_x = self.gstate.fontsize * self.gstate.scaling * 0.01
             for cid, _, _, _ in glyph_data:
                 vx, _ = font.char_position_vec(cid)
