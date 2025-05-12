@@ -23,7 +23,7 @@ from playa.color import (
     Color,
     ColorSpace,
 )
-from playa.font import Font
+from playa.font import Font, CIDFont
 from playa.parser import ContentParser, Token
 from playa.pdftypes import (
     BBOX_NONE,
@@ -478,8 +478,6 @@ class GlyphObject(ContentObject):
     Attributes:
       cid: Character ID for this glyph.
       text: Unicode mapping of this glyph, if any.
-      adv: glyph displacement in text space units (horizontal or vertical,
-           depending on the writing direction).
       matrix: rendering matrix `T_rm` for this glyph, which transforms text
               space coordinates to device space (PDF 2.0 section 9.4.4).
       glyph_offset: Offset in from the
@@ -507,10 +505,11 @@ class GlyphObject(ContentObject):
         descent = font.get_descent()
         ascent = font.get_ascent()
         if font.vertical:
-            textdisp = font.char_disp(self.cid)
-            assert isinstance(textdisp, tuple)
-            (vx, vy) = textdisp
+            assert isinstance(font, CIDFont)
+            vx, vy = font.position(self.cid)
+            # FIXME: apply scaling here
             vx = vx * fontsize * 0.001
+            # FIXME: 1000 here is bogus! that's not how any of this works!
             vy = (1000 - vy) * fontsize * 0.001
             x0, y0 = (-vx, vy + rise + self.adv)
             x1, y1 = (-vx + fontsize, vy + rise)
@@ -614,8 +613,12 @@ class TextObject(ContentObject):
                 for cid, text in font.decode(obj):
                     if needcharspace:
                         pos += charspace
-                    textwidth = font.char_width(cid)
-                    adv = textwidth * fontsize * scaling
+                    if vert:
+                        assert isinstance(font, CIDFont)
+                        adv = font.vdisp(cid) * fontsize * 0.001
+                    else:
+                        textwidth = font.char_width(cid)
+                        adv = textwidth * fontsize * scaling
                     x, y = glyph_offset = (x, pos) if vert else (pos, y)
                     matrix = mult_matrix(
                         scaling_matrix, translate_matrix(tlm_ctm, glyph_offset)
@@ -687,13 +690,12 @@ class TextObject(ContentObject):
                 for cid, _ in font.decode(obj):
                     if needcharspace:
                         pos += charspace
-                    textwidth = font.char_width(cid)
-                    adv = textwidth * fontsize * scaling
                     x, y = (x, pos) if vert else (pos, y)
                     if vert:
-                        textdisp = font.char_disp(cid)
-                        assert isinstance(textdisp, tuple)
-                        (vx, vy) = textdisp
+                        assert isinstance(font, CIDFont)
+                        adv = font.vdisp(cid) * fontsize * 0.001
+                        vx, vy = font.position(self.cid)
+                        # FIXME: apply scaling here
                         vx = vx * fontsize * 0.001
                         vy = (1000 - vy) * fontsize * 0.001
                         x0 = min(x0, x - vx)
@@ -701,6 +703,8 @@ class TextObject(ContentObject):
                         x1 = max(x1, x - vx + fontsize)
                         y1 = max(y1, y + vy + rise)
                     else:
+                        textwidth = font.char_width(cid)
+                        adv = textwidth * fontsize * scaling
                         x1 = x + adv
                     pos += adv
                     if cid == 32 and wordspace:

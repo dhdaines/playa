@@ -407,7 +407,7 @@ IDENTITY_ENCODER = {
 
 
 class CIDFont(Font):
-    default_disp: Union[float, Tuple[float, float]]
+    default_vdisp: float
 
     def __init__(
         self,
@@ -497,23 +497,28 @@ class CIDFont(Font):
             default_width = 1000
         self.vertical = self.cmap.is_vertical()
         if self.vertical:
-            # writing mode: vertical
-            widths2 = get_widths2(list_value(spec.get("W2", [])))
-            self.disps = {cid: (vx, vy) for (cid, (_, (vx, vy))) in widths2.items()}
             if "DW2" in spec:
-                (vy, w) = point_value(spec["DW2"])
+                (vy, w1) = point_value(spec["DW2"])
             else:
                 # seemingly arbitrary values, but found in PDF 2.0 Table 115
-                vy = 880
-                w = -1000
-            self.default_disp = (default_width / 2, vy)  # FIXME: verify
-            widths = {cid: w for (cid, (w, _)) in widths2.items()}
-            # FIXME: This is *NOT* the width and gets misused somewhere
-            default_width = w
+                vy = 880  # vertical component of position vector
+                w1 = -1000  # default vertical displacement
+            self.default_position = (default_width / 2, vy)
+            # The horizontal displacement is *always* zero (PDF 2.0
+            # sec 9.7.4.3) so we only store the vertical.
+            self.default_vdisp = w1
+            # Glyph-specific vertical displacement and position vectors if any
+            self.positions = {}
+            self.vdisps = {}
+            if "W2" in spec:
+                for cid, (w1, (vx, vy)) in get_widths2(list_value(spec["W2"])).items():
+                    self.positions[cid] = (vx, vy)
+                    self.vdisps[cid] = w1
         else:
-            # writing mode: horizontal
-            self.disps = {}
-            self.default_disp = 0
+            self.default_position = (0, 0)
+            self.default_vdisp = 0
+            self.positions = {}
+            self.vdisps = {}
         Font.__init__(self, descriptor, widths, default_width=default_width)
 
     def get_cmap_from_spec(self, spec: Dict[str, PDFObject]) -> CMapBase:
@@ -580,6 +585,22 @@ class CIDFont(Font):
     def __repr__(self) -> str:
         return f"<CIDFont: basefont={self.basefont!r}, cidcoding={self.cidcoding!r}>"
 
-    def char_disp(self, cid: int) -> Union[float, Tuple[float, float]]:
-        """Returns 0 for horizontal fonts, a tuple for vertical fonts."""
-        return self.disps.get(cid, self.default_disp)
+    def vdisp(self, cid: int) -> float:
+        """Get vertical displacement for vertical writing mode.
+
+        Returns 0 for horizontal writing, for obvious reasons."""
+        return self.vdisps.get(cid, self.default_vdisp)
+
+    def position(self, cid: int) -> Tuple[float, float]:
+        """Get position vector for vertical writing mode.
+
+        This is quite ill-defined in the PDF standard but basically it
+        specifies the displacement of the glyph with respect to the
+        origin of glyph space.  It is *subtracted* from that origin to
+        give the glyph position.  So if your text matrix is `[1 0 0 1
+        100 100]`, and your font size is `10`, a position vector of
+        `[500 200]` will place the origin of the glyph at `[95 98]`.
+
+        For horizontal writing, it is obviously (0, 0).
+        """
+        return self.positions.get(cid, self.default_position)
