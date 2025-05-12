@@ -512,9 +512,9 @@ class GlyphObject(ContentObject):
             wx, wy = font.char_width(self.cid), font.char_vertical_disp(self.cid)
             vx, _ = font.char_position_vec(self.cid)
             x0, y0 = (-vx, wy)
-            x1, y1 = (wx - vx, 0)
+            x1, y1 = (wx - vx, 0.)
         else:
-            x0, y0 = (0, descent)
+            x0, y0 = (0., descent)
             x1, y1 = (width, ascent)
         if self._corners:
             return get_bound(
