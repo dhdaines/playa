@@ -589,7 +589,8 @@ class CIDFont(Font):
         """
         assert self.vertical, "Not a vertical font"
         if cid in self.position_vecs:
-            return self.position_vecs[cid]
+            vx, vy = self.position_vecs[cid]
+            return vx * 0.001, vy * 0.001
         else:
             return 0.5 * self.char_width(cid), self.default_position_vec_y * 0.001
 
