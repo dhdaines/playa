@@ -265,6 +265,12 @@ class Page:
         return self.flatten(TextObject)
 
     @property
+    def glyphs(self) -> Iterator["TextObject"]:
+        """Iterator over lazy glyph objects."""
+        for text in self.flatten(TextObject):
+            yield from text
+
+    @property
     def xobjects(self) -> Iterator["XObjectObject"]:
         """Return resolved and rendered Form XObjects.
 

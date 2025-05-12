@@ -36,6 +36,7 @@ from playa.parser import (
 )
 from playa.pdftypes import (
     ContentStream,
+    Rect,
     dict_value,
     int_value,
     list_value,
@@ -190,6 +191,15 @@ class Font:
 
     def string_width(self, s: bytes) -> float:
         return sum(self.char_width(cid) for cid, _ in self.decode(s))
+
+    def text_space_bbox(self, cid: int) -> Rect:
+        """"""
+        descent = self.get_descent()
+        ascent = self.get_ascent()
+        width = self.char_width(cid)
+        x0, y0 = (0, descent)
+        x1, y1 = (width, ascent)
+        return x0, y0, x1, y1
 
 
 class SimpleFont(Font):
@@ -586,21 +596,55 @@ class CIDFont(Font):
         return f"<CIDFont: basefont={self.basefont!r}, cidcoding={self.cidcoding!r}>"
 
     def vdisp(self, cid: int) -> float:
-        """Get vertical displacement for vertical writing mode.
+        """Get vertical displacement for vertical writing mode, in
+        unscaled text space units.
 
-        Returns 0 for horizontal writing, for obvious reasons."""
-        return self.vdisps.get(cid, self.default_vdisp)
+        Returns 0 for horizontal writing, for obvious reasons.
+        """
+        return self.vdisps.get(cid, self.default_vdisp) * self.vscale
 
     def position(self, cid: int) -> Tuple[float, float]:
-        """Get position vector for vertical writing mode.
+        """Get position vector for vertical writing mode, in unscaled
+        text space units.
 
-        This is quite ill-defined in the PDF standard but basically it
-        specifies the displacement of the glyph with respect to the
-        origin of glyph space.  It is *subtracted* from that origin to
-        give the glyph position.  So if your text matrix is `[1 0 0 1
-        100 100]`, and your font size is `10`, a position vector of
-        `[500 200]` will place the origin of the glyph at `[95 98]`.
+        This is quite ill-defined in the PDF standard (PDF 2.0 Figure
+        55), but basically it specifies a translation of the glyph
+        with respect to the origin.  It is *subtracted* from that
+        origin to give the glyph position.  So if your text matrix is
+        `[1 0 0 1 100 100]`, and your font size is `10`, a position
+        vector of `[500 200]` will place the origin of the glyph in
+        glyph space at `[-500 -200]`, which becomes `[-.5 -.2]` in
+        unscaled text space, then `[-5 -2]` after applying the font
+        size, thus the glyph is painted with its origin at `[95 98]`.
+
+        Yes, the horizontal scaling factor **does** apply to the
+        horizontal component of the position matrix, even if some PDF
+        viewers don't think so.
 
         For horizontal writing, it is obviously (0, 0).
+
         """
-        return self.positions.get(cid, self.default_position)
+        vx, vy = self.positions.get(cid, self.default_position)
+        return vx * self.hscale, vy * self.vscale
+
+    def text_space_bbox(self, cid: int) -> Rect:
+        """"""
+        descent = self.get_descent()
+        ascent = self.get_ascent()
+        width = self.char_width(cid)
+        if self.vertical:
+            vx, vy = self.position(cid)
+            # Horizontal offset for glyph origin vs. text
+            # space origin.
+            vx = -vx
+            # Vertical offset for glyph origin
+            vy = -vy
+            # Find glyph bbox
+            x0 = vx
+            y0 = vy + descent
+            x1 = vx + width
+            y1 = vy + ascent
+        else:
+            x0, y0 = (0, descent)
+            x1, y1 = (width, ascent)
+        return x0, y0, x1, y1

@@ -279,17 +279,9 @@ def decode_page_spec(doc: Document, spec: str) -> Iterator[int]:
         yield from pages
 
 
-def flatten_harder(itor: Iterator[ContentObject]) -> Iterator[ContentObject]:
-    for obj in itor:
-        if isinstance(obj, TextObject):
-            yield from obj
-        else:
-            yield obj
-
-
 def get_text_json(page: Page, explode_text: bool = False) -> List[str]:
     objs = []
-    itor = flatten_harder(page.texts) if explode_text else page.texts
+    itor = page.glyphs if explode_text else page.texts
     for text in itor:
         objs.append(
             json.dumps(asobj(text), indent=2, ensure_ascii=False, default=asobj)
