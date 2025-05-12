@@ -184,9 +184,9 @@ class Font:
             return self.default_width * self.hscale
         return self.widths[cid] * self.hscale
 
-    def char_disp(self, cid: int) -> Union[float, Tuple[Optional[float], float]]:
-        """Returns an integer for horizontal fonts, a tuple for vertical fonts."""
-        return 0
+    def char_disp(self, cid: int) -> float:
+        """Get the (horizontal or vertical) displacment from CID."""
+        return self.char_width(cid)
 
     def string_width(self, s: bytes) -> float:
         return sum(self.char_width(cid) for cid, _ in self.decode(s))
@@ -493,28 +493,26 @@ class CIDFont(Font):
 
         self.multibyte = True
         self.vertical = self.cmap.is_vertical()
+        widths = get_widths(list_value(spec.get("W", [])))
+        if "DW" in spec:
+            default_width = num_value(spec["DW"])
+        else:
+            default_width = 1000
         if self.vertical:
             # writing mode: vertical
             widths2 = get_widths2(list_value(spec.get("W2", [])))
-            self.disps = {cid: (vx, vy) for (cid, (_, (vx, vy))) in widths2.items()}
+            self.position_vecs = {cid: (vx, vy) for (cid, (_, (vx, vy))) in widths2.items()}
+            self.vertical_disps = {cid: w for (cid, (w, _)) in widths2.items()}
             if "DW2" in spec:
-                (vy, w) = point_value(spec["DW2"])
+                self.default_position_vec_y, self.default_vertical_disp = point_value(spec["DW2"])
             else:
-                # FIXME: Where did these values come from?
-                vy = 880
-                w = -1000
-            self.default_disp = (None, vy)
-            widths = {cid: w for (cid, (w, _)) in widths2.items()}
-            default_width = w
+                # PDF 2.0, 9.7.4.1, Table 115
+                self.default_position_vec_y = 880
+                self.default_vertical_disp = -1000
         else:
             # writing mode: horizontal
-            self.disps = {}
-            self.default_disp = 0
-            widths = get_widths(list_value(spec.get("W", [])))
-            if "DW" in spec:
-                default_width = num_value(spec["DW"])
-            else:
-                default_width = 1000
+            self.position_vecs, self.vertical_disps = {}, {}
+            self.default_position_vec_y = self.default_vertical_disp = 0
         Font.__init__(self, descriptor, widths, default_width=default_width)
 
     def get_cmap_from_spec(self, spec: Dict[str, PDFObject]) -> CMapBase:
@@ -581,6 +579,21 @@ class CIDFont(Font):
     def __repr__(self) -> str:
         return f"<CIDFont: basefont={self.basefont!r}, cidcoding={self.cidcoding!r}>"
 
-    def char_disp(self, cid: int) -> Union[float, Tuple[Optional[float], float]]:
-        """Returns 0 for horizontal fonts, a tuple for vertical fonts."""
-        return self.disps.get(cid, self.default_disp)
+    def char_disp(self, cid: int) -> float:
+        """Get the (horizontal or vertical) displacment from CID."""
+        return self.char_vertical_disp(cid) if self.vertical else self.char_width(cid)
+
+    def char_position_vec(self, cid: int) -> Point:
+        """Applies only to vertical fonts. Returns position vector from the origin used for
+        horizontal writing (origin 0) to the origin used for vertical writing (origin 1).
+        """
+        assert self.vertical, "Not a vertical font"
+        if cid in self.position_vecs:
+            return self.position_vecs[cid]
+        else:
+            return 0.5 * self.char_width(cid), self.default_position_vec_y * 0.001
+
+    def char_vertical_disp(self, cid: int) -> float:
+        """Applies only to vertical fonts. Get the vertical displacement of a character from its CID."""
+        assert self.vertical, "Not a vertical font"
+        return self.vertical_disps.get(cid, self.default_vertical_disp) * 0.001

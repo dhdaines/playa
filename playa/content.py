@@ -5,6 +5,7 @@ PDF content objects created by the interpreter.
 import itertools
 import logging
 from dataclasses import dataclass
+from collections import deque
 from typing import (
     TYPE_CHECKING,
     Dict,
@@ -23,7 +24,7 @@ from playa.color import (
     Color,
     ColorSpace,
 )
-from playa.font import Font
+from playa.font import Font, CIDFont
 from playa.parser import ContentParser, Token
 from playa.pdftypes import (
     BBOX_NONE,
@@ -37,7 +38,13 @@ from playa.pdftypes import (
     matrix_value,
     rect_value,
 )
-from playa.utils import apply_matrix_pt, get_bound, mult_matrix, transform_bbox, translate_matrix
+from playa.utils import (
+    apply_matrix_pt,
+    get_bound,
+    mult_matrix,
+    transform_bbox,
+    translate_matrix,
+)
 from playa.worker import PageRef, _deref_page
 
 if TYPE_CHECKING:
@@ -501,16 +508,11 @@ class GlyphObject(ContentObject):
         descent = font.get_descent()
         ascent = font.get_ascent()
         if font.vertical:
-            textdisp = font.char_disp(self.cid)
-            assert isinstance(textdisp, tuple)
-            (vx, vy) = textdisp
-            if vx is None:
-                vx = 0.5
-            else:
-                vx = vx * 0.001
-            vy = (1000 - vy) * 0.001
-            x0, y0 = (-vx, vy + width)
-            x1, y1 = (-vx + 1, vy)
+            assert isinstance(font, CIDFont)
+            wx, wy = font.char_width(self.cid), font.char_vertical_disp(self.cid)
+            vx, _ = font.char_position_vec(self.cid)
+            x0, y0 = (-vx, wy)
+            x1, y1 = (wx - vx, 0)
         else:
             x0, y0 = (0, descent)
             x1, y1 = (width, ascent)
@@ -554,8 +556,9 @@ class TextObject(ContentObject):
     _text_space_bbox: Union[Rect, None] = None
     _next_glyph_offset: Union[Point, None] = None
 
-    def __iter__(self) -> Iterator[GlyphObject]:
-        """Generate glyphs for this text object"""
+    def _glyph_iter(self) -> Iterator[Tuple[int, str, float, Point]]:
+        """Iterate through and position glyphs without constructing GlyphObject.
+        Also set _next_glyph_offset as side effect when fully consumed."""
         glyph_offset = self.glyph_offset
         font = self.gstate.font
         fontsize = self.gstate.fontsize
@@ -569,18 +572,13 @@ class TextObject(ContentObject):
             )
             self._next_glyph_offset = glyph_offset
             return
-        assert self.ctm is not None
-
-        tlm_ctm = mult_matrix(self.line_matrix, self.ctm)
-        # Pre-determine if we need to recompute the bound for rotated glyphs
-        a, b, c, d, _, _ = tlm_ctm
-        corners = b * d < 0 or a * c < 0
-        # Apply horizontal scaling
-        scaling = self.gstate.scaling * 0.01
+        vert = font.vertical
+        # Apply horizontal scaling if font is horizontal
+        scaling = 1 if vert else self.gstate.scaling * 0.01
         charspace = self.gstate.charspace * scaling
         wordspace = self.gstate.wordspace * scaling
-        scaling_matrix = self.gstate.fontsize * self.gstate.scaling * 0.01, 0, 0, self.gstate.fontsize, 0, self.gstate.rise
-        vert = font.vertical
+        fontsize_scaling = fontsize * scaling
+        tj_scale = 0.001 * fontsize * scaling
         if font.multibyte:
             wordspace = 0
         (x, y) = glyph_offset
@@ -588,30 +586,15 @@ class TextObject(ContentObject):
         needcharspace = False  # Only for first glyph
         for obj in self.args:
             if isinstance(obj, (int, float)):
-                dxscale = 0.001 * fontsize * scaling
-                pos -= obj * dxscale
+                pos -= obj * tj_scale
                 needcharspace = True
             else:
                 for cid, text in font.decode(obj):
                     if needcharspace:
                         pos += charspace
-                    textwidth = font.char_width(cid)
-                    adv = textwidth * fontsize * scaling
+                    adv = font.char_disp(cid) * fontsize_scaling
                     x, y = glyph_offset = (x, pos) if vert else (pos, y)
-                    matrix = mult_matrix(scaling_matrix, translate_matrix(tlm_ctm, glyph_offset))
-                    glyph = GlyphObject(
-                        _pageref=self._pageref,
-                        gstate=self.gstate,
-                        ctm=self.ctm,
-                        mcstack=self.mcstack,
-                        glyph_offset=glyph_offset,
-                        cid=cid,
-                        text=text,
-                        matrix=matrix,
-                        adv=adv,
-                        _corners=corners,
-                    )
-                    yield glyph
+                    yield cid, text, adv, glyph_offset
                     pos += adv
                     if cid == 32 and wordspace:
                         pos += wordspace
@@ -620,76 +603,67 @@ class TextObject(ContentObject):
         if self._next_glyph_offset is None:
             self._next_glyph_offset = glyph_offset
 
+    def __iter__(self) -> Iterator[GlyphObject]:
+        """Generate glyphs for this text object"""
+        tlm_ctm = mult_matrix(self.line_matrix, self.ctm)
+        # Pre-determine if we need to recompute the bound for rotated glyphs
+        a, b, c, d, _, _ = tlm_ctm
+        corners = b * d < 0 or a * c < 0
+        scaling_matrix = (
+            self.gstate.fontsize * self.gstate.scaling * 0.01,
+            0,
+            0,
+            self.gstate.fontsize,
+            0,
+            self.gstate.rise,
+        )
+        for cid, text, adv, glyph_offset in self._glyph_iter():
+            matrix = mult_matrix(
+                scaling_matrix, translate_matrix(tlm_ctm, glyph_offset)
+            )
+            glyph = GlyphObject(
+                _pageref=self._pageref,
+                gstate=self.gstate,
+                ctm=self.ctm,
+                mcstack=self.mcstack,
+                glyph_offset=glyph_offset,
+                cid=cid,
+                text=text,
+                matrix=matrix,
+                adv=adv,
+                _corners=corners,
+            )
+            yield glyph
+
     def _calculate_scaled_text_space_bbox(self):
         if self._text_space_bbox is not None:
             return self._text_space_bbox
         font = self.gstate.font
-        fontsize = self.gstate.fontsize
-        rise = self.gstate.rise
-        descent = font.get_descent() * fontsize
-        ascent = font.get_ascent() * fontsize
-        if font is None:
-            log.warning(
-                "No font is set, will not update text state or output text: %r TJ",
-                self.args,
-            )
+        glyph_data = list(self._glyph_iter())
+        if font is None or len(glyph_data) == 0:
             self._text_space_bbox = BBOX_NONE
-            self._next_glyph_offset = self.glyph_offset
             return self._text_space_bbox
-        if len(self.args) == 0:
-            self._text_space_bbox = BBOX_NONE
-            self._next_glyph_offset = self.glyph_offset
-            return self._text_space_bbox
-        scaling = self.gstate.scaling * 0.01
-        charspace = self.gstate.charspace * scaling
-        wordspace = self.gstate.wordspace * scaling
         vert = font.vertical
-        if font.multibyte:
-            wordspace = 0
         (x, y) = self.glyph_offset
-        pos = y if vert else x
-        needcharspace = False  # Only for first glyph
         if vert:
+            assert isinstance(font, CIDFont)
             x0 = x1 = x
-            y0 = y1 = y
+            y0 = self.gstate.rise + y
+            y1 = self.gstate.rise + self._next_glyph_offset[1]
+            scaling_x = self.gstate.fontsize * self.gstate.scaling * 0.01
+            for cid, _, _, _ in glyph_data:
+                vx, _ = font.char_position_vec(cid)
+                w = font.char_width(cid)
+                glyph_x0 = x - vx * scaling_x
+                glyph_x1 = glyph_x0 + w * scaling_x
+                x0 = min(x0, glyph_x0)
+                x1 = max(x1, glyph_x1)
         else:
-            # These do not change!
-            x0 = x1 = x
-            y0 = y + descent + rise
-            y1 = y + ascent + rise
-        for obj in self.args:
-            if isinstance(obj, (int, float)):
-                dxscale = 0.001 * fontsize * scaling
-                pos -= obj * dxscale
-                needcharspace = True
-            else:
-                for cid, _ in font.decode(obj):
-                    if needcharspace:
-                        pos += charspace
-                    textwidth = font.char_width(cid)
-                    adv = textwidth * fontsize * scaling
-                    x, y = (x, pos) if vert else (pos, y)
-                    if vert:
-                        textdisp = font.char_disp(cid)
-                        assert isinstance(textdisp, tuple)
-                        (vx, vy) = textdisp
-                        if vx is None:
-                            vx = fontsize * 0.5
-                        else:
-                            vx = vx * fontsize * 0.001
-                        vy = (1000 - vy) * fontsize * 0.001
-                        x0 = min(x0, x - vx)
-                        y0 = min(y0, y + vy + rise + adv)
-                        x1 = max(x1, x - vx + fontsize)
-                        y1 = max(y1, y + vy + rise)
-                    else:
-                        x1 = x + adv
-                    pos += adv
-                    if cid == 32 and wordspace:
-                        pos += wordspace
-                    needcharspace = True
-        if self._next_glyph_offset is None:
-            self._next_glyph_offset = (x, pos) if vert else (pos, y)
+            scaling_y = self.gstate.fontsize
+            x0 = x
+            y0 = y + font.get_descent() * scaling_y + self.gstate.rise
+            x1 = self._next_glyph_offset[0]
+            y1 = y + font.get_ascent() * scaling_y + self.gstate.rise
         self._text_space_bbox = (x0, y0, x1, y1)
         return self._text_space_bbox
 
@@ -697,7 +671,8 @@ class TextObject(ContentObject):
     def next_glyph_offset(self) -> Point:
         if self._next_glyph_offset is not None:
             return self._next_glyph_offset
-        self._calculate_scaled_text_space_bbox()
+        # CPython deque fast path consume iterator for side effects
+        deque(self._glyph_iter(), maxlen=0)
         assert self._next_glyph_offset is not None
         return self._next_glyph_offset
 
