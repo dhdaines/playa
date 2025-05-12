@@ -23,6 +23,7 @@ from typing import (
 
 from playa.content import (
     ContentObject,
+    GlyphObject,
     ImageObject,
     MarkedContent,
     PathObject,
@@ -265,7 +266,7 @@ class Page:
         return self.flatten(TextObject)
 
     @property
-    def glyphs(self) -> Iterator["TextObject"]:
+    def glyphs(self) -> Iterator["GlyphObject"]:
         """Iterator over lazy glyph objects."""
         for text in self.flatten(TextObject):
             yield from text

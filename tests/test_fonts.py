@@ -114,9 +114,9 @@ def test_vertical_font_boxes() -> None:
         glyphs = json.load(infh)
     with playa.open(TESTDIR / "vertical_writing.pdf", space="default") as doc:
         page = doc.pages[0]
-        for found, expected in zip(page.texts, texts):
-            assert found.chars == expected["chars"]
-            assert found.bbox == tuple(expected["bbox"])
-        for found, expected in zip(page.glyphs, glyphs):
-            assert found.text == expected["text"]
-            assert found.bbox == tuple(expected["bbox"])
+        for text, expected in zip(page.texts, texts):
+            assert text.chars == expected["chars"]
+            assert text.bbox == tuple(expected["bbox"])
+        for glyph, expected in zip(page.glyphs, glyphs):
+            assert glyph.text == expected["text"]
+            assert glyph.bbox == tuple(expected["bbox"])
