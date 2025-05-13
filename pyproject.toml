@@ -107,3 +107,6 @@ check = "mypy --install-types --non-interactive {args:playa tests benchmarks}"
 
 [tool.hatch.envs.schema]
 extra-dependencies = [ "pydantic > 2" ]
+
+[tool.coverage.run]
+omit = [ "tests/*" ]

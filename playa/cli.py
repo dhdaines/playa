@@ -90,7 +90,7 @@ from playa import Document, Page, PDFPasswordIncorrect, asobj
 from playa.data.content import Image
 from playa.data.metadata import asobj_document
 from playa.outline import Outline
-from playa.page import ContentObject, ImageObject, TextObject
+from playa.page import ImageObject
 from playa.pdftypes import (
     LITERALS_DCT_DECODE,
     ContentStream,
@@ -279,17 +279,9 @@ def decode_page_spec(doc: Document, spec: str) -> Iterator[int]:
         yield from pages
 
 
-def flatten_harder(itor: Iterator[ContentObject]) -> Iterator[ContentObject]:
-    for obj in itor:
-        if isinstance(obj, TextObject):
-            yield from obj
-        else:
-            yield obj
-
-
 def get_text_json(page: Page, explode_text: bool = False) -> List[str]:
     objs = []
-    itor = flatten_harder(page.texts) if explode_text else page.texts
+    itor = page.glyphs if explode_text else page.texts
     for text in itor:
         objs.append(
             json.dumps(asobj(text), indent=2, ensure_ascii=False, default=asobj)
@@ -317,7 +309,7 @@ def extract_text_objects(doc: Document, args: argparse.Namespace) -> None:
 
 def get_content_json(page: Page, explode_text: bool = False) -> List[str]:
     objs = []
-    itor = flatten_harder(page.flatten()) if explode_text else page.flatten()
+    itor = page.glyphs if explode_text else page.flatten()
     for obj in itor:
         objdict = asobj(obj)
         objdict["object_type"] = obj.object_type

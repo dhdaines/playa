@@ -2,6 +2,7 @@
 Test various font-related things
 """
 
+import json
 from typing import List
 
 import playa
@@ -102,3 +103,21 @@ def test_type3_font_boxes() -> None:
         assert line2 == pytest.approx(
             (25.0, 39.274413, 246.58691507160006, 53.3701175326)
         )
+
+
+@pytest.mark.parametrize("name", ["vertical_writing", "simple3"])
+def test_vertical_font_boxes(name: str) -> None:
+    """Ensure that we correctly handle the whole bestiary of vertical
+    writing mode font metrics."""
+    with open(TESTDIR / f"{name}_texts.json", encoding="utf-8") as infh:
+        texts = json.load(infh)
+    with open(TESTDIR / f"{name}_glyphs.json", encoding="utf-8") as infh:
+        glyphs = json.load(infh)
+    with playa.open(TESTDIR / f"{name}.pdf", space="default") as doc:
+        page = doc.pages[0]
+        for text, expected in zip(page.texts, texts):
+            assert text.chars == expected["chars"]
+            assert text.bbox == tuple(expected["bbox"])
+        for glyph, expected in zip(page.glyphs, glyphs):
+            assert glyph.text == expected["text"]
+            assert glyph.bbox == tuple(expected["bbox"])

@@ -1,0 +1,262 @@
+[
+{
+  "chars": "Hello",
+  "bbox": [
+    0.0,
+    690.064,
+    109.34400000000001,
+    734.4639999999999
+  ],
+  "gstate": {
+    "font": {
+      "name": "Helvetica",
+      "type": "Type1",
+      "ascent": 718.0,
+      "descent": -207.0,
+      "bbox": [
+        -166.0,
+        -225.0,
+        1000.0,
+        931.0
+      ]
+    },
+    "fontsize": 48
+  },
+  "line_matrix": [
+    1,
+    0,
+    0,
+    1,
+    0,
+    700
+  ]
+},
+{
+  "chars": "Hello",
+  "bbox": [
+    109.34400000000001,
+    714.064,
+    218.688,
+    758.4639999999999
+  ],
+  "gstate": {
+    "font": {
+      "name": "Helvetica",
+      "type": "Type1",
+      "ascent": 718.0,
+      "descent": -207.0,
+      "bbox": [
+        -166.0,
+        -225.0,
+        1000.0,
+        931.0
+      ]
+    },
+    "fontsize": 48,
+    "rise": 24
+  },
+  "line_matrix": [
+    1,
+    0,
+    0,
+    1,
+    0,
+    700
+  ],
+  "glyph_offset": [
+    109.34400000000001,
+    0
+  ]
+},
+{
+  "chars": "あいうえお",
+  "bbox": [
+    194.688,
+    460.0,
+    242.688,
+    700.0
+  ],
+  "gstate": {
+    "font": {
+      "name": "unknown",
+      "type": "CIDFont",
+      "ascent": 880,
+      "descent": -120,
+      "default_width": 1000
+    },
+    "fontsize": 48
+  },
+  "line_matrix": [
+    1,
+    0,
+    0,
+    1,
+    0,
+    700
+  ],
+  "glyph_offset": [
+    218.688,
+    0
+  ]
+},
+{
+  "chars": "あいうえお",
+  "bbox": [
+    194.688,
+    244.0,
+    242.688,
+    484.0
+  ],
+  "gstate": {
+    "font": {
+      "name": "unknown",
+      "type": "CIDFont",
+      "ascent": 880,
+      "descent": -120,
+      "default_width": 1000
+    },
+    "fontsize": 48,
+    "rise": 24
+  },
+  "line_matrix": [
+    1,
+    0,
+    0,
+    1,
+    0,
+    700
+  ],
+  "glyph_offset": [
+    218.688,
+    -240.0
+  ]
+},
+{
+  "chars": "World",
+  "bbox": [
+    218.688,
+    215.03199999999998,
+    281.352,
+    237.23199999999997
+  ],
+  "gstate": {
+    "font": {
+      "name": "Helvetica",
+      "type": "Type1",
+      "ascent": 718.0,
+      "descent": -207.0,
+      "bbox": [
+        -166.0,
+        -225.0,
+        1000.0,
+        931.0
+      ]
+    },
+    "fontsize": 24
+  },
+  "line_matrix": [
+    1,
+    0,
+    0,
+    1,
+    0,
+    700
+  ],
+  "glyph_offset": [
+    218.688,
+    -480.0
+  ]
+},
+{
+  "chars": "World",
+  "bbox": [
+    281.352,
+    239.03199999999998,
+    344.01599999999996,
+    261.23199999999997
+  ],
+  "gstate": {
+    "font": {
+      "name": "Helvetica",
+      "type": "Type1",
+      "ascent": 718.0,
+      "descent": -207.0,
+      "bbox": [
+        -166.0,
+        -225.0,
+        1000.0,
+        931.0
+      ]
+    },
+    "fontsize": 24,
+    "rise": 24
+  },
+  "line_matrix": [
+    1,
+    0,
+    0,
+    1,
+    0,
+    700
+  ],
+  "glyph_offset": [
+    281.352,
+    -480.0
+  ]
+},
+{
+  "chars": "あいうえお",
+  "bbox": [
+    470.0,
+    460.0,
+    530.0,
+    700.0
+  ],
+  "gstate": {
+    "font": {
+      "name": "unknown",
+      "type": "CIDFont",
+      "ascent": 880,
+      "descent": -120,
+      "default_width": 1000
+    },
+    "fontsize": 48
+  },
+  "line_matrix": [
+    1,
+    0,
+    0,
+    1,
+    500,
+    700
+  ]
+},
+{
+  "chars": "あいうえお",
+  "bbox": [
+    370.0,
+    380.0,
+    430.0,
+    700.0
+  ],
+  "gstate": {
+    "font": {
+      "name": "unknown",
+      "type": "CIDFont",
+      "ascent": 880,
+      "descent": -120,
+      "default_width": 1000
+    },
+    "fontsize": 48,
+    "charspace": -20
+  },
+  "line_matrix": [
+    1,
+    0,
+    0,
+    1,
+    400,
+    700
+  ]
+}
+]

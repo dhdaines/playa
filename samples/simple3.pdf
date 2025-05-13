@@ -32,18 +32,25 @@ endobj
 >>
 endobj
 5 0 obj
-<< /Length 86 >>
+<< /Length 0 >>
 stream
 BT
 /F1 48 Tf
 0 700 Td 0 Tw 0 Tc
-%1 0 1 1 -500 0 cm
 (Hello) Tj 24 Ts (Hello) Tj 0 Ts
 /F2 48 Tf
 ($"$$$&$\($*) Tj 24 Ts
 ($"$$$&$\($*) Tj 0 Ts
 /F1 24 Tf
 (World) Tj 24 Ts (World) Tj 0 Ts
+ET
+BT
+/F2 48 Tf
+500 700 Td 0 Tw 0 Tc 125 Tz
+($"$$$&$\($*) Tj
+-100 0 Td
+-20 Tc
+($"$$$&$\($*) Tj
 ET
 endstream
 endobj

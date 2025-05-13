@@ -36,6 +36,7 @@ from playa.parser import (
 )
 from playa.pdftypes import (
     ContentStream,
+    Rect,
     dict_value,
     int_value,
     list_value,
@@ -125,8 +126,9 @@ class Font:
         else:
             self.fontname = "unknown"
         self.flags = int_value(descriptor.get("Flags", 0))
-        self.ascent = num_value(descriptor.get("Ascent", 0))
-        self.descent = num_value(descriptor.get("Descent", 0))
+        # Default values based on default DW2 metrics
+        self.ascent = num_value(descriptor.get("Ascent", 880))
+        self.descent = num_value(descriptor.get("Descent", -120))
         self.italic_angle = num_value(descriptor.get("ItalicAngle", 0))
         if default_width is None:
             self.default_width = num_value(descriptor.get("MissingWidth", 0))
@@ -184,12 +186,31 @@ class Font:
             return self.default_width * self.hscale
         return self.widths[cid] * self.hscale
 
-    def char_disp(self, cid: int) -> Union[float, Tuple[Optional[float], float]]:
+    def char_disp(self, cid: int) -> Union[float, Tuple[float, float]]:
         """Returns an integer for horizontal fonts, a tuple for vertical fonts."""
         return 0
 
     def string_width(self, s: bytes) -> float:
         return sum(self.char_width(cid) for cid, _ in self.decode(s))
+
+    def char_bbox(self, cid: int) -> Rect:
+        """Get the standard bounding box for a character from its CID.
+
+        This is, very specifically, `[0 descent width ascent]` in text
+        space units.
+
+        Danger: Not the actual bounding box of the glyph.
+            This is a standardized bounding box for use in text
+            extraction and layout analysis.  It does not correspond to
+            the actual bounding box of an individual glyph as
+            specified by the font program.
+        """
+        descent = self.get_descent()
+        ascent = self.get_ascent()
+        width = self.char_width(cid)
+        x0, y0 = (0, descent)
+        x1, y1 = (width, ascent)
+        return x0, y0, x1, y1
 
 
 class SimpleFont(Font):
@@ -407,7 +428,7 @@ IDENTITY_ENCODER = {
 
 
 class CIDFont(Font):
-    default_disp: Union[float, Tuple[Optional[float], float]]
+    default_vdisp: float
 
     def __init__(
         self,
@@ -486,35 +507,39 @@ class CIDFont(Font):
                 "using identity mapping: %r",
                 spec,
             )
-
         # FIXME: Verify that self.tounicode's code space corresponds
         # to self.cmap (this is actually quite hard because the code
         # spaces have been lost in the precompiled CMaps...)
 
-        self.multibyte = True
+        widths = get_widths(list_value(spec.get("W", [])))
+        if "DW" in spec:
+            default_width = num_value(spec["DW"])
+        else:
+            default_width = 1000
         self.vertical = self.cmap.is_vertical()
         if self.vertical:
-            # writing mode: vertical
-            widths2 = get_widths2(list_value(spec.get("W2", [])))
-            self.disps = {cid: (vx, vy) for (cid, (_, (vx, vy))) in widths2.items()}
             if "DW2" in spec:
-                (vy, w) = point_value(spec["DW2"])
+                (vy, w1) = point_value(spec["DW2"])
             else:
-                # FIXME: Where did these values come from?
-                vy = 880
-                w = -1000
-            self.default_disp = (None, vy)
-            widths = {cid: w for (cid, (w, _)) in widths2.items()}
-            default_width = w
+                # seemingly arbitrary values, but found in PDF 2.0 Table 115
+                vy = 880  # vertical component of position vector
+                w1 = -1000  # default vertical displacement
+            self.default_position = (default_width / 2, vy)
+            # The horizontal displacement is *always* zero (PDF 2.0
+            # sec 9.7.4.3) so we only store the vertical.
+            self.default_vdisp = w1
+            # Glyph-specific vertical displacement and position vectors if any
+            self.positions = {}
+            self.vdisps = {}
+            if "W2" in spec:
+                for cid, (w1, (vx, vy)) in get_widths2(list_value(spec["W2"])).items():
+                    self.positions[cid] = (vx, vy)
+                    self.vdisps[cid] = w1
         else:
-            # writing mode: horizontal
-            self.disps = {}
-            self.default_disp = 0
-            widths = get_widths(list_value(spec.get("W", [])))
-            if "DW" in spec:
-                default_width = num_value(spec["DW"])
-            else:
-                default_width = 1000
+            self.default_position = (0, 0)
+            self.default_vdisp = 0
+            self.positions = {}
+            self.vdisps = {}
         Font.__init__(self, descriptor, widths, default_width=default_width)
 
     def get_cmap_from_spec(self, spec: Dict[str, PDFObject]) -> CMapBase:
@@ -581,6 +606,67 @@ class CIDFont(Font):
     def __repr__(self) -> str:
         return f"<CIDFont: basefont={self.basefont!r}, cidcoding={self.cidcoding!r}>"
 
-    def char_disp(self, cid: int) -> Union[float, Tuple[Optional[float], float]]:
-        """Returns 0 for horizontal fonts, a tuple for vertical fonts."""
-        return self.disps.get(cid, self.default_disp)
+    def vdisp(self, cid: int) -> float:
+        """Get vertical displacement for vertical writing mode, in
+        text space units.
+
+        Returns 0 for horizontal writing, for obvious reasons.
+        """
+        return self.vdisps.get(cid, self.default_vdisp) * self.vscale
+
+    def position(self, cid: int) -> Tuple[float, float]:
+        """Get position vector for vertical writing mode, in text
+        space units.
+
+        This is quite ill-defined in the PDF standard (PDF 2.0 Figure
+        55), but basically it specifies a translation of the glyph
+        with respect to the origin.  It is *subtracted* from that
+        origin to give the glyph position.  So if your text matrix is
+        `[1 0 0 1 100 100]`, and your font size is `10`, a position
+        vector of `[500 200]` will place the origin of the glyph in
+        glyph space at `[-500 -200]`, which becomes `[-.5 -.2]` in
+        text space, then `[-5 -2]` after applying the font size, thus
+        the glyph is painted with its origin at `[95 98]`.
+
+        Yes, the horizontal scaling factor **does** apply to the
+        horizontal component of the position matrix, even if some PDF
+        viewers don't think so.
+
+        For horizontal writing, it is obviously (0, 0).
+
+        """
+        vx, vy = self.positions.get(cid, self.default_position)
+        return vx * self.hscale, vy * self.vscale
+
+    def char_bbox(self, cid: int) -> Rect:
+        """Get the standard bounding box for a character from its CID.
+
+        This is the standard bounding box in text space units based on
+        width, descent and ascent, translated by the position vector.
+
+        Danger: Not the actual bounding box of the glyph.
+            This is a standardized bounding box for use in text
+            extraction and layout analysis.  It does not correspond to
+            the actual bounding box of an individual glyph as
+            specified by the font program.
+
+        """
+        descent = self.get_descent()
+        ascent = self.get_ascent()
+        width = self.char_width(cid)
+        if self.vertical:
+            vx, vy = self.position(cid)
+            # Horizontal offset for glyph origin vs. text
+            # space origin.
+            vx = -vx
+            # Vertical offset for glyph origin
+            vy = -vy
+            # Find glyph bbox
+            x0 = vx
+            y0 = vy + descent
+            x1 = vx + width
+            y1 = vy + ascent
+        else:
+            x0, y0 = (0, descent)
+            x1, y1 = (width, ascent)
+        return x0, y0, x1, y1

@@ -23,7 +23,7 @@ from playa.color import (
     Color,
     ColorSpace,
 )
-from playa.font import Font
+from playa.font import Font, CIDFont
 from playa.parser import ContentParser, Token
 from playa.pdftypes import (
     BBOX_NONE,
@@ -114,15 +114,14 @@ class GraphicState:
         text size but position as well).  Since most reasonable people
         find that behaviour rather confusing, this is often just 1.0,
         and PDFs rely on the text matrix to set the size of text.
-      charspace: Extra spacing to add between each glyph, in
-        "unscaled text space units", which actually just means text
-        space units, that are subsequently scaled by the `fontsize`
-        and `scaling` parameters.
-      wordspace: The width of a space, defined curiously as `cid==32`
-        (But PDF Is A prESeNTaTion fORmAT sO ThERe maY NOt Be aNY
-        SpACeS!!), in unscaled text space units.
+      charspace: Extra spacing to add between each glyph, expressed in
+        unscaled text space units, meaning it is not affected by
+        `fontsize`.  **BUT** it will be modified by `scaling` for
+        horizontal writing mode (so, most of the time).
+      wordspace: The width of a space, defined very specifically as the
+        single-byte character code 32.
       scaling: The horizontal scaling factor as defined by the PDF
-        standard (divided by 100 then applied along with `fontsize`)
+        standard (that is, divided by 100).
       leading: The leading as defined by the PDF standard, in unscaled
         text space units.
       render_mode: The PDF rendering mode.  The really important one
@@ -478,12 +477,14 @@ class GlyphObject(ContentObject):
     Attributes:
       cid: Character ID for this glyph.
       text: Unicode mapping of this glyph, if any.
-      adv: glyph displacement in text space units (horizontal or vertical,
-           depending on the writing direction).
       matrix: rendering matrix `T_rm` for this glyph, which transforms text
               space coordinates to device space (PDF 2.0 section 9.4.4).
-      glyph_offset: Offset in from the
-          origin of the parent TextObject in some undefined space FIXME.
+      glyph_offset: DEPRECATED: Offset from the origin of the parent
+          TextObject in "unscaled text space units", meaning,
+          paradoxically, after applying fontsize, horizontal scaling,
+          and rise, but before any coordinate transformations.
+      adv: DEPRECATED: Glyph displacement (horizontal or vertical
+           according to the font), also in "unscaled text space units".
       bbox: glyph bounding box in device space.
 
     """
@@ -503,23 +504,7 @@ class GlyphObject(ContentObject):
     def bbox(self) -> Rect:
         font = self.gstate.font
         assert font is not None
-        width = font.char_width(self.cid)
-        descent = font.get_descent()
-        ascent = font.get_ascent()
-        if font.vertical:
-            textdisp = font.char_disp(self.cid)
-            assert isinstance(textdisp, tuple)
-            (vx, vy) = textdisp
-            if vx is None:
-                vx = 0.5
-            else:
-                vx = vx * 0.001
-            vy = (1000 - vy) * 0.001
-            x0, y0 = (-vx, vy + width)
-            x1, y1 = (-vx + 1, vy)
-        else:
-            x0, y0 = (0, descent)
-            x1, y1 = (width, ascent)
+        x0, y0, x1, y1 = font.char_bbox(self.cid)
         if self._corners:
             return get_bound(
                 (
@@ -564,7 +549,6 @@ class TextObject(ContentObject):
         """Generate glyphs for this text object"""
         glyph_offset = self.glyph_offset
         font = self.gstate.font
-        fontsize = self.gstate.fontsize
         # If no font is set, we cannot do anything, since even calling
         # TJ with a displacement and no text effects requires us at
         # least to know the fontsize.
@@ -581,10 +565,19 @@ class TextObject(ContentObject):
         # Pre-determine if we need to recompute the bound for rotated glyphs
         a, b, c, d, _, _ = tlm_ctm
         corners = b * d < 0 or a * c < 0
-        # Apply horizontal scaling
-        scaling = self.gstate.scaling * 0.01
-        charspace = self.gstate.charspace * scaling
-        wordspace = self.gstate.wordspace * scaling
+        horizontal_scaling = self.gstate.scaling * 0.01
+        # Calculate charspace and wordspace
+        charspace = self.gstate.charspace
+        wordspace = self.gstate.wordspace
+        if not font.vertical:
+            # PDF 2.0 section 9.3.2: The character-spacing parameter, Tc,
+            # shall be a number specified in unscaled text space units
+            # (although it shall be subject to scaling by the Th parameter
+            # if the writing mode is horizontal)
+            charspace *= horizontal_scaling
+            # Section 9.3.3: Word spacing works the same way as
+            # character spacing
+            wordspace *= horizontal_scaling
         # PDF 2.0 section 9.4.4: Conceptually, the entire
         # transformation from text space to device space can be
         # represented by a text rendering matrix, T_rm:
@@ -594,11 +587,12 @@ class TextObject(ContentObject):
         # Note that scaling_matrix and text_matrix are constant across
         # glyphs in a TextObject, and scaling_matrix is always
         # diagonal (thus the mult_matrix call below can be optimized)
+        fontsize = self.gstate.fontsize
         scaling_matrix = (
-            self.gstate.fontsize * self.gstate.scaling * 0.01,
+            fontsize * horizontal_scaling,
             0,
             0,
-            self.gstate.fontsize,
+            fontsize,
             0,
             self.gstate.rise,
         )
@@ -610,15 +604,18 @@ class TextObject(ContentObject):
         needcharspace = False  # Only for first glyph
         for obj in self.args:
             if isinstance(obj, (int, float)):
-                dxscale = 0.001 * fontsize * scaling
-                pos -= obj * dxscale
+                pos -= obj * 0.001 * fontsize * horizontal_scaling
                 needcharspace = True
             else:
                 for cid, text in font.decode(obj):
+                    width = font.char_width(cid)
                     if needcharspace:
                         pos += charspace
-                    textwidth = font.char_width(cid)
-                    adv = textwidth * fontsize * scaling
+                    if vert:
+                        assert isinstance(font, CIDFont)
+                        disp = font.vdisp(cid) * fontsize
+                    else:
+                        disp = width * fontsize * horizontal_scaling
                     x, y = glyph_offset = (x, pos) if vert else (pos, y)
                     matrix = mult_matrix(
                         scaling_matrix, translate_matrix(tlm_ctm, glyph_offset)
@@ -632,11 +629,11 @@ class TextObject(ContentObject):
                         cid=cid,
                         text=text,
                         matrix=matrix,
-                        adv=adv,
+                        adv=disp,
                         _corners=corners,
                     )
                     yield glyph
-                    pos += adv
+                    pos += disp
                     if cid == 32 and wordspace:
                         pos += wordspace
                     needcharspace = True
@@ -664,9 +661,9 @@ class TextObject(ContentObject):
             self._text_space_bbox = BBOX_NONE
             self._next_glyph_offset = self.glyph_offset
             return self._text_space_bbox
-        scaling = self.gstate.scaling * 0.01
-        charspace = self.gstate.charspace * scaling
-        wordspace = self.gstate.wordspace * scaling
+        horizontal_scaling = self.gstate.scaling * 0.01
+        charspace = self.gstate.charspace
+        wordspace = self.gstate.wordspace
         vert = font.vertical
         if font.multibyte:
             wordspace = 0
@@ -674,39 +671,48 @@ class TextObject(ContentObject):
         pos = y if vert else x
         needcharspace = False  # Only for first glyph
         if vert:
+            # Because the position vector can be anything for vertical
+            # writing, none of these can be fixed even if we ignore
+            # glyph-specific width, ascent and descent.
             x0 = x1 = x
             y0 = y1 = y
         else:
-            # These do not change!
             x0 = x1 = x
+            # In horizontal writing by contrast the baseline never
+            # changes, and by convention, even though it's quite
+            # incorrect, we use the descent and rise for the text and
+            # glyph bounding box.  This means y0 and y1 are fixed.
             y0 = y + descent + rise
             y1 = y + ascent + rise
+            # Scale charspace and wordspace, PDF 2.0 section 9.3.2
+            charspace *= horizontal_scaling
+            wordspace *= horizontal_scaling
         for obj in self.args:
             if isinstance(obj, (int, float)):
-                dxscale = 0.001 * fontsize * scaling
-                pos -= obj * dxscale
+                pos -= obj * 0.001 * fontsize * horizontal_scaling
                 needcharspace = True
             else:
                 for cid, _ in font.decode(obj):
                     if needcharspace:
                         pos += charspace
-                    textwidth = font.char_width(cid)
-                    adv = textwidth * fontsize * scaling
                     x, y = (x, pos) if vert else (pos, y)
+                    width = font.char_width(cid)
                     if vert:
-                        textdisp = font.char_disp(cid)
-                        assert isinstance(textdisp, tuple)
-                        (vx, vy) = textdisp
-                        if vx is None:
-                            vx = fontsize * 0.5
-                        else:
-                            vx = vx * fontsize * 0.001
-                        vy = (1000 - vy) * fontsize * 0.001
-                        x0 = min(x0, x - vx)
-                        y0 = min(y0, y + vy + rise + adv)
-                        x1 = max(x1, x - vx + fontsize)
-                        y1 = max(y1, y + vy + rise)
+                        assert isinstance(font, CIDFont)
+                        adv = font.vdisp(cid) * fontsize
+                        gx0, gy0, gx1, gy1 = font.char_bbox(cid)
+                        gx0 *= fontsize * horizontal_scaling
+                        gx1 *= fontsize * horizontal_scaling
+                        gy0 *= fontsize
+                        gy0 += rise
+                        gy1 *= fontsize
+                        gy1 += rise
+                        x0 = min(x0, x + gx0)
+                        y0 = min(y0, y + gy0)
+                        x1 = max(x1, x + gx1)
+                        y1 = max(y1, y + gy1)
                     else:
+                        adv = width * fontsize * horizontal_scaling
                         x1 = x + adv
                     pos += adv
                     if cid == 32 and wordspace:
