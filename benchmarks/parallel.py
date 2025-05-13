@@ -8,9 +8,12 @@ from pathlib import Path
 import playa
 from playa.page import Page
 
+from tests.data import CONTRIB
+
 
 def process_page(page: Page) -> str:
-    return " ".join(x.chars for x in page.texts)
+    for obj in page:
+        _ = obj.bbox
 
 
 def benchmark_single(path: Path):
@@ -27,22 +30,32 @@ if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("-n", "--ncpu", type=int, default=4)
-    parser.add_argument("pdf", type=Path)
+    parser.add_argument("-n", "--ncpu", type=int, default=2)
+    parser.add_argument("-i", "--niter", type=int, default=5)
+    parser.add_argument(
+        "--pdf",
+        type=Path,
+        default=CONTRIB / "Rgl-1314-2021-DM-Derogations-mineures.pdf",
+    )
     args = parser.parse_args()
 
-    start = time.time()
-    benchmark_multi(args.pdf, args.ncpu)
-    multi_time = time.time() - start
+    multi_time = single_time = 0
+    for iter in range(args.niter + 1):
+        start = time.time()
+        benchmark_multi(args.pdf, args.ncpu)
+        if iter != 0:
+            multi_time += time.time() - start
     print(
-        "PLAYA (%d CPUs) took %.2fs"
+        "PLAYA (%d CPUs) took %d ms / iter"
         % (
             args.ncpu,
-            multi_time,
+            multi_time / args.niter * 1000,
         )
     )
 
-    start = time.time()
-    benchmark_single(args.pdf)
-    single_time = time.time() - start
-    print("PLAYA (single) took %.2fs" % (single_time,))
+    for iter in range(args.niter + 1):
+        start = time.time()
+        benchmark_single(args.pdf)
+        if iter != 0:
+            single_time += time.time() - start
+    print("PLAYA (single) took %d ms / iter" % (single_time / args.niter * 1000,))
