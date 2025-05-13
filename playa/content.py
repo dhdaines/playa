@@ -479,9 +479,12 @@ class GlyphObject(ContentObject):
       text: Unicode mapping of this glyph, if any.
       matrix: rendering matrix `T_rm` for this glyph, which transforms text
               space coordinates to device space (PDF 2.0 section 9.4.4).
-      glyph_offset: Offset in from the
-          origin of the parent TextObject in some undefined space FIXME.
-      adv: Glyph displacement in "scaled text space" FIXME.
+      glyph_offset: DEPRECATED: Offset from the origin of the parent
+          TextObject in "unscaled text space units", meaning,
+          paradoxically, after applying fontsize, horizontal scaling,
+          and rise, but before any coordinate transformations.
+      adv: DEPRECATED: Glyph displacement (horizontal or vertical
+           according to the font), also in "unscaled text space units".
       bbox: glyph bounding box in device space.
 
     """
