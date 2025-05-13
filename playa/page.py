@@ -335,7 +335,7 @@ class Page:
             obj: "TextObject", vertical: bool
         ) -> Tuple[str, float]:
             """Try to get text from a text object."""
-            chars = []
+            chars: List[str] = []
             prev_end = 0.0
             for glyph in obj:
                 x, y = glyph.glyph_offset
@@ -350,7 +350,7 @@ class Page:
 
         prev_end = prev_line_offset = prev_word_offset = 0.0
         lines = []
-        strings = []
+        strings: List[str] = []
         for text in self.texts:
             if text.gstate.font is None:
                 continue
