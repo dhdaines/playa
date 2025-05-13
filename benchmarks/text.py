@@ -7,6 +7,7 @@ import time
 from pathlib import Path
 
 import playa
+
 CONTRIB = Path(__file__).parent.parent / "samples" / "contrib"
 
 LOG = logging.getLogger("benchmark-text")

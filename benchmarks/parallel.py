@@ -11,19 +11,19 @@ from playa.page import Page
 CONTRIB = Path(__file__).parent.parent / "samples" / "contrib"
 
 
-def process_page(page: Page) -> str:
+def process_page(page: Page) -> None:
     for obj in page:
         _ = obj.bbox
 
 
 def benchmark_single(path: Path):
     with playa.open(path) as pdf:
-        return list(pdf.pages.map(process_page))
+        list(pdf.pages.map(process_page))
 
 
 def benchmark_multi(path: Path, ncpu: int):
     with playa.open(path, max_workers=ncpu) as pdf:
-        return list(pdf.pages.map(process_page))
+        list(pdf.pages.map(process_page))
 
 
 if __name__ == "__main__":
@@ -39,7 +39,7 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
 
-    multi_time = single_time = 0
+    multi_time = single_time = 0.0
     for iter in range(args.niter + 1):
         start = time.time()
         benchmark_multi(args.pdf, args.ncpu)
