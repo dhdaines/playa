@@ -192,8 +192,18 @@ class Font:
     def string_width(self, s: bytes) -> float:
         return sum(self.char_width(cid) for cid, _ in self.decode(s))
 
-    def text_space_bbox(self, cid: int) -> Rect:
-        """"""
+    def char_bbox(self, cid: int) -> Rect:
+        """Get the standard bounding box for a character from its CID.
+
+        This is, very specifically, `[0 descent width ascent]` in text
+        space units.
+
+        Danger: Not the actual bounding box of the glyph.
+            This is a standardized bounding box for use in text
+            extraction and layout analysis.  It does not correspond to
+            the actual bounding box of an individual glyph as
+            specified by the font program.
+        """
         descent = self.get_descent()
         ascent = self.get_ascent()
         width = self.char_width(cid)
@@ -627,8 +637,19 @@ class CIDFont(Font):
         vx, vy = self.positions.get(cid, self.default_position)
         return vx * self.hscale, vy * self.vscale
 
-    def text_space_bbox(self, cid: int) -> Rect:
-        """"""
+    def char_bbox(self, cid: int) -> Rect:
+        """Get the standard bounding box for a character from its CID.
+
+        This is the standard bounding box in text space units based on
+        width, descent and ascent, translated by the position vector.
+
+        Danger: Not the actual bounding box of the glyph.
+            This is a standardized bounding box for use in text
+            extraction and layout analysis.  It does not correspond to
+            the actual bounding box of an individual glyph as
+            specified by the font program.
+
+        """
         descent = self.get_descent()
         ascent = self.get_ascent()
         width = self.char_width(cid)
