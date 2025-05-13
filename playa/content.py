@@ -37,7 +37,13 @@ from playa.pdftypes import (
     matrix_value,
     rect_value,
 )
-from playa.utils import apply_matrix_pt, get_bound, mult_matrix, transform_bbox, translate_matrix
+from playa.utils import (
+    apply_matrix_pt,
+    get_bound,
+    mult_matrix,
+    transform_bbox,
+    translate_matrix,
+)
 from playa.worker import PageRef, _deref_page
 
 if TYPE_CHECKING:
@@ -579,7 +585,23 @@ class TextObject(ContentObject):
         scaling = self.gstate.scaling * 0.01
         charspace = self.gstate.charspace * scaling
         wordspace = self.gstate.wordspace * scaling
-        scaling_matrix = self.gstate.fontsize * self.gstate.scaling * 0.01, 0, 0, self.gstate.fontsize, 0, self.gstate.rise
+        # PDF 2.0 section 9.4.4: Conceptually, the entire
+        # transformation from text space to device space can be
+        # represented by a text rendering matrix:
+        #
+        # (scaling_matrix @ glyph.matrix @ glyph.ctm)
+        #
+        # Note that scaling_matrix and glyph.ctm are constant across
+        # glyphs in a TextObject, and scaling_matrix is always
+        # diagonal (thus the mult_matrix call below can be optimized)
+        scaling_matrix = (
+            self.gstate.fontsize * self.gstate.scaling * 0.01,
+            0,
+            0,
+            self.gstate.fontsize,
+            0,
+            self.gstate.rise,
+        )
         vert = font.vertical
         if font.multibyte:
             wordspace = 0
@@ -598,7 +620,9 @@ class TextObject(ContentObject):
                     textwidth = font.char_width(cid)
                     adv = textwidth * fontsize * scaling
                     x, y = glyph_offset = (x, pos) if vert else (pos, y)
-                    matrix = mult_matrix(scaling_matrix, translate_matrix(tlm_ctm, glyph_offset))
+                    matrix = mult_matrix(
+                        scaling_matrix, translate_matrix(tlm_ctm, glyph_offset)
+                    )
                     glyph = GlyphObject(
                         _pageref=self._pageref,
                         gstate=self.gstate,
