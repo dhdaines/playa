@@ -8,7 +8,7 @@ from pathlib import Path
 import playa
 from playa.page import Page
 
-from tests.data import CONTRIB
+CONTRIB = Path(__file__).parent.parent / "samples" / "contrib"
 
 
 def process_page(page: Page) -> str:

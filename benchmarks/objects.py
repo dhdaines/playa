@@ -8,13 +8,11 @@ from pathlib import Path
 
 import playa
 from playa import ContentObject, Rect
-from tests.data import CONTRIB
 
 LOG = logging.getLogger("benchmark-convert")
 # Use a standard benchmark set to make version comparisons possible
+CONTRIB = Path(__file__).parent.parent / "samples" / "contrib"
 PDFS = [
-    "2023-04-06-ODJ et Résolutions-séance xtra 6 avril 2023.pdf",
-    "2023-06-20-PV.pdf",
     "PSC_Station.pdf",
     "Rgl-1314-2021-DM-Derogations-mineures.pdf",
 ]
@@ -48,4 +46,4 @@ if __name__ == "__main__":
             benchmark_one_lazy(path)
             if iter != 0:
                 lazy_time += time.time() - start
-    print("Object types took %.2f s / iter" % (lazy_time / niter,))
+    print("Object types took %d ms / iter" % (lazy_time / niter * 1000,))

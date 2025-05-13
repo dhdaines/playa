@@ -7,10 +7,10 @@ import sys
 import time
 from pathlib import Path
 
-from tests.data import CONTRIB
 
 LOG = logging.getLogger("benchmark-convert")
 # Use a standard benchmark set to make version comparisons possible
+CONTRIB = Path(__file__).parent.parent / "samples" / "contrib"
 PDFS = [
     "2023-04-06-ODJ et Résolutions-séance xtra 6 avril 2023.pdf",
     "2023-06-20-PV.pdf",
