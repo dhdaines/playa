@@ -509,10 +509,9 @@ class GlyphObject(ContentObject):
         ascent = font.get_ascent()
         if font.vertical:
             assert isinstance(font, CIDFont)
-            wx, wy = font.char_width(self.cid), font.char_vertical_disp(self.cid)
-            vx, _ = font.char_position_vec(self.cid)
-            x0, y0 = (-vx, wy)
-            x1, y1 = (wx - vx, 0.)
+            vx, vy = font.char_position_vec(self.cid)
+            x0, y0 = -vx, descent - vy
+            x1, y1 = width - vx, ascent - vy
         else:
             x0, y0 = (0., descent)
             x1, y1 = (width, ascent)
@@ -644,22 +643,30 @@ class TextObject(ContentObject):
             self._text_space_bbox = BBOX_NONE
             return self._text_space_bbox
         vert = font.vertical
-        (x, y) = self.glyph_offset
         if vert:
             assert isinstance(font, CIDFont)
-            x0 = x1 = x
-            y0 = self.gstate.rise + self._next_glyph_offset[1]
-            y1 = self.gstate.rise + y
+            rise = self.gstate.rise
+            descent = font.get_descent() * self.gstate.fontsize
+            ascent = font.get_ascent() * self.gstate.fontsize
             scaling_x = self.gstate.fontsize * self.gstate.scaling * 0.01
-            for cid, _, _, _ in glyph_data:
-                vx, _ = font.char_position_vec(cid)
+            scaling_y = self.gstate.fontsize
+            x0 = y0 = float('inf')
+            x1 = y1 = float('-inf')
+            for cid, _, _, (x, y) in glyph_data:
+                vx, vy = font.char_position_vec(cid)
                 w = font.char_width(cid)
                 glyph_x0 = x - vx * scaling_x
                 glyph_x1 = glyph_x0 + w * scaling_x
+                orig_y = y + rise - vy * scaling_y
+                glyph_y0 = orig_y + descent
+                glyph_y1 = orig_y + ascent
                 x0 = min(x0, glyph_x0)
                 x1 = max(x1, glyph_x1)
+                y0 = min(y0, glyph_y0)
+                y1 = max(y1, glyph_y1)
         else:
             scaling_y = self.gstate.fontsize
+            x, y = self.glyph_offset
             x0 = x
             y0 = y + font.get_descent() * scaling_y + self.gstate.rise
             x1 = self._next_glyph_offset[0]
