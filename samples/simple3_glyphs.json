@@ -1,0 +1,1070 @@
+[
+{
+  "cid": 72,
+  "bbox": [
+    0.0,
+    690.064,
+    34.656,
+    734.4639999999999
+  ],
+  "gstate": {
+    "font": {
+      "name": "Helvetica",
+      "type": "Type1",
+      "ascent": 718.0,
+      "descent": -207.0,
+      "bbox": [
+        -166.0,
+        -225.0,
+        1000.0,
+        931.0
+      ]
+    },
+    "fontsize": 48
+  },
+  "text": "H"
+},
+{
+  "cid": 101,
+  "bbox": [
+    34.656,
+    690.064,
+    61.344,
+    734.4639999999999
+  ],
+  "gstate": {
+    "font": {
+      "name": "Helvetica",
+      "type": "Type1",
+      "ascent": 718.0,
+      "descent": -207.0,
+      "bbox": [
+        -166.0,
+        -225.0,
+        1000.0,
+        931.0
+      ]
+    },
+    "fontsize": 48
+  },
+  "text": "e",
+  "glyph_offset": [
+    34.656,
+    0
+  ]
+},
+{
+  "cid": 108,
+  "bbox": [
+    61.344,
+    690.064,
+    72.0,
+    734.4639999999999
+  ],
+  "gstate": {
+    "font": {
+      "name": "Helvetica",
+      "type": "Type1",
+      "ascent": 718.0,
+      "descent": -207.0,
+      "bbox": [
+        -166.0,
+        -225.0,
+        1000.0,
+        931.0
+      ]
+    },
+    "fontsize": 48
+  },
+  "text": "l",
+  "glyph_offset": [
+    61.344,
+    0
+  ]
+},
+{
+  "cid": 108,
+  "bbox": [
+    72.0,
+    690.064,
+    82.656,
+    734.4639999999999
+  ],
+  "gstate": {
+    "font": {
+      "name": "Helvetica",
+      "type": "Type1",
+      "ascent": 718.0,
+      "descent": -207.0,
+      "bbox": [
+        -166.0,
+        -225.0,
+        1000.0,
+        931.0
+      ]
+    },
+    "fontsize": 48
+  },
+  "text": "l",
+  "glyph_offset": [
+    72.0,
+    0
+  ]
+},
+{
+  "cid": 111,
+  "bbox": [
+    82.656,
+    690.064,
+    109.34400000000001,
+    734.4639999999999
+  ],
+  "gstate": {
+    "font": {
+      "name": "Helvetica",
+      "type": "Type1",
+      "ascent": 718.0,
+      "descent": -207.0,
+      "bbox": [
+        -166.0,
+        -225.0,
+        1000.0,
+        931.0
+      ]
+    },
+    "fontsize": 48
+  },
+  "text": "o",
+  "glyph_offset": [
+    82.656,
+    0
+  ]
+},
+{
+  "cid": 72,
+  "bbox": [
+    109.34400000000001,
+    714.064,
+    144.0,
+    758.4639999999999
+  ],
+  "gstate": {
+    "font": {
+      "name": "Helvetica",
+      "type": "Type1",
+      "ascent": 718.0,
+      "descent": -207.0,
+      "bbox": [
+        -166.0,
+        -225.0,
+        1000.0,
+        931.0
+      ]
+    },
+    "fontsize": 48,
+    "rise": 24
+  },
+  "text": "H",
+  "glyph_offset": [
+    109.34400000000001,
+    0
+  ]
+},
+{
+  "cid": 101,
+  "bbox": [
+    144.0,
+    714.064,
+    170.688,
+    758.4639999999999
+  ],
+  "gstate": {
+    "font": {
+      "name": "Helvetica",
+      "type": "Type1",
+      "ascent": 718.0,
+      "descent": -207.0,
+      "bbox": [
+        -166.0,
+        -225.0,
+        1000.0,
+        931.0
+      ]
+    },
+    "fontsize": 48,
+    "rise": 24
+  },
+  "text": "e",
+  "glyph_offset": [
+    144.0,
+    0
+  ]
+},
+{
+  "cid": 108,
+  "bbox": [
+    170.688,
+    714.064,
+    181.344,
+    758.4639999999999
+  ],
+  "gstate": {
+    "font": {
+      "name": "Helvetica",
+      "type": "Type1",
+      "ascent": 718.0,
+      "descent": -207.0,
+      "bbox": [
+        -166.0,
+        -225.0,
+        1000.0,
+        931.0
+      ]
+    },
+    "fontsize": 48,
+    "rise": 24
+  },
+  "text": "l",
+  "glyph_offset": [
+    170.688,
+    0
+  ]
+},
+{
+  "cid": 108,
+  "bbox": [
+    181.344,
+    714.064,
+    192.0,
+    758.4639999999999
+  ],
+  "gstate": {
+    "font": {
+      "name": "Helvetica",
+      "type": "Type1",
+      "ascent": 718.0,
+      "descent": -207.0,
+      "bbox": [
+        -166.0,
+        -225.0,
+        1000.0,
+        931.0
+      ]
+    },
+    "fontsize": 48,
+    "rise": 24
+  },
+  "text": "l",
+  "glyph_offset": [
+    181.344,
+    0
+  ]
+},
+{
+  "cid": 111,
+  "bbox": [
+    192.0,
+    714.064,
+    218.688,
+    758.4639999999999
+  ],
+  "gstate": {
+    "font": {
+      "name": "Helvetica",
+      "type": "Type1",
+      "ascent": 718.0,
+      "descent": -207.0,
+      "bbox": [
+        -166.0,
+        -225.0,
+        1000.0,
+        931.0
+      ]
+    },
+    "fontsize": 48,
+    "rise": 24
+  },
+  "text": "o",
+  "glyph_offset": [
+    192.0,
+    0
+  ]
+},
+{
+  "cid": 843,
+  "bbox": [
+    194.688,
+    652.0,
+    242.688,
+    700.0
+  ],
+  "gstate": {
+    "font": {
+      "name": "unknown",
+      "type": "CIDFont",
+      "ascent": 880,
+      "descent": -120,
+      "default_width": 1000
+    },
+    "fontsize": 48
+  },
+  "text": "あ",
+  "glyph_offset": [
+    218.688,
+    0
+  ]
+},
+{
+  "cid": 845,
+  "bbox": [
+    194.688,
+    604.0,
+    242.688,
+    652.0
+  ],
+  "gstate": {
+    "font": {
+      "name": "unknown",
+      "type": "CIDFont",
+      "ascent": 880,
+      "descent": -120,
+      "default_width": 1000
+    },
+    "fontsize": 48
+  },
+  "text": "い",
+  "glyph_offset": [
+    218.688,
+    -48.0
+  ]
+},
+{
+  "cid": 847,
+  "bbox": [
+    194.688,
+    556.0,
+    242.688,
+    604.0
+  ],
+  "gstate": {
+    "font": {
+      "name": "unknown",
+      "type": "CIDFont",
+      "ascent": 880,
+      "descent": -120,
+      "default_width": 1000
+    },
+    "fontsize": 48
+  },
+  "text": "う",
+  "glyph_offset": [
+    218.688,
+    -96.0
+  ]
+},
+{
+  "cid": 849,
+  "bbox": [
+    194.688,
+    508.0,
+    242.688,
+    556.0
+  ],
+  "gstate": {
+    "font": {
+      "name": "unknown",
+      "type": "CIDFont",
+      "ascent": 880,
+      "descent": -120,
+      "default_width": 1000
+    },
+    "fontsize": 48
+  },
+  "text": "え",
+  "glyph_offset": [
+    218.688,
+    -144.0
+  ]
+},
+{
+  "cid": 851,
+  "bbox": [
+    194.688,
+    460.0,
+    242.688,
+    508.0
+  ],
+  "gstate": {
+    "font": {
+      "name": "unknown",
+      "type": "CIDFont",
+      "ascent": 880,
+      "descent": -120,
+      "default_width": 1000
+    },
+    "fontsize": 48
+  },
+  "text": "お",
+  "glyph_offset": [
+    218.688,
+    -192.0
+  ]
+},
+{
+  "cid": 843,
+  "bbox": [
+    194.688,
+    436.0,
+    242.688,
+    484.0
+  ],
+  "gstate": {
+    "font": {
+      "name": "unknown",
+      "type": "CIDFont",
+      "ascent": 880,
+      "descent": -120,
+      "default_width": 1000
+    },
+    "fontsize": 48,
+    "rise": 24
+  },
+  "text": "あ",
+  "glyph_offset": [
+    218.688,
+    -240.0
+  ]
+},
+{
+  "cid": 845,
+  "bbox": [
+    194.688,
+    388.0,
+    242.688,
+    436.0
+  ],
+  "gstate": {
+    "font": {
+      "name": "unknown",
+      "type": "CIDFont",
+      "ascent": 880,
+      "descent": -120,
+      "default_width": 1000
+    },
+    "fontsize": 48,
+    "rise": 24
+  },
+  "text": "い",
+  "glyph_offset": [
+    218.688,
+    -288.0
+  ]
+},
+{
+  "cid": 847,
+  "bbox": [
+    194.688,
+    340.0,
+    242.688,
+    388.0
+  ],
+  "gstate": {
+    "font": {
+      "name": "unknown",
+      "type": "CIDFont",
+      "ascent": 880,
+      "descent": -120,
+      "default_width": 1000
+    },
+    "fontsize": 48,
+    "rise": 24
+  },
+  "text": "う",
+  "glyph_offset": [
+    218.688,
+    -336.0
+  ]
+},
+{
+  "cid": 849,
+  "bbox": [
+    194.688,
+    292.0,
+    242.688,
+    340.0
+  ],
+  "gstate": {
+    "font": {
+      "name": "unknown",
+      "type": "CIDFont",
+      "ascent": 880,
+      "descent": -120,
+      "default_width": 1000
+    },
+    "fontsize": 48,
+    "rise": 24
+  },
+  "text": "え",
+  "glyph_offset": [
+    218.688,
+    -384.0
+  ]
+},
+{
+  "cid": 851,
+  "bbox": [
+    194.688,
+    244.0,
+    242.688,
+    292.0
+  ],
+  "gstate": {
+    "font": {
+      "name": "unknown",
+      "type": "CIDFont",
+      "ascent": 880,
+      "descent": -120,
+      "default_width": 1000
+    },
+    "fontsize": 48,
+    "rise": 24
+  },
+  "text": "お",
+  "glyph_offset": [
+    218.688,
+    -432.0
+  ]
+},
+{
+  "cid": 87,
+  "bbox": [
+    218.688,
+    215.032,
+    241.344,
+    237.232
+  ],
+  "gstate": {
+    "font": {
+      "name": "Helvetica",
+      "type": "Type1",
+      "ascent": 718.0,
+      "descent": -207.0,
+      "bbox": [
+        -166.0,
+        -225.0,
+        1000.0,
+        931.0
+      ]
+    },
+    "fontsize": 24
+  },
+  "text": "W",
+  "glyph_offset": [
+    218.688,
+    -480.0
+  ]
+},
+{
+  "cid": 111,
+  "bbox": [
+    241.344,
+    215.032,
+    254.688,
+    237.232
+  ],
+  "gstate": {
+    "font": {
+      "name": "Helvetica",
+      "type": "Type1",
+      "ascent": 718.0,
+      "descent": -207.0,
+      "bbox": [
+        -166.0,
+        -225.0,
+        1000.0,
+        931.0
+      ]
+    },
+    "fontsize": 24
+  },
+  "text": "o",
+  "glyph_offset": [
+    241.344,
+    -480.0
+  ]
+},
+{
+  "cid": 114,
+  "bbox": [
+    254.688,
+    215.032,
+    262.68,
+    237.232
+  ],
+  "gstate": {
+    "font": {
+      "name": "Helvetica",
+      "type": "Type1",
+      "ascent": 718.0,
+      "descent": -207.0,
+      "bbox": [
+        -166.0,
+        -225.0,
+        1000.0,
+        931.0
+      ]
+    },
+    "fontsize": 24
+  },
+  "text": "r",
+  "glyph_offset": [
+    254.688,
+    -480.0
+  ]
+},
+{
+  "cid": 108,
+  "bbox": [
+    262.68,
+    215.032,
+    268.008,
+    237.232
+  ],
+  "gstate": {
+    "font": {
+      "name": "Helvetica",
+      "type": "Type1",
+      "ascent": 718.0,
+      "descent": -207.0,
+      "bbox": [
+        -166.0,
+        -225.0,
+        1000.0,
+        931.0
+      ]
+    },
+    "fontsize": 24
+  },
+  "text": "l",
+  "glyph_offset": [
+    262.68,
+    -480.0
+  ]
+},
+{
+  "cid": 100,
+  "bbox": [
+    268.008,
+    215.032,
+    281.352,
+    237.232
+  ],
+  "gstate": {
+    "font": {
+      "name": "Helvetica",
+      "type": "Type1",
+      "ascent": 718.0,
+      "descent": -207.0,
+      "bbox": [
+        -166.0,
+        -225.0,
+        1000.0,
+        931.0
+      ]
+    },
+    "fontsize": 24
+  },
+  "text": "d",
+  "glyph_offset": [
+    268.008,
+    -480.0
+  ]
+},
+{
+  "cid": 87,
+  "bbox": [
+    281.352,
+    239.032,
+    304.008,
+    261.23199999999997
+  ],
+  "gstate": {
+    "font": {
+      "name": "Helvetica",
+      "type": "Type1",
+      "ascent": 718.0,
+      "descent": -207.0,
+      "bbox": [
+        -166.0,
+        -225.0,
+        1000.0,
+        931.0
+      ]
+    },
+    "fontsize": 24,
+    "rise": 24
+  },
+  "text": "W",
+  "glyph_offset": [
+    281.352,
+    -480.0
+  ]
+},
+{
+  "cid": 111,
+  "bbox": [
+    304.008,
+    239.032,
+    317.352,
+    261.23199999999997
+  ],
+  "gstate": {
+    "font": {
+      "name": "Helvetica",
+      "type": "Type1",
+      "ascent": 718.0,
+      "descent": -207.0,
+      "bbox": [
+        -166.0,
+        -225.0,
+        1000.0,
+        931.0
+      ]
+    },
+    "fontsize": 24,
+    "rise": 24
+  },
+  "text": "o",
+  "glyph_offset": [
+    304.008,
+    -480.0
+  ]
+},
+{
+  "cid": 114,
+  "bbox": [
+    317.352,
+    239.032,
+    325.344,
+    261.23199999999997
+  ],
+  "gstate": {
+    "font": {
+      "name": "Helvetica",
+      "type": "Type1",
+      "ascent": 718.0,
+      "descent": -207.0,
+      "bbox": [
+        -166.0,
+        -225.0,
+        1000.0,
+        931.0
+      ]
+    },
+    "fontsize": 24,
+    "rise": 24
+  },
+  "text": "r",
+  "glyph_offset": [
+    317.352,
+    -480.0
+  ]
+},
+{
+  "cid": 108,
+  "bbox": [
+    325.344,
+    239.032,
+    330.67199999999997,
+    261.23199999999997
+  ],
+  "gstate": {
+    "font": {
+      "name": "Helvetica",
+      "type": "Type1",
+      "ascent": 718.0,
+      "descent": -207.0,
+      "bbox": [
+        -166.0,
+        -225.0,
+        1000.0,
+        931.0
+      ]
+    },
+    "fontsize": 24,
+    "rise": 24
+  },
+  "text": "l",
+  "glyph_offset": [
+    325.344,
+    -480.0
+  ]
+},
+{
+  "cid": 100,
+  "bbox": [
+    330.67199999999997,
+    239.032,
+    344.01599999999996,
+    261.23199999999997
+  ],
+  "gstate": {
+    "font": {
+      "name": "Helvetica",
+      "type": "Type1",
+      "ascent": 718.0,
+      "descent": -207.0,
+      "bbox": [
+        -166.0,
+        -225.0,
+        1000.0,
+        931.0
+      ]
+    },
+    "fontsize": 24,
+    "rise": 24
+  },
+  "text": "d",
+  "glyph_offset": [
+    330.67199999999997,
+    -480.0
+  ]
+},
+{
+  "cid": 843,
+  "bbox": [
+    470.0,
+    652.0,
+    530.0,
+    700.0
+  ],
+  "gstate": {
+    "font": {
+      "name": "unknown",
+      "type": "CIDFont",
+      "ascent": 880,
+      "descent": -120,
+      "default_width": 1000
+    },
+    "fontsize": 48
+  },
+  "text": "あ"
+},
+{
+  "cid": 845,
+  "bbox": [
+    470.0,
+    604.0,
+    530.0,
+    652.0
+  ],
+  "gstate": {
+    "font": {
+      "name": "unknown",
+      "type": "CIDFont",
+      "ascent": 880,
+      "descent": -120,
+      "default_width": 1000
+    },
+    "fontsize": 48
+  },
+  "text": "い",
+  "glyph_offset": [
+    0,
+    -48.0
+  ]
+},
+{
+  "cid": 847,
+  "bbox": [
+    470.0,
+    556.0,
+    530.0,
+    604.0
+  ],
+  "gstate": {
+    "font": {
+      "name": "unknown",
+      "type": "CIDFont",
+      "ascent": 880,
+      "descent": -120,
+      "default_width": 1000
+    },
+    "fontsize": 48
+  },
+  "text": "う",
+  "glyph_offset": [
+    0,
+    -96.0
+  ]
+},
+{
+  "cid": 849,
+  "bbox": [
+    470.0,
+    508.0,
+    530.0,
+    556.0
+  ],
+  "gstate": {
+    "font": {
+      "name": "unknown",
+      "type": "CIDFont",
+      "ascent": 880,
+      "descent": -120,
+      "default_width": 1000
+    },
+    "fontsize": 48
+  },
+  "text": "え",
+  "glyph_offset": [
+    0,
+    -144.0
+  ]
+},
+{
+  "cid": 851,
+  "bbox": [
+    470.0,
+    460.0,
+    530.0,
+    508.0
+  ],
+  "gstate": {
+    "font": {
+      "name": "unknown",
+      "type": "CIDFont",
+      "ascent": 880,
+      "descent": -120,
+      "default_width": 1000
+    },
+    "fontsize": 48
+  },
+  "text": "お",
+  "glyph_offset": [
+    0,
+    -192.0
+  ]
+},
+{
+  "cid": 843,
+  "bbox": [
+    370.0,
+    652.0,
+    430.0,
+    700.0
+  ],
+  "gstate": {
+    "font": {
+      "name": "unknown",
+      "type": "CIDFont",
+      "ascent": 880,
+      "descent": -120,
+      "default_width": 1000
+    },
+    "fontsize": 48,
+    "charspace": -20
+  },
+  "text": "あ"
+},
+{
+  "cid": 845,
+  "bbox": [
+    370.0,
+    584.0,
+    430.0,
+    632.0
+  ],
+  "gstate": {
+    "font": {
+      "name": "unknown",
+      "type": "CIDFont",
+      "ascent": 880,
+      "descent": -120,
+      "default_width": 1000
+    },
+    "fontsize": 48,
+    "charspace": -20
+  },
+  "text": "い",
+  "glyph_offset": [
+    0,
+    -68.0
+  ]
+},
+{
+  "cid": 847,
+  "bbox": [
+    370.0,
+    516.0,
+    430.0,
+    564.0
+  ],
+  "gstate": {
+    "font": {
+      "name": "unknown",
+      "type": "CIDFont",
+      "ascent": 880,
+      "descent": -120,
+      "default_width": 1000
+    },
+    "fontsize": 48,
+    "charspace": -20
+  },
+  "text": "う",
+  "glyph_offset": [
+    0,
+    -136.0
+  ]
+},
+{
+  "cid": 849,
+  "bbox": [
+    370.0,
+    448.0,
+    430.0,
+    496.0
+  ],
+  "gstate": {
+    "font": {
+      "name": "unknown",
+      "type": "CIDFont",
+      "ascent": 880,
+      "descent": -120,
+      "default_width": 1000
+    },
+    "fontsize": 48,
+    "charspace": -20
+  },
+  "text": "え",
+  "glyph_offset": [
+    0,
+    -204.0
+  ]
+},
+{
+  "cid": 851,
+  "bbox": [
+    370.0,
+    380.0,
+    430.0,
+    428.0
+  ],
+  "gstate": {
+    "font": {
+      "name": "unknown",
+      "type": "CIDFont",
+      "ascent": 880,
+      "descent": -120,
+      "default_width": 1000
+    },
+    "fontsize": 48,
+    "charspace": -20
+  },
+  "text": "お",
+  "glyph_offset": [
+    0,
+    -272.0
+  ]
+}
+]

@@ -119,4 +119,4 @@ def test_various_tounicode(name, text):
         assert next(pdf.pages[0].texts).chars == text
     with playa.open(TESTDIR / "simple3.pdf") as pdf:
         text = "".join(x.chars for x in pdf.pages[0].texts)
-        assert text == "HelloHelloあいうえおあいうえおWorldWorld"
+        assert text == "HelloHelloあいうえおあいうえおWorldWorldあいうえおあいうえお"
