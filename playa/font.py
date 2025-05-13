@@ -597,15 +597,15 @@ class CIDFont(Font):
 
     def vdisp(self, cid: int) -> float:
         """Get vertical displacement for vertical writing mode, in
-        unscaled text space units.
+        text space units.
 
         Returns 0 for horizontal writing, for obvious reasons.
         """
         return self.vdisps.get(cid, self.default_vdisp) * self.vscale
 
     def position(self, cid: int) -> Tuple[float, float]:
-        """Get position vector for vertical writing mode, in unscaled
-        text space units.
+        """Get position vector for vertical writing mode, in text
+        space units.
 
         This is quite ill-defined in the PDF standard (PDF 2.0 Figure
         55), but basically it specifies a translation of the glyph
@@ -614,8 +614,8 @@ class CIDFont(Font):
         `[1 0 0 1 100 100]`, and your font size is `10`, a position
         vector of `[500 200]` will place the origin of the glyph in
         glyph space at `[-500 -200]`, which becomes `[-.5 -.2]` in
-        unscaled text space, then `[-5 -2]` after applying the font
-        size, thus the glyph is painted with its origin at `[95 98]`.
+        text space, then `[-5 -2]` after applying the font size, thus
+        the glyph is painted with its origin at `[95 98]`.
 
         Yes, the horizontal scaling factor **does** apply to the
         horizontal component of the position matrix, even if some PDF

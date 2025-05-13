@@ -114,15 +114,14 @@ class GraphicState:
         text size but position as well).  Since most reasonable people
         find that behaviour rather confusing, this is often just 1.0,
         and PDFs rely on the text matrix to set the size of text.
-      charspace: Extra spacing to add between each glyph, in
-        "unscaled text space units", which actually just means text
-        space units, that are subsequently scaled by the `fontsize`
-        and `scaling` parameters.
-      wordspace: The width of a space, defined curiously as `cid==32`
-        (But PDF Is A prESeNTaTion fORmAT sO ThERe maY NOt Be aNY
-        SpACeS!!), in unscaled text space units.
+      charspace: Extra spacing to add between each glyph, expressed in
+        unscaled text space units, meaning it is not affected by
+        `fontsize`.  **BUT** it will be modified by `scaling` for
+        horizontal writing mode (so, most of the time).
+      wordspace: The width of a space, defined very specifically as the
+        single-byte character code 32.
       scaling: The horizontal scaling factor as defined by the PDF
-        standard (divided by 100 then applied along with `fontsize`)
+        standard (that is, divided by 100).
       leading: The leading as defined by the PDF standard, in unscaled
         text space units.
       render_mode: The PDF rendering mode.  The really important one
