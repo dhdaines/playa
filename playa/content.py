@@ -480,8 +480,8 @@ class GlyphObject(ContentObject):
       text: Unicode mapping of this glyph, if any.
       adv: glyph displacement in text space units (horizontal or vertical,
            depending on the writing direction).
-      matrix: rendering matrix for this glyph, which transforms text
-              space (*not glyph space!*) coordinates to device space.
+      matrix: rendering matrix `T_rm` for this glyph, which transforms text
+              space coordinates to device space (PDF 2.0 section 9.4.4).
       glyph_offset: Offset in from the
           origin of the parent TextObject in some undefined space FIXME.
       bbox: glyph bounding box in device space.
@@ -587,11 +587,11 @@ class TextObject(ContentObject):
         wordspace = self.gstate.wordspace * scaling
         # PDF 2.0 section 9.4.4: Conceptually, the entire
         # transformation from text space to device space can be
-        # represented by a text rendering matrix:
+        # represented by a text rendering matrix, T_rm:
         #
-        # (scaling_matrix @ glyph.matrix @ glyph.ctm)
+        # (scaling_matrix @ text_matrix @ glyph.ctm)
         #
-        # Note that scaling_matrix and glyph.ctm are constant across
+        # Note that scaling_matrix and text_matrix are constant across
         # glyphs in a TextObject, and scaling_matrix is always
         # diagonal (thus the mult_matrix call below can be optimized)
         scaling_matrix = (
