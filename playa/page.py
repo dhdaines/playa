@@ -351,11 +351,13 @@ class Page:
         lines = []
         strings = []
         for text in self.texts:
+            if text.gstate.font is None:
+                continue
+            vertical = text.gstate.font.vertical
             # Track changes to the translation component of text
             # rendering matrix to (yes, heuristically) detect newlines
             # and spaces between text objects
             _, _, _, _, dx, dy = mult_matrix(text.line_matrix, text.ctm)
-            vertical = False if text.gstate.font is None else text.gstate.font.vertical
             line_offset = dx if vertical else dy
             word_offset = dy if vertical else dx
             # Vertical text (usually) means right-to-left lines
