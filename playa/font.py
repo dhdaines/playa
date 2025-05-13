@@ -126,8 +126,9 @@ class Font:
         else:
             self.fontname = "unknown"
         self.flags = int_value(descriptor.get("Flags", 0))
-        self.ascent = num_value(descriptor.get("Ascent", 0))
-        self.descent = num_value(descriptor.get("Descent", 0))
+        # Default values based on default DW2 metrics
+        self.ascent = num_value(descriptor.get("Ascent", 880))
+        self.descent = num_value(descriptor.get("Descent", -120))
         self.italic_angle = num_value(descriptor.get("ItalicAngle", 0))
         if default_width is None:
             self.default_width = num_value(descriptor.get("MissingWidth", 0))
