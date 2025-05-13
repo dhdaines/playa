@@ -11,7 +11,7 @@ fi
 
 VENV="$(dirname $0)/.venv"
 if [ ! -e "$VENV" ]; then
-    python -m venv $VENV
+    python -m venv "$VENV"
 fi
 echo Current:
 hatch run python text.py
