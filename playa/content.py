@@ -475,25 +475,22 @@ class GlyphObject(ContentObject):
     """Individual glyph on the page.
 
     Attributes:
+      font: Font for this glyph.
       cid: Character ID for this glyph.
       text: Unicode mapping of this glyph, if any.
-      matrix: rendering matrix `T_rm` for this glyph, which transforms text
-              space coordinates to device space (PDF 2.0 section 9.4.4).
-      glyph_offset: DEPRECATED: Offset from the origin of the parent
-          TextObject in "unscaled text space units", meaning,
-          paradoxically, after applying fontsize, horizontal scaling,
-          and rise, but before any coordinate transformations.
-      adv: DEPRECATED: Glyph displacement (horizontal or vertical
-           according to the font), also in "unscaled text space units".
+      matrix: Rendering matrix `T_rm` for this glyph, which transforms
+              text space coordinates to device space (PDF 2.0 section
+              9.4.4).
+      origin: Origin of this glyph in device space.
+      displacement: Vector to the origin of the next glyph in device space.
       bbox: glyph bounding box in device space.
 
     """
 
     cid: int
     text: Union[str, None]
-    glyph_offset: Point
     matrix: Matrix
-    adv: float
+    _displacement: float
     _corners: bool
 
     def __len__(self) -> int:
@@ -501,10 +498,32 @@ class GlyphObject(ContentObject):
         return 0
 
     @property
-    def bbox(self) -> Rect:
+    def font(self) -> Font:
         font = self.gstate.font
         assert font is not None
-        x0, y0, x1, y1 = font.char_bbox(self.cid)
+        return font
+
+    @property
+    def origin(self) -> Point:
+        _, _, _, _, dx, dy = self.matrix
+        return dx, dy
+
+    @property
+    def displacement(self) -> Point:
+        # Equivalent to:
+        # apply_matrix_norm(self.matrix,
+        #                   (0, self._displacement)
+        #                   if font.vertical else
+        #                   (self._displacement, 0))
+        a, b, c, d, _, _ = self.matrix
+        if self.font.vertical:
+            return c * self._displacement, d * self._displacement
+        else:
+            return a * self._displacement, c * self._displacement
+
+    @property
+    def bbox(self) -> Rect:
+        x0, y0, x1, y1 = self.font.char_bbox(self.cid)
         if self._corners:
             return get_bound(
                 (
@@ -530,8 +549,8 @@ class TextObject(ContentObject):
 
     Attributes:
       line_matrix: Text line matrix for this object.
-      glyph_offset: Offset of the first glyph in this
-          text object, in some undefined space FIXME.
+      glyph_offset: Offset of this text object from the origin of the
+                    line matrix, in "unscaled text space units".
       args: Strings or position adjustments
       bbox: Text bounding box in device space.
 
@@ -608,15 +627,10 @@ class TextObject(ContentObject):
                 needcharspace = True
             else:
                 for cid, text in font.decode(obj):
-                    width = font.char_width(cid)
                     if needcharspace:
                         pos += charspace
-                    if vert:
-                        assert isinstance(font, CIDFont)
-                        disp = font.vdisp(cid) * fontsize
-                    else:
-                        disp = width * fontsize * horizontal_scaling
-                    x, y = glyph_offset = (x, pos) if vert else (pos, y)
+                    glyph_offset = (x, pos) if vert else (pos, y)
+                    disp = font.vdisp(cid) if vert else font.char_width(cid)
                     matrix = mult_matrix(
                         scaling_matrix, translate_matrix(tlm_ctm, glyph_offset)
                     )
@@ -625,15 +639,17 @@ class TextObject(ContentObject):
                         gstate=self.gstate,
                         ctm=self.ctm,
                         mcstack=self.mcstack,
-                        glyph_offset=glyph_offset,
                         cid=cid,
                         text=text,
                         matrix=matrix,
-                        adv=disp,
+                        _displacement=disp,
                         _corners=corners,
                     )
                     yield glyph
-                    pos += disp
+                    if vert:
+                        pos += disp * fontsize
+                    else:
+                        pos += disp * fontsize * horizontal_scaling
                     if cid == 32 and wordspace:
                         pos += wordspace
                     needcharspace = True

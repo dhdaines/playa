@@ -186,12 +186,27 @@ class Font:
             return self.default_width * self.hscale
         return self.widths[cid] * self.hscale
 
-    def char_disp(self, cid: int) -> Union[float, Tuple[float, float]]:
-        """Returns an integer for horizontal fonts, a tuple for vertical fonts."""
-        return 0
-
     def string_width(self, s: bytes) -> float:
         return sum(self.char_width(cid) for cid, _ in self.decode(s))
+
+    def vdisp(self, cid: int) -> float:
+        """Get vertical displacement for vertical writing mode, in
+        text space units.
+
+        This is always 0 for simple fonts as they have no vertical
+        writing mode.
+
+        """
+        return 0
+
+    def position(self, cid: int) -> Tuple[float, float]:
+        """Get position vector for vertical writing mode, in text
+        space units.
+
+        This is always `[0 0]` for simple fonts as they have no
+        vertical writing mode.
+        """
+        return (0, 0)
 
     def char_bbox(self, cid: int) -> Rect:
         """Get the standard bounding box for a character from its CID.

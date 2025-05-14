@@ -338,14 +338,15 @@ class Page:
             chars: List[str] = []
             prev_end = 0.0
             for glyph in obj:
-                x, y = glyph.glyph_offset
+                x, y = glyph.origin
                 off = y if vertical else x
                 # FIXME: The 0.5 is a heuristic!!!
                 if prev_end and off - prev_end > 0.5:
                     chars.append(" ")
                 if glyph.text is not None:
                     chars.append(glyph.text)
-                prev_end = off + glyph.adv
+                dx, dy = glyph.displacement
+                prev_end = off + (dy if vertical else dx)
             return "".join(chars), prev_end
 
         prev_end = prev_line_offset = prev_word_offset = 0.0
