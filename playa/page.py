@@ -293,7 +293,7 @@ class Page:
 
         Note: Resource names are not font names.
             The resource names (e.g. `F1`, `F42`, `FooBar`) here are
-            specific to a page (or Form XObject) resource dictionary `
+            specific to a page (or Form XObject) resource dictionary
             and have no relation to the font name as commonly
             understood (e.g. `Helvetica`,
             `WQERQE+Arial-SuperBold-HJRE-UTF-8`).  Since font names are

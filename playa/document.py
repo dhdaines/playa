@@ -559,7 +559,7 @@ class Document:
 
         Note: Font names may collide.
             Font names are generally understood to be globally unique
-            ~in the neighbourhood~ in the document, but there's no
+            <del>in the neighbourhood</del> in the document, but there's no
             guarantee that this is the case.  In keeping with the
             "incremental update" philosophy dear to PDF, you get the
             last font with a given name.
