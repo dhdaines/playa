@@ -12,6 +12,7 @@ from typing import (
     Iterator,
     List,
     Literal,
+    Mapping,
     Optional,
     Tuple,
     Type,
@@ -31,7 +32,8 @@ from playa.content import (
     XObjectObject,
 )
 from playa.exceptions import PDFSyntaxError
-from playa.interp import LazyInterpreter
+from playa.font import Font
+from playa.interp import LazyInterpreter, _make_fontmap
 from playa.parser import ContentParser, PDFObject, Token
 from playa.pdftypes import (
     MATRIX_IDENTITY,
@@ -81,6 +83,8 @@ class Page:
       ctm: coordinate transformation matrix from default user space to
            page's device space
     """
+
+    _fontmap: Union[Dict[str, Font], None] = None
 
     def __init__(
         self,
@@ -282,6 +286,29 @@ class Page:
             except StopIteration:
                 return
             yield tok
+
+    @property
+    def fonts(self) -> Mapping[str, Font]:
+        """Get the mapping of resource names to fonts for this page.
+
+        Note: Resource names are not font names.
+            The resource names (e.g. `F1`, `F42`, `FooBar`) here are
+            specific to a page (or Form XObject) resource dictionary `
+            and have no relation to the font name as commonly
+            understood (e.g. `Helvetica`,
+            `WQERQE+Arial-SuperBold-HJRE-UTF-8`).  Since font names are
+            generally considered to be globally unique, it may be
+            possible to access fonts by them in the future.
+
+        Danger: Do not rely on this being a `dict`.
+            Currently this is implemented eagerly, but in the future it
+            may return a lazy object which only loads fonts on demand.
+
+        """
+        if self._fontmap is not None:
+            return self._fontmap
+        self._fontmap = _make_fontmap(self.resources.get("Font"), self.doc)
+        return self._fontmap
 
     def __repr__(self) -> str:
         return f"<Page: Resources={self.resources!r}, MediaBox={self.mediabox!r}>"

@@ -16,6 +16,7 @@ from typing import (
     Iterable,
     Iterator,
     List,
+    Mapping,
     Optional,
     Set,
     Tuple,
@@ -163,6 +164,7 @@ class Document:
     _outline: Union["Outline", None] = None
     _destinations: Union["Destinations", None] = None
     _structure: Union["Tree", None]
+    _fontmap: Union[Dict[str, Font], None] = None
 
     def __enter__(self) -> "Document":
         return self
@@ -547,6 +549,33 @@ class Document:
         if objid:
             self._cached_fonts[objid] = font
         return font
+
+    @property
+    def fonts(self) -> Mapping[str, Font]:
+        """Get the mapping of font names to fonts for this document.
+
+        Note that this can be quite slow the first time it's accessed
+        as it must scan every single page in the document.
+
+        Note: Font names may collide.
+            Font names are generally understood to be globally unique
+            ~in the neighbourhood~ in the document, but there's no
+            guarantee that this is the case.  In keeping with the
+            "incremental update" philosophy dear to PDF, you get the
+            last font with a given name.
+
+        Danger: Do not rely on this being a `dict`.
+            Currently this is implemented eagerly, but in the future it
+            may return a lazy object which only loads fonts on demand.
+
+        """
+        if self._fontmap is not None:
+            return self._fontmap
+        self._fontmap: Dict[str, Font] = {}
+        for idx, page in enumerate(self.pages):
+            for font in page.fonts.values():
+                self._fontmap[font.fontname] = font
+        return self._fontmap
 
     @property
     def outline(self) -> Union[Outline, None]:

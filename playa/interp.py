@@ -57,6 +57,7 @@ from playa.utils import decode_text, mult_matrix
 from playa.worker import _deref_document
 
 if TYPE_CHECKING:
+    from playa.document import Document
     from playa.page import Page
 
 log = logging.getLogger(__name__)
@@ -101,6 +102,28 @@ class TextState:
         self.glyph_offset = (0, 0)
 
 
+def _make_fontmap(mapping: PDFObject, doc: "Document") -> Dict[str, Font]:
+    fontmap: Dict[str, Font] = {}
+    if not isinstance(mapping, dict):
+        log.warning("Font mapping not a dict: %r", mapping)
+        return fontmap
+    for fontid, spec in mapping.items():
+        objid = 0  # Not a valid object ID (will not cache)
+        if isinstance(spec, ObjRef):
+            objid = spec.objid
+        try:
+            fontmap[fontid] = doc.get_font(objid, dict_value(spec))
+        except Exception:
+            log.warning(
+                "Invalid font dictionary for Font %r: %r",
+                fontid,
+                spec,
+                exc_info=True,
+            )
+            fontmap[fontid] = doc.get_font(objid, None)
+    return fontmap
+
+
 class LazyInterpreter:
     """Interpret the page yielding lazy objects."""
 
@@ -141,7 +164,6 @@ class LazyInterpreter:
         self.csmap: Dict[str, ColorSpace] = copy(PREDEFINED_COLORSPACE)
         if not self.resources:
             return
-        doc = _deref_document(page.docref)
 
         for k, v in dict_value(self.resources).items():
             mapping = resolve1(v)
@@ -149,23 +171,7 @@ class LazyInterpreter:
                 log.warning("Missing %s mapping", k)
                 continue
             if k == "Font":
-                if not isinstance(mapping, dict):
-                    log.warning("Font mapping not a dict: %r", mapping)
-                    continue
-                for fontid, spec in mapping.items():
-                    objid = 0  # Not a valid object ID (will not cache)
-                    if isinstance(spec, ObjRef):
-                        objid = spec.objid
-                    try:
-                        self.fontmap[fontid] = doc.get_font(objid, dict_value(spec))
-                    except Exception:
-                        log.warning(
-                            "Invalid font dictionary for Font %r: %r",
-                            fontid,
-                            spec,
-                            exc_info=True,
-                        )
-                        self.fontmap[fontid] = doc.get_font(objid, None)
+                self.fontmap = _make_fontmap(mapping, _deref_document(page.docref))
             elif k == "ColorSpace":
                 if not isinstance(mapping, dict):
                     log.warning("ColorSpace mapping not a dict: %r", mapping)
