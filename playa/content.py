@@ -657,15 +657,11 @@ class TextObject(ContentObject):
             wordspace = 0
         (x, y) = glyph_offset
         pos = y if vert else x
-        needcharspace = False  # Only for first glyph
         for obj in self.args:
             if isinstance(obj, (int, float)):
                 pos -= obj * 0.001 * fontsize * horizontal_scaling
-                needcharspace = True
             else:
                 for cid, text in font.decode(obj):
-                    if needcharspace:
-                        pos += charspace
                     glyph_offset = (x, pos) if vert else (pos, y)
                     disp = font.vdisp(cid) if vert else font.char_width(cid)
                     matrix = mult_matrix(
@@ -684,12 +680,11 @@ class TextObject(ContentObject):
                     )
                     yield glyph
                     if vert:
-                        pos += disp * fontsize
+                        pos += disp * fontsize + charspace
                     else:
-                        pos += disp * fontsize * horizontal_scaling
+                        pos += disp * fontsize * horizontal_scaling + charspace
                     if cid == 32 and wordspace:
                         pos += wordspace
-                    needcharspace = True
         glyph_offset = (x, pos) if vert else (pos, y)
         if self._next_glyph_offset is None:
             self._next_glyph_offset = glyph_offset
@@ -722,7 +717,6 @@ class TextObject(ContentObject):
             wordspace = 0
         (x, y) = self._glyph_offset
         pos = y if vert else x
-        needcharspace = False  # Only for first glyph
         if vert:
             # Because the position vector can be anything for vertical
             # writing, none of these can be fixed even if we ignore
@@ -743,11 +737,8 @@ class TextObject(ContentObject):
         for obj in self.args:
             if isinstance(obj, (int, float)):
                 pos -= obj * 0.001 * fontsize * horizontal_scaling
-                needcharspace = True
             else:
                 for cid, _ in font.decode(obj):
-                    if needcharspace:
-                        pos += charspace
                     x, y = (x, pos) if vert else (pos, y)
                     width = font.char_width(cid)
                     if vert:
@@ -768,9 +759,9 @@ class TextObject(ContentObject):
                         adv = width * fontsize * horizontal_scaling
                         x1 = x + adv
                     pos += adv
+                    pos += charspace
                     if cid == 32 and wordspace:
                         pos += wordspace
-                    needcharspace = True
         if self._next_glyph_offset is None:
             self._next_glyph_offset = (x, pos) if vert else (pos, y)
         self._text_space_bbox = (x0, y0, x1, y1)
