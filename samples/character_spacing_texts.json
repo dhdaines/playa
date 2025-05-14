@@ -1,0 +1,136 @@
+[
+{
+  "chars": "Hello",
+  "bbox": [
+    100.0,
+    695.032,
+    194.672,
+    717.232
+  ],
+  "matrix": [
+    24.0,
+    0.0,
+    0,
+    24,
+    100,
+    700
+  ],
+  "gstate": {
+    "font": {
+      "name": "Helvetica",
+      "type": "Type1",
+      "ascent": 718.0,
+      "descent": -207.0,
+      "bbox": [
+        -166.0,
+        -225.0,
+        1000.0,
+        931.0
+      ]
+    },
+    "fontsize": 24,
+    "charspace": 10
+  }
+},
+{
+  "chars": "Goodbye",
+  "bbox": [
+    204.672,
+    695.032,
+    362.06399999999996,
+    717.232
+  ],
+  "matrix": [
+    24.0,
+    0.0,
+    0,
+    24,
+    204.672,
+    700.0
+  ],
+  "gstate": {
+    "font": {
+      "name": "Helvetica",
+      "type": "Type1",
+      "ascent": 718.0,
+      "descent": -207.0,
+      "bbox": [
+        -166.0,
+        -225.0,
+        1000.0,
+        931.0
+      ]
+    },
+    "fontsize": 24,
+    "charspace": 10
+  }
+},
+{
+  "chars": "Hello ",
+  "bbox": [
+    100.0,
+    665.032,
+    211.344,
+    687.232
+  ],
+  "matrix": [
+    24.0,
+    0.0,
+    0,
+    24,
+    100,
+    670
+  ],
+  "gstate": {
+    "font": {
+      "name": "Helvetica",
+      "type": "Type1",
+      "ascent": 718.0,
+      "descent": -207.0,
+      "bbox": [
+        -166.0,
+        -225.0,
+        1000.0,
+        931.0
+      ]
+    },
+    "fontsize": 24,
+    "charspace": 10,
+    "wordspace": 100
+  }
+},
+{
+  "chars": "Goodbye",
+  "bbox": [
+    321.344,
+    665.032,
+    478.736,
+    687.232
+  ],
+  "matrix": [
+    24.0,
+    0.0,
+    0,
+    24,
+    321.344,
+    670.0
+  ],
+  "gstate": {
+    "font": {
+      "name": "Helvetica",
+      "type": "Type1",
+      "ascent": 718.0,
+      "descent": -207.0,
+      "bbox": [
+        -166.0,
+        -225.0,
+        1000.0,
+        931.0
+      ]
+    },
+    "fontsize": 24,
+    "charspace": 10,
+    "wordspace": 100
+  }
+}
+]

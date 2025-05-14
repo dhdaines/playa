@@ -105,10 +105,10 @@ def test_type3_font_boxes() -> None:
         )
 
 
-@pytest.mark.parametrize("name", ["vertical_writing", "simple3"])
-def test_vertical_font_boxes(name: str) -> None:
-    """Ensure that we correctly handle the whole bestiary of vertical
-    writing mode font metrics."""
+@pytest.mark.parametrize("name", ["vertical_writing", "simple3", "character_spacing"])
+def test_glyph_positioning(name: str) -> None:
+    """Verify that various more or less exotic aspects of glyph
+    positioning are handled correctly."""
     with open(TESTDIR / f"{name}_texts.json", encoding="utf-8") as infh:
         texts = json.load(infh)
     with open(TESTDIR / f"{name}_glyphs.json", encoding="utf-8") as infh:

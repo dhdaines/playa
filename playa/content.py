@@ -621,19 +621,16 @@ class TextObject(ContentObject):
         # Pre-determine if we need to recompute the bound for rotated glyphs
         a, b, c, d, _, _ = tlm_ctm
         corners = b * d < 0 or a * c < 0
+        fontsize = self.gstate.fontsize
         horizontal_scaling = self.gstate.scaling * 0.01
-        # Calculate charspace and wordspace
-        charspace = self.gstate.charspace
-        wordspace = self.gstate.wordspace
-        if not font.vertical:
-            # PDF 2.0 section 9.3.2: The character-spacing parameter, Tc,
-            # shall be a number specified in unscaled text space units
-            # (although it shall be subject to scaling by the Th parameter
-            # if the writing mode is horizontal)
-            charspace *= horizontal_scaling
-            # Section 9.3.3: Word spacing works the same way as
-            # character spacing
-            wordspace *= horizontal_scaling
+        # PDF 2.0 section 9.3.2: The character-spacing parameter, Tc,
+        # shall be a number specified in unscaled text space units
+        # (although it shall be subject to scaling by the Th parameter
+        # if the writing mode is horizontal).
+        scaled_charspace = self.gstate.charspace / fontsize
+        # Section 9.3.3: Word spacing "works the same way"
+        scaled_wordspace = self.gstate.wordspace / fontsize
+
         # PDF 2.0 section 9.4.4: Conceptually, the entire
         # transformation from text space to device space can be
         # represented by a text rendering matrix, T_rm:
@@ -643,7 +640,6 @@ class TextObject(ContentObject):
         # Note that scaling_matrix and text_matrix are constant across
         # glyphs in a TextObject, and scaling_matrix is always
         # diagonal (thus the mult_matrix call below can be optimized)
-        fontsize = self.gstate.fontsize
         scaling_matrix = (
             fontsize * horizontal_scaling,
             0,
@@ -653,21 +649,21 @@ class TextObject(ContentObject):
             self.gstate.rise,
         )
         vert = font.vertical
+        # FIXME: THIS IS NOT TRUE!!!  We need a test for it though.
         if font.multibyte:
-            wordspace = 0
+            scaled_wordspace = 0
         (x, y) = glyph_offset
         pos = y if vert else x
-        needcharspace = False  # Only for first glyph
         for obj in self.args:
             if isinstance(obj, (int, float)):
                 pos -= obj * 0.001 * fontsize * horizontal_scaling
-                needcharspace = True
             else:
                 for cid, text in font.decode(obj):
-                    if needcharspace:
-                        pos += charspace
                     glyph_offset = (x, pos) if vert else (pos, y)
                     disp = font.vdisp(cid) if vert else font.char_width(cid)
+                    disp += scaled_charspace
+                    if cid == 32:
+                        disp += scaled_wordspace
                     matrix = mult_matrix(
                         scaling_matrix, translate_matrix(tlm_ctm, glyph_offset)
                     )
@@ -683,13 +679,11 @@ class TextObject(ContentObject):
                         _corners=corners,
                     )
                     yield glyph
+                    # This implements the proper scaling of charspace/wordspace
                     if vert:
                         pos += disp * fontsize
                     else:
                         pos += disp * fontsize * horizontal_scaling
-                    if cid == 32 and wordspace:
-                        pos += wordspace
-                    needcharspace = True
         glyph_offset = (x, pos) if vert else (pos, y)
         if self._next_glyph_offset is None:
             self._next_glyph_offset = glyph_offset
@@ -722,7 +716,6 @@ class TextObject(ContentObject):
             wordspace = 0
         (x, y) = self._glyph_offset
         pos = y if vert else x
-        needcharspace = False  # Only for first glyph
         if vert:
             # Because the position vector can be anything for vertical
             # writing, none of these can be fixed even if we ignore
@@ -743,11 +736,8 @@ class TextObject(ContentObject):
         for obj in self.args:
             if isinstance(obj, (int, float)):
                 pos -= obj * 0.001 * fontsize * horizontal_scaling
-                needcharspace = True
             else:
                 for cid, _ in font.decode(obj):
-                    if needcharspace:
-                        pos += charspace
                     x, y = (x, pos) if vert else (pos, y)
                     width = font.char_width(cid)
                     if vert:
@@ -768,9 +758,9 @@ class TextObject(ContentObject):
                         adv = width * fontsize * horizontal_scaling
                         x1 = x + adv
                     pos += adv
-                    if cid == 32 and wordspace:
+                    pos += charspace
+                    if cid == 32:
                         pos += wordspace
-                    needcharspace = True
         if self._next_glyph_offset is None:
             self._next_glyph_offset = (x, pos) if vert else (pos, y)
         self._text_space_bbox = (x0, y0, x1, y1)

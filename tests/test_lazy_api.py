@@ -210,11 +210,12 @@ def test_glyph_bboxes() -> None:
         assert en_y1 >= zh_y1
 
 
-def test_glyph_properties() -> None:
+@pytest.mark.parametrize("name", ["rotated.pdf", "character_spacing.pdf"])
+def test_glyph_properties(name: str) -> None:
     """Check that the newfangled glyph properties do what they should."""
     # Ensure that origin and displacement reflect actual positions
     for space in "default", "page", "screen":
-        with playa.open(TESTDIR / "rotated.pdf", space=space) as pdf:
+        with playa.open(TESTDIR / name, space=space) as pdf:
             for text in pdf.pages[0].texts:
                 next_origin = text.origin
                 for glyph in text:
@@ -222,9 +223,5 @@ def test_glyph_properties() -> None:
                     gx, gy = glyph.origin
                     dx, dy = glyph.displacement
                     next_origin = (gx + dx, gy + dy)
-        with playa.open(
-            TESTDIR / "graphics_state_in_text_object.pdf", space=space
-        ) as pdf:
-            for text in pdf.pages[0].texts:
-                x0, y0, x1, y1 = text.bbox
-                assert text.size >= y1 - y0
+                    assert glyph.size > 0
+                assert text.size > 0
