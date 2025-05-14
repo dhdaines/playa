@@ -339,6 +339,17 @@ def test_objects():
 
 
 INLINEDATA1 = b"""
+BI /L 42 ID
+012345678901234567890123456789012345678901
+EI
+BI /Length 30 /Filter /A85 ID
+
+
+<^BVT:K:=9<E)pd;BS_1:/aSV;ag~>
+
+
+
+EI
 BI
 /Foo (bar)
 ID
@@ -378,6 +389,12 @@ OLDMACDONALDEIEIOEI
 
 def test_inline_images():
     parser = ObjectParser(INLINEDATA1)
+    pos, img = next(parser)
+    assert isinstance(img, InlineImage)
+    assert img.buffer == b"012345678901234567890123456789012345678901"
+    pos, img = next(parser)
+    assert isinstance(img, InlineImage)
+    assert img.buffer == b"VARIOUS UTTER NONSENSE"
     pos, img = next(parser)
     assert isinstance(img, InlineImage)
     assert img.attrs["Foo"] == b"bar"

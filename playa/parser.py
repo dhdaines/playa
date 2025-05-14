@@ -1,3 +1,9 @@
+"""PDF lexer and parser
+
+Danger: API subject to change.
+    These APIs are unstable and subject to revision before PLAYA 1.0.
+"""
+
 import itertools
 import logging
 import mmap
@@ -135,6 +141,7 @@ STRLEXER = re.compile(
 HEXDIGIT = re.compile(rb"#([A-Fa-f\d][A-Fa-f\d])")
 EOLR = re.compile(rb"\r\n?|\n")
 SPC = re.compile(rb"\s")
+WSR = re.compile(rb"\s+")
 
 
 class Lexer:
@@ -459,8 +466,13 @@ class ObjectParser:
         the image data.  Advances the file pointer to a position after
         the "EI" token that (we hope) ends the image.
 
-        Note: WELCOME TO THE HELL!!!
-            - The PDF standard only specifies that image data must be
+        Note: WELCOME IN THE HELL!!!
+            If you're lucky enough to have PDF 2.0 documents, then you
+            can skip this, you aren't actually in (the) hell.  Otherwise
+            read on to know why you might be missng images or reading
+            a lot of garbage in your logs:
+
+            - The PDF 1.7 standard only specifies that image data must be
               delimited by `ID` and `EI`, and that "The bytes between
               the `ID` and `EI` operators shall be treated the same as a
               stream object’s data, even though they do not follow the
@@ -471,7 +483,7 @@ class ObjectParser:
               `ASCII85Decode` (in which case there can just be any
               whitespace you like, or none at all).
             - It's obviously impossible to determine what a "conforming
-              implementation" of this standard is.
+              implementation" of this should do.
 
             In the easiest case, if it's `ASCIIHexDecode` data then we
             can just look for the first instance of `b"EI"`, ignoring all
@@ -497,6 +509,13 @@ class ObjectParser:
             take the most distant one, and if this causes you to lose
             data, well, it's definitely Adobe's fault.
 
+            There **is** an absolutely foolproof way to parse inline
+            images, but it's ridiculous so we won't do it:
+
+            1. Find the very first instance of `b"EI"`.
+            2. Extract the image itself (which could be in various formats).
+            3. If it's a valid image, congratulations!  Otherwise try again.
+
             The moral of the story is that the author of this part of
             the PDF specification should have considered a career in
             literally anything else.
@@ -516,35 +535,49 @@ class ObjectParser:
         dic = {literal_name(k): v for (k, v) in choplist(2, objs) if v is not None}
 
         target_re = EIR
-        initial_whitespace = True
-        filters = dic.get("F", [])
-        if not isinstance(filters, list):
-            filters = [filters]
-        if filters:
-            if filters[0] in LITERALS_ASCII85_DECODE:
-                # ASCII85: look for ~>EI, ignoring all whitespace
-                initial_whitespace = False
-                target_re = A85R
-            elif filters[0] in LITERALS_ASCIIHEX_DECODE:
-                # ASCIIHex: just look for EI
-                initial_whitespace = False
-                target_re = EIEIR
-            else:
-                initial_whitespace = True
+        whitespace_re = SPC
+        # Final filter is actually the *first* in the list
+        final_filter = dic.get("F", dic.get("Filter"))
+        if isinstance(final_filter, list) and final_filter:
+            final_filter = final_filter[0]
+        if final_filter in LITERALS_ASCII85_DECODE:
+            # ASCII85: look for ~>EI, ignoring all whitespace
+            whitespace_re = WSR
+            target_re = A85R
+        elif final_filter in LITERALS_ASCIIHEX_DECODE:
+            # ASCIIHex: just look for EI
+            whitespace_re = WSR
+            target_re = EIEIR
 
-        # Find the start of the image data
+        # Find the start of the image data by skipping the appropriate
+        # amount of whitespace.  In the case of ASCII filters, we need
+        # to skip any extra whitespace before we use a possible Length
+        # value (this is very dumb but the standard says...)
         pos = idpos + len(token.name)
         data = self._lexer.data
-        if initial_whitespace:
-            ws = data[pos : pos + 1]
-            if ws.isspace():
-                pos = pos + 1
+        m = whitespace_re.match(data, pos)
+        if m is None:  # Note that WSR will also match nothing
+            errmsg = f"ID token at {pos} not followed by whitespace"
+            if self.strict:
+                raise PDFSyntaxError(errmsg)
             else:
-                errmsg = f"ID token not followed by whitespace: {ws!r}"
+                log.warning(errmsg)
+        else:
+            pos = m.end(0)
+
+        # If you have Length, you have everything
+        length = dic.get("L", dic.get("Length"))
+        if length is not None:
+            end = pos + int_value(length)
+            self.seek(end)
+            (_, token) = self.nexttoken()
+            if token is not KEYWORD_EI:
+                errmsg = f"EI not found after Length {length!r}"
                 if self.strict:
                     raise PDFSyntaxError(errmsg)
                 else:
                     log.warning(errmsg)
+            return InlineImage(dic, data[pos:end])
 
         m = target_re.search(data, pos)
         if m is not None:
