@@ -61,53 +61,6 @@ from playa.utils import (
 )
 
 log = logging.getLogger(__name__)
-
-
-def get_widths(seq: Iterable[PDFObject]) -> Dict[int, float]:
-    """Build a mapping of character widths for horizontal writing."""
-    widths: Dict[int, float] = {}
-    r: List[float] = []
-    for v in seq:
-        if isinstance(v, list):
-            if r:
-                char1 = r[-1]
-                for i, w in enumerate(v):
-                    widths[int_value(char1) + i] = w
-                r = []
-        elif isinstance(v, (int, float)):  # == utils.isnumber(v)
-            r.append(v)
-            if len(r) == 3:
-                (char1, char2, w) = r
-                for i in range(int_value(char1), int_value(char2) + 1):
-                    widths[i] = w
-                r = []
-    return widths
-
-
-def get_widths2(seq: Iterable[PDFObject]) -> Dict[int, Tuple[float, Point]]:
-    """Build a mapping of character widths for vertical writing."""
-    widths: Dict[int, Tuple[float, Point]] = {}
-    r: List[float] = []
-    for v in seq:
-        if isinstance(v, list):
-            if r:
-                char1 = r[-1]
-                for i, (w, vx, vy) in enumerate(choplist(3, v)):
-                    widths[int(char1) + i] = (
-                        num_value(w),
-                        (int_value(vx), int_value(vy)),
-                    )
-                r = []
-        elif isinstance(v, (int, float)):  # == utils.isnumber(v)
-            r.append(v)
-            if len(r) == 5:
-                (char1, char2, w, vx, vy) = r
-                for i in range(int(char1), int(char2) + 1):
-                    widths[i] = (w, (vx, vy))
-                r = []
-    return widths
-
-
 LITERAL_STANDARD_ENCODING = LIT("StandardEncoding")
 
 
@@ -448,6 +401,51 @@ IDENTITY_ENCODER = {
 }
 
 
+def _get_widths(seq: Iterable[PDFObject]) -> Dict[int, float]:
+    """Build a mapping of character widths for horizontal writing."""
+    widths: Dict[int, float] = {}
+    r: List[float] = []
+    for v in seq:
+        if isinstance(v, list):
+            if r:
+                char1 = r[-1]
+                for i, w in enumerate(v):
+                    widths[int_value(char1) + i] = w
+                r = []
+        elif isinstance(v, (int, float)):  # == utils.isnumber(v)
+            r.append(v)
+            if len(r) == 3:
+                (char1, char2, w) = r
+                for i in range(int_value(char1), int_value(char2) + 1):
+                    widths[i] = w
+                r = []
+    return widths
+
+
+def _get_widths2(seq: Iterable[PDFObject]) -> Dict[int, Tuple[float, Point]]:
+    """Build a mapping of character widths for vertical writing."""
+    widths: Dict[int, Tuple[float, Point]] = {}
+    r: List[float] = []
+    for v in seq:
+        if isinstance(v, list):
+            if r:
+                char1 = r[-1]
+                for i, (w, vx, vy) in enumerate(choplist(3, v)):
+                    widths[int(char1) + i] = (
+                        num_value(w),
+                        (int_value(vx), int_value(vy)),
+                    )
+                r = []
+        elif isinstance(v, (int, float)):  # == utils.isnumber(v)
+            r.append(v)
+            if len(r) == 5:
+                (char1, char2, w, vx, vy) = r
+                for i in range(int(char1), int(char2) + 1):
+                    widths[i] = (w, (vx, vy))
+                r = []
+    return widths
+
+
 class CIDFont(Font):
     default_vdisp: float
 
@@ -532,7 +530,7 @@ class CIDFont(Font):
         # to self.cmap (this is actually quite hard because the code
         # spaces have been lost in the precompiled CMaps...)
 
-        widths = get_widths(list_value(spec.get("W", [])))
+        widths = _get_widths(list_value(spec.get("W", [])))
         if "DW" in spec:
             default_width = num_value(spec["DW"])
         else:
@@ -553,7 +551,7 @@ class CIDFont(Font):
             self.positions = {}
             self.vdisps = {}
             if "W2" in spec:
-                for cid, (w1, (vx, vy)) in get_widths2(list_value(spec["W2"])).items():
+                for cid, (w1, (vx, vy)) in _get_widths2(list_value(spec["W2"])).items():
                     self.positions[cid] = (vx, vy)
                     self.vdisps[cid] = w1
         else:
