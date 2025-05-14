@@ -470,12 +470,30 @@ class PathObject(ContentObject):
         return transform_bbox(self.ctm, bbox)
 
 
+def _font_size(matrix: Matrix, vert: bool = False) -> float:
+    if vert:
+        # dx, dy = apply_matrix_norm(self.matrix, (1, 0))
+        dx, dy, _, _, _, _ = matrix
+    else:
+        # dx, dy = apply_matrix_norm(self.matrix, (0, 1))
+        _, _, dx, dy, _, _ = matrix
+    if dx == 0:  # Nearly always true
+        return abs(dy)
+    elif dy == 0:
+        return abs(dx)
+    else:
+        import math
+
+        return math.sqrt(dx * dx + dy * dy)
+
+
 @dataclass
 class GlyphObject(ContentObject):
     """Individual glyph on the page.
 
     Attributes:
       font: Font for this glyph.
+      size: Effective font size for this glyph.
       cid: Character ID for this glyph.
       text: Unicode mapping of this glyph, if any.
       matrix: Rendering matrix `T_rm` for this glyph, which transforms
@@ -502,6 +520,11 @@ class GlyphObject(ContentObject):
         font = self.gstate.font
         assert font is not None
         return font
+
+    @property
+    def size(self) -> float:
+        vert = False if self.gstate.font is None else self.gstate.font.vertical
+        return _font_size(self.matrix, vert)
 
     @property
     def origin(self) -> Point:
@@ -553,8 +576,7 @@ class TextObject(ContentObject):
               which transforms text space coordinates to device space
               (PDF 2.0 section 9.4.4).
       origin: Origin of this text object in device space.
-      displacement: Vector to the origin of the next text object in device
-                    space.
+      size: Effective font size for this text object.
       text_matrix: Text matrix `T_m` for this text object, which
                    transforms text space coordinates to user space.
       line_matrix: Text line matrix `T_lm` for this text object, which
@@ -765,8 +787,15 @@ class TextObject(ContentObject):
     def matrix(self) -> Matrix:
         if self._matrix is not None:
             return self._matrix
-        self._matrix = mult_matrix(self.scaling_matrix, mult_matrix(self.text_matrix, self.ctm))
+        self._matrix = mult_matrix(
+            self.scaling_matrix, mult_matrix(self.text_matrix, self.ctm)
+        )
         return self._matrix
+
+    @property
+    def size(self) -> float:
+        vert = False if self.gstate.font is None else self.gstate.font.vertical
+        return _font_size(self.matrix, vert)
 
     @property
     def scaling_matrix(self):
