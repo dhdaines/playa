@@ -8,11 +8,14 @@ from pathlib import Path
 
 import playa
 
+SAMPLES = Path(__file__).parent.parent / "samples"
 CONTRIB = Path(__file__).parent.parent / "samples" / "contrib"
 
 LOG = logging.getLogger("benchmark-text")
 # Use a standard benchmark set to make version comparisons possible
 PDFS = [
+    "jo.pdf",
+    "zen_of_python_corrupted.pdf",
     "2023-04-06-ODJ et Résolutions-séance xtra 6 avril 2023.pdf",
     "2023-06-20-PV.pdf",
     "PSC_Station.pdf",
@@ -38,11 +41,14 @@ def benchmark_text(path: Path):
 
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.ERROR)
     niter = 5
     chars_time = text_time = 0.0
     for iter in range(niter + 1):
         for name in PDFS:
-            path = CONTRIB / name
+            path = SAMPLES / name
+            if not path.exists():
+                path = CONTRIB / name
             start = time.time()
             benchmark_chars(path)
             if iter != 0:

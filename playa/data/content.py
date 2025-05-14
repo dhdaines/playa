@@ -35,13 +35,9 @@ class Text(TypedDict, total=False):
     """Unicode string representation of text."""
     bbox: Rect
     """Bounding rectangle for all glyphs in text in default user space."""
-    ctm: Matrix
-    """Coordinate transformation matrix, default if not present is the
-    identity matrix `[1 0 0 1 0 0]`."""
-    line_matrix: Matrix
-    """Coordinate transformation matrix for start of current line."""
-    glyph_offset: Point
-    """Offset of text object in relation to current line FIXME in weird units."""
+    matrix: Matrix
+    """Text rendering matrix.  Note that the effective font size
+    and the origin can be derived from this."""
     gstate: "GraphicState"
     """Graphic state."""
     mcstack: List["Tag"]
@@ -75,9 +71,9 @@ class GraphicState(TypedDict, total=False):
     font: Font
     """Descriptor of current font."""
     fontsize: float
-    """Font size in unscaled text space units (**not** in points, can be
-    scaled using `line_matrix` to obtain user space units), default if
-    not present is 1.0."""
+    """Font size in unscaled text space units (**not** in points, can
+    be scaled using a text or glyph's `matrix` to obtain user space
+    units), default if not present is 1.0."""
     charspace: float
     """Character spacing in unscaled text space units, default if not present is 0."""
     wordspace: float
@@ -135,10 +131,12 @@ class Tag(TypedDict, total=False):
 
 
 class Image(TypedDict, total=False):
+    ctm: Matrix
+    """Coordinate transformation matrix, default is `(1, 0, 0, 1, 0, 0)`"""
     xobject_name: str
     """Name of XObject in page resources, if any."""
     bbox: Rect
-    """Bounding rectangle for image in default user space."""
+    """Bounding rectangle for image."""
     srcsize: Tuple[int, int]
     """Size of source image in pixels."""
     bits: int
@@ -152,6 +150,8 @@ class Image(TypedDict, total=False):
 
 
 class Path(TypedDict, total=False):
+    ctm: Matrix
+    """Coordinate transformation matrix, default is `(1, 0, 0, 1, 0, 0)`"""
     stroke: bool
     """True if the outline of the path is stroked."""
     fill: bool
@@ -173,7 +173,7 @@ class PathSegment(TypedDict, total=False):
     """Normalized path operator (PDF 1.7 section 8.5.2).  Note that "re"
     will be expanded into its constituent line segments."""
     points: List[Point]
-    """Point or control points in default user space for path segment."""
+    """Point or control points for path segment."""
 
 
 class Glyph(TypedDict, total=False):
@@ -182,12 +182,12 @@ class Glyph(TypedDict, total=False):
     cid: int
     """Character ID for glyph in font."""
     bbox: Rect
-    """Bounding rectangle for all glyphs in text in default user space."""
-    ctm: Matrix
-    """Coordinate transformation matrix, default if not present is the
-    identity matrix `[1 0 0 1 0 0]`."""
-    glyph_offset: Point
-    """Offset of glyph in relation to current line FIXME in weird units."""
+    """Bounding rectangle."""
+    matrix: Matrix
+    """Rendering matrix for glyph.  Note that the effective font size
+    and the origin can be derived from this."""
+    displacement: Point
+    """Displacement to origin of next glyph."""
     gstate: "GraphicState"
     """Graphic state."""
     mcstack: List["Tag"]
@@ -268,20 +268,14 @@ def asobj_text(obj: _TextObject) -> Text:
     text = Text(
         chars=obj.chars,
         bbox=obj.bbox,
+        matrix=obj.matrix,
     )
-    # But there is a default graphic state
     gstate = asobj(obj.gstate)
     if gstate:
         text["gstate"] = gstate
     mcstack = [asobj(mcs) for mcs in obj.mcstack]
     if mcstack:
         text["mcstack"] = mcstack
-    if obj.ctm is not MATRIX_IDENTITY:
-        text["ctm"] = obj.ctm
-    if obj.line_matrix is not MATRIX_IDENTITY:
-        text["line_matrix"] = obj.line_matrix
-    if obj.glyph_offset != (0, 0):
-        text["glyph_offset"] = obj.glyph_offset
     return text
 
 
@@ -299,6 +293,8 @@ def asobj_tag(obj: _TagObject) -> Tag:
 @asobj.register
 def asobj_image(obj: _ImageObject) -> Image:
     img = Image(srcsize=obj.srcsize, bbox=obj.bbox, stream=asobj(obj.stream))
+    if obj.ctm is not MATRIX_IDENTITY:
+        img["ctm"] = obj.ctm
     if obj.xobjid is not None:
         img["xobject_name"] = obj.xobjid
     if obj.bits != 1:
@@ -316,6 +312,8 @@ def asobj_path(obj: _PathObject) -> Path:
     gstate = asobj(obj.gstate)
     if gstate:
         path["gstate"] = gstate
+    if obj.ctm is not MATRIX_IDENTITY:
+        path["ctm"] = obj.ctm
     mcstack = [asobj(mcs) for mcs in obj.mcstack]
     if mcstack:
         path["mcstack"] = mcstack
@@ -339,6 +337,8 @@ def asobj_glyph(obj: _GlyphObject) -> Glyph:
     glyph = Glyph(
         cid=obj.cid,
         bbox=obj.bbox,
+        matrix=obj.matrix,
+        displacement=obj.displacement,
     )
     # But there is a default graphic state
     gstate = asobj(obj.gstate)
@@ -349,8 +349,4 @@ def asobj_glyph(obj: _GlyphObject) -> Glyph:
     mcstack = [asobj(mcs) for mcs in obj.mcstack]
     if mcstack:
         glyph["mcstack"] = mcstack
-    if obj.ctm is not MATRIX_IDENTITY:
-        glyph["ctm"] = obj.ctm
-    if obj.glyph_offset != (0, 0):
-        glyph["glyph_offset"] = obj.glyph_offset
     return glyph

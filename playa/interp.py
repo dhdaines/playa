@@ -245,7 +245,7 @@ class LazyInterpreter:
                     if co is not None:
                         yield co
                     if isinstance(co, TextObject):
-                        self.textstate.glyph_offset = co.next_glyph_offset
+                        self.textstate.glyph_offset = co._get_next_glyph_offset()
                 else:
                     # TODO: This can get very verbose
                     log.warning("Unknown operator: %r", obj)
@@ -371,7 +371,7 @@ class LazyInterpreter:
         obj = self.create(
             TextObject,
             line_matrix=self.textstate.line_matrix,
-            glyph_offset=self.textstate.glyph_offset,
+            _glyph_offset=self.textstate.glyph_offset,
             args=args,
         )
         if obj is not None:
@@ -379,7 +379,7 @@ class LazyInterpreter:
                 return obj
             # Even without text, TJ can still update the glyph offset
             assert isinstance(obj, TextObject)
-            self.textstate.glyph_offset = obj.next_glyph_offset
+            self.textstate.glyph_offset = obj._get_next_glyph_offset()
         return None
 
     def do_Tj(self, s: PDFObject) -> Union[ContentObject, None]:

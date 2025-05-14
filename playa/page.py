@@ -58,23 +58,6 @@ DeviceSpace = Literal["page", "screen", "default", "user"]
 CO = TypeVar("CO")
 
 
-# FIXME: This should be a method of TextObject (soon)
-def _extract_text_from_obj(obj: "TextObject", vertical: bool) -> Tuple[str, float]:
-    """Try to get text from a text object."""
-    chars = []
-    prev_end = 0.0
-    for glyph in obj:
-        x, y = glyph.glyph_offset
-        off = y if vertical else x
-        # FIXME: This is a heuristic!!!
-        if prev_end and off - prev_end > 0.5:
-            chars.append(" ")
-        if glyph.text is not None:
-            chars.append(glyph.text)
-        prev_end = off + glyph.adv
-    return "".join(chars), prev_end
-
-
 class Page:
     """An object that holds the information about a page.
 
@@ -347,29 +330,55 @@ class Page:
 
     def extract_text_untagged(self) -> str:
         """Get text from a page of an untagged PDF."""
-        prev_line_matrix = None
-        prev_end = 0.0
+
+        def _extract_text_from_obj(
+            obj: "TextObject", vertical: bool
+        ) -> Tuple[str, float]:
+            """Try to get text from a text object."""
+            chars: List[str] = []
+            prev_end = 0.0
+            for glyph in obj:
+                x, y = glyph.origin
+                off = y if vertical else x
+                # FIXME: The 0.5 is a heuristic!!!
+                if prev_end and off - prev_end > 0.5:
+                    chars.append(" ")
+                if glyph.text is not None:
+                    chars.append(glyph.text)
+                dx, dy = glyph.displacement
+                prev_end = off + (dy if vertical else dx)
+            return "".join(chars), prev_end
+
+        prev_end = prev_line_offset = prev_word_offset = 0.0
         lines = []
-        strings = []
+        strings: List[str] = []
         for text in self.texts:
-            line_matrix = text.line_matrix
-            vertical = False if text.gstate.font is None else text.gstate.font.vertical
-            lpos = -2 if vertical else -1
-            if (
-                prev_line_matrix is not None
-                and line_matrix[lpos] < prev_line_matrix[lpos]
-            ):
+            if text.gstate.font is None:
+                continue
+            vertical = text.gstate.font.vertical
+            # Track changes to the translation component of text
+            # rendering matrix to (yes, heuristically) detect newlines
+            # and spaces between text objects
+            _, _, _, _, dx, dy = text.matrix
+            line_offset = dx if vertical else dy
+            word_offset = dy if vertical else dx
+            # Vertical text (usually) means right-to-left lines
+            if vertical:
+                line_feed = line_offset < prev_line_offset
+            elif self.space in ("page", "default"):
+                line_feed = line_offset < prev_line_offset
+            else:
+                line_feed = line_offset > prev_line_offset
+            if strings and line_feed:
                 lines.append("".join(strings))
                 strings.clear()
-            wpos = -1 if vertical else -2
-            if (
-                prev_line_matrix is not None
-                and prev_end + prev_line_matrix[wpos] < line_matrix[wpos]
-            ):
+            # FIXME: the 0.5 is a heuristic!!!
+            if strings and word_offset > prev_end + prev_word_offset + 0.5:
                 strings.append(" ")
             textstr, end = _extract_text_from_obj(text, vertical)
             strings.append(textstr)
-            prev_line_matrix = line_matrix
+            prev_line_offset = line_offset
+            prev_word_offset = word_offset
             prev_end = end
         if strings:
             lines.append("".join(strings))

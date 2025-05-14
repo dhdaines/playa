@@ -2,6 +2,7 @@
 - Remove use of `object` in type annotations
 - Add support for role map and standard structure types
 - Add `bbox` and `contents` to structure elements
+- Somewhat improve untagged text extraction where the CTM is exotic
 - BREAKING: `find` and `find_all` in structure search by standard
   structure types (roles)
 - BREAKING: `parent_tree` moved to `playa.structure.Tree`
@@ -11,11 +12,13 @@
   recursively descend it now
 - BREAKING: Content objects moved to `playa.content` and interpreter
   to `playa.interp`
-- BREAKING: Text state no longer exists in the public API, text and
-  glyph objects have immutable line matrix and glyph offset now, and
+- BREAKING: Text state no longer exists in the public API, text
+  objects have immutable line matrix and glyph offset now, and
   everything else is in the graphic state
 - BREAKING: `text_space_` properties are removed since what they
   returned was not actually text space (and maybe not useful either)
+- BREAKING: `glyph_offset` is removed from glyphs and made private in
+  text objects, as it is not in a well defined space.
 
 ## PLAYA 0.4.3: 2025-05-09
 - Correct ascent, descent, and glyph boxes for Type3 fonts
