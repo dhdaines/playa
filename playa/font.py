@@ -364,7 +364,7 @@ class Type3Font(SimpleFont):
         firstchar = int_value(spec.get("FirstChar", 0))
         # lastchar = int_value(spec.get('LastChar', 0))
         width_list = list_value(spec.get("Widths", [0] * 256))
-        widths = {i + firstchar: w for (i, w) in enumerate(width_list)}
+        widths = {i + firstchar: num_value(w) for (i, w) in enumerate(width_list)}
         descriptor = dict_value(spec.get("FontDescriptor", {}))
         SimpleFont.__init__(self, descriptor, widths, spec)
         if "FontMatrix" in spec:  # it is actually required though
@@ -410,14 +410,14 @@ def _get_widths(seq: Iterable[PDFObject]) -> Dict[int, float]:
             if r:
                 char1 = r[-1]
                 for i, w in enumerate(v):
-                    widths[int_value(char1) + i] = w
+                    widths[int_value(char1) + i] = num_value(w)
                 r = []
         elif isinstance(v, (int, float)):  # == utils.isnumber(v)
             r.append(v)
             if len(r) == 3:
                 (char1, char2, w) = r
                 for i in range(int_value(char1), int_value(char2) + 1):
-                    widths[i] = w
+                    widths[i] = num_value(w)
                 r = []
     return widths
 
@@ -433,7 +433,7 @@ def _get_widths2(seq: Iterable[PDFObject]) -> Dict[int, Tuple[float, Point]]:
                 for i, (w, vx, vy) in enumerate(choplist(3, v)):
                     widths[int(char1) + i] = (
                         num_value(w),
-                        (int_value(vx), int_value(vy)),
+                        (num_value(vx), num_value(vy)),
                     )
                 r = []
         elif isinstance(v, (int, float)):  # == utils.isnumber(v)
@@ -441,7 +441,10 @@ def _get_widths2(seq: Iterable[PDFObject]) -> Dict[int, Tuple[float, Point]]:
             if len(r) == 5:
                 (char1, char2, w, vx, vy) = r
                 for i in range(int(char1), int(char2) + 1):
-                    widths[i] = (w, (vx, vy))
+                    widths[i] = (
+                        num_value(w),
+                        (num_value(vx), num_value(vy)),
+                    )
                 r = []
     return widths
 

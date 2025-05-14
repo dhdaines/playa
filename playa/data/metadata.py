@@ -307,10 +307,8 @@ def font_from_spec(spec: Dict[str, Any]) -> Font:
     )
     if basefont in FONT_METRICS:
         desc, _ = FONT_METRICS[basefont]
-    elif "FontDescriptor" in spec:
-        desc = dict_value(spec["FontDescriptor"])
     else:
-        desc = None
+        desc = resolve1(spec.get("FontDescriptor"))
     if desc is not None:
         desc = dict_value(desc)
         for attr in (

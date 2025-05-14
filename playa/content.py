@@ -697,8 +697,6 @@ class TextObject(ContentObject):
         font = self.gstate.font
         fontsize = self.gstate.fontsize
         rise = self.gstate.rise
-        descent = font.get_descent() * fontsize
-        ascent = font.get_ascent() * fontsize
         if font is None:
             log.warning(
                 "No font is set, will not update text state or output text: %r TJ",
@@ -711,6 +709,8 @@ class TextObject(ContentObject):
             self._text_space_bbox = BBOX_NONE
             self._next_glyph_offset = self._glyph_offset
             return self._text_space_bbox
+        descent = font.get_descent() * fontsize
+        ascent = font.get_ascent() * fontsize
         horizontal_scaling = self.gstate.scaling * 0.01
         charspace = self.gstate.charspace
         wordspace = self.gstate.wordspace
