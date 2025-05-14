@@ -27,6 +27,7 @@ from playa.parser import IndirectObject as _IndirectObject
 from playa.pdftypes import MATRIX_IDENTITY
 from playa.pdftypes import ContentStream as _ContentStream
 from playa.pdftypes import (
+    PDFObject,
     dict_value,
     int_value,
     matrix_value,
@@ -305,6 +306,7 @@ def font_from_spec(spec: Dict[str, Any]) -> Font:
         name=basefont,
         type=asobj(resolve1(spec.get("Subtype"))),
     )
+    desc: PDFObject
     if basefont in FONT_METRICS:
         desc, _ = FONT_METRICS[basefont]
     else:
