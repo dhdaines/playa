@@ -332,11 +332,10 @@ class Page:
         """Get text from a page of an untagged PDF."""
 
         def _extract_text_from_obj(
-            obj: "TextObject", vertical: bool
+            obj: "TextObject", vertical: bool, prev_end: float
         ) -> Tuple[str, float]:
             """Try to get text from a text object."""
             chars: List[str] = []
-            prev_end = 0.0
             for glyph in obj:
                 x, y = glyph.origin
                 off = y if vertical else x
@@ -375,7 +374,7 @@ class Page:
             # FIXME: the 0.5 is a heuristic!!!
             if strings and word_offset > prev_end + prev_word_offset + 0.5:
                 strings.append(" ")
-            textstr, end = _extract_text_from_obj(text, vertical)
+            textstr, end = _extract_text_from_obj(text, vertical, prev_end)
             strings.append(textstr)
             prev_line_offset = line_offset
             prev_word_offset = word_offset
