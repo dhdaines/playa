@@ -13,6 +13,7 @@
 - Add `origin` and `displacement` to glyphs
 - Add `size` to glyphs and texts to get effective font size (still not
   entirely accurate when there is rotation or skewing)
+- Support PDF 2.0 `Length` attribute on inline images
 - BREAKING: `find` and `find_all` in structure search by standard
   structure types (roles)
 - BREAKING: `parent_tree` moved to `playa.structure.Tree`

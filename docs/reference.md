@@ -20,10 +20,12 @@
 
 ::: playa.content
 
-::: playa.parser
-
 ::: playa.structure
 
 ::: playa.outline
+
+::: playa.font
+
+::: playa.parser
 
 ::: playa.worker

@@ -1,3 +1,9 @@
+"""Font metrics and descriptors
+
+Danger: API subject to change.
+    These APIs are unstable and subject to revision before PLAYA 1.0.
+"""
+
 import logging
 from io import BytesIO
 from typing import (
