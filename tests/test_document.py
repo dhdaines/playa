@@ -90,6 +90,25 @@ def test_object_streams():
         assert len(objs) == 53
 
 
+def test_fonts():
+    """Test getting fonts from documents."""
+    with playa.open(TESTDIR / "font-size-test.pdf") as doc:
+        assert doc.fonts.keys() == {
+            "OKXWSQ+Calibri-Light",
+            "FMIXLV+Calibri-Italic",
+            "XXGPLK+Calibri-Bold",
+            "TKMFIM+Calibri-BoldItalic",
+            "XQOVTX+Calibri-LightItalic",
+            "BKHCKV+Calibri",
+            "FXOQDS+ArialMT",
+            "BAOYBE+Batang",
+        }
+    with playa.open(TESTDIR / "font-size-test.pdf") as doc:
+        assert doc.pages[0].fonts.keys() == {"TT2", "TT8", "TT10", "TT12", "TT6", "TT4"}
+        assert doc.pages[1].fonts.keys() == {"TT2", "TT14"}
+        assert doc.pages[2].fonts.keys() == {"TT2", "TT16"}
+
+
 @pytest.mark.skipif(not CONTRIB.exists(), reason="contrib samples not present")
 def test_page_labels():
     with playa.open(CONTRIB / "pagelabels.pdf") as doc:
