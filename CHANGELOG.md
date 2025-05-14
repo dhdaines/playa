@@ -1,11 +1,18 @@
 ## PLAYA 0.5.0: unreleased
 - Remove use of `object` in type annotations
 - Add support for role map and standard structure types
-- Add `bbox` and `contents` to structure elements
+- Refactor page.py as it was getting really unwieldy
+- Add missing `ctm` to content objects in metadata API
 - Somewhat improve untagged text extraction where the CTM is exotic
 - Correct character and word spacing to apply after all glyphs
+- Correct vertical writing to fully support glyph-specific position
+  vectors, even totally absurd ones
 - Correct horizontal scaling to apply to vertical writing, including
   the position vector
+- Add `bbox` and `contents` to structure elements
+- Add `origin` and `displacement` to glyphs
+- Add `size` to glyphs and texts to get effective font size (still not
+  entirely accurate when there is rotation or skewing)
 - BREAKING: `find` and `find_all` in structure search by standard
   structure types (roles)
 - BREAKING: `parent_tree` moved to `playa.structure.Tree`
@@ -22,6 +29,11 @@
   returned was not actually text space (and maybe not useful either)
 - BREAKING: `glyph_offset` is removed from glyphs and made private in
   text objects, as it is not in a well defined space.
+- BREAKING: Glyph `bbox` now has a precise definition, which isn't
+  exactly the glyph bounding box but is a lot closer.  This means
+  notably that adjacent glyphs may overlap or may not touch, which is
+  why you should **never** use the `bbox` to detect word boundaries.
+  Use `origin` and `displacement` instead, please!
 
 ## PLAYA 0.4.3: 2025-05-09
 - Correct ascent, descent, and glyph boxes for Type3 fonts
