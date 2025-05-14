@@ -3,6 +3,9 @@
 - Add support for role map and standard structure types
 - Add `bbox` and `contents` to structure elements
 - Somewhat improve untagged text extraction where the CTM is exotic
+- Correct character and word spacing to apply after all glyphs
+- Correct horizontal scaling to apply to vertical writing, including
+  the position vector
 - BREAKING: `find` and `find_all` in structure search by standard
   structure types (roles)
 - BREAKING: `parent_tree` moved to `playa.structure.Tree`
