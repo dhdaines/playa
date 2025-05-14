@@ -38,6 +38,8 @@ BT
 /F1 24 Tf
 100 700 Td
 10 Tc (Hello) Tj (Goodbye) Tj
+0 -30 Td 100 Tw
+(Hello ) Tj (Goodbye) Tj
 ET
 endstream
 endobj
