@@ -519,7 +519,7 @@ class GlyphObject(ContentObject):
         if self.font.vertical:
             return c * self._displacement, d * self._displacement
         else:
-            return a * self._displacement, c * self._displacement
+            return a * self._displacement, b * self._displacement
 
     @property
     def bbox(self) -> Rect:

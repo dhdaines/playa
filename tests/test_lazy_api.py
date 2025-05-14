@@ -208,3 +208,23 @@ def test_glyph_bboxes() -> None:
         _, en_y0, _, en_y1 = t.bbox
         assert en_y0 <= zh_y0
         assert en_y1 >= zh_y1
+
+
+def test_glyph_properties() -> None:
+    """Check that the newfangled glyph properties do what they should."""
+    # Ensure that origin and displacement reflect actual positions
+    for space in "default", "page", "screen":
+        with playa.open(TESTDIR / "rotated.pdf", space=space) as pdf:
+            for text in pdf.pages[0].texts:
+                next_origin = text.origin
+                for glyph in text:
+                    assert glyph.origin == pytest.approx(next_origin)
+                    gx, gy = glyph.origin
+                    dx, dy = glyph.displacement
+                    next_origin = (gx + dx, gy + dy)
+        with playa.open(
+            TESTDIR / "graphics_state_in_text_object.pdf", space=space
+        ) as pdf:
+            for text in pdf.pages[0].texts:
+                x0, y0, x1, y1 = text.bbox
+                assert text.size >= y1 - y0
