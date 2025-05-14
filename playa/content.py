@@ -548,17 +548,32 @@ class TextObject(ContentObject):
     """Text object (contains one or more glyphs).
 
     Attributes:
-      line_matrix: Text line matrix for this object.
-      glyph_offset: Offset of this text object from the origin of the
-                    line matrix, in "unscaled text space units".
-      args: Strings or position adjustments
+
+      matrix: Initial rendering matrix `T_rm` for this text object,
+              which transforms text space coordinates to device space
+              (PDF 2.0 section 9.4.4).
+      origin: Origin of this text object in device space.
+      displacement: Vector to the origin of the next text object in device
+                    space.
+      text_matrix: Text matrix `T_m` for this text object, which
+                   transforms text space coordinates to user space.
+      line_matrix: Text line matrix `T_lm` for this text object, which
+                   is the text matrix at the beginning of the "current
+                   line" (PDF 2.0 section 9.4.1).  Note that this is
+                   **not** reliable for detecting line breaks.
+      scaling_matrix: The anonymous but rather important matrix which
+                      applies font size, horizontal scaling and rise to
+                      obtain the rendering matrix (PDF 2.0 sec 9.4.4).
+      args: Strings or position adjustments.
       bbox: Text bounding box in device space.
 
     """
 
     args: List[Union[bytes, float]]
     line_matrix: Matrix
-    glyph_offset: Point
+    _glyph_offset: Point
+
+    _matrix: Union[Matrix, None] = None
     _chars: Union[List[str], None] = None
     _bbox: Union[Rect, None] = None
     _text_space_bbox: Union[Rect, None] = None
@@ -566,7 +581,7 @@ class TextObject(ContentObject):
 
     def __iter__(self) -> Iterator[GlyphObject]:
         """Generate glyphs for this text object"""
-        glyph_offset = self.glyph_offset
+        glyph_offset = self._glyph_offset
         font = self.gstate.font
         # If no font is set, we cannot do anything, since even calling
         # TJ with a displacement and no text effects requires us at
@@ -671,11 +686,11 @@ class TextObject(ContentObject):
                 self.args,
             )
             self._text_space_bbox = BBOX_NONE
-            self._next_glyph_offset = self.glyph_offset
+            self._next_glyph_offset = self._glyph_offset
             return self._text_space_bbox
         if len(self.args) == 0:
             self._text_space_bbox = BBOX_NONE
-            self._next_glyph_offset = self.glyph_offset
+            self._next_glyph_offset = self._glyph_offset
             return self._text_space_bbox
         horizontal_scaling = self.gstate.scaling * 0.01
         charspace = self.gstate.charspace
@@ -683,7 +698,7 @@ class TextObject(ContentObject):
         vert = font.vertical
         if font.multibyte:
             wordspace = 0
-        (x, y) = self.glyph_offset
+        (x, y) = self._glyph_offset
         pos = y if vert else x
         needcharspace = False  # Only for first glyph
         if vert:
@@ -739,13 +754,41 @@ class TextObject(ContentObject):
         self._text_space_bbox = (x0, y0, x1, y1)
         return self._text_space_bbox
 
-    @property
-    def next_glyph_offset(self) -> Point:
+    def _get_next_glyph_offset(self) -> Point:
         if self._next_glyph_offset is not None:
             return self._next_glyph_offset
         self._calculate_scaled_text_space_bbox()
         assert self._next_glyph_offset is not None
         return self._next_glyph_offset
+
+    @property
+    def matrix(self) -> Matrix:
+        if self._matrix is not None:
+            return self._matrix
+        self._matrix = mult_matrix(self.scaling_matrix, mult_matrix(self.text_matrix, self.ctm))
+        return self._matrix
+
+    @property
+    def scaling_matrix(self):
+        horizontal_scaling = self.gstate.scaling * 0.01
+        fontsize = self.gstate.fontsize
+        return (
+            fontsize * horizontal_scaling,
+            0,
+            0,
+            fontsize,
+            0,
+            self.gstate.rise,
+        )
+
+    @property
+    def text_matrix(self) -> Matrix:
+        return translate_matrix(self.line_matrix, self._glyph_offset)
+
+    @property
+    def origin(self) -> Point:
+        _, _, _, _, dx, dy = self.matrix
+        return dx, dy
 
     @property
     def bbox(self) -> Rect:

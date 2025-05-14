@@ -31,16 +31,13 @@ from playa.pdftypes import resolve_all, MATRIX_IDENTITY, Matrix, Point, Rect
 
 
 class Text(TypedDict, total=False):
-    ctm: Matrix
-    """Coordinate transformation matrix, default is `(1, 0, 0, 1, 0, 0)`"""
     chars: str
     """Unicode string representation of text."""
     bbox: Rect
     """Bounding rectangle for all glyphs in text in default user space."""
-    line_matrix: Matrix
-    """Coordinate transformation matrix for start of current line."""
-    glyph_offset: Point
-    """Offset of text object in relation to current line FIXME in weird units."""
+    matrix: Matrix
+    """Text rendering matrix.  Note that the effective font size
+    and the origin can be derived from this."""
     gstate: "GraphicState"
     """Graphic state."""
     mcstack: List["Tag"]
@@ -271,6 +268,7 @@ def asobj_text(obj: _TextObject) -> Text:
     text = Text(
         chars=obj.chars,
         bbox=obj.bbox,
+        matrix=obj.matrix,
     )
     gstate = asobj(obj.gstate)
     if gstate:
@@ -278,12 +276,6 @@ def asobj_text(obj: _TextObject) -> Text:
     mcstack = [asobj(mcs) for mcs in obj.mcstack]
     if mcstack:
         text["mcstack"] = mcstack
-    if obj.ctm is not MATRIX_IDENTITY:
-        text["ctm"] = obj.ctm
-    if obj.line_matrix is not MATRIX_IDENTITY:
-        text["line_matrix"] = obj.line_matrix
-    if obj.glyph_offset != (0, 0):
-        text["glyph_offset"] = obj.glyph_offset
     return text
 
 
