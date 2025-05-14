@@ -211,7 +211,7 @@ class SimpleFont(Font):
         if base is None:
             base = self.get_implicit_encoding(descriptor)
         self.encoding = EncodingDB.get_encoding(base, diff)
-        self.cid2unicode = cid2unicode_from_encoding(self.encoding)
+        self._cid2unicode = cid2unicode_from_encoding(self.encoding)
         self.tounicode: Optional[ToUnicodeMap] = None
         if "ToUnicode" in spec:
             strm = resolve1(spec["ToUnicode"])
@@ -241,7 +241,7 @@ class SimpleFont(Font):
             return zip(data, self.tounicode.decode(data))
         else:
             log.debug("decode with Encoding: %r", data)
-            return ((cid, self.cid2unicode.get(cid, "")) for cid in data)
+            return ((cid, self._cid2unicode.get(cid, "")) for cid in data)
 
 
 def get_basefont(spec: Dict[str, PDFObject]) -> str:
@@ -324,10 +324,10 @@ class Type1Font(SimpleFont):
         #
         # Then we can construct `self.widths` directly using `self.encoding`.
         if self.char_widths is not None:
-            if cid not in self.cid2unicode:
+            if cid not in self._cid2unicode:
                 width = self.default_width
             else:
-                width = self.char_widths.get(self.cid2unicode[cid], self.default_width)
+                width = self.char_widths.get(self._cid2unicode[cid], self.default_width)
         else:
             width = self.widths.get(cid, self.default_width)
         return width * self.hscale

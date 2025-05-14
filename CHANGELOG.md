@@ -35,6 +35,8 @@
   notably that adjacent glyphs may overlap or may not touch, which is
   why you should **never** use the `bbox` to detect word boundaries.
   Use `origin` and `displacement` instead, please!
+- BREAKING: `cid2unicode` attribute of fonts is removed as it doesn't
+  make any sense for Type3 or CID fonts.
 
 ## PLAYA 0.4.3: 2025-05-09
 - Correct ascent, descent, and glyph boxes for Type3 fonts
