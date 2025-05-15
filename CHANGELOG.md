@@ -1,4 +1,4 @@
-## PLAYA 0.5.0: unreleased
+## PLAYA 0.5.0: 2024-05-14
 - Remove use of `object` in type annotations
 - Add support for role map and standard structure types
 - Refactor page.py as it was getting really unwieldy
