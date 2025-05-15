@@ -6149,7 +6149,7 @@ loaded lazily and cached.  We do not handle modification of PDFs.</p>
 
 <span class="sd">        Note: Font names may collide.</span>
 <span class="sd">            Font names are generally understood to be globally unique</span>
-<span class="sd">            ~in the neighbourhood~ in the document, but there&#39;s no</span>
+<span class="sd">            &lt;del&gt;in the neighbourhood&lt;/del&gt; in the document, but there&#39;s no</span>
 <span class="sd">            guarantee that this is the case.  In keeping with the</span>
 <span class="sd">            &quot;incremental update&quot; philosophy dear to PDF, you get the</span>
 <span class="sd">            last font with a given name.</span>
@@ -6424,7 +6424,7 @@ as it must scan every single page in the document.</p>
 <details class="note" open>
   <summary>Font names may collide.</summary>
   <p>Font names are generally understood to be globally unique
-~in the neighbourhood~ in the document, but there's no
+<del>in the neighbourhood</del> in the document, but there's no
 guarantee that this is the case.  In keeping with the
 "incremental update" philosophy dear to PDF, you get the
 last font with a given name.</p>
@@ -9332,7 +9332,7 @@ consistently, if history is any guide).</p>
 
 <span class="sd">        Note: Resource names are not font names.</span>
 <span class="sd">            The resource names (e.g. `F1`, `F42`, `FooBar`) here are</span>
-<span class="sd">            specific to a page (or Form XObject) resource dictionary `</span>
+<span class="sd">            specific to a page (or Form XObject) resource dictionary</span>
 <span class="sd">            and have no relation to the font name as commonly</span>
 <span class="sd">            understood (e.g. `Helvetica`,</span>
 <span class="sd">            `WQERQE+Arial-SuperBold-HJRE-UTF-8`).  Since font names are</span>
@@ -9589,8 +9589,10 @@ consistently, if history is any guide).</p>
 <details class="note" open>
   <summary>Resource names are not font names.</summary>
   <p>The resource names (e.g. <code>F1</code>, <code>F42</code>, <code>FooBar</code>) here are
-specific to a page (or Form XObject) resource dictionary <code>and have no relation to the font name as commonly
-understood (e.g.</code>Helvetica<code>,</code>WQERQE+Arial-SuperBold-HJRE-UTF-8`).  Since font names are
+specific to a page (or Form XObject) resource dictionary
+and have no relation to the font name as commonly
+understood (e.g. <code>Helvetica</code>,
+<code>WQERQE+Arial-SuperBold-HJRE-UTF-8</code>).  Since font names are
 generally considered to be globally unique, it may be
 possible to access fonts by them in the future.</p>
 </details>

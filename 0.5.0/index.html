@@ -325,6 +325,15 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#path-objects" class="md-nav__link">
+    <span class="md-ellipsis">
+      Path Objects
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#text-objects" class="md-nav__link">
     <span class="md-ellipsis">
       Text Objects
@@ -551,6 +560,15 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#path-objects" class="md-nav__link">
+    <span class="md-ellipsis">
+      Path Objects
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#text-objects" class="md-nav__link">
     <span class="md-ellipsis">
       Text Objects
@@ -617,9 +635,9 @@ need another one. It is not recommended that you use this library for
 anything at all, but if you were going to use it for something, it
 would be specifically one of these things and nothing else:</p>
 <ol>
-<li>Accessing the document catalog, page tree, structure tree, content
-   streams, cross-reference table, XObjects, and other low-level PDF
-   metadata.</li>
+<li>Accessing the document catalog, page tree, structure tree, outline,
+   content streams, cross-reference table, XObjects, fonts,
+   annotations, and other low-level PDF metadata.</li>
 <li>Obtaining the absolute position and attributes of every character,
    line, path, and image in every page of a PDF.</li>
 </ol>
@@ -744,7 +762,9 @@ page = pdf.pages[&quot;42&quot;]     # or &quot;logical&quot; page number (also 
 print(f&quot;Page {page.label} is {page.width} x {page.height}&quot;)
 </code></pre>
 <p>Since PDF is at heart a page-oriented, presentation format, many types
-of metadata are mostly accessible via the page objects.</p>
+of metadata are mostly accessible via the page objects.  For instance
+you can access the fonts used in page with, obviously, the <code>fonts</code>
+property, or the annotations via the <code>annotations</code> property.</p>
 <p>For example, annotations (internal or external links) are defined on
 pages (since their position would not make any sense otherwise).
 There are umpteen zillion kinds of annotations (PDF 1.7 sect 12.5.6)
@@ -913,8 +933,8 @@ accessible by iteration, as with pages (but <strong>not</strong> documents):</p>
 the tokens, and you can also see raw, mysterious PDF objects with
 <code>contents</code>.</p>
 <h3 id="graphics-state">Graphics state</h3>
-<p>You may also wish to know what color an object is, and other aspects of
-what PDF refers to as the <em>graphics state</em>, which is accessible
+<p>You may also wish to know what color an object is, and other aspects
+of what PDF refers to as the <em>graphics state</em>, which is accessible
 through <code>obj.gstate</code>.  This is a mutable object, and since there are
 quite a few parameters in the graphics state, PLAYA does not create a
 copy of it for every object in the layout - you are responsible for
@@ -928,26 +948,26 @@ particularly onerous, because the parameters themselves are immutable:</p>
     my_stuff = (obj.dash, obj.gstate.scolor, obj.gstate.ncolor)
     other_stuff.append(my_stuff)  # it's safe there
 </code></pre>
-<p>For compatibility with <code>pdfminer.six</code>, PLAYA, even though it is not a
-layout analyzer, can do some basic interpretation of paths.  Again,
-this is lazy.  If you don't care about them, you just get objects with
-<code>object_type</code> of <code>"path"</code>, which you can ignore.  PLAYA won't even
-compute the bounding box (which isn't all that slow, but still).  If
-you <em>do</em> care, then you have some options.  You can look at the actual
-path segments in user space (fast):</p>
+<p>You should however definitely be aware that storing content objects to
+a list, then iterating over that list, will give unpredictable and
+undefined results!  Don't do this, for instance:</p>
+<pre><code class="language-python"># DO NOT do this
+objs = list(page)
+for obj in objs:
+    obj.gstate  # ...is now undefined
+</code></pre>
+<h3 id="path-objects">Path Objects</h3>
+<p>Unlike pdfminer.six, PLAYA does not try to interpret paths (as
+rectangles or whatever) nor does it break them into "subpaths".  You
+just get path segments (it does, however, do some basic normalization
+to remove redundant segments).  You can look at the actual path
+segments in user space (fast):</p>
 <pre><code class="language-python">for seg in path.raw_segments:
    print(f&quot;segment: {seg}&quot;)
 </code></pre>
 <p>Or in PLAYA's "device space" (not so fast):</p>
 <pre><code class="language-python">for seg in path.segments:
    print(f&quot;segment: {seg}&quot;)
-</code></pre>
-<p>This API doesn't try to interpret paths for you.  You only get
-<code>PathSegment</code>s.  But for convenience you can get them grouped by
-subpaths as created using the <code>m</code> or <code>re</code> operators:</p>
-<pre><code class="language-python">for subpath in path:
-   for seg in subpath.segments:
-       print(f&quot;segment: {seg}&quot;)
 </code></pre>
 <h3 id="text-objects">Text Objects</h3>
 <p>Since most PDFs consist primarily of text, obviously you may wish to
@@ -979,14 +999,14 @@ giving you, well, more items, which are the individual glyphs:</p>
 </code></pre>
 <p>Note that the actual positioning of the glyphs is only done once you
 actually look at their <code>bbox</code> property, so for instance, if you wish
-to ignore glyphs with <code>textstate.render_mode == 3</code> (which means
-"invisible") or <code>gstate.scolor.values == (1.0,)</code> (which means "written
-in white ink") then you could do that.</p>
-<p>PDF has the concept of a <em>text state</em> which determines some aspects of
-how text is rendered.  You can obviously access this though
-<code>glyph.textstate</code> - note that the text state, like the graphics state,
-is mutable, so you will have to copy it or save individual parameters
-that you might care about.  This may be a major footgun so watch out.</p>
+to ignore glyphs with <code>glyph.gstate.render_mode == 3</code> (which means
+"invisible") or <code>glyph.gstate.scolor.values == (1.0,)</code> (which means
+"written in white ink") then you could do that.</p>
+<p>For text extraction you really don't care about the <code>bbox</code>, but you
+probably <em>do</em> care about the origin of each glyph relative to its
+neighbours.  For this reason PLAYA provides you with two convenience
+properties, <code>origin</code> and <code>displacement</code>, which are considerably faster
+to compute than the <code>bbox</code>.</p>
 <p>PLAYA doesn't guarantee that text objects come at you in anything
 other than the order they occur in the file (but it does guarantee
 that).</p>
