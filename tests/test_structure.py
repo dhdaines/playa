@@ -72,6 +72,7 @@ def test_annotations() -> None:
             for kid in link:
                 if isinstance(kid, ContentObject):
                     assert isinstance(kid.obj, Annotation)
+                    assert kid.bbox is not BBOX_NONE
 
 
 def test_content_xobjects() -> None:
