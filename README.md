@@ -8,9 +8,9 @@ need another one. It is not recommended that you use this library for
 anything at all, but if you were going to use it for something, it
 would be specifically one of these things and nothing else:
 
-1. Accessing the document catalog, page tree, structure tree, content
-   streams, cross-reference table, XObjects, and other low-level PDF
-   metadata.
+1. Accessing the document catalog, page tree, structure tree, outline,
+   content streams, cross-reference table, XObjects, fonts,
+   annotations, and other low-level PDF metadata.
 2. Obtaining the absolute position and attributes of every character,
    line, path, and image in every page of a PDF.
    
@@ -173,7 +173,9 @@ print(f"Page {page.label} is {page.width} x {page.height}")
 ```
 
 Since PDF is at heart a page-oriented, presentation format, many types
-of metadata are mostly accessible via the page objects.
+of metadata are mostly accessible via the page objects.  For instance
+you can access the fonts used in page with, obviously, the `fonts`
+property, or the annotations via the `annotations` property.
 
 For example, annotations (internal or external links) are defined on
 pages (since their position would not make any sense otherwise).
@@ -392,8 +394,8 @@ the tokens, and you can also see raw, mysterious PDF objects with
 
 ### Graphics state
 
-You may also wish to know what color an object is, and other aspects of
-what PDF refers to as the *graphics state*, which is accessible
+You may also wish to know what color an object is, and other aspects
+of what PDF refers to as the *graphics state*, which is accessible
 through `obj.gstate`.  This is a mutable object, and since there are
 quite a few parameters in the graphics state, PLAYA does not create a
 copy of it for every object in the layout - you are responsible for
@@ -410,13 +412,24 @@ for obj in page:
     other_stuff.append(my_stuff)  # it's safe there
 ```
 
-For compatibility with `pdfminer.six`, PLAYA, even though it is not a
-layout analyzer, can do some basic interpretation of paths.  Again,
-this is lazy.  If you don't care about them, you just get objects with
-`object_type` of `"path"`, which you can ignore.  PLAYA won't even
-compute the bounding box (which isn't all that slow, but still).  If
-you *do* care, then you have some options.  You can look at the actual
-path segments in user space (fast):
+You should however definitely be aware that storing content objects to
+a list, then iterating over that list, will give unpredictable and
+undefined results!  Don't do this, for instance:
+
+```python
+# DO NOT do this
+objs = list(page)
+for obj in objs:
+    obj.gstate  # ...is now undefined
+```
+
+### Path Objects
+
+Unlike pdfminer.six, PLAYA does not try to interpret paths (as
+rectangles or whatever) nor does it break them into "subpaths".  You
+just get path segments (it does, however, do some basic normalization
+to remove redundant segments).  You can look at the actual path
+segments in user space (fast):
 
 ```python
 for seg in path.raw_segments:
@@ -428,16 +441,6 @@ Or in PLAYA's "device space" (not so fast):
 ```python
 for seg in path.segments:
    print(f"segment: {seg}")
-```
-
-This API doesn't try to interpret paths for you.  You only get
-`PathSegment`s.  But for convenience you can get them grouped by
-subpaths as created using the `m` or `re` operators:
-
-```python
-for subpath in path:
-   for seg in subpath.segments:
-       print(f"segment: {seg}")
 ```
 
 ### Text Objects
@@ -477,15 +480,15 @@ for glyph in item:
 
 Note that the actual positioning of the glyphs is only done once you
 actually look at their `bbox` property, so for instance, if you wish
-to ignore glyphs with `textstate.render_mode == 3` (which means
-"invisible") or `gstate.scolor.values == (1.0,)` (which means "written
-in white ink") then you could do that.
+to ignore glyphs with `glyph.gstate.render_mode == 3` (which means
+"invisible") or `glyph.gstate.scolor.values == (1.0,)` (which means
+"written in white ink") then you could do that.
 
-PDF has the concept of a *text state* which determines some aspects of
-how text is rendered.  You can obviously access this though
-`glyph.textstate` - note that the text state, like the graphics state,
-is mutable, so you will have to copy it or save individual parameters
-that you might care about.  This may be a major footgun so watch out.
+For text extraction you really don't care about the `bbox`, but you
+probably *do* care about the origin of each glyph relative to its
+neighbours.  For this reason PLAYA provides you with two convenience
+properties, `origin` and `displacement`, which are considerably faster
+to compute than the `bbox`.
 
 PLAYA doesn't guarantee that text objects come at you in anything
 other than the order they occur in the file (but it does guarantee
