@@ -51,7 +51,7 @@ MatchFunc = Callable[["Element"], bool]
 
 if TYPE_CHECKING:
     from playa.document import Document
-    from playa.page import Annotation, Page, XObjectObject
+    from playa.page import Annotation, Page
 
 
 @dataclass
@@ -66,6 +66,7 @@ class ContentItem:
     _pageref: PageRef
     mcid: int
     stream: Union[ContentStream, None]
+    _bbox: Union[Rect, None] = None
 
     @property
     def page(self) -> Union["Page", None]:
@@ -73,6 +74,24 @@ class ContentItem:
         if self._pageref is None:
             return None
         return _deref_page(self._pageref)
+
+    @property
+    def bbox(self) -> Rect:
+        """Find the bounding box, if any, of this item.
+
+        Note that this is currently quite inefficient as it involves
+        parsing the entire page.
+
+        If the `page` attribute is `None`, then `bbox` will be
+        `BBOX_NONE`.
+        """
+        if self._bbox is not None:
+            return self._bbox
+        page = self.page
+        if page is None:
+            return BBOX_NONE
+        self._bbox = get_bound_rects(obj.bbox for obj in page if obj.mcid == self.mcid)
+        return self._bbox
 
 
 @dataclass
@@ -309,7 +328,7 @@ class Element(Findable):
 
     @property
     def bbox(self) -> Rect:
-        """Find the bounding box, if any, of this element.
+        """The bounding box, if any, of this element.
 
         Elements may explicitly define a `BBox` in default user space,
         in which case this is used.  Otherwise, the bounding box is
@@ -319,8 +338,8 @@ class Element(Findable):
         Note: Elements may span multiple pages!
             In the case of an element (such as a `Document` for
             instance) that spans multiple pages, the bounding box
-            cannot exist, and `BBOX_NONE` will be returned.  If the
-            `page` attribute is `None`, then `bbox` will be BBOX_NONE.
+            cannot exist, and `BBOX_NONE` will be returned.  If then
+            `page` attribute is `None`, then `bbox` will be `BBOX_NONE`.
 
         """
         page = self.page
