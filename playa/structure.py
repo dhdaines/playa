@@ -137,6 +137,7 @@ class ContentObject:
             from playa.page import Annotation
 
             return Annotation.from_dict(self.props, self.page)
+        # Otherwise, we don't know what to do with it!
         return None
 
     @property
@@ -153,6 +154,17 @@ class ContentObject:
     def page(self) -> "Page":
         """Containing page for this content object."""
         return _deref_page(self._pageref)
+
+    @property
+    def bbox(self) -> Rect:
+        """Find the bounding box, if any, of this object.
+
+        If there is no bounding box (very unlikely) this will be
+        `BBOX_NONE`.
+        """
+        if self.obj is None:
+            return BBOX_NONE
+        return self.obj.bbox
 
 
 def _find_all(
