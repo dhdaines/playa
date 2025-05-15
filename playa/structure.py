@@ -89,8 +89,11 @@ class ContentItem:
             return self._bbox
         page = self.page
         if page is None:
-            return BBOX_NONE
-        self._bbox = get_bound_rects(obj.bbox for obj in page if obj.mcid == self.mcid)
+            self._bbox = BBOX_NONE
+        else:
+            self._bbox = get_bound_rects(
+                obj.bbox for obj in page if obj.mcid == self.mcid
+            )
         return self._bbox
 
 
