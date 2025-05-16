@@ -2,7 +2,9 @@
 Classes for looking at pages and their contents.
 """
 
+import itertools
 import logging
+import operator
 import textwrap
 from dataclasses import dataclass
 from typing import (
@@ -25,7 +27,6 @@ from playa.content import (
     ContentObject,
     GlyphObject,
     ImageObject,
-    MarkedContent,
     PathObject,
     TextObject,
     XObjectObject,
@@ -38,6 +39,7 @@ from playa.pdftypes import (
     MATRIX_IDENTITY,
     ContentStream,
     PSLiteral,
+    Point,
     Rect,
     dict_value,
     int_value,
@@ -378,16 +380,18 @@ class Page:
             for glyph in obj:
                 x, y = glyph.origin
                 off = y if vertical else x
-                # FIXME: The 0.5 is a heuristic!!!
+                # 0.5 here is a heuristic!!!
                 if prev_end and off - prev_end > 0.5:
-                    chars.append(" ")
+                    if chars and chars[-1] != " ":
+                        chars.append(" ")
                 if glyph.text is not None:
                     chars.append(glyph.text)
                 dx, dy = glyph.displacement
                 prev_end = off + (dy if vertical else dx)
             return "".join(chars), prev_end
 
-        prev_end = prev_line_offset = prev_word_offset = 0.0
+        prev_end = 0.0
+        prev_origin: Union[Point, None] = None
         lines = []
         strings: List[str] = []
         for text in self.texts:
@@ -397,70 +401,84 @@ class Page:
             # Track changes to the translation component of text
             # rendering matrix to (yes, heuristically) detect newlines
             # and spaces between text objects
-            _, _, _, _, dx, dy = text.matrix
-            line_offset = dx if vertical else dy
-            word_offset = dy if vertical else dx
-            # Vertical text (usually) means right-to-left lines
-            if vertical:
-                line_feed = line_offset < prev_line_offset
-            elif self.space in ("page", "default"):
-                line_feed = line_offset < prev_line_offset
-            else:
-                line_feed = line_offset > prev_line_offset
-            if strings and line_feed:
+            dx, dy = text.origin
+            off = dy if vertical else dx
+            if strings and self._next_line(text, prev_origin):
                 lines.append("".join(strings))
                 strings.clear()
-            # FIXME: the 0.5 is a heuristic!!!
-            if strings and word_offset > prev_end + prev_word_offset + 0.5:
+            # 0.5 here is a heuristic!!!
+            if strings and off - prev_end > 0.5 and not strings[-1].endswith(" "):
                 strings.append(" ")
-            textstr, end = _extract_text_from_obj(text, vertical, prev_end)
+            textstr, prev_end = _extract_text_from_obj(text, vertical, off)
             strings.append(textstr)
-            prev_line_offset = line_offset
-            prev_word_offset = word_offset
-            prev_end = end
+            prev_origin = dx, dy
         if strings:
             lines.append("".join(strings))
         return "\n".join(lines)
+
+    def _next_line(
+        self, text: Union[TextObject, None], prev_offset: Union[Point, None]
+    ) -> bool:
+        if text is None:
+            return False
+        if text.gstate.font is None:
+            return False
+        if prev_offset is None:
+            return False
+        offset = text.origin
+
+        # Vertical text (usually) means right-to-left lines
+        if text.gstate.font.vertical:
+            line_offset = offset[0] - prev_offset[0]
+        else:
+            # The CTM isn't useful here because we actually do care
+            # about the final device space, and we just want to know
+            # which way is up and which way is down.
+            dy = offset[1] - prev_offset[1]
+            if self.space == "screen":
+                line_offset = -dy
+            else:
+                line_offset = dy
+        return line_offset < 0
 
     def extract_text_tagged(self) -> str:
         """Get text from a page of a tagged PDF."""
         lines: List[str] = []
         strings: List[str] = []
-        at_mcs: Union[MarkedContent, None] = None
         prev_mcid: Union[int, None] = None
-        for text in self.texts:
-            in_artifact = same_actual_text = reversed_chars = False
-            actual_text = None
-            for mcs in reversed(text.mcstack):
-                if mcs.tag == "Artifact":
-                    in_artifact = True
-                    break
-                actual_text = mcs.props.get("ActualText")
-                if actual_text is not None:
-                    if mcs is at_mcs:
-                        same_actual_text = True
-                    at_mcs = mcs
-                    break
-                if mcs.tag == "ReversedChars":
-                    reversed_chars = True
-                    break
-            if in_artifact or same_actual_text:
+        prev_origin: Union[Point, None] = None
+        # TODO: Iteration over marked content sections and getting
+        # their text, origin, and displacement, will be refactored
+        for mcs, texts in itertools.groupby(self.texts, operator.attrgetter("mcs")):
+            text: Union[TextObject, None] = None
+            if mcs is None or mcs.tag == "Artifact":
+                for text in texts:
+                    prev_origin = text.origin
                 continue
+            actual_text = mcs.props.get("ActualText")
             if actual_text is None:
-                chars = text.chars
-                if reversed_chars:
-                    chars = chars[::-1]
+                reversed = mcs.tag == "ReversedChars"
+                c = []
+                for text in texts:
+                    c.append(text.chars[::-1] if reversed else text.chars)
+                chars = "".join(c)
             else:
                 assert isinstance(actual_text, bytes)
                 chars = actual_text.decode("UTF-16")
+                for text in texts:
+                    pass
+
             # Remove soft hyphens
             chars = chars.replace("\xad", "")
-            # Insert a line break (FIXME: not really correct)
-            if text.mcid != prev_mcid:
-                lines.extend(textwrap.wrap("".join(strings)))
-                strings.clear()
-                prev_mcid = text.mcid
+            # There *might* be a line break, determine based on origin
+            if mcs.mcid != prev_mcid:
+                if self._next_line(text, prev_origin):
+                    lines.extend(textwrap.wrap("".join(strings)))
+                    strings.clear()
+                prev_mcid = mcs.mcid
             strings.append(chars)
+            if text is not None:
+                prev_origin = text.origin
         if strings:
             lines.extend(textwrap.wrap("".join(strings)))
         return "\n".join(lines)
