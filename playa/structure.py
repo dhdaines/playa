@@ -77,13 +77,16 @@ class ContentItem:
 
     @property
     def bbox(self) -> Rect:
-        """Find the bounding box, if any, of this item.
+        """Find the bounding box, if any, of this item, which is the
+        smallest rectangle enclosing all objects in its marked content
+        section.
 
         Note that this is currently quite inefficient as it involves
-        parsing the entire page.
+        interpreting the entire page.
 
         If the `page` attribute is `None`, then `bbox` will be
         `BBOX_NONE`.
+
         """
         if self._bbox is not None:
             return self._bbox
@@ -350,11 +353,15 @@ class Element(Findable):
         the smallest rectangle enclosing all of the content items
         contained by this element (which may take some time to compute).
 
+        Note that this is currently quite inefficient as it involves
+        interpreting the entire page.
+
         Note: Elements may span multiple pages!
             In the case of an element (such as a `Document` for
             instance) that spans multiple pages, the bounding box
-            cannot exist, and `BBOX_NONE` will be returned.  If then
-            `page` attribute is `None`, then `bbox` will be `BBOX_NONE`.
+            cannot exist, and `BBOX_NONE` will be returned.  If the
+            `page` attribute is `None`, then `bbox` will be
+            `BBOX_NONE`.
 
         """
         page = self.page
