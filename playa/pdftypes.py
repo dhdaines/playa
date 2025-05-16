@@ -272,6 +272,13 @@ def decipher_all(
     return x
 
 
+def bool_value(x: PDFObject) -> bool:
+    x = resolve1(x)
+    if not isinstance(x, bool):
+        raise TypeError("Boolean required: %r" % (x,))
+    return x
+
+
 def int_value(x: PDFObject) -> int:
     x = resolve1(x)
     if not isinstance(x, int):
