@@ -4,6 +4,7 @@ PDF content objects created by the interpreter.
 
 import itertools
 import logging
+from copy import copy
 from dataclasses import dataclass
 from typing import (
     TYPE_CHECKING,
@@ -19,12 +20,14 @@ from typing import (
 from playa.color import (
     BASIC_BLACK,
     LITERAL_RELATIVE_COLORIMETRIC,
+    LITERAL_NORMAL,
+    LITERAL_DEFAULT,
     PREDEFINED_COLORSPACE,
     Color,
     ColorSpace,
 )
 from playa.font import Font, CIDFont
-from playa.parser import ContentParser, Token
+from playa.parser import ContentParser, Token, LIT
 from playa.pdftypes import (
     BBOX_NONE,
     ContentStream,
@@ -95,12 +98,30 @@ class GraphicState:
     separately.
 
     Attributes:
+      clipping_path: The current clipping path (sec. 8.5.4)
       linewidth: Line width in user space units (sec. 8.4.3.2)
       linecap: Line cap style (sec. 8.4.3.3)
       linejoin: Line join style (sec. 8.4.3.4)
       miterlimit: Maximum length of mitered line joins (sec. 8.4.3.5)
       dash: Dash pattern for stroking (sec 8.4.3.6)
       intent: Rendering intent (sec. 8.6.5.8)
+      stroke_adjustment: A flag specifying whether to compensate for
+        possible rasterization effects when stroking a path with a line
+        width that is small relative to the pixel resolution of the output
+        device (sec. 10.7.5)
+      blend_mode: The current blend mode that shall be used in the
+        transparent imaging model (sec. 11.3.5)
+      soft_mask: A soft-mask dictionary (sec. 11.6.5.1) or None
+      salpha: The constant shape or constant opacity value used for
+        stroking operations (sec. 11.3.7.2 & 11.6.4.4)
+      nalpha: The constant shape or constant opacity value used for
+        non-stroking operations
+      alpha_source: A flag specifying whether the current soft mask and
+        alpha constant parameters shall be interpreted as shape values
+        (true) or opacity values (false). This flag also governs the
+        interpretation of the SMask entry, if any, in an image dictionary
+      black_pt_comp: The black point compensation algorithm that shall be
+        used when converting CIE-based colours (sec. 8.6.5.9)
       flatness: The precision with which curves shall be rendered on
         the output device (sec. 10.6.2)
       scolor: Colour used for stroking operations
@@ -132,15 +153,26 @@ class GraphicState:
         want to use this to detect invisible text.
       rise: The text rise (superscript or subscript position), in
         unscaled text space units.
+      knockout: The text knockout flag, shall determine the behaviour of
+        overlapping glyphs within a text object in the transparent imaging
+        model (sec. 9.3.8)
 
     """
 
+    clipping_path: None = None # TODO
     linewidth: float = 1
     linecap: int = 0
     linejoin: int = 0
     miterlimit: float = 10
     dash: DashPattern = SOLID_LINE
     intent: PSLiteral = LITERAL_RELATIVE_COLORIMETRIC
+    stroke_adjustment: bool = False
+    blend_mode: Union[PSLiteral, List[PSLiteral]] = LITERAL_NORMAL
+    soft_mask: None = None # TODO
+    salpha: float = 1
+    nalpha: float = 1
+    alpha_source: bool = False
+    black_pt_comp: PSLiteral = LITERAL_DEFAULT
     flatness: float = 1
     scolor: Color = BASIC_BLACK
     scs: ColorSpace = PREDEFINED_COLORSPACE["DeviceGray"]
@@ -154,6 +186,7 @@ class GraphicState:
     leading: float = 0
     render_mode: int = 0
     rise: float = 0
+    knockout: bool = True
 
 
 class MarkedContent(NamedTuple):
@@ -324,6 +357,8 @@ class ImageObject(ContentObject):
         # region of the page by temporarily altering the CTM.
         return transform_bbox(self.ctm, (0, 0, 1, 1))
 
+# Group XObject subtypes. As of PDF 2.0 Transparency is the only defined subtype
+LITERAL_TRANSPARENCY = LIT("Transparency")
 
 @dataclass
 class XObjectObject(ContentObject):
@@ -347,6 +382,7 @@ class XObjectObject(ContentObject):
     xobjid: str
     stream: ContentStream
     resources: Union[None, Dict[str, PDFObject]]
+    group: Union[None, Dict[str, PDFObject]]
 
     def __contains__(self, name: str) -> bool:
         return name in self.stream
@@ -417,14 +453,29 @@ class XObjectObject(ContentObject):
         # page.resources.
         xobjres = stream.get("Resources")
         resources = None if xobjres is None else dict_value(xobjres)
+        xobjgrp = stream.get("Group")
+        group = None if xobjgrp is None else dict_value(xobjgrp)
+        # PDF 2.0, sec 11.6.6
+        # Initial blend mode: Before execution of the transparency group
+        # XObject’s content stream, the current blend mode in the graphics
+        # state shall be initialised to Normal, the current stroking and
+        # nonstroking alpha constants to 1.0, and the current soft mask to None
+        if group and group.get("S") == LITERAL_TRANSPARENCY:
+            init_gstate = copy(gstate)
+            init_gstate.blend_mode = LITERAL_NORMAL
+            init_gstate.salpha = init_gstate.nalpha = 1
+            init_gstate.soft_mask = None
+        else:
+            init_gstate = gstate
         return cls(
             _pageref=page.pageref,
-            gstate=gstate,
+            gstate=init_gstate,
             ctm=ctm,
             mcstack=mcstack,
             xobjid=xobjid,
             stream=stream,
             resources=resources,
+            group=group,
         )
 
 

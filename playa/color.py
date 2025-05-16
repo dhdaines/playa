@@ -18,6 +18,10 @@ LITERAL_RELATIVE_COLORIMETRIC = LIT("RelativeColorimetric")
 LITERAL_ABSOLUTE_COLORIMETRIC = LIT("AbsoluteColorimetric")
 LITERAL_SATURATION = LIT("Saturation")
 LITERAL_PERCEPTUAL = LIT("Perceptual")
+# Use of black point compensation
+LITERAL_DEFAULT = LIT("Default")
+# Blend modes
+LITERAL_NORMAL = LIT("Normal")
 
 PREDEFINED_COLORSPACE: Dict[str, "ColorSpace"] = {}
 
