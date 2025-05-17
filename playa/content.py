@@ -168,7 +168,7 @@ class GraphicState:
     intent: PSLiteral = LITERAL_RELATIVE_COLORIMETRIC
     stroke_adjustment: bool = False
     blend_mode: Union[PSLiteral, List[PSLiteral]] = LITERAL_NORMAL
-    soft_mask: None = None # TODO
+    soft_mask: Union[None, Dict[str, PDFObject]] = None
     salpha: float = 1
     nalpha: float = 1
     alpha_source: bool = False
