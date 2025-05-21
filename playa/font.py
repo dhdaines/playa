@@ -85,6 +85,7 @@ class Font:
             self.fontname = decode_text(fontname)
         else:
             self.fontname = "unknown"
+        self.basefont = self.fontname
         self.flags = int_value(descriptor.get("Flags", 0))
         # Default values based on default DW2 metrics
         self.ascent = num_value(descriptor.get("Ascent", 880))
@@ -213,13 +214,6 @@ class SimpleFont(Font):
             base = self.get_implicit_encoding(descriptor)
         self.encoding = EncodingDB.get_encoding(base, diff)
         self._cid2unicode = cid2unicode_from_encoding(self.encoding)
-        if self._cid2unicode == {}:
-            log.warning(
-                "Using StandardEncoding for cid2unicode as "
-                "Encoding has no meaningful glyphs: %r",
-                self.encoding,
-            )
-            self._cid2unicode = LITERAL_STANDARD_CID2UNICODE
         self.tounicode: Optional[ToUnicodeMap] = None
         if "ToUnicode" in spec:
             strm = resolve1(spec["ToUnicode"])
@@ -236,6 +230,14 @@ class SimpleFont(Font):
                 log.debug("ToUnicode: %r", vars(self.tounicode))
             else:
                 log.warning("ToUnicode is not a content stream: %r", strm)
+        # Make sure we have some way to extract text
+        if self._cid2unicode == {} and self.tounicode is None:
+            log.warning(
+                "Using StandardEncoding for cid2unicode as "
+                "Encoding has no meaningful glyphs: %r",
+                self.encoding,
+            )
+            self._cid2unicode = LITERAL_STANDARD_CID2UNICODE
         Font.__init__(self, descriptor, widths)
 
     def get_implicit_encoding(
@@ -375,6 +377,27 @@ class Type3Font(SimpleFont):
         widths = {i + firstchar: num_value(w) for (i, w) in enumerate(width_list)}
         descriptor = dict_value(spec.get("FontDescriptor", {}))
         SimpleFont.__init__(self, descriptor, widths, spec)
+        # Type 3 fonts don't have a BaseFont in their font dictionary
+        # and generally don't have a FontName in their descriptor
+        # (https://github.com/pdf-association/pdf-issues/issues/11) as
+        # they aren't considered to be subsettable, so we should just
+        # look at Name to get their name and ignore whatever
+        # SimpleFont.__init__ tells us
+        fontname = resolve1(descriptor.get("FontName", spec.get("Name")))
+        if isinstance(fontname, PSLiteral):
+            self.fontname = fontname.name
+        elif isinstance(fontname, bytes):
+            self.fontname = decode_text(fontname)
+        else:
+            self.fontname = "unknown"
+        # However in many cases the name will be clearly "subset-like"
+        # so set basefont to the "base font" part of it
+        _, _, basefont = self.fontname.partition("+")
+        if basefont:
+            self.basefont = basefont
+        else:
+            self.basefont = self.fontname
+
         if "FontMatrix" in spec:  # it is actually required though
             self.matrix = matrix_value(spec["FontMatrix"])
         else:
