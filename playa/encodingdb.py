@@ -93,4 +93,9 @@ class EncodingDB:
 
 
 def cid2unicode_from_encoding(encoding: Dict[int, str]) -> Dict[int, str]:
-    return {cid: name2unicode(name) for cid, name in encoding.items()}
+    cid2unicode = {}
+    for cid, name in encoding.items():
+        uni = name2unicode(name)
+        if uni != "":
+            cid2unicode[cid] = uni
+    return cid2unicode

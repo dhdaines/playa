@@ -31,6 +31,7 @@ from playa.encodingdb import (
 from playa.encodings import (
     SYMBOL_BUILTIN_ENCODING,
     ZAPFDINGBATS_BUILTIN_ENCODING,
+    LITERAL_STANDARD_CID2UNICODE,
 )
 from playa.fontmetrics import FONT_METRICS
 from playa.fontprogram import CFFFontProgram, TrueTypeFontProgram, Type1FontHeaderParser
@@ -212,6 +213,13 @@ class SimpleFont(Font):
             base = self.get_implicit_encoding(descriptor)
         self.encoding = EncodingDB.get_encoding(base, diff)
         self._cid2unicode = cid2unicode_from_encoding(self.encoding)
+        if self._cid2unicode == {}:
+            log.warning(
+                "Using StandardEncoding for cid2unicode as "
+                "Encoding has no meaningful glyphs: %r",
+                self.encoding,
+            )
+            self._cid2unicode = LITERAL_STANDARD_CID2UNICODE
         self.tounicode: Optional[ToUnicodeMap] = None
         if "ToUnicode" in spec:
             strm = resolve1(spec["ToUnicode"])
