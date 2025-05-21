@@ -391,10 +391,10 @@ class Document:
         """
         if hasattr(self, "_structure"):
             return self._structure
-        if "StructTreeRoot" not in self.catalog:
-            self._structure = None
-        else:
+        try:
             self._structure = Tree(self)
+        except (TypeError, KeyError):
+            self._structure = None
         return self._structure
 
     def _getobj_objstm(
