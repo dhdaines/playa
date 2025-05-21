@@ -72,36 +72,48 @@ class XRefTable:
     def _load(self, parser: ObjectParser, offset: int) -> None:
         while True:
             pos, line = parser.nextline()
-            if line == b"":
+            if line == b"":  # EOF
                 break
             line = line.strip()
-            if not line:
+            if line == b"":  # Blank line
                 continue
             if line.startswith(b"trailer"):
                 parser.seek(pos)
                 break
             f = line.split(b" ")
             if len(f) != 2:
-                error_msg = f"Trailer not found: {parser!r}: line={line!r}"
+                error_msg = f"start and nobjs not found: line={line!r}"
                 raise IndexError(error_msg)
             try:
                 (start, nobjs) = map(int, f)
             except ValueError:
-                error_msg = f"Invalid line: {parser!r}: line={line!r}"
+                error_msg = f"Invalid line: line={line!r}"
                 raise ValueError(error_msg)
-            for objid in range(start, start + nobjs):
+            log.debug("reading positions of objects %d to %d", start, start + nobjs - 1)
+            objid = start
+            while objid < start + nobjs:
+                # FIXME: It's supposed to be exactly 20 bytes, not
+                # necessarily a line
                 _, line = parser.nextline()
-                if line == b"":
+                if line == b"":  # EOF
                     break
                 line = line.strip()
+                # We need to tolerate blank lines here in case someone
+                # has creatively ended an entry with \r\r or \n\n
+                if line == b"":  # Blank line
+                    continue
                 f = line.split(b" ")
                 if len(f) != 3:
-                    error_msg = f"Invalid XRef format: {parser!r}, line={line!r}"
+                    error_msg = f"Invalid XRef format: line={line!r}"
                     raise ValueError(error_msg)
                 (pos_b, genno_b, use_b) = f
                 if use_b != b"n":
+                    # Ignore free entries, we don't care
+                    objid += 1
                     continue
+                log.debug("object %d %d at pos %d", objid, int(genno_b), int(pos_b))
                 self.offsets[objid] = XRefPos(None, int(pos_b) + offset, int(genno_b))
+                objid += 1
         self._load_trailer(parser)
 
     def _load_trailer(self, parser: ObjectParser) -> None:
