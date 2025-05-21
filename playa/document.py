@@ -278,6 +278,7 @@ class Document:
             self._read_xref_from(xrefpos, self.xrefs)
             return
         except (ValueError, IndexError, StopIteration, PDFSyntaxError) as e:
+            log.warning("Checking for two PDFs in a trenchcoat: %s", e)
             xrefpos = self._detect_concatenation(xrefpos)
             if xrefpos == -1:
                 raise PDFSyntaxError("Failed to read xref table at end of file") from e
@@ -305,10 +306,11 @@ class Document:
             try:
                 (pos, token) = parser.nexttoken()
             except StopIteration:
-                raise ValueError("Unexpected EOF at {start}")
+                raise ValueError(f"Unexpected EOF at {filestart}")
             if token is KEYWORD_XREF:
                 log.debug(
-                    "Found two PDFs in a trenchcoat at %d (second xref is at %d not %d)",
+                    "Found two PDFs in a trenchcoat at %d "
+                    "(second xref is at %d not %d)",
                     filestart,
                     pos,
                     xrefpos,
@@ -389,10 +391,10 @@ class Document:
         """
         if hasattr(self, "_structure"):
             return self._structure
-        if "StructTreeRoot" not in self.catalog:
-            self._structure = None
-        else:
+        try:
             self._structure = Tree(self)
+        except (TypeError, KeyError):
+            self._structure = None
         return self._structure
 
     def _getobj_objstm(
@@ -745,8 +747,9 @@ class Document:
         try:
             (pos, token) = parser.nexttoken()
         except StopIteration:
-            raise ValueError("Unexpected EOF at {start}")
+            raise ValueError(f"Unexpected EOF at {start}")
         if token is KEYWORD_XREF:
+            log.debug("Reading xref table at %d", pos)
             parser.nextline()
             xref: XRef = XRefTable(parser, self.offset)
         else:
