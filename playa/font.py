@@ -682,7 +682,7 @@ class CIDFont(Font):
         the glyph is painted with its origin at `[95 98]`.
 
         Yes, the horizontal scaling factor **does** apply to the
-        horizontal component of the position matrix, even if some PDF
+        horizontal component of the position vector, even if some PDF
         viewers don't think so.
 
         For horizontal writing, it is obviously (0, 0).
