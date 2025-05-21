@@ -340,6 +340,8 @@ def font_from_spec(spec: Dict[str, Any]) -> Font:
             flaglist = flags_to_list(int_value(flags))
             if flaglist:
                 font["flags"] = flaglist
+        if font["name"] is None and "FontName" in desc:
+            font["name"] = asobj(resolve1(desc["FontName"]))
     sub = resolve1(spec.get("DescendantFonts"))
     if sub and isinstance(sub, list) and sub[0] is not None:
         font["cidfont"] = font_from_spec(dict_value(sub[0]))

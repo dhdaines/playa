@@ -82,6 +82,9 @@ def test_type3_font_boxes() -> None:
     this)"""
     with playa.open(TESTDIR / "type3_fonts.pdf") as doc:
         font = doc.get_font(5, dict_value(doc[5]))
+        # Verify that we find "subset-like" names (Type3 fonts are not subsettable)
+        assert font.basefont == "Open-Sans-Light"
+        assert font.fontname == "BAAAAA+Open-Sans-Light"
         # This font's BBox is really something
         assert font.bbox == (-164, 493, 1966, -1569)
         assert isinstance(font, Type3Font)
@@ -121,3 +124,26 @@ def test_glyph_positioning(name: str) -> None:
         for glyph, expected in zip(page.glyphs, glyphs):
             assert glyph.text == expected["text"]
             assert glyph.bbox == tuple(expected["bbox"])
+
+
+@pytest.mark.skipif(not CONTRIB.exists(), reason="contrib samples not present")
+def test_fallback_type3_cid2unicode() -> None:
+    """Verify that we fall back to standard encoding when a Type3 font
+    has nonsense glyph names."""
+    with playa.open(CONTRIB / "anonymous_type3_fonts.pdf") as doc:
+        wtf = doc.pages[2].fonts["T3_0"]
+        # Additionally verify that we correctly use Name as FontName
+        # and (if not obviously subset) BaseFont for Type3 fonts
+        assert wtf.basefont == "F47"
+        assert wtf.fontname == "F47"
+        assert list(wtf.decode(b"scienti\xaec")) == [
+            (115, "s"),
+            (99, "c"),
+            (105, "i"),
+            (101, "e"),
+            (110, "n"),
+            (116, "t"),
+            (105, "i"),
+            (174, "ﬁ"),
+            (99, "c"),
+        ]
