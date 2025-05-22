@@ -260,8 +260,8 @@ def transform_bbox(matrix: Matrix, bbox: Rect) -> Rect:
     """Transform a bounding box and return the rectangle that covers
     the points of the resulting shape."""
     x0, y0, x1, y1 = bbox
-    # Corners are still valid.
     if matrix[0] * matrix[2] < 0 or matrix[1] * matrix[3] < 0:
+        # Corners of untransformed bbox are not preserved
         return get_bound(
             (
                 apply_matrix_pt(matrix, (x0, y0)),
