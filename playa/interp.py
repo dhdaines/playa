@@ -45,6 +45,7 @@ from playa.pdftypes import (
     Point,
     PSKeyword,
     PSLiteral,
+    bool_value,
     dict_value,
     int_value,
     list_value,
@@ -162,6 +163,7 @@ class LazyInterpreter:
         self.fontmap: Dict[str, Font] = {}
         self.xobjmap = {}
         self.csmap: Dict[str, ColorSpace] = copy(PREDEFINED_COLORSPACE)
+        self.extgstatemap = {}
         if not self.resources:
             return
 
@@ -170,25 +172,23 @@ class LazyInterpreter:
             if mapping is None:
                 log.warning("Missing %s mapping", k)
                 continue
+            if k == "ProcSet":
+                continue
+            # PDF 2.0, sec 7.8.3, Table 34, ProcSet is an array, everything else are dictionaries
+            if not isinstance(mapping, dict):
+                log.warning("%s mapping not a dict: %r", k, mapping)
+                continue
             if k == "Font":
                 self.fontmap = _make_fontmap(mapping, _deref_document(page.docref))
             elif k == "ColorSpace":
-                if not isinstance(mapping, dict):
-                    log.warning("ColorSpace mapping not a dict: %r", mapping)
-                    continue
                 for csid, spec in mapping.items():
                     colorspace = get_colorspace(resolve1(spec), csid)
                     if colorspace is not None:
                         self.csmap[csid] = colorspace
-            elif k == "ProcSet":
-                pass  # called get_procset which did exactly
-                # nothing. perhaps we want to do something?
             elif k == "XObject":
-                if not isinstance(mapping, dict):
-                    log.warning("XObject mapping not a dict: %r", mapping)
-                    continue
-                for xobjid, xobjstrm in mapping.items():
-                    self.xobjmap[xobjid] = xobjstrm
+                self.xobjmap = mapping
+            elif k == "ExtGState":
+                self.extgstatemap = mapping
 
     def init_state(self, ctm: Matrix, gstate: Union[GraphicState, None] = None) -> None:
         self.gstack: List[Tuple[Matrix, GraphicState, TextState]] = []
@@ -535,7 +535,58 @@ class LazyInterpreter:
 
     def do_gs(self, name: PDFObject) -> None:
         """Set parameters from graphics state parameter dictionary"""
-        # TODO
+        try:
+            extgstate = dict_value(self.extgstatemap[literal_name(name)])
+        except KeyError:
+            log.warning("Undefined ExtGState: %r", name)
+            return
+        # PDF 2.0, sec 8.4.5, Table 57
+        # Skipping Device-dependent graphics state parameters except for flatness tolerance
+        if "LW" in extgstate:
+            self.do_w(extgstate["LW"])
+        if "LC" in extgstate:
+            self.do_J(extgstate["LC"])
+        if "LJ" in extgstate:
+            self.do_j(extgstate["LJ"])
+        if "ML" in extgstate:
+            self.do_M(extgstate["ML"])
+        if "D" in extgstate:
+            dash, phase = list_value(extgstate["D"])
+            self.do_d(dash, phase)
+        if "RI" in extgstate:
+            self.do_ri(extgstate["RI"])
+        if "Font" in extgstate:
+            fontref, fontsize = list_value(extgstate["Font"])
+            self.graphicstate.font = self.page.doc.get_font(fontref.objid, None)
+            self.graphicstate.fontsize = num_value(fontsize)
+        if "FL" in extgstate:
+            self.do_i(extgstate["FL"])
+        if "SA" in extgstate:
+            self.graphicstate.stroke_adjustment = bool_value(extgstate["SA"])
+        if "BM" in extgstate:
+            bm = extgstate["BM"]
+            if isinstance(bm, PSLiteral):
+                self.graphicstate.blend_mode = bm
+            else:
+                self.graphicstate.blend_mode = cast(List[PSLiteral], list_value(bm))
+        if "SMask" in extgstate:
+            smask = extgstate["SMask"]
+            if isinstance(smask, PSLiteral):
+                self.graphicstate.smask = None
+            else:
+                self.graphicstate.smask = dict_value(smask)
+        if "CA" in extgstate:
+            self.graphicstate.salpha = num_value(extgstate["CA"])
+        if "ca" in extgstate:
+            self.graphicstate.nalpha = num_value(extgstate["ca"])
+        if "AIS" in extgstate:
+            self.graphicstate.alpha_source = bool_value(extgstate["AIS"])
+        if "TK" in extgstate:
+            self.graphicstate.knockout = bool_value(extgstate["TK"])
+        if "UseBlackPtComp" in extgstate:
+            black_pt_comp = extgstate["UseBlackPtComp"]
+            assert isinstance(black_pt_comp, PSLiteral)
+            self.graphicstate.black_pt_comp = black_pt_comp
 
     def do_m(self, x: PDFObject, y: PDFObject) -> None:
         """Begin new subpath"""
