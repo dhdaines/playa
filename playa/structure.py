@@ -571,7 +571,7 @@ class Tree(Findable):
         if "ParentTree" not in self.props:
             self._parent_tree = NumberTree({})
         else:
-            self._parent_tree = NumberTree(self.props["StructTreeRoot"])
+            self._parent_tree = NumberTree(self.props["ParentTree"])
         return self._parent_tree
 
     @property
