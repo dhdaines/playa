@@ -111,7 +111,7 @@ class GraphicState:
         device (sec. 10.7.5)
       blend_mode: The current blend mode that shall be used in the
         transparent imaging model (sec. 11.3.5)
-      soft_mask: A soft-mask dictionary (sec. 11.6.5.1) or None
+      smask: A soft-mask dictionary (sec. 11.6.5.1) or None
       salpha: The constant shape or constant opacity value used for
         stroking operations (sec. 11.3.7.2 & 11.6.4.4)
       nalpha: The constant shape or constant opacity value used for
@@ -168,7 +168,7 @@ class GraphicState:
     intent: PSLiteral = LITERAL_RELATIVE_COLORIMETRIC
     stroke_adjustment: bool = False
     blend_mode: Union[PSLiteral, List[PSLiteral]] = LITERAL_NORMAL
-    soft_mask: Union[None, Dict[str, PDFObject]] = None
+    smask: Union[None, Dict[str, PDFObject]] = None
     salpha: float = 1
     nalpha: float = 1
     alpha_source: bool = False
@@ -464,7 +464,7 @@ class XObjectObject(ContentObject):
             init_gstate = copy(gstate)
             init_gstate.blend_mode = LITERAL_NORMAL
             init_gstate.salpha = init_gstate.nalpha = 1
-            init_gstate.soft_mask = None
+            init_gstate.smask = None
         else:
             init_gstate = gstate
         return cls(

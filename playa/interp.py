@@ -572,9 +572,9 @@ class LazyInterpreter:
         if "SMask" in extgstate:
             smask = extgstate["SMask"]
             if isinstance(smask, PSLiteral):
-                self.graphicstate.soft_mask = None
+                self.graphicstate.smask = None
             else:
-                self.graphicstate.soft_mask = dict_value(smask)
+                self.graphicstate.smask = dict_value(smask)
         if "CA" in extgstate:
             self.graphicstate.salpha = num_value(extgstate["CA"])
         if "ca" in extgstate:
