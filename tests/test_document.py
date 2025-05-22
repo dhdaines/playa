@@ -197,10 +197,17 @@ def test_xobjects() -> None:
 
 
 def test_annotations() -> None:
-    with playa.open(TESTDIR / "simple5.pdf") as doc:
+    with playa.open(TESTDIR / "simple5.pdf", space="screen") as doc:
         page = doc.pages[0]
         for annot in page.annotations:
             assert annot.page is page
+            rx0, ry0, rx1, ry1 = annot.rect
+            bx0, by0, bx1, by1 = annot.bbox
+            print(annot.subtype, annot.rect, annot.bbox)
+            assert rx0 == bx0
+            assert rx1 == bx1
+            assert by0 == pytest.approx(page.height - ry1)
+            assert by1 == pytest.approx(page.height - ry0)
 
 
 def test_is_tagged() -> None:
