@@ -56,9 +56,9 @@ from playa.pdftypes import (
 )
 from playa.utils import (
     Point,
-    apply_matrix_norm,
     choplist,
     decode_text,
+    transform_bbox,
 )
 
 log = logging.getLogger(__name__)
@@ -406,11 +406,19 @@ class Type3Font(SimpleFont):
         if "FontBBox" in spec:  # it is also required though
             self.bbox = rect_value(spec["FontBBox"])
             # otherwise it was set in SimpleFont.__init__
-        # set ascent/descent from the bbox (they *could* be in the
+        a, b, c, d, e, f = self.matrix
+        # If FontMatrix is not diagonal then normalize everything
+        # except the widths and hscale (FIXME: This isn't really
+        # correct!)
+        if b or c:
+            x0, y0, x1, y1 = transform_bbox(self.matrix, self.bbox)
+            self.bbox = (x0 * 1000, y0 * 1000, x1 * 1000, y1 * 1000)
+            self.matrix = (a, 0, 0, 0.001, e, f)
+            self.hscale = a
+        self.hscale, _, _, self.vscale, _, _ = self.matrix
+        # Set ascent/descent from the bbox (they *could* be in the
         # descriptor but this is very unlikely)
         _, self.descent, _, self.ascent = self.bbox
-        # determine the actual height/width applying transformation
-        (self.hscale, self.vscale) = apply_matrix_norm(self.matrix, (1, 1))
 
     def get_implicit_encoding(
         self, descriptor: Dict[str, PDFObject]
