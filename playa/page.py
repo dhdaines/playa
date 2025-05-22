@@ -47,7 +47,7 @@ from playa.pdftypes import (
     resolve1,
     stream_value,
 )
-from playa.utils import decode_text, mult_matrix, normalize_rect
+from playa.utils import decode_text, mult_matrix, normalize_rect, transform_bbox
 from playa.worker import PageRef, _deref_document, _deref_page, _ref_document, _ref_page
 
 if TYPE_CHECKING:
@@ -489,6 +489,11 @@ class Annotation:
     def page(self) -> Page:
         """Containing page for this annotation."""
         return _deref_page(self._pageref)
+
+    @property
+    def bbox(self) -> Rect:
+        """Bounding box for this annotation in device space."""
+        return transform_bbox(self.page.ctm, self.rect)
 
     @property
     def contents(self) -> Union[str, None]:
