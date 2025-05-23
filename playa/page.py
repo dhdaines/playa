@@ -348,7 +348,7 @@ class Page:
         sections, the same element may occur multiple times in this
         list.
 
-        Note: This is not the same as `Document.structure`.
+        Note: This is not the same as `playa.Document.structure`.
             PDF documents have logical structure, but PDF pages **do
             not**, and it is dishonest to pretend otherwise (as some
             code I once wrote unfortunately does).  What they do have
@@ -389,7 +389,7 @@ class Page:
     def fonts(self) -> Mapping[str, Font]:
         """Mapping of resource names to fonts for this page.
 
-        Note: Resource names are not font names.
+        Note: This is not the same as `playa.Document.fonts`.
             The resource names (e.g. `F1`, `F42`, `FooBar`) here are
             specific to a page (or Form XObject) resource dictionary
             and have no relation to the font name as commonly
