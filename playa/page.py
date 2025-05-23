@@ -307,19 +307,26 @@ class Page:
                 return
             yield tok
 
-    @property
     def marked_contents(
         self,
-    ) -> Iterable[Tuple[MarkedContent, Iterator[ContentObject]]]:
-        """Iterator over marked content sections.
+    ) -> Iterable[Tuple[Union[MarkedContent, None], Iterator[ContentObject]]]:
+        """Iterator over marked and unmarked content sections.
+
+        This iterates over all objects on the page (including those
+        inside Form XObjects), grouped by their containing marked
+        content section, if any.  Objects outside marked content
+        sections are also returned, with `None` as the first element
+        of the tuple.
 
         Currently this is just a wrapper around `itertools.groupby`,
         but in the future it may return a more interesting iterable object.
 
         Danger: Single-use and stateful iterators.
-            Because the iterator returned updates the graphics state, it
-            is not possible to reuse it, but worse yet, if you attempt to
-            save it to a `list` like flake8 suggests to do, you will
+            As with `itertools.groupby`, it is not possible to reuse
+            the iterators which are the second element of the tuples
+            returned by this generator.  But worse yet, because these
+            iterators update the graphics state, if you attempt to
+            save them to `list` like flake8 suggests to do, you will
             possibly get inconsistent results.
 
         Note: Marked contents are not structure elements.  Because
@@ -330,8 +337,9 @@ class Page:
             the `mcid` attribute is not `None`, then a corresponding
             element *might* exist, which you can access through
             `page.structure`.
+
         """
-        for mcs, group in itertools.groupby(self, operator.attrgetter("mcs")):
+        for mcs, group in itertools.groupby(self.flatten(), operator.attrgetter("mcs")):
             yield mcs, group
             # Consume any remaining objects in group
             for _ in group:  # noqa: B031
