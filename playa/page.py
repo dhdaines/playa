@@ -16,6 +16,7 @@ from typing import (
     Literal,
     Mapping,
     Optional,
+    Sequence,
     Tuple,
     Type,
     TypeVar,
@@ -27,6 +28,7 @@ from playa.content import (
     ContentObject,
     GlyphObject,
     ImageObject,
+    MarkedContent,
     PathObject,
     TextObject,
     XObjectObject,
@@ -38,11 +40,13 @@ from playa.parser import ContentParser, PDFObject, Token
 from playa.pdftypes import (
     MATRIX_IDENTITY,
     ContentStream,
+    ObjRef,
     PSLiteral,
     Point,
     Rect,
     dict_value,
     int_value,
+    list_value,
     literal_name,
     rect_value,
     resolve1,
@@ -53,6 +57,7 @@ from playa.worker import PageRef, _deref_document, _deref_page, _ref_document, _
 
 if TYPE_CHECKING:
     from playa.document import Document
+    from playa.structure import Element
 
 log = logging.getLogger(__name__)
 
@@ -86,6 +91,7 @@ class Page:
     """
 
     _fontmap: Union[Dict[str, Font], None] = None
+    _structmap: Union[List[Union["Element", None]], None] = None
 
     def __init__(
         self,
@@ -231,7 +237,7 @@ class Page:
     @property
     def contents(self) -> Iterator[PDFObject]:
         """Iterator over PDF objects in the content streams."""
-        for pos, obj in ContentParser(self._contents):
+        for _, obj in ContentParser(self._contents):
             yield obj
 
     def __iter__(self) -> Iterator["ContentObject"]:
@@ -302,8 +308,86 @@ class Page:
             yield tok
 
     @property
+    def marked_contents(
+        self,
+    ) -> Iterable[Tuple[MarkedContent, Iterator[ContentObject]]]:
+        """Iterator over marked content sections.
+
+        Currently this is just a wrapper around `itertools.groupby`,
+        but in the future it may return a more interesting iterable object.
+
+        Danger: Single-use and stateful iterators.
+            Because the iterator returned updates the graphics state, it
+            is not possible to reuse it, but worse yet, if you attempt to
+            save it to a `list` like flake8 suggests to do, you will
+            possibly get inconsistent results.
+
+        Note: Marked contents are not structure elements.  Because
+            Reasons (Adobe, Spiderman, etc), PDF has unclear and
+            overlapping notions of tags, marked content and logical
+            structure.  This means that marked content sections may or
+            may not be associated to logical structure elements.  If
+            the `mcid` attribute is not `None`, then a corresponding
+            element *might* exist, which you can access through
+            `page.structure`.
+        """
+        for mcs, group in itertools.groupby(self, operator.attrgetter("mcs")):
+            yield mcs, group
+            # Consume any remaining objects in group
+            for _ in group:  # noqa: B031
+                pass
+
+    @property
+    def structure(self) -> Sequence[Union["Element", None]]:
+        """Mapping of marked content IDs to logical structure elements.
+
+        This is actually a list of logical structure elements
+        corresponding to marked content IDs, or `None` for indices
+        which do not correspond to a marked content ID.  Note that
+        because structure elements may contain multiple marked content
+        sections, the same element may occur multiple times in this
+        list.
+
+        Note: This is not the same as `Document.structure`.
+            PDF documents have logical structure, but PDF pages **do
+            not**, and it is dishonest to pretend otherwise (as some
+            code I once wrote unfortunately does).  What they do have
+            is marked content sections which correspond to content
+            items in the logical structure tree.
+
+        Danger: Do not rely on this being a `list`.
+            Currently this is implemented eagerly, but in the future it
+            may return a lazy object.
+
+        """
+        from playa.structure import Element
+
+        if self._structmap is not None:
+            return self._structmap
+        self._structmap = []
+        if self.doc.structure is None:
+            return self._structmap
+        if "StructParents" not in self.attrs:
+            return self._structmap
+        try:
+            parents = list_value(
+                self.doc.structure.parent_tree[self.attrs["StructParents"]]
+            )
+        except IndexError:
+            return self._structmap
+        # Elements can contain multiple marked content sections, so
+        # don't create redundant Element objects for these
+        elements: Dict[int, Element] = {}
+        for obj in parents:
+            objid = obj.objid if isinstance(obj, ObjRef) else id(obj)
+            if objid not in elements:
+                elements[objid] = Element.from_dict(self.doc, dict_value(obj))
+            self._structmap.append(elements[objid])
+        return self._structmap
+
+    @property
     def fonts(self) -> Mapping[str, Font]:
-        """Get the mapping of resource names to fonts for this page.
+        """Mapping of resource names to fonts for this page.
 
         Note: Resource names are not font names.
             The resource names (e.g. `F1`, `F42`, `FooBar`) here are
@@ -459,13 +543,14 @@ class Page:
             if actual_text is None:
                 reversed = mcs.tag == "ReversedChars"
                 c = []
-                for text in texts:
+                for text in texts:  # noqa: B031
                     c.append(text.chars[::-1] if reversed else text.chars)
                 chars = "".join(c)
             else:
                 assert isinstance(actual_text, bytes)
                 chars = actual_text.decode("UTF-16")
-                for text in texts:
+                # Consume all text objects to ensure correct graphicstate
+                for _ in texts:  # noqa: B031
                     pass
 
             # Remove soft hyphens
