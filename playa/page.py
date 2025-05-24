@@ -307,6 +307,7 @@ class Page:
                 return
             yield tok
 
+    @property
     def marked_contents(
         self,
     ) -> Iterable[Tuple[Union[MarkedContent, None], Iterator[ContentObject]]]:
