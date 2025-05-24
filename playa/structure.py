@@ -51,7 +51,7 @@ MatchFunc = Callable[["Element"], bool]
 
 if TYPE_CHECKING:
     from playa.document import Document
-    from playa.page import Annotation, Page, XObjectObject
+    from playa.page import Annotation, Page
 
 
 @dataclass
@@ -66,6 +66,7 @@ class ContentItem:
     _pageref: PageRef
     mcid: int
     stream: Union[ContentStream, None]
+    _bbox: Union[Rect, None] = None
 
     @property
     def page(self) -> Union["Page", None]:
@@ -73,6 +74,30 @@ class ContentItem:
         if self._pageref is None:
             return None
         return _deref_page(self._pageref)
+
+    @property
+    def bbox(self) -> Rect:
+        """Find the bounding box, if any, of this item, which is the
+        smallest rectangle enclosing all objects in its marked content
+        section.
+
+        Note that this is currently quite inefficient as it involves
+        interpreting the entire page.
+
+        If the `page` attribute is `None`, then `bbox` will be
+        `BBOX_NONE`.
+
+        """
+        if self._bbox is not None:
+            return self._bbox
+        page = self.page
+        if page is None:
+            self._bbox = BBOX_NONE
+        else:
+            self._bbox = get_bound_rects(
+                obj.bbox for obj in page if obj.mcid == self.mcid
+            )
+        return self._bbox
 
 
 @dataclass
@@ -118,6 +143,7 @@ class ContentObject:
             from playa.page import Annotation
 
             return Annotation.from_dict(self.props, self.page)
+        # Otherwise, we don't know what to do with it!
         return None
 
     @property
@@ -134,6 +160,17 @@ class ContentObject:
     def page(self) -> "Page":
         """Containing page for this content object."""
         return _deref_page(self._pageref)
+
+    @property
+    def bbox(self) -> Rect:
+        """Find the bounding box, if any, of this object.
+
+        If there is no bounding box (very unlikely) this will be
+        `BBOX_NONE`.
+        """
+        if self.obj is None:
+            return BBOX_NONE
+        return self.obj.bbox
 
 
 def _find_all(
@@ -309,18 +346,22 @@ class Element(Findable):
 
     @property
     def bbox(self) -> Rect:
-        """Find the bounding box, if any, of this element.
+        """The bounding box, if any, of this element.
 
         Elements may explicitly define a `BBox` in default user space,
         in which case this is used.  Otherwise, the bounding box is
         the smallest rectangle enclosing all of the content items
         contained by this element (which may take some time to compute).
 
+        Note that this is currently quite inefficient as it involves
+        interpreting the entire page.
+
         Note: Elements may span multiple pages!
             In the case of an element (such as a `Document` for
             instance) that spans multiple pages, the bounding box
             cannot exist, and `BBOX_NONE` will be returned.  If the
-            `page` attribute is `None`, then `bbox` will be BBOX_NONE.
+            `page` attribute is `None`, then `bbox` will be
+            `BBOX_NONE`.
 
         """
         page = self.page
