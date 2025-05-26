@@ -541,7 +541,7 @@ class Tree(Findable):
         if hasattr(self, "_role_map"):
             return self._role_map
         self._role_map = {}
-        rm = resolve1(self.props["RoleMap"])
+        rm = resolve1(self.props.get("RoleMap"))  # It is optional
         if isinstance(rm, dict):
             for k, v in rm.items():
                 if isinstance(v, PSLiteral):
