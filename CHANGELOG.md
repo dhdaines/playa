@@ -1,3 +1,14 @@
+## PLAYA 0.5.1: 2024-05-26
+- Update documentation for API changes
+- Implement graphics state parameter dictionaries
+- Correctly implement `name2unicode`
+- Handle Type3 fonts with useless Encodings and no ToUnicode
+- Correct `fontname` and guess `basename` for Type3 fonts
+- Add missing `bbox` property to annotations
+- Correct parent tree access (oops!)
+- Correctly handle bogus line endings in xref tables
+- Avoid `KeyError` when `RoleMap` does not exist
+
 ## PLAYA 0.5.0: 2024-05-14
 - Remove use of `object` in type annotations
 - Add support for role map and standard structure types
