@@ -1,0 +1,81 @@
+%PDF-2.0
+1 0 obj
+<< 
+  /Type /Catalog
+  /Pages 2 0 R
+>>
+endobj
+
+2 0 obj
+<<
+  /Type /Pages
+  /Count 1
+  /Kids [3 0 R]
+>>
+endobj
+
+3 0 obj
+<<
+  /Type /Page
+  /MediaBox [0 0 612 792]
+  /Parent 2 0 R
+  /Resources 4 0 R
+  /Contents [6 0 R]
+>>
+endobj
+
+4 0 obj
+<<
+  /ProcSet [/PDF /Text]
+  /ExtGState << /GS1 5 0 R >>
+  /Font << /F1 7 0 R >>
+>>
+endobj
+
+5 0 obj
+<<
+  /Type /ExtGState
+  /BM /Screen
+  /Font [7 0 R 24]
+  /CA 0.8
+  /ca 0.6
+  /LW 10
+  /LC 1
+  /LJ 2
+  /D [[20] 10]
+>>
+endobj
+
+6 0 obj
+<< >>
+stream
+/GS1 gs
+1 0 0 RG
+0 1 0 rg
+100 700 m
+300 700 l
+300 600 l
+S
+BT
+100 700 Td
+(Hello World) Tj
+ET
+endstream
+endobj
+
+7 0 obj
+<<
+  /Type /Font
+  /Subtype /Type1
+  /Name /F1
+  /BaseFont /Helvetica
+  /Encoding /MacRomanEncoding
+>>
+endobj
+
+trailer
+<< 
+  /Root 1 0 R
+  /Size 8
+>>
+%%EOF

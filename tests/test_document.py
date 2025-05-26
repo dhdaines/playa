@@ -7,6 +7,7 @@ from io import BytesIO
 import pytest
 
 import playa
+from playa.content import DashPattern
 from playa.data_structures import NameTree
 from playa.document import Document, XRefTable, _open_input
 from playa.page import TextObject
@@ -242,3 +243,17 @@ def test_xobject_graphicstate() -> None:
     with playa.open(TESTDIR / "xobject_graphicstate.pdf") as doc:
         text = next(doc.pages[0].texts)
         assert text.gstate.font is not None
+
+
+def test_extgstate() -> None:
+    """Verify that gs operators set graphicstate."""
+    with playa.open(TESTDIR / "extgstate.pdf") as doc:
+        gstate = next(doc.pages[0].texts).gstate
+        assert gstate.blend_mode == LIT("Screen")
+        assert gstate.font is not None
+        assert gstate.salpha == 0.8
+        assert gstate.nalpha == 0.6
+        assert gstate.linewidth == 10
+        assert gstate.linecap == 1
+        assert gstate.linejoin == 2
+        assert gstate.dash == DashPattern((20,), 10)

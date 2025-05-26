@@ -45,6 +45,8 @@ class Text(TypedDict, total=False):
 
 
 class GraphicState(TypedDict, total=False):
+    clipping_path: None # TODO
+    """The current clipping path (sec. 8.5.4), default `None`"""
     linewidth: float
     """Line width in user space units (sec. 8.4.3.2), default 1"""
     linecap: int
@@ -57,6 +59,28 @@ class GraphicState(TypedDict, total=False):
     """Dash pattern for stroking (sec 8.4.3.6), default solid line `((), 0)`"""
     intent: str
     """Rendering intent (sec. 8.6.5.8), default `RelativeColorimetric`'"""
+    stroke_adjustment: bool
+    """A flag specifying whether to compensate for possible rasterization
+    effects when stroking a path with a line width that is small relative to
+    the pixel resolution of the output device (sec. 10.7.5), default `False`"""
+    blend_mode: Union[str, List[str]]
+    """The current blend mode that shall be used in the transparent imaging
+    model (sec. 11.3.5), default `Normal`"""
+    smask: Union[None, dict]
+    """A soft-mask dictionary (sec. 11.6.5.1) or None, default `None`"""
+    salpha: float
+    """The constant shape or constant opacity value used for stroking
+    operations (sec. 11.3.7.2 & 11.6.4.4), default 1"""
+    nalpha: float
+    """The constant shape or constant opacity value used for non-stroking
+    operations, default 1"""
+    alpha_source: bool
+    """A flag specifying whether the current soft mask and alpha constant
+    parameters shall be interpreted as shape values (true) or opacity values
+    (false), default `False`"""
+    black_pt_comp: str
+    """The black point compensation algorithm that shall be used when
+    converting CIE-based colours (sec. 8.6.5.9), default `Default`"""
     flatness: float
     """The precision with which curves shall be rendered on
     the output device (sec. 10.6.2), default 1"""
@@ -87,6 +111,10 @@ class GraphicState(TypedDict, total=False):
     rise: float
     """Text rise (for super and subscript) in unscaled text space
     units, default if not present is 0."""
+    knockout: bool
+    """The text knockout flag, shall determine the behaviour of overlapping
+    glyphs within a text object in the transparent imaging model (sec. 9.3.8),
+    default `True`"""
 
 
 class DashPattern(TypedDict, total=False):
@@ -229,12 +257,20 @@ def asobj_gstate(obj: _GraphicState) -> GraphicState:
         # fontsize is always defined with font
         gstate["fontsize"] = obj.fontsize
     for field in (
+        "clipping_path",
         "linewidth",
         "linecap",
         "linejoin",
         "miterlimit",
         "dash",
         "intent",
+        "stroke_adjustment",
+        "blend_mode",
+        "smask",
+        "salpha",
+        "nalpha",
+        "alpha_source",
+        "black_pt_comp",
         "flatness",
         "scolor",
         "scs",
@@ -245,6 +281,7 @@ def asobj_gstate(obj: _GraphicState) -> GraphicState:
         "leading",
         "render_mode",
         "rise",
+        "knockout",
     ):
         val = getattr(obj, field)
         if val != GRAPHICSTATE_DEFAULTS[field]:
