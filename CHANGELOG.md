@@ -3,8 +3,8 @@
 - Add `structure` to `Page` to access structure elements indexed by
   marked content IDs (convenience wrapper over the parent tree)
 - TODO: Add `structure` to `XObjectObject` for the same reason
-- TODO: Add `element` to `ImageObject` and `XObjectObject` to access
-  structure element via the parent tree
+- TODO: Add `element` to all `ContentObject` to access parent
+  structure element (if any) via the parent tree
 - Add `marked_contents` iterator to `Page`
 - TODO: Add `marked_contents` to `XObjectObject` to access marked
   content sections inside Form XObjects
