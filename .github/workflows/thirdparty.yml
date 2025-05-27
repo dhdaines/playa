@@ -1,9 +1,5 @@
 name: Third-Party Tests
 on:
-  push:
-    # Only run automatically on release tags
-    tags:
-      - v*
   workflow_dispatch:
 
 jobs:
