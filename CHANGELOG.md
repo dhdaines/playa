@@ -1,4 +1,24 @@
+## PLAYA 0.6.0: Unreleased
+
+- Add `structure` to `Page` to access structure elements indexed by
+  marked content IDs (convenience wrapper over the parent tree)
+- TODO: Add `structure` to `XObjectObject` for the same reason
+- TODO: Add `element` to `ImageObject` and `XObjectObject` to access
+  structure element via the parent tree
+- Add `marked_contents` iterator to `Page`
+- TODO: Add `marked_contents` to `XObjectObject` to access marked
+  content sections inside Form XObjects
+- Improve text extraction for rotated pages
+- Improve text extraction for tagged PDFs
+- TODO: Add functioning `__iter__` to `GlyphObject` in the case of
+  Type3 fonts, which works like `XObjectObject`
+- TODO: Correct displacement and bbox for Type3 fonts with
+  non-diagonal `FontMatrix`
+- TODO: Add `displacement` property to `TextObject`
+- TODO: Extract non-JPEG images as PPM
+
 ## PLAYA 0.5.1: 2024-05-26
+
 - Update documentation for API changes
 - Implement graphics state parameter dictionaries
 - Correctly implement `name2unicode`
@@ -10,6 +30,7 @@
 - Avoid `KeyError` when `RoleMap` does not exist
 
 ## PLAYA 0.5.0: 2024-05-14
+
 - Remove use of `object` in type annotations
 - Add support for role map and standard structure types
 - Refactor page.py as it was getting really unwieldy
@@ -51,10 +72,12 @@
   make any sense for Type3 or CID fonts.
 
 ## PLAYA 0.4.3: 2025-05-09
+
 - Correct ascent, descent, and glyph boxes for Type3 fonts
 - XObjects inherit graphics state from surrounding content
 
 ## PLAYA 0.4.2: 2025-04-26
+
 - Correct `fontsize` and `scaling` in text state
 - Correct `ValueError` on incorrect stream lengths for ASCII85 data
 - Correct implicit font encodings for Type1 fonts
@@ -106,10 +129,12 @@
 - Deprecate `dests` API and add friendly `destinations`
 
 ## PLAYA 0.2.10: 2025-02-18
+
 - Fix serious bug in rare ' and " text operators
 - Fix robustness issues in structtree API
 
 ## PLAYA 0.2.9: 2025-02-07
+
 - Support the all-important empty name object
 - Break the CLI again (ZeroVer YOLO) to better support page ranges
 - Add necessary .doc property to page list
@@ -119,11 +144,13 @@
 - Support arbitrary iterables in `PageList.__getitem__`
 
 ## PLAYA 0.2.8: 2025-01-22
+
 - Accept `None` for `max_workers`
 - Update documentation with a meme for the younger generation
 - Allow returning indirect object references from worker processes
 
 ## PLAYA 0.2.7: 2025-01-07
+
 - Remove excessive debug logging
 - Add rendering matrix to `GlyphObject`
 - Fix ToUnicode CMaps for CID fonts
@@ -137,6 +164,7 @@
 - Deliberately break the CLI (ZeroVer FTW YOLO ROTFL)
 
 ## PLAYA 0.2.6: 2024-12-30
+
 - Correct some type annotations (these were not really bugs)
 - Handle more CMap and ToUnicode corner cases
 - Add parallel operations
@@ -144,6 +172,7 @@
 - Correct some problems on Windows/MacOS
 
 ## PLAYA 0.2.5: 2024-12-15
+
 - Fix various bugs in the lazy API
   - Add specialized `__len__` methods to ContentObject classes
   - Clarify iteration over ContentObject
@@ -156,6 +185,7 @@
   in a document
 
 ## PLAYA 0.2.4: 2024-12-02
+
 - fix more embarrassing bugs largely regarding the creation of empty
   ContentObjects
 - these are not actually all fixed because (surprise!) sometimes we
@@ -164,6 +194,7 @@
   testsuite of pdf horrors
 
 ## PLAYA 0.2.3: 2024-11-28:
+
 - release early and often
 - fix some embarrassing bugs, again:
   - CMap parser did not recognize bfrange correctly (regression)
@@ -171,16 +202,19 @@
   - documentation said document.structtree exists but nope it didn't
 
 ## PLAYA 0.2.2: 2024-11-27
+
 - make everything quite a lot faster (25-35% faster than pdfminer now)
 - fix some more pdfminer.six bugs and verify others already fixed
 - really make sure not to return text objects with no text
 
 ## PLAYA 0.2.1: 2024-11-26
+
 - fix serious bug on malformed stream_length
 - report actual bounding box for rotated glyphs
   - eager API is no longer faster than pdfminer :( but it is more correct
 
 ## PLAYA 0.2: 2024-11-25
+
 - expose form XObjects on Page to allow getting only their contents
 - expose form XObject IDs in LayoutDict
 - make TextState conform to PDF spec (leading and line matrix) and document it
