@@ -115,5 +115,15 @@ def test_structure_bbox() -> None:
             assert item.bbox is not BBOX_NONE
 
 
+def test_content_structure() -> None:
+    """Verify that we can access structure elements from content objects."""
+    with playa.open(TESTDIR / "pdf_structure.pdf") as pdf:
+        for obj in pdf.pages[0]:
+            if obj.object_type == "path":
+                assert obj.parent is None
+            else:
+                assert obj.parent.role in ("P", "H1", "H2", "H3")
+
+
 if __name__ == "__main__":
     test_specific_structure()

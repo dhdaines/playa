@@ -51,6 +51,7 @@ from playa.worker import PageRef, _deref_page
 
 if TYPE_CHECKING:
     from playa.page import Page
+    from playa.structure import Element
 
 log = logging.getLogger(__name__)
 
@@ -262,11 +263,42 @@ class ContentObject:
     @property
     def mcid(self) -> Union[int, None]:
         """The marked content ID of the nearest enclosing marked
-        content section with an ID."""
+        content section with an ID.
+
+        This is notably what you should use (and what `parent` uses)
+        to find the parent logical structure element, because (PDF
+        14.7.5.1.1):
+
+        > A marked-content sequence corresponding to a structure
+        content item shall not have another marked-content sequence
+        for a structure content item nested within it though
+        non-structural marked-content shall be allowed.
+        """
         for mcs in self.mcstack[::-1]:
             if mcs.mcid is not None:
                 return mcs.mcid
         return None
+
+    @property
+    def parent(self) -> Union["Element", None]:
+        """The enclosing logical structure element, if any."""
+        # Use `mcid` and not `mcs` here (see docs for `mcid`)
+        mcid = self.mcid
+        if mcid is None:
+            return None
+        # FIXME: The parent ID can also come from a Form XObject
+        # (either as StructParents or StructParent)
+        page = self.page
+        if page is None:
+            return None
+        parents = page.structure
+        if parents is None:
+            return None
+        if mcid >= len(parents):
+            log.warning("Invalid marked content ID: %d (page has %d MCIDs)",
+                        mcid, len(parents))
+            return None
+        return parents[mcid]
 
     @property
     def page(self) -> "Page":
