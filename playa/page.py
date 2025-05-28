@@ -504,6 +504,9 @@ class Page:
         # their text, origin, and displacement, will be refactored
         for mcs, texts in itertools.groupby(self.texts, operator.attrgetter("mcs")):
             text: Union[TextObject, None] = None
+            # TODO: Artifact can also be a structure element, but
+            # also, any content outside the structure tree is
+            # considered an artifact
             if mcs is None or mcs.tag == "Artifact":
                 for text in texts:
                     prev_origin = text.origin

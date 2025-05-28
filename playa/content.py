@@ -274,31 +274,43 @@ class ContentObject:
         for a structure content item nested within it though
         non-structural marked-content shall be allowed.
         """
+        if hasattr(self, "_mcid"):
+            return self._mcid
         for mcs in self.mcstack[::-1]:
             if mcs.mcid is not None:
-                return mcs.mcid
-        return None
+                self._mcid: Union[int, None] = mcs.mcid
+                break
+        else:
+            self._mcid = None
+        return self._mcid
 
     @property
     def parent(self) -> Union["Element", None]:
         """The enclosing logical structure element, if any."""
         # Use `mcid` and not `mcs` here (see docs for `mcid`)
+        if hasattr(self, "_parent"):
+            return self._parent
         mcid = self.mcid
         if mcid is None:
+            self._parent: Union["Element", None] = None
             return None
         # FIXME: The parent ID can also come from a Form XObject
         # (either as StructParents or StructParent)
         page = self.page
         if page is None:
+            self._parent = None
             return None
         parents = page.structure
         if parents is None:
+            self._parent = None
             return None
         if mcid >= len(parents):
             log.warning("Invalid marked content ID: %d (page has %d MCIDs)",
                         mcid, len(parents))
+            self._parent = None
             return None
-        return parents[mcid]
+        self._parent = parents[mcid]
+        return self._parent
 
     @property
     def page(self) -> "Page":
