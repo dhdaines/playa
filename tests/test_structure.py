@@ -122,6 +122,7 @@ def test_content_structure() -> None:
             if obj.object_type == "path":
                 assert obj.parent is None
             else:
+                assert obj.parent is not None
                 assert obj.parent.role in ("P", "H1", "H2", "H3")
 
 
