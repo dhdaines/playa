@@ -159,7 +159,6 @@ class GraphicState:
         model (sec. 9.3.8)
 
     """
-
     clipping_path: None = None  # TODO
     linewidth: float = 1
     linecap: int = 0
