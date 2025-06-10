@@ -472,6 +472,10 @@ class LazyInterpreter:
         if height is None:
             log.debug("Image has no Height: %r", stream)
             height = 1
+        if "StructParent" in stream:
+            parent_key = int_value(stream["StructParent"])
+        else:
+            parent_key = None
         return self.create(
             ImageObject,
             stream=stream,
@@ -480,6 +484,7 @@ class LazyInterpreter:
             imagemask=stream.get_any(("IM", "ImageMask")),
             bits=stream.get_any(("BPC", "BitsPerComponent"), 1),
             colorspace=colorspace,
+            _parentkey=parent_key,
         )
 
     def do_q(self) -> None:

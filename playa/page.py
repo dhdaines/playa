@@ -307,6 +307,13 @@ class Page:
             yield tok
 
     @property
+    def parent_key(self) -> Union[int, None]:
+        """Parent tree key for this page, if any."""
+        if "StructParents" in self.attrs:
+            return int_value(self.attrs["StructParents"])
+        return None
+
+    @property
     def structure(self) -> Sequence[Union["Element", None]]:
         """Mapping of marked content IDs to logical structure elements.
 
@@ -336,12 +343,11 @@ class Page:
         self._structmap = []
         if self.doc.structure is None:
             return self._structmap
-        if "StructParents" not in self.attrs:
+        parent_key = self.parent_key
+        if parent_key is None:
             return self._structmap
         try:
-            parents = list_value(
-                self.doc.structure.parent_tree[self.attrs["StructParents"]]
-            )
+            parents = list_value(self.doc.structure.parent_tree[parent_key])
         except IndexError:
             return self._structmap
         # Elements can contain multiple marked content sections, so

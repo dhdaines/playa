@@ -13,6 +13,7 @@ from typing import (
     List,
     Literal,
     NamedTuple,
+    Sequence,
     Tuple,
     Union,
 )
@@ -32,13 +33,16 @@ from playa.pdftypes import (
     BBOX_NONE,
     ContentStream,
     Matrix,
+    ObjRef,
     PDFObject,
     Point,
     PSLiteral,
     Rect,
     dict_value,
+    int_value,
     matrix_value,
     rect_value,
+    resolve1,
 )
 from playa.utils import (
     apply_matrix_pt,
@@ -47,9 +51,10 @@ from playa.utils import (
     transform_bbox,
     translate_matrix,
 )
-from playa.worker import PageRef, _deref_page
+from playa.worker import PageRef, _deref_page, _deref_document
 
 if TYPE_CHECKING:
+    from playa.document import Document
     from playa.page import Page
     from playa.structure import Element
 
@@ -159,6 +164,7 @@ class GraphicState:
         model (sec. 9.3.8)
 
     """
+
     clipping_path: None = None  # TODO
     linewidth: float = 1
     linecap: int = 0
@@ -304,8 +310,9 @@ class ContentObject:
             self._parent = None
             return None
         if mcid >= len(parents):
-            log.warning("Invalid marked content ID: %d (page has %d MCIDs)",
-                        mcid, len(parents))
+            log.warning(
+                "Invalid marked content ID: %d (page has %d MCIDs)", mcid, len(parents)
+            )
             self._parent = None
             return None
         self._parent = parents[mcid]
@@ -315,6 +322,12 @@ class ContentObject:
     def page(self) -> "Page":
         """The page containing this content object."""
         return _deref_page(self._pageref)
+
+    @property
+    def doc(self) -> "Document":
+        """The document containing this content object."""
+        docref, _ = self._pageref
+        return _deref_document(docref)
 
 
 @dataclass
@@ -375,6 +388,7 @@ class ImageObject(ContentObject):
     imagemask: bool
     stream: ContentStream
     colorspace: Union[ColorSpace, None]
+    _parentkey: Union[int, None]
 
     def __contains__(self, name: str) -> bool:
         return name in self.stream
@@ -386,6 +400,27 @@ class ImageObject(ContentObject):
         """Even though you can __getitem__ from an image you cannot iterate
         over its keys, sorry about that.  Returns zero."""
         return 0
+
+    @property
+    def parent(self) -> Union["Element", None]:
+        """The enclosing logical structure element, if any."""
+        if hasattr(self, "_parent"):
+            return self._parent
+        # No parent key, look in containing page
+        if self._parentkey is None:
+            self._parent = super().parent
+            return self._parent
+        self._parent = None
+        # No structure, no parent!
+        if self.doc.structure is None:
+            return self._parent
+        try:
+            parent = resolve1(self.doc.structure.parent_tree[self._parentkey])
+            if isinstance(parent, dict):
+                self._parent = Element.from_dict(self.doc, parent)
+        except IndexError:
+            pass
+        return self._parent
 
     @property
     def buffer(self) -> bytes:
@@ -419,26 +454,22 @@ class XObjectObject(ContentObject):
 
     Attributes:
       xobjid: Name of this XObject (in the page resources).
-      page: Weak reference to containing page.
       stream: Content stream with PDF operators.
       resources: Resources specific to this XObject, if any.
+      group: Transparency group, if any.
     """
 
     xobjid: str
     stream: ContentStream
     resources: Union[None, Dict[str, PDFObject]]
     group: Union[None, Dict[str, PDFObject]]
+    _parentkey: Union[None, int]
 
     def __contains__(self, name: str) -> bool:
         return name in self.stream
 
     def __getitem__(self, name: str) -> PDFObject:
         return self.stream[name]
-
-    @property
-    def page(self) -> "Page":
-        """Get the page (if it exists, raising RuntimeError if not)."""
-        return _deref_page(self._pageref)
 
     @property
     def bbox(self) -> Rect:
@@ -479,6 +510,67 @@ class XObjectObject(ContentObject):
         )
         return iter(interp)
 
+    @property
+    def parent(self) -> Union["Element", None]:
+        """The enclosing logical structure element, if any."""
+        if hasattr(self, "_parent"):
+            return self._parent
+        # No parent key, look in containing page
+        if self._parentkey is None:
+            self._parent = super().parent
+            return self._parent
+        self._parent = None
+        # No structure, no parent!
+        if self.doc.structure is None:
+            return self._parent
+        try:
+            parent = resolve1(self.doc.structure.parent_tree[self._parentkey])
+            # Make sure that it's actually a single element
+            if isinstance(parent, dict):
+                self._parent = Element.from_dict(self.doc, parent)
+        except IndexError:
+            pass
+        return self._parent
+
+    @property
+    def structure(self) -> Sequence[Union["Element", None]]:
+        """Mapping of marked content IDs to logical structure elements.
+
+        As with pages, Form XObjects can also contain their own
+        mapping of marked content IDs to structure elements.
+
+        Danger: Do not rely on this being a `list`.
+            Currently this is implemented eagerly, but in the future it
+            may return a lazy object.
+
+        """
+        from playa.structure import Element
+
+        if hasattr(self, "_structmap"):
+            return self._structmap
+        self._structmap: List[Union["Element", None]] = []
+        if self.doc.structure is None:
+            return self._structmap
+        if self._parentkey is None:
+            return self._structmap
+        try:
+            parents = resolve1(self.doc.structure.parent_tree[self._parentkey])
+            if not isinstance(parents, list):
+                # This means that there is a single StructParent, and thus
+                # no internal structure to this Form XObject
+                return self._structmap
+        except IndexError:
+            return self._structmap
+        # Elements can contain multiple marked content sections, so
+        # don't create redundant Element objects for these
+        elements: Dict[int, Element] = {}
+        for obj in parents:
+            objid = obj.objid if isinstance(obj, ObjRef) else id(obj)
+            if objid not in elements:
+                elements[objid] = Element.from_dict(self.doc, dict_value(obj))
+            self._structmap.append(elements[objid])
+        return self._structmap
+
     @classmethod
     def from_stream(
         cls,
@@ -512,8 +604,20 @@ class XObjectObject(ContentObject):
             init_gstate.smask = None
         else:
             init_gstate = gstate
+        # PDF 2.0, Table 359
+        # At most one of [StructParent and StructParents] shall be
+        # present in a given object. An object may be either a content
+        # item in its entirety or a container for marked-content
+        # sequences that are content items, but not both.
+        if "StructParent" in stream:
+            parent_key = int_value(stream["StructParent"])
+        elif "StructParents" in stream:
+            parent_key = int_value(stream["StructParents"])
+        else:
+            parent_key = None
         return cls(
             _pageref=page.pageref,
+            _parentkey=parent_key,
             gstate=init_gstate,
             ctm=ctm,
             mcstack=mcstack,
