@@ -18,7 +18,6 @@ from typing import (
     Type,
     TypeVar,
     Union,
-    cast,
     overload,
 )
 
@@ -270,11 +269,24 @@ class Page:
         you may see the same named XObject multiple times.  If you
         need to access their actual definitions you'll have to look at
         `page.resources`.
+
+        This will also return Form XObjects within Form XObjects,
+        except in the case of circular reference chains.
         """
-        return cast(
-            Iterator["XObjectObject"],
-            iter(LazyInterpreter(self, self._contents, filter_class=XObjectObject)),
-        )
+
+        from typing import Set
+
+        def xobjects_one(
+            itor: Iterable["ContentObject"], parents: Set[str]
+        ) -> Iterator["XObjectObject"]:
+            for obj in itor:
+                if isinstance(obj, XObjectObject) and obj.xobjid not in parents:
+                    yield obj
+                    yield from xobjects_one(obj, parents | {obj.xobjid})
+
+        for obj in xobjects_one(self, set()):
+            if isinstance(obj, XObjectObject):
+                yield obj
 
     @property
     def tokens(self) -> Iterator[Token]:

@@ -236,6 +236,9 @@ def test_evil_xobjects() -> None:
     with playa.open(TESTDIR / "evil_xobjects.pdf") as doc:
         for _ in doc.pages[0].flatten():
             pass
+        # Even when we descend into xobjects
+        xo = list(doc.pages[0].xobjects)
+        assert len(xo) == 2
 
 
 def test_xobject_graphicstate() -> None:
