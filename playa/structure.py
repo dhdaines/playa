@@ -42,6 +42,7 @@ from playa.worker import (
 LOG = logging.getLogger(__name__)
 LITERAL_ANNOT = LIT("Annot")
 LITERAL_XOBJECT = LIT("XObject")
+LITERAL_IMAGE = LIT("Image")
 LITERAL_MCR = LIT("MCR")
 LITERAL_OBJR = LIT("OBJR")
 LITERAL_STRUCTTREEROOT = LIT("StructTreeRoot")
@@ -51,6 +52,7 @@ MatchFunc = Callable[["Element"], bool]
 if TYPE_CHECKING:
     from playa.document import Document
     from playa.page import Annotation, Page
+    from playa.content import ImageObject, XObjectObject
 
 
 @dataclass
@@ -75,6 +77,12 @@ class ContentItem:
         return _deref_page(self._pageref)
 
     @property
+    def doc(self) -> "Document":
+        """The document containing this content object."""
+        docref, _ = self._pageref
+        return _deref_document(docref)
+
+    @property
     def bbox(self) -> Rect:
         """Find the bounding box, if any, of this item, which is the
         smallest rectangle enclosing all objects in its marked content
@@ -93,8 +101,13 @@ class ContentItem:
         if page is None:
             self._bbox = BBOX_NONE
         else:
+            itor: Union["Page", "XObjectObject"] = page
+            if self.stream is not None:
+                for obj in page.xobjects:
+                    if obj.stream.objid == self.stream.objid:
+                        itor = obj
             self._bbox = get_bound_rects(
-                obj.bbox for obj in page if obj.mcid == self.mcid
+                obj.bbox for obj in itor if obj.mcid == self.mcid
             )
         return self._bbox
 
@@ -107,12 +120,19 @@ class ContentObject:
     (PDF 1.7 section 14.7.43), and can be used to (lazily) get that
 
     The standard is very unclear on what this could be aside from an
-    `Annotation` or an `XObject`.  An XObject must be a content
-    stream, so that's clear enough... Otherwise, since the `Type` key
-    is not required in an annotation dictionary we presume that this
-    is an annotation if it's not present.
+    `Annotation` or an `XObject` (presumably either a Form XObject or
+    an image).  An XObject must be a content stream, so that's clear
+    enough... Otherwise, since the `Type` key is not required in an
+    annotation dictionary we presume that this is an annotation if
+    it's not present.
 
-    Not to be confused with `playa.page.ContentObject`.
+    Not to be confused with `playa.page.ContentObject`.  While you
+    *can* get there from here with the `obj` property, it may not be a
+    great idea, because the only way to do that correctly in the case
+    of an `XObject` (or image) is to interpret the containing page.
+
+    Sometimes, but not always, you can nonetheless rapidly access the
+    `bbox`, so this is also provided as a property here.
 
     """
 
@@ -120,29 +140,22 @@ class ContentObject:
     props: Union[ContentStream, Dict[str, PDFObject]]
 
     @property
-    def obj(self) -> Union["XObjectObject", "Annotation", None]:
-        """Return the underlying object, if possible."""
-        if isinstance(self.props, ContentStream):
-            from playa.pdftypes import MATRIX_IDENTITY
-
-            if "Name" in self.props and isinstance(self.props["Name"], PSLiteral):
-                xobjid = literal_name(self.props["Name"])
-            else:
-                xobjid = "XObject"
-            return XObjectObject.from_stream(
-                stream=self.props,
-                page=self.page,
-                xobjid=xobjid,
-                gstate=GraphicState(),
-                ctm=MATRIX_IDENTITY,
-                mcstack=(),
-            )
+    def obj(self) -> Union["XObjectObject", "ImageObject", "Annotation", None]:
+        """Return an instantiated object, if possible."""
         objtype = self.type
         if objtype is LITERAL_ANNOT:
             from playa.page import Annotation
 
             return Annotation.from_dict(self.props, self.page)
-        # Otherwise, we don't know what to do with it!
+
+        if objtype is LITERAL_XOBJECT:
+            assert isinstance(self.props, ContentStream)
+            subtype = self.props.get("Subtype")
+            itor = self.page.images if subtype is LITERAL_IMAGE else self.page.xobjects
+            for obj in itor:
+                if obj.stream.objid == self.props.objid:
+                    return obj
+
         return None
 
     @property
@@ -161,15 +174,30 @@ class ContentObject:
         return _deref_page(self._pageref)
 
     @property
+    def doc(self) -> "Document":
+        """The document containing this content object."""
+        docref, _ = self._pageref
+        return _deref_document(docref)
+
+    @property
     def bbox(self) -> Rect:
         """Find the bounding box, if any, of this object.
 
         If there is no bounding box (very unlikely) this will be
         `BBOX_NONE`.
         """
-        if self.obj is None:
+        if "BBox" in self.props:
+            rawbox = rect_value(self.props["BBox"])
+            return transform_bbox(self.page.ctm, rawbox)
+
+        if "Rect" in self.props:
+            rawbox = rect_value(self.props["Rect"])
+            return transform_bbox(self.page.ctm, rawbox)
+
+        obj = self.obj
+        if obj is None:
             return BBOX_NONE
-        return self.obj.bbox
+        return obj.bbox
 
 
 def _find_all(

@@ -4,9 +4,9 @@ import pytest
 
 import playa
 from playa.exceptions import PDFEncryptionError
-from playa.page import Annotation, XObjectObject, TextObject
+from playa.page import Annotation, ImageObject
 from playa.pdftypes import BBOX_NONE
-from playa.structure import Element, Tree, ContentItem, ContentObject
+from playa.structure import Element, Tree, ContentObject
 
 from .data import ALLPDFS, CONTRIB, PASSWORDS, TESTDIR, XFAILS
 
@@ -81,17 +81,29 @@ def test_content_xobjects() -> None:
     useless)."""
     with playa.open(TESTDIR / "structure_xobjects.pdf") as pdf:
         assert pdf.structure is not None
-        section = pdf.structure.find("Document")
-        assert section is not None
-        xobj, mcs = section
-        assert isinstance(xobj, ContentObject)
-        xobjobj = xobj.obj
-        assert isinstance(xobjobj, XObjectObject)
-        (text,) = xobjobj
-        assert isinstance(text, TextObject)
-        assert text.chars == "Hello world"
-        assert isinstance(mcs, ContentItem)
-        assert mcs.mcid == 1
+        top = pdf.structure.find("Document")
+        assert top is not None
+        kids = list(top)
+        assert len(kids) == 4
+        (img,) = kids[3]
+        assert isinstance(img, ContentObject)
+        obj = img.obj
+        assert isinstance(obj, ImageObject)
+        assert obj.bbox == pytest.approx((25, 154, 237, 275))
+
+
+def test_xobject_mcids() -> None:
+    """Verify that we can access marked content sections inside Form
+    XObjects (ark) using marked-content reference dictionaries."""
+    with playa.open(TESTDIR / "structure_xobjects.pdf") as pdf:
+        assert pdf.structure is not None
+        top = pdf.structure.find("Document")
+        assert top is not None
+        _, _, p, _ = top
+        assert isinstance(p, Element)
+        (item,) = p
+        # Make sure we get the right one!
+        assert item.bbox == pytest.approx((25, 60.768, 143.68, 82.968))
 
 
 def test_structure_bbox() -> None:
