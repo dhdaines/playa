@@ -5,6 +5,7 @@
 - TODO: Add `structure` to `XObjectObject` for the same reason
 - TODO: Add `element` to all `ContentObject` to access parent
   structure element (if any) via the parent tree
+- Descend into Form XObjects in `Page.xobjects`
 - Add `marked_contents` iterator to `Page`
 - TODO: Add `marked_contents` to `XObjectObject` to access marked
   content sections inside Form XObjects
