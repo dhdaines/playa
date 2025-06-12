@@ -83,7 +83,7 @@ import json
 import logging
 from collections import deque
 from pathlib import Path
-from typing import Any, Deque, Dict, Iterable, Iterator, List, TextIO, Tuple, Union
+from typing import Any, Deque, Iterable, Iterator, List, TextIO, Tuple, Union
 
 import playa
 from playa import Document, Page, PDFPasswordIncorrect, asobj
@@ -102,7 +102,6 @@ from playa.structure import ContentItem
 from playa.structure import ContentObject as StructContentObject
 from playa.structure import Element
 from playa.utils import decode_text
-from playa.worker import PageRef, _deref_page
 
 LOG = logging.getLogger(__name__)
 
