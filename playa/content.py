@@ -811,8 +811,49 @@ class TextObject(ContentObject):
     def _get_next_glyph_offset(self) -> Point:
         if self._next_glyph_offset is not None:
             return self._next_glyph_offset
-        self._calculate_scaled_text_space_bbox()
-        assert self._next_glyph_offset is not None
+        font = self.gstate.font
+        fontsize = self.gstate.fontsize
+        if font is None:
+            log.warning(
+                "No font is set, will not update text state or output text: %r TJ",
+                self.args,
+            )
+            self._text_space_bbox = BBOX_NONE
+            self._next_glyph_offset = self._glyph_offset
+            return self._next_glyph_offset
+        if len(self.args) == 0:
+            self._text_space_bbox = BBOX_NONE
+            self._next_glyph_offset = self._glyph_offset
+            return self._next_glyph_offset
+
+        horizontal_scaling = self.gstate.scaling * 0.01
+        charspace = self.gstate.charspace
+        wordspace = self.gstate.wordspace
+        vert = font.vertical
+        if font.multibyte:
+            wordspace = 0
+        (x, y) = self._glyph_offset
+        pos = y if vert else x
+        if not vert:
+            # Scale charspace and wordspace, PDF 2.0 section 9.3.2
+            charspace *= horizontal_scaling
+            wordspace *= horizontal_scaling
+        for obj in self.args:
+            if isinstance(obj, (int, float)):
+                pos -= obj * 0.001 * fontsize * horizontal_scaling
+            else:
+                for cid, _ in font.decode(obj):
+                    x, y = (x, pos) if vert else (pos, y)
+                    if vert:
+                        assert isinstance(font, CIDFont)
+                        pos += font.vdisp(cid) * fontsize
+                    else:
+                        hdisp = font.hdisp(cid)
+                        pos += hdisp * fontsize * horizontal_scaling
+                    pos += charspace
+                    if cid == 32:
+                        pos += wordspace
+        self._next_glyph_offset = (x, pos) if vert else (pos, y)
         return self._next_glyph_offset
 
     @property
