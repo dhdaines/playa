@@ -111,6 +111,24 @@ class ContentItem:
             )
         return self._bbox
 
+    @property
+    def text(self) -> Union[str, None]:
+        """Unicode text contained in this structure element."""
+        page = self.page
+        if page is None:
+            return None
+        itor: Union["Page", "XObjectObject"] = page
+        if self.stream is not None:
+            # FIXME: Potentially quite slow, but we hope this never happens
+            for obj in page.xobjects:
+                if obj.stream.objid == self.stream.objid:
+                    itor = obj
+            # FIXME: if we don't find it... then what? (probably None, but...)
+        texts = itor.mcid_texts.get(self.mcid)
+        if texts is None:
+            return None
+        return "".join(texts)
+
 
 @dataclass
 class ContentObject:

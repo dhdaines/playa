@@ -106,6 +106,16 @@ def test_xobject_mcids() -> None:
         assert item.bbox == pytest.approx((25, 60.768, 143.68, 82.968))
 
 
+def test_mcid_texts() -> None:
+    """Verify that we can access marked content sections inside Form
+    XObjects (ark) using marked-content reference dictionaries."""
+    with playa.open(TESTDIR / "structure_xobjects.pdf") as pdf:
+        page = pdf.pages[0]
+        assert page.mcid_texts == {0: ["Hello again"]}
+        xobj = next(page.xobjects)
+        assert xobj.mcid_texts == {0: ["Hello world"], 1: ["Goodbye now"]}
+
+
 def test_structure_bbox() -> None:
     """Verify that we can get the bounding box of structure elements."""
     with playa.open(TESTDIR / "pdf_structure.pdf") as pdf:

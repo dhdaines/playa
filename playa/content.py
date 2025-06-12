@@ -9,9 +9,11 @@ from dataclasses import dataclass
 from typing import (
     TYPE_CHECKING,
     Dict,
+    Iterable,
     Iterator,
     List,
     Literal,
+    Mapping,
     NamedTuple,
     Sequence,
     Tuple,
@@ -440,6 +442,26 @@ class ImageObject(ContentObject):
 LITERAL_TRANSPARENCY = LIT("Transparency")
 
 
+def _extract_mcid_texts(itor: Iterable[ContentObject]) -> Dict[int, List[str]]:
+    """Get text for all MCIDs on a page or in a Form XObject"""
+    mctext: Dict[int, List[str]] = {}
+    for obj in itor:
+        if not isinstance(obj, TextObject):
+            continue
+        mcs = obj.mcs
+        if mcs is None or mcs.mcid is None:
+            continue
+        if "ActualText" in mcs.props:
+            assert isinstance(mcs.props["ActualText"], bytes)
+            chars = mcs.props["ActualText"].decode("UTF-16")
+        else:
+            chars = obj.chars
+        # Remove soft hyphens
+        chars = chars.replace("\xad", "")
+        mctext.setdefault(mcs.mcid, []).append(chars)
+    return mctext
+
+
 @dataclass
 class XObjectObject(ContentObject):
     """An eXternal Object, in the context of a page.
@@ -570,6 +592,21 @@ class XObjectObject(ContentObject):
                 elements[objid] = Element.from_dict(self.doc, dict_value(obj))
             self._structmap.append(elements[objid])
         return self._structmap
+
+    @property
+    def mcid_texts(self) -> Mapping[int, List[str]]:
+        """Mapping of marked content IDs to Unicode text strings.
+
+        For use in text extraction from tagged PDFs.
+
+        Danger: Do not rely on this being a `dict`.
+            Currently this is implemented eagerly, but in the future it
+            may return a lazy object.
+        """
+        if hasattr(self, "_textmap"):
+            return self._textmap
+        self._textmap: Mapping[int, List[str]] = _extract_mcid_texts(self)
+        return self._textmap
 
     @classmethod
     def from_stream(

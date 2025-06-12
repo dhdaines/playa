@@ -31,6 +31,7 @@ from playa.content import (
     PathObject,
     TextObject,
     XObjectObject,
+    _extract_mcid_texts,
 )
 from playa.exceptions import PDFSyntaxError
 from playa.font import Font
@@ -414,6 +415,21 @@ class Page:
             for obj in flatten_one(self, set()):
                 if isinstance(obj, filter_class):
                     yield obj
+
+    @property
+    def mcid_texts(self) -> Mapping[int, List[str]]:
+        """Mapping of marked content IDs to Unicode text strings.
+
+        For use in text extraction from tagged PDFs.
+
+        Danger: Do not rely on this being a `dict`.
+            Currently this is implemented eagerly, but in the future it
+            may return a lazy object.
+        """
+        if hasattr(self, "_textmap"):
+            return self._textmap
+        self._textmap: Mapping[int, List[str]] = _extract_mcid_texts(self)
+        return self._textmap
 
     def extract_text(self) -> str:
         """Do some best-effort text extraction.
