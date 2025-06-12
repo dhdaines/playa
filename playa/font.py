@@ -144,8 +144,7 @@ class Font:
         This is always `[0 0]` for simple fonts as they have no
         vertical writing mode.
         """
-        _, _, _, _, e, f = self.matrix
-        return (e, f)
+        return (0, 0)
 
     def char_bbox(self, cid: int) -> Rect:
         """Get the standard bounding box for a character from its CID.
@@ -160,7 +159,9 @@ class Font:
             specified by the font program.
         """
         width = self.widths.get(cid, self.default_width)
-        return transform_bbox(self.matrix, (0, self.descent, width, self.ascent))
+        # We know the matrix is diagonal
+        a, _, _, d, _, _ = self.matrix
+        return (0, d * self.descent, a * width, d * self.ascent)
 
 
 class SimpleFont(Font):
@@ -330,7 +331,9 @@ class Type1Font(SimpleFont):
             specified by the font program.
         """
         width = self._glyph_space_width(cid)
-        return transform_bbox(self.matrix, (0, self.descent, width, self.ascent))
+        # We know the matrix is diagonal
+        a, _, _, d, _, _ = self.matrix
+        return (0, d * self.descent, a * width, d * self.ascent)
 
     def __repr__(self) -> str:
         return "<Type1Font: basefont=%r>" % self.basefont
@@ -407,6 +410,20 @@ class Type3Font(SimpleFont):
         # codes to glyph names shall be entirely defined by its
         # Encoding entry, which is required in this case.
         return {}
+
+    def char_bbox(self, cid: int) -> Rect:
+        """Get the standard bounding box for a character from its CID.
+
+        This is the smallest rectangle enclosing [0 descent width
+        ascent] after the font matrix has been applied.
+
+        Danger: Not the actual bounding box of the glyph (but almost).
+            The descent and ascent here are from the **font** and not
+            from the individual **glyph** so this will be somewhat
+            larger than the actual bounding box.
+        """
+        width = self.widths.get(cid, self.default_width)
+        return transform_bbox(self.matrix, (0, self.descent, width, self.ascent))
 
     def __repr__(self) -> str:
         return "<Type3Font>"
@@ -677,7 +694,9 @@ class CIDFont(Font):
 
         """
         vx, vy = self.positions.get(cid, self.default_position)
-        return apply_matrix_pt(self.matrix, (vx, vy))
+        # We know that the matrix is diagonal here
+        a, _, _, d, _, _ = self.matrix
+        return a * vx, d * vy
 
     def char_bbox(self, cid: int) -> Rect:
         """Get the standard bounding box for a character from its CID.
@@ -693,6 +712,8 @@ class CIDFont(Font):
 
         """
         width = self.widths.get(cid, self.default_width)
+        # We know that the matrix is diagonal here
+        a, _, _, d, _, _ = self.matrix
         if self.vertical:
             vx, vy = self.positions.get(cid, self.default_position)
             # Horizontal offset for glyph origin vs. text
@@ -701,7 +722,10 @@ class CIDFont(Font):
             # Vertical offset for glyph origin
             vy = -vy
             # Find glyph bbox
-            return transform_bbox(
-                self.matrix, (vx, vy + self.descent, vx + width, vy + self.ascent)
+            return (
+                a * vx,
+                d * (vy + self.descent),
+                a * (vx + width),
+                d * (vy + self.ascent),
             )
-        return transform_bbox(self.matrix, (0, self.descent, width, self.ascent))
+        return (0, d * self.descent, a * width, d * self.ascent)
