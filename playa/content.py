@@ -763,8 +763,6 @@ class TextObject(ContentObject):
             self._next_glyph_offset = self._glyph_offset
             return self._text_space_bbox
 
-        descent = font.matrix[3] * font.descent * fontsize
-        ascent = font.matrix[3] * font.ascent * fontsize
         horizontal_scaling = self.gstate.scaling * 0.01
         charspace = self.gstate.charspace
         wordspace = self.gstate.wordspace
@@ -773,20 +771,9 @@ class TextObject(ContentObject):
             wordspace = 0
         (x, y) = self._glyph_offset
         pos = y if vert else x
-        if vert:
-            # Because the position vector can be anything for vertical
-            # writing, none of these can be fixed even if we ignore
-            # glyph-specific width, ascent and descent.
-            x0 = x1 = x
-            y0 = y1 = y
-        else:
-            x0 = x1 = x
-            # In horizontal writing by contrast the baseline never
-            # changes, and by convention, even though it's quite
-            # incorrect, we use the descent and rise for the text and
-            # glyph bounding box.  This means y0 and y1 are fixed.
-            y0 = y + descent + rise
-            y1 = y + ascent + rise
+        x0 = x1 = x
+        y0 = y1 = y + rise
+        if not vert:
             # Scale charspace and wordspace, PDF 2.0 section 9.3.2
             charspace *= horizontal_scaling
             wordspace *= horizontal_scaling
@@ -796,25 +783,23 @@ class TextObject(ContentObject):
             else:
                 for cid, _ in font.decode(obj):
                     x, y = (x, pos) if vert else (pos, y)
-                    hdisp = font.hdisp(cid)
+                    gx0, gy0, gx1, gy1 = font.char_bbox(cid)
+                    gx0 *= fontsize * horizontal_scaling
+                    gx1 *= fontsize * horizontal_scaling
+                    gy0 *= fontsize
+                    gy0 += rise
+                    gy1 *= fontsize
+                    gy1 += rise
+                    x0 = min(x0, x + gx0)
+                    y0 = min(y0, y + gy0)
+                    x1 = max(x1, x + gx1)
+                    y1 = max(y1, y + gy1)
                     if vert:
                         assert isinstance(font, CIDFont)
-                        adv = font.vdisp(cid) * fontsize
-                        gx0, gy0, gx1, gy1 = font.char_bbox(cid)
-                        gx0 *= fontsize * horizontal_scaling
-                        gx1 *= fontsize * horizontal_scaling
-                        gy0 *= fontsize
-                        gy0 += rise
-                        gy1 *= fontsize
-                        gy1 += rise
-                        x0 = min(x0, x + gx0)
-                        y0 = min(y0, y + gy0)
-                        x1 = max(x1, x + gx1)
-                        y1 = max(y1, y + gy1)
+                        pos += font.vdisp(cid) * fontsize
                     else:
-                        adv = hdisp * fontsize * horizontal_scaling
-                        x1 = x + adv
-                    pos += adv
+                        hdisp = font.hdisp(cid)
+                        pos += hdisp * fontsize * horizontal_scaling
                     pos += charspace
                     if cid == 32:
                         pos += wordspace

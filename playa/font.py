@@ -94,7 +94,7 @@ class Font:
         self.descent = num_value(descriptor.get("Descent", -120))
         self.italic_angle = num_value(descriptor.get("ItalicAngle", 0))
         if default_width is None:
-            self.default_width = num_value(descriptor.get("MissingWidth", 0))
+            self.default_width = num_value(descriptor.get("MissingWidth", 1000))
         else:
             self.default_width = default_width
         self.leading = num_value(descriptor.get("Leading", 0))
