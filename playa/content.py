@@ -654,7 +654,6 @@ class TextObject(ContentObject):
     _matrix: Union[Matrix, None] = None
     _chars: Union[List[str], None] = None
     _bbox: Union[Rect, None] = None
-    _text_space_bbox: Union[Rect, None] = None
     _next_glyph_offset: Union[Point, None] = None
 
     def __iter__(self) -> Iterator[GlyphObject]:
@@ -744,71 +743,8 @@ class TextObject(ContentObject):
         if self._next_glyph_offset is None:
             self._next_glyph_offset = glyph_offset
 
-    def _calculate_scaled_text_space_bbox(self):
-        if self._text_space_bbox is not None:
-            return self._text_space_bbox
-        font = self.gstate.font
-        fontsize = self.gstate.fontsize
-        rise = self.gstate.rise
-        if font is None:
-            log.warning(
-                "No font is set, will not update text state or output text: %r TJ",
-                self.args,
-            )
-            self._text_space_bbox = BBOX_NONE
-            self._next_glyph_offset = self._glyph_offset
-            return self._text_space_bbox
-        if len(self.args) == 0:
-            self._text_space_bbox = BBOX_NONE
-            self._next_glyph_offset = self._glyph_offset
-            return self._text_space_bbox
-
-        horizontal_scaling = self.gstate.scaling * 0.01
-        charspace = self.gstate.charspace
-        wordspace = self.gstate.wordspace
-        vert = font.vertical
-        if font.multibyte:
-            wordspace = 0
-        (x, y) = self._glyph_offset
-        pos = y if vert else x
-        x0 = x1 = x
-        y0 = y1 = y + rise
-        if not vert:
-            # Scale charspace and wordspace, PDF 2.0 section 9.3.2
-            charspace *= horizontal_scaling
-            wordspace *= horizontal_scaling
-        for obj in self.args:
-            if isinstance(obj, (int, float)):
-                pos -= obj * 0.001 * fontsize * horizontal_scaling
-            else:
-                for cid, _ in font.decode(obj):
-                    x, y = (x, pos) if vert else (pos, y)
-                    gx0, gy0, gx1, gy1 = font.char_bbox(cid)
-                    gx0 *= fontsize * horizontal_scaling
-                    gx1 *= fontsize * horizontal_scaling
-                    gy0 *= fontsize
-                    gy0 += rise
-                    gy1 *= fontsize
-                    gy1 += rise
-                    x0 = min(x0, x + gx0)
-                    y0 = min(y0, y + gy0)
-                    x1 = max(x1, x + gx1)
-                    y1 = max(y1, y + gy1)
-                    if vert:
-                        assert isinstance(font, CIDFont)
-                        pos += font.vdisp(cid) * fontsize
-                    else:
-                        hdisp = font.hdisp(cid)
-                        pos += hdisp * fontsize * horizontal_scaling
-                    pos += charspace
-                    if cid == 32:
-                        pos += wordspace
-        if self._next_glyph_offset is None:
-            self._next_glyph_offset = (x, pos) if vert else (pos, y)
-        self._text_space_bbox = (x0, y0, x1, y1)
-        return self._text_space_bbox
-
     def _get_next_glyph_offset(self) -> Point:
+        """Update only the glyph offset without calculating anything else."""
         if self._next_glyph_offset is not None:
             return self._next_glyph_offset
         font = self.gstate.font
@@ -818,11 +754,9 @@ class TextObject(ContentObject):
                 "No font is set, will not update text state or output text: %r TJ",
                 self.args,
             )
-            self._text_space_bbox = BBOX_NONE
             self._next_glyph_offset = self._glyph_offset
             return self._next_glyph_offset
         if len(self.args) == 0:
-            self._text_space_bbox = BBOX_NONE
             self._next_glyph_offset = self._glyph_offset
             return self._next_glyph_offset
 
@@ -901,7 +835,77 @@ class TextObject(ContentObject):
         if self._bbox is not None:
             return self._bbox
         matrix = mult_matrix(self.line_matrix, self.ctm)
-        self._bbox = transform_bbox(matrix, self._calculate_scaled_text_space_bbox())
+        font = self.gstate.font
+        fontsize = self.gstate.fontsize
+        rise = self.gstate.rise
+        if font is None:
+            log.warning(
+                "No font is set, will not update text state or output text: %r TJ",
+                self.args,
+            )
+            self._bbox = BBOX_NONE
+            self._next_glyph_offset = self._glyph_offset
+            return self._bbox
+        if len(self.args) == 0:
+            self._bbox = BBOX_NONE
+            self._next_glyph_offset = self._glyph_offset
+            return self._bbox
+
+        horizontal_scaling = self.gstate.scaling * 0.01
+        charspace = self.gstate.charspace
+        wordspace = self.gstate.wordspace
+        vert = font.vertical
+        if font.multibyte:
+            wordspace = 0
+        (x, y) = self._glyph_offset
+        pos = y if vert else x
+        x0 = x1 = x
+        y0 = y1 = y + rise
+        fast_path = False
+        if not vert:
+            # Scale charspace and wordspace, PDF 2.0 section 9.3.2
+            charspace *= horizontal_scaling
+            wordspace *= horizontal_scaling
+            # Detect the most frequent case, horizontal writing with
+            # diagonal font.matrix
+            a, b, c, d, e, f = font.matrix
+            if b == 0 and c == 0:
+                fast_path = True
+                y0 += d * font.descent * fontsize
+                y1 += d * font.ascent * fontsize
+        for obj in self.args:
+            if isinstance(obj, (int, float)):
+                pos -= obj * 0.001 * fontsize * horizontal_scaling
+            else:
+                for cid, _ in font.decode(obj):
+                    x, y = (x, pos) if vert else (pos, y)
+                    if vert:
+                        assert isinstance(font, CIDFont)
+                        pos += font.vdisp(cid) * fontsize
+                    else:
+                        hdisp = font.hdisp(cid)
+                        pos += hdisp * fontsize * horizontal_scaling
+                    if fast_path:
+                        x1 = pos
+                    else:
+                        gx0, gy0, gx1, gy1 = font.char_bbox(cid)
+                        gx0 *= fontsize * horizontal_scaling
+                        gx1 *= fontsize * horizontal_scaling
+                        gy0 *= fontsize
+                        gy0 += rise
+                        gy1 *= fontsize
+                        gy1 += rise
+                        x0 = min(x0, x + gx0)
+                        y0 = min(y0, y + gy0)
+                        x1 = max(x1, x + gx1)
+                        y1 = max(y1, y + gy1)
+                    pos += charspace
+                    if cid == 32:
+                        pos += wordspace
+        # Update this because we can!
+        if self._next_glyph_offset is None:
+            self._next_glyph_offset = (x, pos) if vert else (pos, y)
+        self._bbox = transform_bbox(matrix, (x0, y0, x1, y1))
         return self._bbox
 
     @property

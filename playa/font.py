@@ -60,7 +60,6 @@ from playa.utils import (
     choplist,
     decode_text,
     transform_bbox,
-    apply_matrix_pt,
 )
 
 log = logging.getLogger(__name__)
