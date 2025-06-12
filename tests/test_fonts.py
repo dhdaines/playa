@@ -78,12 +78,10 @@ def test_implicit_encoding_cff_issue91() -> None:
 
 def test_type3_font_boxes() -> None:
     """Ensure that we get bounding boxes right for Type3 fonts with
-    mildly exotic FontMatrix (FIXME: it could be much more exotic than
-    this)"""
+    mildly exotic FontMatrix"""
     with playa.open(TESTDIR / "type3_fonts.pdf") as doc:
         font = doc.get_font(5, dict_value(doc[5]))
-        # Verify that we find "subset-like" names (Type3 fonts are not subsettable)
-        assert font.basefont == "Open-Sans-Light"
+        assert font.basefont == "BAAAAA+Open-Sans-Light"
         assert font.fontname == "BAAAAA+Open-Sans-Light"
         # This font's BBox is really something
         assert font.bbox == (-164, 493, 1966, -1569)

@@ -18,6 +18,8 @@
 - BREAKING: Remove misleading `char_width`, `get_descent`, and
   `get_ascent` methods and `hscale` and `vscale` properties from font
   objects
+- BREAKING: Do not guess `basename` for Type3 fonts (generally it
+  isn't different from `fontname` for other subset fonts)
 - TODO: Add `displacement` property to `TextObject`
 - TODO: Extract non-JPEG images as PPM
 

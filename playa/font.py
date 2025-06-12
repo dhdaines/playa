@@ -382,13 +382,7 @@ class Type3Font(SimpleFont):
             self.fontname = decode_text(fontname)
         else:
             self.fontname = "unknown"
-        # However in many cases the name will be clearly "subset-like"
-        # so set basefont to the "base font" part of it
-        _, _, basefont = self.fontname.partition("+")
-        if basefont:
-            self.basefont = basefont
-        else:
-            self.basefont = self.fontname
+        self.basefont = self.fontname
 
         if "FontMatrix" in spec:  # it is actually required though
             self.matrix = matrix_value(spec["FontMatrix"])
