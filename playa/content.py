@@ -159,7 +159,7 @@ class GraphicState:
 
     """
 
-    clipping_path: None = None # TODO
+    clipping_path: None = None  # TODO
     linewidth: float = 1
     linecap: int = 0
     linejoin: int = 0
@@ -357,8 +357,10 @@ class ImageObject(ContentObject):
         # region of the page by temporarily altering the CTM.
         return transform_bbox(self.ctm, (0, 0, 1, 1))
 
+
 # Group XObject subtypes. As of PDF 2.0 Transparency is the only defined subtype
 LITERAL_TRANSPARENCY = LIT("Transparency")
+
 
 @dataclass
 class XObjectObject(ContentObject):
@@ -714,7 +716,7 @@ class TextObject(ContentObject):
             else:
                 for cid, text in font.decode(obj):
                     glyph_offset = (x, pos) if vert else (pos, y)
-                    disp = font.vdisp(cid) if vert else font.char_width(cid)
+                    disp = font.vdisp(cid) if vert else font.hdisp(cid)
                     disp += scaled_charspace
                     if cid == 32:
                         disp += scaled_wordspace
@@ -760,8 +762,9 @@ class TextObject(ContentObject):
             self._text_space_bbox = BBOX_NONE
             self._next_glyph_offset = self._glyph_offset
             return self._text_space_bbox
-        descent = font.get_descent() * fontsize
-        ascent = font.get_ascent() * fontsize
+
+        descent = font.matrix[3] * font.descent * fontsize
+        ascent = font.matrix[3] * font.ascent * fontsize
         horizontal_scaling = self.gstate.scaling * 0.01
         charspace = self.gstate.charspace
         wordspace = self.gstate.wordspace
@@ -793,7 +796,7 @@ class TextObject(ContentObject):
             else:
                 for cid, _ in font.decode(obj):
                     x, y = (x, pos) if vert else (pos, y)
-                    width = font.char_width(cid)
+                    hdisp = font.hdisp(cid)
                     if vert:
                         assert isinstance(font, CIDFont)
                         adv = font.vdisp(cid) * fontsize
@@ -809,7 +812,7 @@ class TextObject(ContentObject):
                         x1 = max(x1, x + gx1)
                         y1 = max(y1, y + gy1)
                     else:
-                        adv = width * fontsize * horizontal_scaling
+                        adv = hdisp * fontsize * horizontal_scaling
                         x1 = x + adv
                     pos += adv
                     pos += charspace

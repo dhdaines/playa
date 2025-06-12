@@ -45,7 +45,7 @@ class Text(TypedDict, total=False):
 
 
 class GraphicState(TypedDict, total=False):
-    clipping_path: None # TODO
+    clipping_path: None  # TODO
     """The current clipping path (sec. 8.5.4), default `None`"""
     linewidth: float
     """Line width in user space units (sec. 8.4.3.2), default 1"""

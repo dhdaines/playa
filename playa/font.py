@@ -43,6 +43,7 @@ from playa.parser import (
 )
 from playa.pdftypes import (
     ContentStream,
+    Matrix,
     Rect,
     dict_value,
     int_value,
@@ -59,6 +60,7 @@ from playa.utils import (
     choplist,
     decode_text,
     transform_bbox,
+    apply_matrix_pt,
 )
 
 log = logging.getLogger(__name__)
@@ -100,7 +102,7 @@ class Font:
             self.bbox = rect_value(descriptor["FontBBox"])
         else:
             self.bbox = (0, 0, 0, 0)
-        self.hscale = self.vscale = 0.001
+        self.matrix: Matrix = (0.001, 0, 0, 0.001, 0, 0)
 
         # PDF RM 9.8.1 specifies /Descent should always be a negative number.
         # PScript5.dll seems to produce Descent with a positive number, but
@@ -119,36 +121,11 @@ class Font:
         log.debug("decode with identity: %r", data)
         return ((cid, chr(cid)) for cid in data)
 
-    def get_ascent(self) -> float:
-        """Ascent above the baseline, in text space units"""
-        return self.ascent * self.vscale
-
-    def get_descent(self) -> float:
-        """Descent below the baseline, in text space units; always negative"""
-        return self.descent * self.vscale
-
-    def get_width(self) -> float:
-        """Maximum width of a glyph in this font"""
-        w = self.bbox[2] - self.bbox[0]
-        if w == 0:
-            w = -self.default_width
-        return w * self.hscale
-
-    def get_height(self) -> float:
-        """Maximum height of a glyph in this font"""
-        h = self.bbox[3] - self.bbox[1]
-        if h == 0:
-            h = self.ascent - self.descent
-        return h * self.vscale
-
-    def char_width(self, cid: int) -> float:
-        """Get the width of a character from its CID."""
-        if cid not in self.widths:
-            return self.default_width * self.hscale
-        return self.widths[cid] * self.hscale
-
-    def string_width(self, s: bytes) -> float:
-        return sum(self.char_width(cid) for cid, _ in self.decode(s))
+    def hdisp(self, cid: int) -> float:
+        """Get the horizontal displacement (so-called "width") of a character
+        from its CID."""
+        width = self.widths.get(cid, self.default_width)
+        return self.matrix[0] * width
 
     def vdisp(self, cid: int) -> float:
         """Get vertical displacement for vertical writing mode, in
@@ -167,7 +144,8 @@ class Font:
         This is always `[0 0]` for simple fonts as they have no
         vertical writing mode.
         """
-        return (0, 0)
+        _, _, _, _, e, f = self.matrix
+        return (e, f)
 
     def char_bbox(self, cid: int) -> Rect:
         """Get the standard bounding box for a character from its CID.
@@ -181,12 +159,8 @@ class Font:
             the actual bounding box of an individual glyph as
             specified by the font program.
         """
-        descent = self.get_descent()
-        ascent = self.get_ascent()
-        width = self.char_width(cid)
-        x0, y0 = (0, descent)
-        x1, y1 = (width, ascent)
-        return x0, y0, x1, y1
+        width = self.widths.get(cid, self.default_width)
+        return transform_bbox(self.matrix, (0, self.descent, width, self.ascent))
 
 
 class SimpleFont(Font):
@@ -318,8 +292,7 @@ class Type1Font(SimpleFont):
             # shall be the font's built-in encoding (see FIXME above)
             return LITERAL_STANDARD_ENCODING
 
-    def char_width(self, cid: int) -> float:
-        """Get the width of a character from its CID."""
+    def _glyph_space_width(self, cid: int) -> float:
         # Commit 6e4f36d <- what's the purpose of this? seems very cursed
         # reverting this would make #76 easy to fix since cid2unicode would only be
         # needed when ToUnicode is absent
@@ -335,12 +308,29 @@ class Type1Font(SimpleFont):
         # Then we can construct `self.widths` directly using `self.encoding`.
         if self.char_widths is not None:
             if cid not in self._cid2unicode:
-                width = self.default_width
-            else:
-                width = self.char_widths.get(self._cid2unicode[cid], self.default_width)
-        else:
-            width = self.widths.get(cid, self.default_width)
-        return width * self.hscale
+                return self.default_width
+            return self.char_widths.get(self._cid2unicode[cid], self.default_width)
+        return self.widths.get(cid, self.default_width)
+
+    def hdisp(self, cid: int) -> float:
+        """Get the horizontal displacement (so-called "width") of a character
+        from its CID."""
+        return self.matrix[0] * self._glyph_space_width(cid)
+
+    def char_bbox(self, cid: int) -> Rect:
+        """Get the standard bounding box for a character from its CID.
+
+        This is, very specifically, `[0 descent width ascent]` in text
+        space units.
+
+        Danger: Not the actual bounding box of the glyph.
+            This is a standardized bounding box for use in text
+            extraction and layout analysis.  It does not correspond to
+            the actual bounding box of an individual glyph as
+            specified by the font program.
+        """
+        width = self._glyph_space_width(cid)
+        return transform_bbox(self.matrix, (0, self.descent, width, self.ascent))
 
     def __repr__(self) -> str:
         return "<Type1Font: basefont=%r>" % self.basefont
@@ -406,16 +396,6 @@ class Type3Font(SimpleFont):
         if "FontBBox" in spec:  # it is also required though
             self.bbox = rect_value(spec["FontBBox"])
             # otherwise it was set in SimpleFont.__init__
-        a, b, c, d, e, f = self.matrix
-        # If FontMatrix is not diagonal then normalize everything
-        # except the widths and hscale (FIXME: This isn't really
-        # correct!)
-        if b or c:
-            x0, y0, x1, y1 = transform_bbox(self.matrix, self.bbox)
-            self.bbox = (x0 * 1000, y0 * 1000, x1 * 1000, y1 * 1000)
-            self.matrix = (a, 0, 0, 0.001, e, f)
-            self.hscale = a
-        self.hscale, _, _, self.vscale, _, _ = self.matrix
         # Set ascent/descent from the bbox (they *could* be in the
         # descriptor but this is very unlikely)
         _, self.descent, _, self.ascent = self.bbox
@@ -673,7 +653,7 @@ class CIDFont(Font):
 
         Returns 0 for horizontal writing, for obvious reasons.
         """
-        return self.vdisps.get(cid, self.default_vdisp) * self.vscale
+        return self.matrix[3] * self.vdisps.get(cid, self.default_vdisp)
 
     def position(self, cid: int) -> Tuple[float, float]:
         """Get position vector for vertical writing mode, in text
@@ -697,7 +677,7 @@ class CIDFont(Font):
 
         """
         vx, vy = self.positions.get(cid, self.default_position)
-        return vx * self.hscale, vy * self.vscale
+        return apply_matrix_pt(self.matrix, (vx, vy))
 
     def char_bbox(self, cid: int) -> Rect:
         """Get the standard bounding box for a character from its CID.
@@ -712,22 +692,16 @@ class CIDFont(Font):
             specified by the font program.
 
         """
-        descent = self.get_descent()
-        ascent = self.get_ascent()
-        width = self.char_width(cid)
+        width = self.widths.get(cid, self.default_width)
         if self.vertical:
-            vx, vy = self.position(cid)
+            vx, vy = self.positions.get(cid, self.default_position)
             # Horizontal offset for glyph origin vs. text
             # space origin.
             vx = -vx
             # Vertical offset for glyph origin
             vy = -vy
             # Find glyph bbox
-            x0 = vx
-            y0 = vy + descent
-            x1 = vx + width
-            y1 = vy + ascent
-        else:
-            x0, y0 = (0, descent)
-            x1, y1 = (width, ascent)
-        return x0, y0, x1, y1
+            return transform_bbox(
+                self.matrix, (vx, vy + self.descent, vx + width, vy + self.ascent)
+            )
+        return transform_bbox(self.matrix, (0, self.descent, width, self.ascent))
