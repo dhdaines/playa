@@ -78,12 +78,10 @@ def test_implicit_encoding_cff_issue91() -> None:
 
 def test_type3_font_boxes() -> None:
     """Ensure that we get bounding boxes right for Type3 fonts with
-    mildly exotic FontMatrix (FIXME: it could be much more exotic than
-    this)"""
+    mildly exotic FontMatrix"""
     with playa.open(TESTDIR / "type3_fonts.pdf") as doc:
         font = doc.get_font(5, dict_value(doc[5]))
-        # Verify that we find "subset-like" names (Type3 fonts are not subsettable)
-        assert font.basefont == "Open-Sans-Light"
+        assert font.basefont == "BAAAAA+Open-Sans-Light"
         assert font.fontname == "BAAAAA+Open-Sans-Light"
         # This font's BBox is really something
         assert font.bbox == (-164, 493, 1966, -1569)
@@ -106,6 +104,42 @@ def test_type3_font_boxes() -> None:
         assert line2 == pytest.approx(
             (25.0, 39.274413, 246.58691507160006, 53.3701175326)
         )
+
+
+def test_exotic_type3_font_boxes() -> None:
+    """Ensure that we get bounding boxes right for Type3 fonts with
+    seriously exotic FontMatrix"""
+    with playa.open(TESTDIR / "rotated_type3_fonts.pdf") as doc:
+        page = doc.pages[0]
+        f30 = page.fonts["F5R30"]
+        assert f30.matrix == (
+            0.000422864,
+            -0.000244141,
+            -0.000244141,
+            -0.000422864,
+            0,
+            0,
+        )
+        f30r = page.fonts["F5RM30"]
+        assert f30r.matrix == (
+            0.000422864,
+            0.000244141,
+            0.000244141,
+            -0.000422864,
+            0,
+            0,
+        )
+        # Ensure char bboxes take rotation into account (the fonts are
+        # othewise the same)
+        assert f30.char_bbox(0) != f30r.char_bbox(0)
+        # Ensure TextObject bboxes take rotation into account
+        boxes = list(t.bbox for t in page.texts)
+        # Rotating backwards moves the left side backwards
+        assert boxes[1][0] < boxes[0][0]
+        # Rotating forwards moves the right side forwards
+        assert boxes[0][2] > boxes[1][2]
+        # Height remains (at least approximately) the same
+        assert (boxes[0][3] - boxes[0][1]) == pytest.approx(boxes[1][3] - boxes[1][1])
 
 
 @pytest.mark.parametrize("name", ["vertical_writing", "simple3", "character_spacing"])

@@ -13,10 +13,16 @@
 - Improve text extraction for tagged PDFs
 - TODO: Add functioning `__iter__` to `GlyphObject` in the case of
   Type3 fonts, which works like `XObjectObject`
-- TODO: Correct displacement and bbox for Type3 fonts with
-  non-diagonal `FontMatrix`
+- Correct displacement and bbox for Type3 fonts with non-diagonal
+  `FontMatrix`
+- BREAKING: Remove misleading `char_width`, `get_descent`, and
+  `get_ascent` methods and `hscale` and `vscale` properties from font
+  objects
+- BREAKING: Do not guess `basename` for Type3 fonts (generally it
+  isn't different from `fontname` for other subset fonts)
 - TODO: Add `displacement` property to `TextObject`
 - TODO: Extract non-JPEG images as PPM
+
 
 ## PLAYA 0.5.1: 2024-05-26
 

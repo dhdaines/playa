@@ -108,5 +108,8 @@ check = "mypy --install-types --non-interactive {args:playa tests benchmarks}"
 [tool.hatch.envs.schema]
 extra-dependencies = [ "pydantic > 2" ]
 
+[tool.hatch.envs.notebooks]
+extra-dependencies = [ "paves", "jupyterlab" ]
+
 [tool.coverage.run]
 omit = [ "tests/*" ]
