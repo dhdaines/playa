@@ -13,7 +13,7 @@
 - Add `displacement` property to `TextObject`
 - Add functioning `__iter__` to `GlyphObject` in the case of
   Type3 fonts, which works like `XObjectObject`
-- TODO: Extract non-JPEG images as PPM
+- Extract non-JPEG images as PNM
 - BREAKING: Fix `__len__` on `PathObject` which incorrectly returned
   non-zero even though iteration is not possible
 - BREAKING: Remove misleading `char_width`, `get_descent`, and
