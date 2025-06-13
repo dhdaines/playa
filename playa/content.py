@@ -409,11 +409,9 @@ class ImageObject(ContentObject):
 
         if hasattr(self, "_parent"):
             return self._parent
-        # No parent key, look in containing page
-        if self._parentkey is None:
-            self._parent = super().parent
-            return self._parent
         self._parent = None
+        if self._parentkey is None:
+            return self._parent
         # No structure, no parent!
         if self.doc.structure is None:
             return self._parent
@@ -421,6 +419,9 @@ class ImageObject(ContentObject):
             parent = resolve1(self.doc.structure.parent_tree[self._parentkey])
             if isinstance(parent, dict):
                 self._parent = Element.from_dict(self.doc, parent)
+            else:
+                del self._parent
+                return super().parent
         except IndexError:
             pass
         return self._parent
@@ -533,7 +534,10 @@ class XObjectObject(ContentObject):
             self.resources,
             ctm=self.ctm,
             gstate=self.gstate,
-            # FIXME: This is probably incorrect if we have a StructParent
+            # This is not really correct if this XObject has a
+            # StructParent, *but* in that case the standard forbids
+            # there to be any marked content sections inside it so
+            # this should never get accessed anyway.
             parent_key=self._parentkey,
         )
         return iter(interp)
@@ -541,21 +545,23 @@ class XObjectObject(ContentObject):
     @property
     def parent(self) -> Union["Element", None]:
         """The enclosing logical structure element, if any."""
+        from playa.structure import Element
+
         if hasattr(self, "_parent"):
             return self._parent
-        # No parent key, look in containing page
-        if self._parentkey is None:
-            self._parent = super().parent
-            return self._parent
         self._parent = None
+        if self._parentkey is None:
+            return self._parent
         # No structure, no parent!
         if self.doc.structure is None:
             return self._parent
         try:
             parent = resolve1(self.doc.structure.parent_tree[self._parentkey])
-            # Make sure that it's actually a single element
             if isinstance(parent, dict):
                 self._parent = Element.from_dict(self.doc, parent)
+            else:
+                del self._parent
+                return super().parent
         except IndexError:
             pass
         return self._parent

@@ -133,6 +133,21 @@ def test_xobject_mcids() -> None:
         assert cobj.bbox == fig.bbox
 
 
+def test_image_in_mcs() -> None:
+    """Verify that we can access images both through marked content
+    sections and OBJRs."""
+    with playa.open(TESTDIR / "structure_xobjects_2.pdf") as pdf:
+        img1, img2 = pdf.pages[0].images
+        assert img1.parent is not None
+        (item,) = img1.parent
+        assert isinstance(item, ContentItem)
+        assert item.bbox == img1.bbox
+        assert img2.parent is not None
+        (cobj,) = img2.parent
+        assert isinstance(cobj, ContentObject)
+        assert cobj.bbox == img2.bbox
+
+
 def test_mcid_texts() -> None:
     """Verify that we can get text from marked content sections."""
     with playa.open(TESTDIR / "structure_xobjects.pdf") as pdf:
