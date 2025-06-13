@@ -385,6 +385,13 @@ class Type3Font(SimpleFont):
         self.basefont = self.fontname
         # Get the character definitions so we can interpret them
         self.charprocs = dict_value(spec.get("CharProcs", {}))
+        # Get font-specific resources (FIXME: There is a huge amount
+        # of ambiguity surrounding resources in Type3 fonts, see
+        # https://github.com/pdf-association/pdf-issues/issues/128)
+        resources = resolve1(spec.get("Resources"))
+        self.resources: Union[None, Dict[str, PDFObject]] = (
+            None if resources is None else dict_value(resources)
+        )
         if "FontMatrix" in spec:  # it is actually required though
             self.matrix = matrix_value(spec["FontMatrix"])
         else:
