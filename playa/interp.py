@@ -37,6 +37,7 @@ from playa.content import (
 from playa.font import Font
 from playa.parser import KWD, ContentParser, InlineImage, PDFObject
 from playa.pdftypes import (
+    BBOX_NONE,
     LIT,
     MATRIX_IDENTITY,
     ContentStream,
@@ -45,6 +46,7 @@ from playa.pdftypes import (
     Point,
     PSKeyword,
     PSLiteral,
+    Rect,
     bool_value,
     dict_value,
     int_value,
@@ -139,6 +141,7 @@ class LazyInterpreter:
         ctm: Union[Matrix, None] = None,
         gstate: Union[GraphicState, None] = None,
         parent_key: Union[int, None] = None,
+        ignore_colours: bool = False
     ) -> None:
         self._dispatch: Dict[PSKeyword, Tuple[Callable, int]] = {}
         for name in dir(self):
@@ -158,6 +161,7 @@ class LazyInterpreter:
         )
         self.contents = contents
         self.filter_class = filter_class
+        self.ignore_colours = ignore_colours
         self.init_resources(page, page.resources if resources is None else resources)
         self.init_state(page.ctm if ctm is None else ctm, gstate)
 
@@ -539,6 +543,8 @@ class LazyInterpreter:
 
     def do_ri(self, intent: PDFObject) -> None:
         """Set color rendering intent"""
+        if self.ignore_colours:
+            return
         # FIXME: Should actually be a (runtime checked) enum
         self.graphicstate.intent = cast(PSLiteral, intent)
 
@@ -554,7 +560,8 @@ class LazyInterpreter:
             log.warning("Undefined ExtGState: %r", name)
             return
         # PDF 2.0, sec 8.4.5, Table 57
-        # Skipping Device-dependent graphics state parameters except for flatness tolerance
+        # Skipping Device-dependent graphics state parameters except
+        # for flatness tolerance
         if "LW" in extgstate:
             self.do_w(extgstate["LW"])
         if "LC" in extgstate:
@@ -596,10 +603,12 @@ class LazyInterpreter:
             self.graphicstate.alpha_source = bool_value(extgstate["AIS"])
         if "TK" in extgstate:
             self.graphicstate.knockout = bool_value(extgstate["TK"])
-        if "UseBlackPtComp" in extgstate:
+        if "UseBlackPtComp" in extgstate and not self.ignore_colours:
             black_pt_comp = extgstate["UseBlackPtComp"]
             assert isinstance(black_pt_comp, PSLiteral)
             self.graphicstate.black_pt_comp = black_pt_comp
+        # Also ignored with ignore_colours, but we do not support
+        # them: TR, TR2, HT, BG, BG2, UCR, UCR2
 
     def do_m(self, x: PDFObject, y: PDFObject) -> None:
         """Begin new subpath"""
@@ -679,6 +688,8 @@ class LazyInterpreter:
 
         Introduced in PDF 1.1
         """
+        if self.ignore_colours:
+            return
         try:
             self.graphicstate.scs = self.csmap[literal_name(name)]
         except KeyError:
@@ -686,6 +697,8 @@ class LazyInterpreter:
 
     def do_cs(self, name: PDFObject) -> None:
         """Set color space for nonstroking operators"""
+        if self.ignore_colours:
+            return
         try:
             self.graphicstate.ncs = self.csmap[literal_name(name)]
         except KeyError:
@@ -693,36 +706,50 @@ class LazyInterpreter:
 
     def do_G(self, gray: PDFObject) -> None:
         """Set gray level for stroking operators"""
+        if self.ignore_colours:
+            return
         self.graphicstate.scs = self.csmap["DeviceGray"]
         self.graphicstate.scolor = self.graphicstate.scs.make_color(gray)
 
     def do_g(self, gray: PDFObject) -> None:
         """Set gray level for nonstroking operators"""
+        if self.ignore_colours:
+            return
         self.graphicstate.ncs = self.csmap["DeviceGray"]
         self.graphicstate.ncolor = self.graphicstate.ncs.make_color(gray)
 
     def do_RG(self, r: PDFObject, g: PDFObject, b: PDFObject) -> None:
         """Set RGB color for stroking operators"""
+        if self.ignore_colours:
+            return
         self.graphicstate.scs = self.csmap["DeviceRGB"]
         self.graphicstate.scolor = self.graphicstate.scs.make_color(r, g, b)
 
     def do_rg(self, r: PDFObject, g: PDFObject, b: PDFObject) -> None:
         """Set RGB color for nonstroking operators"""
+        if self.ignore_colours:
+            return
         self.graphicstate.ncs = self.csmap["DeviceRGB"]
         self.graphicstate.ncolor = self.graphicstate.ncs.make_color(r, g, b)
 
     def do_K(self, c: PDFObject, m: PDFObject, y: PDFObject, k: PDFObject) -> None:
         """Set CMYK color for stroking operators"""
+        if self.ignore_colours:
+            return
         self.graphicstate.scs = self.csmap["DeviceCMYK"]
         self.graphicstate.scolor = self.graphicstate.scs.make_color(c, m, y, k)
 
     def do_k(self, c: PDFObject, m: PDFObject, y: PDFObject, k: PDFObject) -> None:
         """Set CMYK color for nonstroking operators"""
+        if self.ignore_colours:
+            return
         self.graphicstate.ncs = self.csmap["DeviceCMYK"]
         self.graphicstate.ncolor = self.graphicstate.ncs.make_color(c, m, y, k)
 
     def do_SCN(self) -> None:
         """Set color for stroking operators."""
+        if self.ignore_colours:
+            return
         if self.graphicstate.scs is None:
             log.warning("No colorspace specified, using default DeviceGray")
             self.graphicstate.scs = self.csmap["DeviceGray"]
@@ -732,6 +759,8 @@ class LazyInterpreter:
 
     def do_scn(self) -> None:
         """Set color for nonstroking operators"""
+        if self.ignore_colours:
+            return
         if self.graphicstate.ncs is None:
             log.warning("No colorspace specified, using default DeviceGray")
             self.graphicstate.ncs = self.csmap["DeviceGray"]
@@ -749,6 +778,8 @@ class LazyInterpreter:
 
     def do_sh(self, name: Any) -> None:
         """Paint area defined by shading pattern"""
+        if self.ignore_colours:
+            return
 
     def do_BT(self) -> None:
         """Begin text object.
@@ -968,3 +999,22 @@ class LazyInterpreter:
         """End marked-content sequence"""
         if self.mcstack:
             self.mcstack = self.mcstack[:-1]
+
+
+# This should be in playa.fontprogram, but circular imports...
+class Type3Interpreter(LazyInterpreter):
+    """Interpret Type3 font programs."""
+    width: float = 1000
+    bbox: Rect = BBOX_NONE
+
+    def do_d0(self, wx: float, wy: float) -> None:
+        """Simple Type3 font metrics operator."""
+        self.width = wx
+
+    def do_d1(
+        self, wx: float, wy: float, llx: float, lly: float, urx: float, ury: float
+    ) -> None:
+        """More complete Type3 font metrics operator that ignores colours."""
+        self.width = wx
+        self.ignore_colours = True
+        self.bbox = (llx, lly, urx, ury)

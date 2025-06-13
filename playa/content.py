@@ -769,21 +769,22 @@ class GlyphObject(ContentObject):
 
         Otherwise, you can't do that, and you get nothing.
         """
-        from playa.interp import LazyInterpreter
+        from playa.interp import Type3Interpreter
 
         font = self.font
+        itor: Iterator[ContentObject] = iter(())
         if not isinstance(font, Type3Font):
-            return iter(())
+            return itor
         gid = font.encoding.get(self.cid)
         if gid is None:
             log.warning("Unknown CID %d in Type3 font %r", self.cid, font)
-            return iter(())
+            return itor
         charproc = resolve1(font.charprocs.get(gid))
         if not isinstance(charproc, ContentStream):
             log.warning("CharProc %s not found in font %r ", gid, font)
-            return iter(())
+            return itor
 
-        interp = LazyInterpreter(
+        interp = Type3Interpreter(
             self.page,
             [charproc],
             font.resources,
@@ -792,7 +793,11 @@ class GlyphObject(ContentObject):
             # a new graphics state.
             gstate=self.gstate,
         )
-        return iter(interp)
+        itor = iter(interp)
+        # TODO: We *could* try to get and use the d1 information here
+        # but if we do that, we need to do it everywhere the glyph is
+        # used so that the bbox will be consistent
+        return itor
 
     @property
     def font(self) -> Font:
