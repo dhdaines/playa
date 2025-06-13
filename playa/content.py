@@ -696,10 +696,6 @@ class PathObject(ContentObject):
     fill: bool
     evenodd: bool
 
-    def __len__(self) -> int:
-        """Number of segments (beware: not subpaths!)"""
-        return len(self.raw_segments)
-
     @property
     def segments(self) -> Iterator[PathSegment]:
         """Get path segments in device space."""
@@ -763,12 +759,6 @@ class GlyphObject(ContentObject):
     matrix: Matrix
     _displacement: float
     _corners: bool
-
-    def __len__(self) -> int:
-        """In the case of Type3 fonts this will be the number of paths
-        or other objects inside it.  Otherwise zero.  Beware, this
-        requires interpreting the character program, so it is slow."""
-        return sum(1 for _ in self)
 
     def __iter__(self) -> Iterator[ContentObject]:
         """Possibly iterate over paths in a glyph.
