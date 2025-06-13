@@ -197,6 +197,8 @@ class LazyInterpreter:
     def init_state(self, ctm: Matrix, gstate: Union[GraphicState, None] = None) -> None:
         self.gstack: List[Tuple[Matrix, GraphicState, TextState]] = []
         self.ctm = ctm
+        # Note the copy here, a new interpreter *always* creates a new
+        # graphics state (including text state and CTM)
         self.graphicstate = GraphicState() if gstate is None else copy(gstate)
         # Mutable text state (just the matrices) - this is not
         # supposed to exist outside BT/ET pairs, but we will tolerate
@@ -450,13 +452,15 @@ class LazyInterpreter:
                 #
                 # The lazy interpretation of this is, obviously, that
                 # we simply create an XObjectObject with a copy of the
-                # current graphics state.
+                # current graphics state.  The copying is actually
+                # done (lazily, of course) when construcitng a new
+                # LazyInterpreter, not here.
                 return XObjectObject.from_stream(
                     stream=xobj,
                     page=self.page,
                     xobjid=xobjid,
                     ctm=self.ctm,
-                    gstate=copy(self.graphicstate),
+                    gstate=self.graphicstate,
                     mcstack=self.mcstack,
                 )
         elif subtype is LITERAL_IMAGE:

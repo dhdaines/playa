@@ -630,12 +630,7 @@ class XObjectObject(ContentObject):
         ctm: Matrix,
         mcstack: Tuple[MarkedContent, ...],
     ) -> "XObjectObject":
-        """Create a new XObjectObject from a content stream.
-
-        For consistency with `__init__`, `gstate` here will be
-        consumed, not copied, so **YOU MUST PASS A COPY HERE** because
-        Form XObjects cannot modify their enclosing graphics state.
-        """
+        """Create a new XObjectObject from a content stream."""
         if "Matrix" in stream:
             ctm = mult_matrix(matrix_value(stream["Matrix"]), ctm)
         # According to PDF reference 1.7 section 4.9.1, XObjects in
@@ -653,6 +648,9 @@ class XObjectObject(ContentObject):
         # state shall be initialised to Normal, the current stroking and
         # nonstroking alpha constants to 1.0, and the current soft mask to None
         if group and group.get("S") == LITERAL_TRANSPARENCY:
+            # Need to copy here so as not to modify existing gstate,
+            # unfortunately it will get copied again later...
+            gstate = copy(gstate)
             gstate.blend_mode = LITERAL_NORMAL
             gstate.salpha = gstate.nalpha = 1
             gstate.smask = None
@@ -798,11 +796,11 @@ class GlyphObject(ContentObject):
         interp = LazyInterpreter(
             self.page,
             [charproc],
-            {},
+            font.resources,
             ctm=mult_matrix(font.matrix, self.matrix),
-            # Font programs should not modify
-            # graphic state!
-            gstate=copy(self.gstate),
+            # NOTE: no copy here because an interpreter always creates
+            # a new graphics state.
+            gstate=self.gstate,
         )
         return iter(interp)
 
