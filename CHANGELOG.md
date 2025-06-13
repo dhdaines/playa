@@ -1,4 +1,4 @@
-## PLAYA 0.6.0: Unreleased
+## PLAYA 0.6.0: 2025
 
 - Add `structure` to `Page` to access structure elements indexed by
   marked content IDs (convenience wrapper over the parent tree)
@@ -10,6 +10,12 @@
 - Improve text extraction for tagged PDFs
 - Correct displacement and bbox for Type3 fonts with non-diagonal
   `FontMatrix`
+- Add `displacement` property to `TextObject`
+- Add functioning `__iter__` to `GlyphObject` in the case of
+  Type3 fonts, which works like `XObjectObject`
+- TODO: Extract non-JPEG images as PPM
+- BREAKING: Fix `__len__` on `PathObject` which incorrectly returned
+  non-zero even though iteration is not possible
 - BREAKING: Remove misleading `char_width`, `get_descent`, and
   `get_ascent` methods and `hscale` and `vscale` properties from font
   objects
@@ -17,13 +23,9 @@
   isn't different from `fontname` for other subset fonts)
 - BREAKING: `Element.contents` contains both `structure.ContentItem`
   and `structure.ContentObject`
-- TODO: Add functioning `__iter__` to `GlyphObject` in the case of
-  Type3 fonts, which works like `XObjectObject`
-- TODO: Add `displacement` property to `TextObject`
-- TODO: Extract non-JPEG images as PPM
 
 
-## PLAYA 0.5.1: 2024-05-26
+## PLAYA 0.5.1: 2025-05-26
 
 - Update documentation for API changes
 - Implement graphics state parameter dictionaries
@@ -35,7 +37,7 @@
 - Correctly handle bogus line endings in xref tables
 - Avoid `KeyError` when `RoleMap` does not exist
 
-## PLAYA 0.5.0: 2024-05-14
+## PLAYA 0.5.0: 2025-05-14
 
 - Remove use of `object` in type annotations
 - Add support for role map and standard structure types
