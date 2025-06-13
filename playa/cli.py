@@ -83,7 +83,7 @@ import json
 import logging
 from collections import deque
 from pathlib import Path
-from typing import Any, Deque, Dict, Iterable, Iterator, List, TextIO, Tuple, Union
+from typing import Any, Deque, Iterable, Iterator, List, TextIO, Tuple, Union
 
 import playa
 from playa import Document, Page, PDFPasswordIncorrect, asobj
@@ -102,7 +102,6 @@ from playa.structure import ContentItem
 from playa.structure import ContentObject as StructContentObject
 from playa.structure import Element
 from playa.utils import decode_text
-from playa.worker import PageRef, _deref_page
 
 LOG = logging.getLogger(__name__)
 
@@ -359,26 +358,6 @@ def extract_text(doc: Document, args: argparse.Namespace) -> None:
         print(text, file=args.outfile)
 
 
-@functools.lru_cache(maxsize=16)
-def get_mcid_text(pageref: PageRef) -> Dict[int, List[str]]:
-    """Get text for all MCIDs on a page"""
-    page = _deref_page(pageref)
-    mctext: Dict[int, List[str]] = {}
-    for text in page.texts:
-        mcs = text.mcs
-        if mcs is None or mcs.mcid is None:
-            continue
-        if "ActualText" in mcs.props:
-            assert isinstance(mcs.props["ActualText"], bytes)
-            chars = mcs.props["ActualText"].decode("UTF-16")
-        else:
-            chars = text.chars
-        # Remove soft hyphens
-        chars = chars.replace("\xad", "")
-        mctext.setdefault(mcs.mcid, []).append(chars)
-    return mctext
-
-
 @functools.singledispatch
 def _extract_child(
     kid: Union[Element, StructContentObject, ContentItem], indent: int, outfh: TextIO
@@ -400,11 +379,11 @@ def _extract_content_object(
 def _extract_content_item(kid: ContentItem, indent: int, outfh: TextIO) -> bool:
     if kid.page is None:
         return False
-    strs = get_mcid_text(kid.page.pageref).get(kid.mcid)
-    if strs is None:
+    text = kid.text
+    if text is None:
         return False
     ws = " " * indent
-    text = json.dumps("".join(strs), ensure_ascii=False)
+    text = json.dumps(text, ensure_ascii=False)
     print(f"{ws}{text}", end="", file=outfh)
     return True
 

@@ -4,7 +4,8 @@ import pytest
 
 import playa
 from playa.exceptions import PDFEncryptionError
-from playa.page import Annotation, XObjectObject, TextObject
+from playa.page import Annotation, ImageObject
+from playa.pdftypes import BBOX_NONE
 from playa.structure import Element, Tree, ContentItem, ContentObject
 
 from .data import ALLPDFS, CONTRIB, PASSWORDS, TESTDIR, XFAILS
@@ -71,6 +72,7 @@ def test_annotations() -> None:
             for kid in link:
                 if isinstance(kid, ContentObject):
                     assert isinstance(kid.obj, Annotation)
+                    assert kid.bbox is not BBOX_NONE
 
 
 def test_content_xobjects() -> None:
@@ -79,17 +81,80 @@ def test_content_xobjects() -> None:
     useless)."""
     with playa.open(TESTDIR / "structure_xobjects.pdf") as pdf:
         assert pdf.structure is not None
-        section = pdf.structure.find("Document")
-        assert section is not None
-        xobj, mcs = section
-        assert isinstance(xobj, ContentObject)
-        xobjobj = xobj.obj
-        assert isinstance(xobjobj, XObjectObject)
-        (text,) = xobjobj
-        assert isinstance(text, TextObject)
-        assert text.chars == "Hello world"
-        assert isinstance(mcs, ContentItem)
-        assert mcs.mcid == 1
+        top = pdf.structure.find("Document")
+        assert top is not None
+        kids = list(top)
+        assert len(kids) == 4
+        (img,) = kids[3]
+        assert isinstance(img, ContentObject)
+        obj = img.obj
+        assert isinstance(obj, ImageObject)
+        assert obj.bbox == pytest.approx((25, 154, 237, 275))
+
+
+def test_xobject_mcids() -> None:
+    """Verify that we can access marked content sections inside Form
+    XObjects (ark) using marked-content reference dictionaries."""
+    with playa.open(TESTDIR / "structure_xobjects.pdf") as pdf:
+        assert pdf.structure is not None
+        top = pdf.structure.find("Document")
+        assert top is not None
+        p1, p2, p3, fig = top
+        assert isinstance(p1, Element)
+        assert isinstance(p2, Element)
+        assert isinstance(p3, Element)
+        assert isinstance(fig, Element)
+        (item,) = p1
+        assert isinstance(item, ContentItem)
+        assert item.text == "Hello world"
+        assert item.bbox == p1.bbox
+        (item,) = p2
+        assert isinstance(item, ContentItem)
+        assert item.text == "Goodbye now"
+        assert item.bbox == p2.bbox
+        (item,) = p3
+        assert isinstance(item, ContentItem)
+        assert item.text == "Hello again"
+        assert item.bbox == p3.bbox
+        xobj = next(pdf.pages[0].xobjects)
+        for obj in xobj:
+            assert obj.parent is not None
+            (item,) = obj.parent.contents
+            assert isinstance(item, ContentItem)
+            assert item.mcid == obj.mcid
+            assert item.bbox == obj.bbox
+            assert item.stream is not None
+            assert item.stream.objid == xobj.stream.objid
+        img = next(pdf.pages[0].images)
+        assert img.parent is not None
+        (cobj,) = img.parent
+        assert isinstance(cobj, ContentObject)
+        assert cobj.bbox == img.bbox
+        assert cobj.bbox == fig.bbox
+
+
+def test_image_in_mcs() -> None:
+    """Verify that we can access images both through marked content
+    sections and OBJRs."""
+    with playa.open(TESTDIR / "structure_xobjects_2.pdf") as pdf:
+        img1, img2 = pdf.pages[0].images
+        assert img1.parent is not None
+        (item,) = img1.parent
+        assert isinstance(item, ContentItem)
+        assert item.bbox == img1.bbox
+        assert img2.parent is not None
+        (cobj,) = img2.parent
+        assert isinstance(cobj, ContentObject)
+        assert cobj.bbox == img2.bbox
+
+
+def test_mcid_texts() -> None:
+    """Verify that we can get text from marked content sections."""
+    with playa.open(TESTDIR / "structure_xobjects.pdf") as pdf:
+        page = pdf.pages[0]
+        assert page.mcid_texts == {0: ["Hello again"]}
+        xobj = next(page.xobjects)
+        assert xobj.mcid_texts == {0: ["Hello world"], 1: ["Goodbye now"]}
 
 
 def test_structure_bbox() -> None:
@@ -98,15 +163,30 @@ def test_structure_bbox() -> None:
         assert pdf.structure is not None
         table = pdf.structure.find("Table")
         assert table is not None
-        print(table.bbox)
+        assert table.bbox is not BBOX_NONE
         li = pdf.structure.find("LI")
         assert li is not None
-        print(li.bbox)
+        assert li.bbox is not BBOX_NONE
+        for item in li.contents:
+            assert item.bbox is not BBOX_NONE
     with playa.open(TESTDIR / "image_structure.pdf") as pdf:
         assert pdf.structure is not None
         figure = pdf.structure.find("Figure")
         assert figure is not None
-        print(figure.bbox)
+        assert figure.bbox is not BBOX_NONE
+        for item in figure.contents:
+            assert item.bbox is not BBOX_NONE
+
+
+def test_content_structure() -> None:
+    """Verify that we can access structure elements from content objects."""
+    with playa.open(TESTDIR / "pdf_structure.pdf") as pdf:
+        for obj in pdf.pages[0]:
+            if obj.object_type == "path":
+                assert obj.parent is None
+            else:
+                assert obj.parent is not None
+                assert obj.parent.role in ("P", "H1", "H2", "H3")
 
 
 if __name__ == "__main__":

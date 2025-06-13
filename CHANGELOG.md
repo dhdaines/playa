@@ -2,17 +2,12 @@
 
 - Add `structure` to `Page` to access structure elements indexed by
   marked content IDs (convenience wrapper over the parent tree)
-- TODO: Add `structure` to `XObjectObject` for the same reason
-- TODO: Add `element` to all `ContentObject` to access parent
-  structure element (if any) via the parent tree
+- Add `structure` to `XObjectObject` for the same reason
+- Add `parent` to all `ContentObject` to access parent structure
+  element (if any) via the parent tree
 - Descend into Form XObjects in `Page.xobjects`
-- Add `marked_contents` iterator to `Page`
-- TODO: Add `marked_contents` to `XObjectObject` to access marked
-  content sections inside Form XObjects
 - Improve text extraction for rotated pages
 - Improve text extraction for tagged PDFs
-- TODO: Add functioning `__iter__` to `GlyphObject` in the case of
-  Type3 fonts, which works like `XObjectObject`
 - Correct displacement and bbox for Type3 fonts with non-diagonal
   `FontMatrix`
 - BREAKING: Remove misleading `char_width`, `get_descent`, and
@@ -20,6 +15,10 @@
   objects
 - BREAKING: Do not guess `basename` for Type3 fonts (generally it
   isn't different from `fontname` for other subset fonts)
+- BREAKING: `Element.contents` contains both `structure.ContentItem`
+  and `structure.ContentObject`
+- TODO: Add functioning `__iter__` to `GlyphObject` in the case of
+  Type3 fonts, which works like `XObjectObject`
 - TODO: Add `displacement` property to `TextObject`
 - TODO: Extract non-JPEG images as PPM
 

@@ -17,7 +17,6 @@ from typing import (
     Union,
 )
 
-from playa.content import XObjectObject, GraphicState
 from playa.data_structures import NumberTree
 from playa.parser import LIT, PDFObject, PSLiteral
 from playa.pdftypes import (
@@ -43,6 +42,7 @@ from playa.worker import (
 LOG = logging.getLogger(__name__)
 LITERAL_ANNOT = LIT("Annot")
 LITERAL_XOBJECT = LIT("XObject")
+LITERAL_IMAGE = LIT("Image")
 LITERAL_MCR = LIT("MCR")
 LITERAL_OBJR = LIT("OBJR")
 LITERAL_STRUCTTREEROOT = LIT("StructTreeRoot")
@@ -51,7 +51,8 @@ MatchFunc = Callable[["Element"], bool]
 
 if TYPE_CHECKING:
     from playa.document import Document
-    from playa.page import Annotation, Page, XObjectObject
+    from playa.page import Annotation, Page
+    from playa.content import ImageObject, XObjectObject
 
 
 @dataclass
@@ -66,6 +67,7 @@ class ContentItem:
     _pageref: PageRef
     mcid: int
     stream: Union[ContentStream, None]
+    _bbox: Union[Rect, None] = None
 
     @property
     def page(self) -> Union["Page", None]:
@@ -73,6 +75,59 @@ class ContentItem:
         if self._pageref is None:
             return None
         return _deref_page(self._pageref)
+
+    @property
+    def doc(self) -> "Document":
+        """The document containing this content object."""
+        docref, _ = self._pageref
+        return _deref_document(docref)
+
+    @property
+    def bbox(self) -> Rect:
+        """Find the bounding box, if any, of this item, which is the
+        smallest rectangle enclosing all objects in its marked content
+        section.
+
+        Note that this is currently quite inefficient as it involves
+        interpreting the entire page.
+
+        If the `page` attribute is `None`, then `bbox` will be
+        `BBOX_NONE`.
+
+        """
+        if self._bbox is not None:
+            return self._bbox
+        page = self.page
+        if page is None:
+            self._bbox = BBOX_NONE
+        else:
+            itor: Union["Page", "XObjectObject"] = page
+            if self.stream is not None:
+                for obj in page.xobjects:
+                    if obj.stream.objid == self.stream.objid:
+                        itor = obj
+            self._bbox = get_bound_rects(
+                obj.bbox for obj in itor if obj.mcid == self.mcid
+            )
+        return self._bbox
+
+    @property
+    def text(self) -> Union[str, None]:
+        """Unicode text contained in this structure element."""
+        page = self.page
+        if page is None:
+            return None
+        itor: Union["Page", "XObjectObject"] = page
+        if self.stream is not None:
+            # FIXME: Potentially quite slow, but we hope this never happens
+            for obj in page.xobjects:
+                if obj.stream.objid == self.stream.objid:
+                    itor = obj
+            # FIXME: if we don't find it... then what? (probably None, but...)
+        texts = itor.mcid_texts.get(self.mcid)
+        if texts is None:
+            return None
+        return "".join(texts)
 
 
 @dataclass
@@ -83,12 +138,19 @@ class ContentObject:
     (PDF 1.7 section 14.7.43), and can be used to (lazily) get that
 
     The standard is very unclear on what this could be aside from an
-    `Annotation` or an `XObject`.  An XObject must be a content
-    stream, so that's clear enough... Otherwise, since the `Type` key
-    is not required in an annotation dictionary we presume that this
-    is an annotation if it's not present.
+    `Annotation` or an `XObject` (presumably either a Form XObject or
+    an image).  An XObject must be a content stream, so that's clear
+    enough... Otherwise, since the `Type` key is not required in an
+    annotation dictionary we presume that this is an annotation if
+    it's not present.
 
-    Not to be confused with `playa.page.ContentObject`.
+    Not to be confused with `playa.page.ContentObject`.  While you
+    *can* get there from here with the `obj` property, it may not be a
+    great idea, because the only way to do that correctly in the case
+    of an `XObject` (or image) is to interpret the containing page.
+
+    Sometimes, but not always, you can nonetheless rapidly access the
+    `bbox`, so this is also provided as a property here.
 
     """
 
@@ -96,28 +158,22 @@ class ContentObject:
     props: Union[ContentStream, Dict[str, PDFObject]]
 
     @property
-    def obj(self) -> Union["XObjectObject", "Annotation", None]:
-        """Return the underlying object, if possible."""
-        if isinstance(self.props, ContentStream):
-            from playa.pdftypes import MATRIX_IDENTITY
-
-            if "Name" in self.props and isinstance(self.props["Name"], PSLiteral):
-                xobjid = literal_name(self.props["Name"])
-            else:
-                xobjid = "XObject"
-            return XObjectObject.from_stream(
-                stream=self.props,
-                page=self.page,
-                xobjid=xobjid,
-                gstate=GraphicState(),
-                ctm=MATRIX_IDENTITY,
-                mcstack=(),
-            )
+    def obj(self) -> Union["XObjectObject", "ImageObject", "Annotation", None]:
+        """Return an instantiated object, if possible."""
         objtype = self.type
         if objtype is LITERAL_ANNOT:
             from playa.page import Annotation
 
             return Annotation.from_dict(self.props, self.page)
+
+        if objtype is LITERAL_XOBJECT:
+            assert isinstance(self.props, ContentStream)
+            subtype = self.props.get("Subtype")
+            itor = self.page.images if subtype is LITERAL_IMAGE else self.page.xobjects
+            for obj in itor:
+                if obj.stream.objid == self.props.objid:
+                    return obj
+
         return None
 
     @property
@@ -134,6 +190,32 @@ class ContentObject:
     def page(self) -> "Page":
         """Containing page for this content object."""
         return _deref_page(self._pageref)
+
+    @property
+    def doc(self) -> "Document":
+        """The document containing this content object."""
+        docref, _ = self._pageref
+        return _deref_document(docref)
+
+    @property
+    def bbox(self) -> Rect:
+        """Find the bounding box, if any, of this object.
+
+        If there is no bounding box (very unlikely) this will be
+        `BBOX_NONE`.
+        """
+        if "BBox" in self.props:
+            rawbox = rect_value(self.props["BBox"])
+            return transform_bbox(self.page.ctm, rawbox)
+
+        if "Rect" in self.props:
+            rawbox = rect_value(self.props["Rect"])
+            return transform_bbox(self.page.ctm, rawbox)
+
+        obj = self.obj
+        if obj is None:
+            return BBOX_NONE
+        return obj.bbox
 
 
 def _find_all(
@@ -299,28 +381,32 @@ class Element(Findable):
         return Element.from_dict(self.doc, p)
 
     @property
-    def contents(self) -> Iterator[ContentItem]:
+    def contents(self) -> Iterator[Union[ContentItem, ContentObject]]:
         """Iterate over all content items contained in an element."""
         for kid in self:
             if isinstance(kid, Element):
                 yield from kid.contents
-            elif isinstance(kid, ContentItem):
+            elif isinstance(kid, (ContentItem, ContentObject)):
                 yield kid
 
     @property
     def bbox(self) -> Rect:
-        """Find the bounding box, if any, of this element.
+        """The bounding box, if any, of this element.
 
         Elements may explicitly define a `BBox` in default user space,
         in which case this is used.  Otherwise, the bounding box is
         the smallest rectangle enclosing all of the content items
         contained by this element (which may take some time to compute).
 
+        Note that this is currently quite inefficient as it involves
+        interpreting the entire page.
+
         Note: Elements may span multiple pages!
             In the case of an element (such as a `Document` for
             instance) that spans multiple pages, the bounding box
             cannot exist, and `BBOX_NONE` will be returned.  If the
-            `page` attribute is `None`, then `bbox` will be BBOX_NONE.
+            `page` attribute is `None`, then `bbox` will be
+            `BBOX_NONE`.
 
         """
         page = self.page
@@ -330,13 +416,12 @@ class Element(Findable):
             rawbox = rect_value(self.props["BBox"])
             return transform_bbox(page.ctm, rawbox)
         else:
-            # NOTE: This is probably somewhat slow
-            mcids = set(
-                item.mcid
+            # NOTE: This is quite slow
+            return get_bound_rects(
+                item.bbox
                 for item in self.contents
-                if item.page is None or item.page is page
+                if item.page is page and item.bbox is not BBOX_NONE
             )
-            return get_bound_rects(obj.bbox for obj in page if obj.mcid in mcids)
 
     def __iter__(self) -> Iterator[Union["Element", ContentItem, ContentObject]]:
         if "K" in self.props:
@@ -575,12 +660,12 @@ class Tree(Findable):
         return self._parent_tree
 
     @property
-    def contents(self) -> Iterator[ContentItem]:
+    def contents(self) -> Iterator[Union[ContentItem, ContentObject]]:
         """Iterate over all content items in the tree."""
         for kid in self:
             if isinstance(kid, Element):
                 yield from kid.contents
-            elif isinstance(kid, ContentItem):
+            elif isinstance(kid, (ContentItem, ContentObject)):
                 # This is not supposed to happen, but we will support it anyway
                 yield kid
 

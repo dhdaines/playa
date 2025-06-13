@@ -31,24 +31,35 @@ endobj
   /ProcSet [ /PDF /Text /ImageC ]
   /XObject << /X1 6 0 R
               /X2 8 0 R >>
+  /Font << /F1 7 0 R >>
  >>
 >>
 endobj
 5 0 obj
-<< /Length 85 >>
+<< /Length 0 >>
 stream
 q
-1 0 0 1 25 200 cm /X1 Do
+1 0 0 1 25 150 cm /X1 Do
 Q
-/Figure <</MCID 1>> BDC
+q
 212 0 0 121 25 25 cm /X2 Do
+Q
+BT
+250 200 Td
+/F1 24 Tf
+% NOTE: MCID is scoped to page's content stream(s)
+/P <</MCID 0>> BDC
+(Hello again) Tj
 EMC
+ET
+/F1
 endstream
 endobj
 6 0 obj
 << /Subtype /Form
-   /Length 33
+   /Length 0
    /BBox [0 0 500 300]
+   /StructParents 1
    /Resources <<
      /ProcSet [ /PDF /Text ]
      /Font << /F1 7 0 R >>
@@ -56,8 +67,16 @@ endobj
 >>
 stream
 BT
+0 72 Td
 /F1 24 Tf
+% NOTE: MCID is scoped to Form XObject (not page)
+/P <</MCID 0>> BDC
 (Hello world) Tj
+EMC
+0 -36 Td
+/P <</MCID 1>> BDC
+(Goodbye now) Tj
+EMC
 ET
 endstream
 endobj
@@ -72,13 +91,14 @@ endobj
 endobj
 8 0 obj
 <<
-  /Name /X
+  /Name /X2
   /Subtype /Image
   /BitsPerComponent 8
   /ColorSpace /DeviceRGB
   /DecodeParms <</BitsPerComponent 8/Colors 3/Columns 3>>
   /Filter /ASCIIHexDecode
   /Type /XObject
+  /StructParent 2
   /Width 3
   /Height 5
   /Length 105
@@ -93,7 +113,7 @@ endstream
 endobj
 9 0 obj
   << /Type /StructTreeRoot
-     /ParentTree << /Nums [ 0 [4 0 R] ] >>
+     /ParentTree << /Nums [ 0 [13 0 R] 1 [11 0 R 12 0 R] 2 14 0 R ]>>
      /RoleMap << /Title /P >>
      /ClassMap << /C1 << /O /Foo /A1 1 >>
                   /C2 << /O /Foo /A1 3 >>
@@ -107,16 +127,50 @@ endobj
      /S /Document
      /Pg 4 0 R
      /P 9 0 R
-     /K [
-        << /Type /OBJR /Pg 4 0 R /Obj 6 0 R >>
-        1
-     ]
+     /K [ 11 0 R 12 0 R 13 0 R 14 0 R ]
   >>
 endobj
 
+11 0 obj
+  << /Type /StructElem
+     /S /P
+     /Pg 4 0 R
+     /P 10 0 R
+     /K [<< /Type /MCR /Pg 4 0 R /Stm 6 0 R /MCID 0 >>]
+  >>
+endobj
+
+12 0 obj
+  << /Type /StructElem
+     /S /P
+     /Pg 4 0 R
+     /P 10 0 R
+     /K [<< /Type /MCR /Pg 4 0 R /Stm 6 0 R /MCID 1 >>]
+  >>
+endobj
+
+13 0 obj
+  << /Type /StructElem
+     /S /P
+     /Pg 4 0 R
+     /P 10 0 R
+     /K [0]
+  >>
+endobj
+
+14 0 obj
+  << /Type /StructElem
+     /S /Figure
+     /Pg 4 0 R
+     /P 10 0 R
+     /K [<< /Type /OBJR /Pg 4 0 R /Obj 8 0 R >>]
+  >>
+endobj
+
+
 trailer 
 <<
- /Size 8
+ /Size 14
  /Root 1 0 R
 >>
 %%EOF

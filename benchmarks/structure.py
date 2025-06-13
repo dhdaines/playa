@@ -24,6 +24,7 @@ PDFS = [
 
 def benchmark_cli(path: Path) -> None:
     from argparse import Namespace
+
     with open("/dev/null", "w") as out:
         args = Namespace(outfile=out)
         with playa.open(path) as doc:
