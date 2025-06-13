@@ -7,6 +7,7 @@ from typing import List
 
 import playa
 import pytest
+from playa.content import PathObject
 from playa.font import Type3Font
 from playa.pdftypes import Rect, dict_value
 from playa.utils import get_bound_rects
@@ -181,3 +182,21 @@ def test_fallback_type3_cid2unicode() -> None:
             (174, "ﬁ"),
             (99, "c"),
         ]
+
+
+def test_type3_charprocs() -> None:
+    """Test iteration over Type3 font programs."""
+    with playa.open(TESTDIR / "type3_fonts.pdf") as pdf:
+        f5 = pdf.pages[0].fonts["F5"]
+        assert isinstance(f5, Type3Font)
+        assert f5.resources is None
+        assert "g26" in f5.charprocs
+        c = next(iter(pdf.pages[0].glyphs))
+        assert c.cid == 38
+        assert c.text == "C"
+        p = next(iter(c))
+        assert isinstance(p, PathObject)
+        assert p.ctm == pytest.approx(
+            (0.0068359382, 0.0, 0.0, 0.0068359382, 25.0, 25.0)
+        )
+        print(list(p.segments))

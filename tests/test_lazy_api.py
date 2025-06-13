@@ -28,7 +28,9 @@ def test_content_objects():
         assert mcs_bbox == [254.25, 895.5023, 360.09, 972.6]
         for obj in page.paths:
             assert obj.object_type == "path"
-            assert len(obj) != 0
+            # We cannot directly iterate over path segments becuase
+            # they aren't ContentObjects
+            assert len(obj) == 0
         rect = next(obj for obj in page.paths)
         ibbox = [round(x) for x in rect.bbox]
         assert ibbox == [85, 669, 211, 670]

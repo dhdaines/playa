@@ -29,7 +29,7 @@ from playa.color import (
     Color,
     ColorSpace,
 )
-from playa.font import Font, CIDFont
+from playa.font import Font, CIDFont, Type3Font
 from playa.parser import ContentParser, Token, LIT
 from playa.pdftypes import (
     BBOX_NONE,
@@ -630,6 +630,7 @@ class XObjectObject(ContentObject):
         ctm: Matrix,
         mcstack: Tuple[MarkedContent, ...],
     ) -> "XObjectObject":
+        """Create a new XObjectObject from a content stream."""
         if "Matrix" in stream:
             ctm = mult_matrix(matrix_value(stream["Matrix"]), ctm)
         # According to PDF reference 1.7 section 4.9.1, XObjects in
@@ -647,12 +648,12 @@ class XObjectObject(ContentObject):
         # state shall be initialised to Normal, the current stroking and
         # nonstroking alpha constants to 1.0, and the current soft mask to None
         if group and group.get("S") == LITERAL_TRANSPARENCY:
-            init_gstate = copy(gstate)
-            init_gstate.blend_mode = LITERAL_NORMAL
-            init_gstate.salpha = init_gstate.nalpha = 1
-            init_gstate.smask = None
-        else:
-            init_gstate = gstate
+            # Need to copy here so as not to modify existing gstate,
+            # unfortunately it will get copied again later...
+            gstate = copy(gstate)
+            gstate.blend_mode = LITERAL_NORMAL
+            gstate.salpha = gstate.nalpha = 1
+            gstate.smask = None
         # PDF 2.0, Table 359
         # At most one of [StructParent and StructParents] shall be
         # present in a given object. An object may be either a content
@@ -667,7 +668,7 @@ class XObjectObject(ContentObject):
         return cls(
             _pageref=page.pageref,
             _parentkey=parent_key,
-            gstate=init_gstate,
+            gstate=gstate,
             ctm=ctm,
             mcstack=mcstack,
             xobjid=xobjid,
@@ -694,10 +695,6 @@ class PathObject(ContentObject):
     stroke: bool
     fill: bool
     evenodd: bool
-
-    def __len__(self) -> int:
-        """Number of segments (beware: not subpaths!)"""
-        return len(self.raw_segments)
 
     @property
     def segments(self) -> Iterator[PathSegment]:
@@ -763,9 +760,44 @@ class GlyphObject(ContentObject):
     _displacement: float
     _corners: bool
 
-    def __len__(self) -> int:
-        """Fool! You cannot iterate over a GlyphObject!"""
-        return 0
+    def __iter__(self) -> Iterator[ContentObject]:
+        """Possibly iterate over paths in a glyph.
+
+        For Type3 fonts, you can iterate over paths (or anything
+        else) inside a glyph, in the coordinate space defined by the
+        text rendering matrix.
+
+        Otherwise, you can't do that, and you get nothing.
+        """
+        from playa.interp import Type3Interpreter
+
+        font = self.font
+        itor: Iterator[ContentObject] = iter(())
+        if not isinstance(font, Type3Font):
+            return itor
+        gid = font.encoding.get(self.cid)
+        if gid is None:
+            log.warning("Unknown CID %d in Type3 font %r", self.cid, font)
+            return itor
+        charproc = resolve1(font.charprocs.get(gid))
+        if not isinstance(charproc, ContentStream):
+            log.warning("CharProc %s not found in font %r ", gid, font)
+            return itor
+
+        interp = Type3Interpreter(
+            self.page,
+            [charproc],
+            font.resources,
+            ctm=mult_matrix(font.matrix, self.matrix),
+            # NOTE: no copy here because an interpreter always creates
+            # a new graphics state.
+            gstate=self.gstate,
+        )
+        itor = iter(interp)
+        # TODO: We *could* try to get and use the d1 information here
+        # but if we do that, we need to do it everywhere the glyph is
+        # used so that the bbox will be consistent
+        return itor
 
     @property
     def font(self) -> Font:
