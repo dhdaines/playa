@@ -141,7 +141,7 @@ class LazyInterpreter:
         ctm: Union[Matrix, None] = None,
         gstate: Union[GraphicState, None] = None,
         parent_key: Union[int, None] = None,
-        ignore_colours: bool = False
+        ignore_colours: bool = False,
     ) -> None:
         self._dispatch: Dict[PSKeyword, Tuple[Callable, int]] = {}
         for name in dir(self):
@@ -1004,6 +1004,7 @@ class LazyInterpreter:
 # This should be in playa.fontprogram, but circular imports...
 class Type3Interpreter(LazyInterpreter):
     """Interpret Type3 font programs."""
+
     width: float = 1000
     bbox: Rect = BBOX_NONE
 

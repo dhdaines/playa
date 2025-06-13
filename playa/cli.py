@@ -494,6 +494,8 @@ def write_pnm(path: Path, img: ImageObject) -> Path:
     if img.bits == 1:
         path = path.with_suffix(".pbm")
         ftype = b"P4"
+    elif img.colorspace is None:
+        raise ValueError("Unknown colorspace for image %r" % (img,))
     elif img.colorspace.ncomponents == 1:
         path = path.with_suffix(".pgm")
         ftype = b"P5"
@@ -501,7 +503,7 @@ def write_pnm(path: Path, img: ImageObject) -> Path:
         path = path.with_suffix(".ppm")
         ftype = b"P6"
     else:
-        raise ValueError("Unsupported colorspace: %r" % img.colorspace)
+        raise ValueError("Unsupported colorspace: %r" % (img.colorspace,))
     max_value = (1 << img.bits) - 1
     with open(path, "wb") as outfh:
         width, height = img.srcsize
@@ -509,11 +511,43 @@ def write_pnm(path: Path, img: ImageObject) -> Path:
         if img.bits == 1:
             # Have to invert the bits! OMG! (FIXME: is there a more
             # efficient way to do this?)
-            outfh.write(bytes(x ^ 0xff for x in img.buffer))
+            outfh.write(bytes(x ^ 0xFF for x in img.buffer))
         else:
             outfh.write(b"%d\n" % max_value)
             outfh.write(img.buffer)
     return path
+
+
+def get_one_image(img: ImageObject, imgpath: Path) -> Path:
+    fp = img.stream.get_filters()
+    if fp:
+        filters, params = zip(*fp)
+        for f in filters:
+            if f in LITERALS_DCT_DECODE:
+                imgpath = imgpath.with_suffix(".jpg")
+                break
+            if f in LITERALS_JPX_DECODE:
+                imgpath = imgpath.with_suffix(".jp2")
+                break
+            if f in LITERALS_JBIG2_DECODE:
+                imgpath = imgpath.with_suffix(".jb2")
+                break
+    if imgpath.suffix in (".jpg", ".jp2", ".jb2"):
+        # DCT streams are generally JPEG-compatible.  FIXME:
+        # Assumed to be true for JPEG2000 and JBIG2, is it?
+        with open(imgpath, "wb") as outfh:
+            outfh.write(img.stream.buffer)
+    else:
+        # Otherwise, try to write a PNM file (TODO: This should go
+        # in ImageObject)
+        try:
+            imgpath = write_pnm(imgpath, img)
+        except ValueError:
+            # Fall back to a binary file
+            imgpath = imgpath.with_suffix(".dat")
+            with open(imgpath, "wb") as outfh:
+                outfh.write(img.stream.buffer)
+    return imgpath
 
 
 def get_images(page: Page, imgdir: Path) -> List[Tuple[Path, Image]]:
@@ -521,39 +555,12 @@ def get_images(page: Page, imgdir: Path) -> List[Tuple[Path, Image]]:
     for idx, img in enumerate(page.flatten(ImageObject)):
         if img.xobjid is None:
             text_bbox = ",".join(str(round(x)) for x in img.bbox)
-            imgname = f"page{page.page_idx}-{idx}-inline-{text_bbox}"
+            imgname = f"page{page.page_idx + 1}-{idx}-inline-{text_bbox}"
         else:
-            imgname = f"page{page.page_idx}-{idx}-{img.xobjid}"
+            imgname = f"page{page.page_idx + 1}-{idx}-{img.xobjid}"
         imgpath = imgdir / imgname
-        fp = img.stream.get_filters()
-        if fp:
-            filters, params = zip(*fp)
-            for f in filters:
-                if f in LITERALS_DCT_DECODE:
-                    imgpath = imgpath.with_suffix(".jpg")
-                    break
-                if f in LITERALS_JPX_DECODE:
-                    imgpath = imgpath.with_suffix(".jp2")
-                    break
-                if f in LITERALS_JBIG2_DECODE:
-                    imgpath = imgpath.with_suffix(".jb2")
-                    break
-        if imgpath.suffix in (".jpg", ".jp2", ".jb2"):
-            # DCT streams are generally JPEG-compatible.  FIXME:
-            # Assumed to be true for JPEG2000 and JBIG2, is it?
-            with open(imgpath, "wb") as outfh:
-                outfh.write(img.stream.buffer)
-        else:
-            # Otherwise, try to write a PNM file (TODO: This should go
-            # in ImageObject)
-            try:
-                imgpath = write_pnm(imgpath, img)
-            except ValueError:
-                # Fall back to a binary file
-                imgpath = imgpath.with_suffix(".dat")
-                with open(imgpath, "wb") as outfh:
-                    outfh.write(img.stream.buffer)
-        images.append((imgpath, asobj(img)))
+        images.append((get_one_image(img, imgpath), asobj(img)))
+        # TODO: Mask, SMask, Alternates, etc
     return images
 
 
