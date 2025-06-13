@@ -138,6 +138,7 @@ class LazyInterpreter:
         filter_class: Union[Type[ContentObject], None] = None,
         ctm: Union[Matrix, None] = None,
         gstate: Union[GraphicState, None] = None,
+        parent_key: Union[int, None] = None,
     ) -> None:
         self._dispatch: Dict[PSKeyword, Tuple[Callable, int]] = {}
         for name in dir(self):
@@ -152,6 +153,9 @@ class LazyInterpreter:
                 nargs = func.__code__.co_argcount - 1
                 self._dispatch[kwd] = (func, nargs)
         self.page = page
+        self.parent_key = (
+            page.attrs.get("StructParents") if parent_key is None else parent_key
+        )
         self.contents = contents
         self.filter_class = filter_class
         self.init_resources(page, page.resources if resources is None else resources)
@@ -263,6 +267,7 @@ class LazyInterpreter:
             return None
         return object_class(
             _pageref=self.page.pageref,
+            _parentkey=self.parent_key,
             ctm=self.ctm,
             mcstack=self.mcstack,
             gstate=self.graphicstate,
@@ -472,11 +477,7 @@ class LazyInterpreter:
         if height is None:
             log.debug("Image has no Height: %r", stream)
             height = 1
-        if "StructParent" in stream:
-            parent_key = int_value(stream["StructParent"])
-        else:
-            parent_key = None
-        return self.create(
+        obj = self.create(
             ImageObject,
             stream=stream,
             xobjid=xobjid,
@@ -484,8 +485,11 @@ class LazyInterpreter:
             imagemask=stream.get_any(("IM", "ImageMask")),
             bits=stream.get_any(("BPC", "BitsPerComponent"), 1),
             colorspace=colorspace,
-            _parentkey=parent_key,
         )
+        # Override parent key if one is defined on the image specifically
+        if "StructParent" in stream:
+            obj._parentkey = int_value(stream["StructParent"])
+        return obj
 
     def do_q(self) -> None:
         """Save graphics state"""
@@ -912,6 +916,7 @@ class LazyInterpreter:
         if self.filter_class is None or self.filter_class is TagObject:
             return TagObject(
                 _pageref=self.page.pageref,
+                _parentkey=self.parent_key,
                 ctm=self.ctm,
                 mcstack=self.mcstack,
                 gstate=self.graphicstate,

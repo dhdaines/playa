@@ -42,6 +42,7 @@ from playa.pdftypes import (
     Rect,
     dict_value,
     int_value,
+    list_value,
     matrix_value,
     rect_value,
     resolve1,
@@ -198,13 +199,13 @@ class GraphicState:
 
 
 class MarkedContent(NamedTuple):
-    """
-    Marked content information for a point or section in a PDF page.
+    """Marked content point or section in a PDF page or Form XObject.
 
     Attributes:
       mcid: Marked content section ID, or `None` for a marked content point.
       tag: Name of tag for this marked content.
       props: Marked content property dictionary.
+
     """
 
     mcid: Union[int, None]
@@ -235,6 +236,7 @@ class ContentObject:
     """
 
     _pageref: PageRef
+    _parentkey: Union[int, None]
     gstate: GraphicState
     ctm: Matrix
     mcstack: Tuple[MarkedContent, ...]
@@ -294,30 +296,28 @@ class ContentObject:
     @property
     def parent(self) -> Union["Element", None]:
         """The enclosing logical structure element, if any."""
+        from playa.structure import Element
+
         # Use `mcid` and not `mcs` here (see docs for `mcid`)
         if hasattr(self, "_parent"):
             return self._parent
+        self._parent: Union["Element", None] = None
+        parent_key = self._parentkey
+        if parent_key is None:
+            return self._parent
+        structure = self.doc.structure
+        if structure is None:
+            return self._parent
         mcid = self.mcid
         if mcid is None:
-            self._parent: Union["Element", None] = None
-            return None
-        # FIXME: The parent ID can also come from a Form XObject
-        # (either as StructParents or StructParent)
-        page = self.page
-        if page is None:
-            self._parent = None
-            return None
-        parents = page.structure
-        if parents is None:
-            self._parent = None
-            return None
+            return self._parent
+        parents = list_value(structure.parent_tree[parent_key])
         if mcid >= len(parents):
             log.warning(
                 "Invalid marked content ID: %d (page has %d MCIDs)", mcid, len(parents)
             )
-            self._parent = None
-            return None
-        self._parent = parents[mcid]
+            return self._parent
+        self._parent = Element.from_dict(self.doc, dict_value(parents[mcid]))
         return self._parent
 
     @property
@@ -390,7 +390,6 @@ class ImageObject(ContentObject):
     imagemask: bool
     stream: ContentStream
     colorspace: Union[ColorSpace, None]
-    _parentkey: Union[int, None]
 
     def __contains__(self, name: str) -> bool:
         return name in self.stream
@@ -406,6 +405,8 @@ class ImageObject(ContentObject):
     @property
     def parent(self) -> Union["Element", None]:
         """The enclosing logical structure element, if any."""
+        from playa.structure import Element
+
         if hasattr(self, "_parent"):
             return self._parent
         # No parent key, look in containing page
@@ -485,7 +486,6 @@ class XObjectObject(ContentObject):
     stream: ContentStream
     resources: Union[None, Dict[str, PDFObject]]
     group: Union[None, Dict[str, PDFObject]]
-    _parentkey: Union[None, int]
 
     def __contains__(self, name: str) -> bool:
         return name in self.stream
@@ -528,7 +528,13 @@ class XObjectObject(ContentObject):
         from playa.interp import LazyInterpreter
 
         interp = LazyInterpreter(
-            self.page, [self.stream], self.resources, ctm=self.ctm, gstate=self.gstate
+            self.page,
+            [self.stream],
+            self.resources,
+            ctm=self.ctm,
+            gstate=self.gstate,
+            # FIXME: This is probably incorrect if we have a StructParent
+            parent_key=self._parentkey,
         )
         return iter(interp)
 
@@ -908,6 +914,7 @@ class TextObject(ContentObject):
                     )
                     glyph = GlyphObject(
                         _pageref=self._pageref,
+                        _parentkey=self._parentkey,
                         gstate=self.gstate,
                         ctm=self.ctm,
                         mcstack=self.mcstack,

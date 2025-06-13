@@ -99,11 +99,28 @@ def test_xobject_mcids() -> None:
         assert pdf.structure is not None
         top = pdf.structure.find("Document")
         assert top is not None
-        _, _, p, _ = top
-        assert isinstance(p, Element)
-        (item,) = p
-        # Make sure we get the right one!
-        assert item.bbox == pytest.approx((25, 60.768, 143.68, 82.968))
+        p1, p2, p3, fig = top
+        assert isinstance(p1, Element)
+        assert isinstance(p2, Element)
+        assert isinstance(p3, Element)
+        assert isinstance(fig, Element)
+        (item,) = p1
+        assert item.text == "Hello world"
+        (item,) = p2
+        assert item.text == "Goodbye now"
+        (item,) = p3
+        assert item.text == "Hello again"
+        xobj = next(pdf.pages[0].xobjects)
+        for obj in xobj:
+            assert obj.parent is not None
+            (item,) = obj.parent.contents
+            assert item.mcid == obj.mcid
+            assert item.bbox == obj.bbox
+            assert item.stream.objid == xobj.stream.objid
+        img = next(pdf.pages[0].images)
+        assert img.parent is not None
+        (cobj,) = img.parent
+        assert cobj.bbox == img.bbox
 
 
 def test_mcid_texts() -> None:
