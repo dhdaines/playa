@@ -630,6 +630,12 @@ class XObjectObject(ContentObject):
         ctm: Matrix,
         mcstack: Tuple[MarkedContent, ...],
     ) -> "XObjectObject":
+        """Create a new XObjectObject from a content stream.
+
+        For consistency with `__init__`, `gstate` here will be
+        consumed, not copied, so **YOU MUST PASS A COPY HERE** because
+        Form XObjects cannot modify their enclosing graphics state.
+        """
         if "Matrix" in stream:
             ctm = mult_matrix(matrix_value(stream["Matrix"]), ctm)
         # According to PDF reference 1.7 section 4.9.1, XObjects in
@@ -647,12 +653,9 @@ class XObjectObject(ContentObject):
         # state shall be initialised to Normal, the current stroking and
         # nonstroking alpha constants to 1.0, and the current soft mask to None
         if group and group.get("S") == LITERAL_TRANSPARENCY:
-            init_gstate = copy(gstate)
-            init_gstate.blend_mode = LITERAL_NORMAL
-            init_gstate.salpha = init_gstate.nalpha = 1
-            init_gstate.smask = None
-        else:
-            init_gstate = gstate
+            gstate.blend_mode = LITERAL_NORMAL
+            gstate.salpha = gstate.nalpha = 1
+            gstate.smask = None
         # PDF 2.0, Table 359
         # At most one of [StructParent and StructParents] shall be
         # present in a given object. An object may be either a content
@@ -667,7 +670,7 @@ class XObjectObject(ContentObject):
         return cls(
             _pageref=page.pageref,
             _parentkey=parent_key,
-            gstate=init_gstate,
+            gstate=gstate,
             ctm=ctm,
             mcstack=mcstack,
             xobjid=xobjid,
