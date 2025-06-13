@@ -785,21 +785,26 @@ class GlyphObject(ContentObject):
 
         font = self.font
         if not isinstance(font, Type3Font):
-            yield from ()
+            return iter(())
         gid = font.encoding.get(self.cid)
         if gid is None:
             log.warning("Unknown CID %d in Type3 font %r", self.cid, font)
-            yield from ()
+            return iter(())
         charproc = resolve1(font.charprocs.get(gid))
         if not isinstance(charproc, ContentStream):
             log.warning("CharProc %s not found in font %r ", gid, font)
-            yield from ()
+            return iter(())
 
-        yield from LazyInterpreter(self.page, [charproc], {},
-                                   ctm=mult_matrix(font.matrix, self.matrix),
-                                   # Font programs should not modify
-                                   # graphic state!
-                                   gstate=copy(self.gstate))
+        interp = LazyInterpreter(
+            self.page,
+            [charproc],
+            {},
+            ctm=mult_matrix(font.matrix, self.matrix),
+            # Font programs should not modify
+            # graphic state!
+            gstate=copy(self.gstate),
+        )
+        return iter(interp)
 
     @property
     def font(self) -> Font:
