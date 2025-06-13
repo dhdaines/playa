@@ -306,10 +306,12 @@ If you don't care about absolute positioning, you can use
 `space="default"`, which may be somewhat faster in the future (currently
 it isn't).  In this case, no translation or rotation of the default
 user space is done (in other words any values of `MediaBox` or
-`Rotate` in the page dictionary are simply ignored).  This is **definitely**
-what you want if you wish to take advantage of the coordinates that
-you may find in `outlines`, `dests`, tags and logical structure
-elements.
+`Rotate` in the page dictionary are simply ignored).
+
+In general, where the API provides you with coordinates, they are
+translated to the device space, unless indicated otherwise (for
+example, sometimes there is a `rect` property which gives the default
+user-space rectangle, and a `bbox` property which gives device space).
 
 ## Lazy object API
 
@@ -341,13 +343,22 @@ for obj in page:
     print(f"{obj.object_type} is in marked content section {obj.mcs.mcid}")
     print(f"    which is tag {obj.mcs.tag.name}")
     print(f"    with properties {obj.mcs.tag.props}")
+    print(f"    in structure element {obj.parent}")
 ```
 
 The `mcid` here is the same one referenced in elements of the
 structure tree as shown above (but remember that `tag` has nothing to
-do with the structure tree element, because Reasons).  A marked
-content section does not necessarily have a `mcid` or `props`, but it
-will *always* have a `tag`.
+do with the structure tree element, because Reasons).  Logical
+structure elements can contain one or more marked content sections,
+and the parent element can be found using the `parent` property on
+content objects or the `structure` property on pages and Form
+XObjects, which contains them indexed by `mcid`.
+
+A marked content section does not necessarily have a `mcid` or
+`props`, but it will *always* have a `tag`.  Exceptionally, because
+marked content sections may (unfortunately) be nested, you can find
+the `mcid` of the nearest *containing* marked content section, if one
+exists, with the `mcid` property on objects.
 
 PDF also has the concept of "marked content points". PLAYA suports
 these with objects of `object_type == "tag"`.  The tag name and
@@ -367,10 +378,12 @@ avoid causing memory leaks.
 
 A PDF page may also contain "Form XObjects" which are like tiny
 embedded PDF documents (they have nothing to do with fillable forms).
-The lazy API (because it is lazy) **will not expand these for you**
-which may be a source of surprise.  You can identify them because they
-have `object_type == "xobject"`.  The layout objects inside them are
-accessible by iteration, as with pages (but **not** documents):
+Simply iterating over a `Page` **will not expand these for you** which
+may be a source of surprise, but you can recurse into them with the
+`flatten` method, or with the convenience properties `paths`,
+`images`, `texts` and `glyphs`.  You can also identify them in
+iteration because they have `object_type == "xobject"`.  The layout
+objects inside are accessible by iteration, as with pages:
 
 ```python
 for obj in page:
@@ -379,7 +392,9 @@ for obj in page:
             ...
 ```
 
-You can also iterate over them in the page context with `page.xobjects`:
+You can also iterate over them in the page context with
+`page.xobjects` (this will also find Form XObjects contained inside
+other Form XObjects, which is unfortunately a thing):
 
 ```python
 for xobj in page.xobjects:
@@ -521,6 +536,11 @@ also appear in a text object (PDF 1.7, sec 8.2, table 9):
 In other words, as usual:
 
 ![Adobe is Spiderman](./docs/adobe-spiderman.jpg)
+
+(above meme does not apply to PDF 2.0, where you, yes you, can help
+to eradicate the [numerous inconsistencies, contradictions, and
+ambiguities](https://github.com/pdf-association/pdf-issues) of the
+previous standard)
 
 In particular, we care **a lot** about marked content operators, because
 of the abovementioned `ActualText` property.  For this reason a
