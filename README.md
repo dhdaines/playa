@@ -36,10 +36,9 @@ metadata):
     playa --text fascinating-research-paper.pdf
     playa --text-objects colorful-presentation.pdf
 
-Or images (no format conversion will be done for anything other than
-JPEG at the moment, you're on your own):
+Or images, in JPEG and PNM format (may not work for all images):
 
-    playa --images splashy-resume.pdf --imgdir imagedir
+    playa --images imagedir splashy-resume.pdf
 
 If you just want to extract text from a PDF, there are better and/or
 faster tools and libraries out there, notably
