@@ -128,14 +128,13 @@ def test_xobject_mcids() -> None:
         img = next(pdf.pages[0].images)
         assert img.parent is not None
         (cobj,) = img.parent
-        assert isinstance(item, ContentObject)
+        assert isinstance(cobj, ContentObject)
         assert cobj.bbox == img.bbox
         assert cobj.bbox == fig.bbox
 
 
 def test_mcid_texts() -> None:
-    """Verify that we can access marked content sections inside Form
-    XObjects (ark) using marked-content reference dictionaries."""
+    """Verify that we can get text from marked content sections."""
     with playa.open(TESTDIR / "structure_xobjects.pdf") as pdf:
         page = pdf.pages[0]
         assert page.mcid_texts == {0: ["Hello again"]}
