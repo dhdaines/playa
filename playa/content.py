@@ -828,6 +828,8 @@ class TextObject(ContentObject):
               which transforms text space coordinates to device space
               (PDF 2.0 section 9.4.4).
       origin: Origin of this text object in device space.
+      displacement: Vector to the origin of the next text object in
+                    device space.
       size: Effective font size for this text object.
       text_matrix: Text matrix `T_m` for this text object, which
                    transforms text space coordinates to user space.
@@ -1022,6 +1024,19 @@ class TextObject(ContentObject):
     def origin(self) -> Point:
         _, _, _, _, dx, dy = self.matrix
         return dx, dy
+
+    @property
+    def displacement(self) -> Point:
+        matrix = self.matrix
+        # FIXME: This should be either cached or optimized
+        next_matrix = mult_matrix(
+            self.scaling_matrix,
+            mult_matrix(
+                translate_matrix(self.line_matrix, self._get_next_glyph_offset()),
+                self.ctm,
+            ),
+        )
+        return next_matrix[-2] - matrix[-2], next_matrix[-1] - matrix[-1]
 
     @property
     def bbox(self) -> Rect:
