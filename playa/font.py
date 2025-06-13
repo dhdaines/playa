@@ -383,7 +383,8 @@ class Type3Font(SimpleFont):
         else:
             self.fontname = "unknown"
         self.basefont = self.fontname
-
+        # Get the character definitions so we can interpret them
+        self.charprocs = dict_value(spec.get("CharProcs", {}))
         if "FontMatrix" in spec:  # it is actually required though
             self.matrix = matrix_value(spec["FontMatrix"])
         else:

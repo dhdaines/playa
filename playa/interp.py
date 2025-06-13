@@ -450,8 +450,7 @@ class LazyInterpreter:
                 #
                 # The lazy interpretation of this is, obviously, that
                 # we simply create an XObjectObject with a copy of the
-                # current graphics state.  This copying is done by
-                # from_stream().
+                # current graphics state.
                 return XObjectObject.from_stream(
                     stream=xobj,
                     page=self.page,

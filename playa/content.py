@@ -29,7 +29,7 @@ from playa.color import (
     Color,
     ColorSpace,
 )
-from playa.font import Font, CIDFont
+from playa.font import Font, CIDFont, Type3Font
 from playa.parser import ContentParser, Token, LIT
 from playa.pdftypes import (
     BBOX_NONE,
@@ -767,8 +767,39 @@ class GlyphObject(ContentObject):
     _corners: bool
 
     def __len__(self) -> int:
-        """Fool! You cannot iterate over a GlyphObject!"""
-        return 0
+        """In the case of Type3 fonts this will be the number of paths
+        or other objects inside it.  Otherwise zero.  Beware, this
+        requires interpreting the character program, so it is slow."""
+        return sum(1 for _ in self)
+
+    def __iter__(self) -> Iterator[ContentObject]:
+        """Possibly iterate over paths in a glyph.
+
+        For Type3 fonts, you can iterate over paths (or anything
+        else) inside a glyph, in the coordinate space defined by the
+        text rendering matrix.
+
+        Otherwise, you can't do that, and you get nothing.
+        """
+        from playa.interp import LazyInterpreter
+
+        font = self.font
+        if not isinstance(font, Type3Font):
+            yield from ()
+        gid = font.encoding.get(self.cid)
+        if gid is None:
+            log.warning("Unknown CID %d in Type3 font %r", self.cid, font)
+            yield from ()
+        charproc = resolve1(font.charprocs.get(gid))
+        if not isinstance(charproc, ContentStream):
+            log.warning("CharProc %s not found in font %r ", gid, font)
+            yield from ()
+
+        yield from LazyInterpreter(self.page, [charproc], {},
+                                   ctm=mult_matrix(font.matrix, self.matrix),
+                                   # Font programs should not modify
+                                   # graphic state!
+                                   gstate=copy(self.gstate))
 
     @property
     def font(self) -> Font:
