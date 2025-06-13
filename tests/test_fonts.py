@@ -200,3 +200,11 @@ def test_type3_charprocs() -> None:
             (0.0068359382, 0.0, 0.0, 0.0068359382, 25.0, 25.0)
         )
         print(list(p.segments))
+
+
+def test_bogus_metrics() -> None:
+    """Verify that we fix bogus font descriptors with ascent = descent = 0."""
+    with playa.open(TESTDIR / "pdf_structure.pdf") as pdf:
+        for t in pdf.pages[0].texts:
+            x0, y0, x1, y1 = t.bbox
+            assert y1 > y0

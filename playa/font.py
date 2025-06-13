@@ -111,6 +111,12 @@ class Font:
             self.descent = -self.descent
         # NOTE: A Type3 font *can* have positive descent because the
         # FontMatrix might be flipped, this is handled in the subclass
+        # (but also, we ignore ascent and descent on Type3 fonts)
+
+        # For some unknown reason sometimes Ascent and Descent are
+        # both zero, in which case set them from the bbox.
+        if self.ascent == 0 and self.descent == 0:
+            _, self.descent, _, self.ascent = self.bbox
 
     def __repr__(self) -> str:
         return "<Font>"
@@ -400,8 +406,10 @@ class Type3Font(SimpleFont):
         if "FontBBox" in spec:  # it is also required though
             self.bbox = rect_value(spec["FontBBox"])
             # otherwise it was set in SimpleFont.__init__
+
         # Set ascent/descent from the bbox (they *could* be in the
-        # descriptor but this is very unlikely)
+        # descriptor but this is very unlikely, and then, they might
+        # also both be zero, which is bad)
         _, self.descent, _, self.ascent = self.bbox
 
     def get_implicit_encoding(

@@ -107,6 +107,7 @@ class TextState:
 
 def _make_fontmap(mapping: PDFObject, doc: "Document") -> Dict[str, Font]:
     fontmap: Dict[str, Font] = {}
+    mapping = resolve1(mapping)
     if not isinstance(mapping, dict):
         log.warning("Font mapping not a dict: %r", mapping)
         return fontmap
