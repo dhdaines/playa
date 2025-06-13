@@ -118,6 +118,28 @@ def test_rotated_text_objects() -> None:
             assert bbox == pytest.approx(get_bound(points))
 
 
+def test_text_displacement() -> None:
+    with playa.open(TESTDIR / "text_displacement.pdf") as pdf:
+        x, y = (100.0, 200.0)
+        for text in pdf.pages[0].texts:
+            cx, cy = text.origin
+            assert cx == pytest.approx(x)
+            assert cy == pytest.approx(y)
+            dx, dy = text.displacement
+            print(text.chars, cx, cy, dx, dy)
+            x += dx
+            y += dy
+        x, y = (100.0, 200.0)
+        for glyph in pdf.pages[0].glyphs:
+            cx, cy = glyph.origin
+            assert cx == pytest.approx(x)
+            assert cy == pytest.approx(y)
+            dx, dy = glyph.displacement
+            print(glyph.text, cx, cy, dx, dy)
+            x += dx
+            y += dy
+
+
 TEXTOBJS = [
     {
         "chars": "foo",
