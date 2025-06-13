@@ -487,7 +487,7 @@ class LazyInterpreter:
             colorspace=colorspace,
         )
         # Override parent key if one is defined on the image specifically
-        if "StructParent" in stream:
+        if obj is not None and "StructParent" in stream:
             obj._parentkey = int_value(stream["StructParent"])
         return obj
 

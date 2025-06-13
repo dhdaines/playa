@@ -8,8 +8,6 @@
 - Descend into Form XObjects in `Page.xobjects`
 - Improve text extraction for rotated pages
 - Improve text extraction for tagged PDFs
-- TODO: Add functioning `__iter__` to `GlyphObject` in the case of
-  Type3 fonts, which works like `XObjectObject`
 - Correct displacement and bbox for Type3 fonts with non-diagonal
   `FontMatrix`
 - BREAKING: Remove misleading `char_width`, `get_descent`, and
@@ -17,6 +15,10 @@
   objects
 - BREAKING: Do not guess `basename` for Type3 fonts (generally it
   isn't different from `fontname` for other subset fonts)
+- BREAKING: `Element.contents` contains both `structure.ContentItem`
+  and `structure.ContentObject`
+- TODO: Add functioning `__iter__` to `GlyphObject` in the case of
+  Type3 fonts, which works like `XObjectObject`
 - TODO: Add `displacement` property to `TextObject`
 - TODO: Extract non-JPEG images as PPM
 

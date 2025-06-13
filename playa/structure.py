@@ -381,12 +381,12 @@ class Element(Findable):
         return Element.from_dict(self.doc, p)
 
     @property
-    def contents(self) -> Iterator[ContentItem]:
+    def contents(self) -> Iterator[Union[ContentItem, ContentObject]]:
         """Iterate over all content items contained in an element."""
         for kid in self:
             if isinstance(kid, Element):
                 yield from kid.contents
-            elif isinstance(kid, ContentItem):
+            elif isinstance(kid, (ContentItem, ContentObject)):
                 yield kid
 
     @property
@@ -416,13 +416,12 @@ class Element(Findable):
             rawbox = rect_value(self.props["BBox"])
             return transform_bbox(page.ctm, rawbox)
         else:
-            # NOTE: This is probably somewhat slow
-            mcids = set(
-                item.mcid
+            # NOTE: This is quite slow
+            return get_bound_rects(
+                item.bbox
                 for item in self.contents
-                if item.page is None or item.page is page
+                if item.page is page and item.bbox is not BBOX_NONE
             )
-            return get_bound_rects(obj.bbox for obj in page if obj.mcid in mcids)
 
     def __iter__(self) -> Iterator[Union["Element", ContentItem, ContentObject]]:
         if "K" in self.props:
@@ -661,12 +660,12 @@ class Tree(Findable):
         return self._parent_tree
 
     @property
-    def contents(self) -> Iterator[ContentItem]:
+    def contents(self) -> Iterator[Union[ContentItem, ContentObject]]:
         """Iterate over all content items in the tree."""
         for kid in self:
             if isinstance(kid, Element):
                 yield from kid.contents
-            elif isinstance(kid, ContentItem):
+            elif isinstance(kid, (ContentItem, ContentObject)):
                 # This is not supposed to happen, but we will support it anyway
                 yield kid
 

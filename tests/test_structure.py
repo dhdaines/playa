@@ -6,7 +6,7 @@ import playa
 from playa.exceptions import PDFEncryptionError
 from playa.page import Annotation, ImageObject
 from playa.pdftypes import BBOX_NONE
-from playa.structure import Element, Tree, ContentObject
+from playa.structure import Element, Tree, ContentItem, ContentObject
 
 from .data import ALLPDFS, CONTRIB, PASSWORDS, TESTDIR, XFAILS
 
@@ -105,22 +105,32 @@ def test_xobject_mcids() -> None:
         assert isinstance(p3, Element)
         assert isinstance(fig, Element)
         (item,) = p1
+        assert isinstance(item, ContentItem)
         assert item.text == "Hello world"
+        assert item.bbox == p1.bbox
         (item,) = p2
+        assert isinstance(item, ContentItem)
         assert item.text == "Goodbye now"
+        assert item.bbox == p2.bbox
         (item,) = p3
+        assert isinstance(item, ContentItem)
         assert item.text == "Hello again"
+        assert item.bbox == p3.bbox
         xobj = next(pdf.pages[0].xobjects)
         for obj in xobj:
             assert obj.parent is not None
             (item,) = obj.parent.contents
+            assert isinstance(item, ContentItem)
             assert item.mcid == obj.mcid
             assert item.bbox == obj.bbox
+            assert item.stream is not None
             assert item.stream.objid == xobj.stream.objid
         img = next(pdf.pages[0].images)
         assert img.parent is not None
         (cobj,) = img.parent
+        assert isinstance(item, ContentObject)
         assert cobj.bbox == img.bbox
+        assert cobj.bbox == fig.bbox
 
 
 def test_mcid_texts() -> None:
