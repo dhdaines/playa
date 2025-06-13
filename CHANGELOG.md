@@ -1,4 +1,4 @@
-## PLAYA 0.6.0: 2025
+## PLAYA 0.6.0: 2025-06-13
 
 - Add `structure` to `Page` to access structure elements indexed by
   marked content IDs (convenience wrapper over the parent tree)
