@@ -569,13 +569,6 @@ class ContentStream:
         return int_value(self.get_any(("BPC", "BitsPerComponent"), 1))
 
     @property
-    def ncomponents(self) -> int:
-        """Number of components for an image stream.
-
-        Default is 1."""
-        return self.colorspace.ncomponents
-
-    @property
     def width(self) -> int:
         """Width in pixels of an image stream.
 
