@@ -630,6 +630,9 @@ class IndirectObject(NamedTuple):
     obj: PDFObject
 
 
+ENDSTREAMR = re.compile(rb"(?:\r|\n|\r\n|)endstream")
+
+
 class IndirectObjectParser:
     """IndirectObjectParser fetches indirect objects from a data
     stream.  It holds a weak reference to the document in order to
@@ -790,7 +793,6 @@ class IndirectObjectParser:
         self._parser.seek(pos)
         _, line = self._parser.nextline()
         assert line.strip() == b"stream"
-        pos = self._parser.tell()
         # Because PDFs do not follow the spec, we will read
         # *at least* the specified number of bytes, which
         # could be zero (particularly if not specified!), up
@@ -799,41 +801,40 @@ class IndirectObjectParser:
         # the stream anyway, but for encrypted streams you
         # probably don't want that (LOL @ PDF "security")
         data = self._parser.read(objlen)
-        # sec 7.3.8.1: There should be an end-of-line
-        # marker after the data and before endstream; this
-        # marker shall not be included in the stream length.
-        linepos, line = self._parser.nextline()
-        if self.strict:
-            # In reality there usually is no end-of-line
-            # marker.  We will nonetheless warn if there's
-            # something other than 'endstream'.
-            if line not in (
-                b"\r",
-                b"\n",
-                b"\r\n",
-                b"endstream\n",
-                b"endstream\r\n",
-            ):
-                raise PDFSyntaxError(
-                    "Expected newline or 'endstream', got %r" % (line,)
-                )
-        else:
-            # Reuse that line and read more if necessary
-            while True:
-                if b"endstream" in line:
-                    idx = line.index(b"endstream")
-                    objlen += idx
-                    data += line[:idx]
-                    self._parser.seek(pos + objlen)
-                    break
-                objlen += len(line)
-                data += line
-                linepos, line = self._parser.nextline()
-                if line == b"":  # Means EOF
-                    log.warning("Incorrect length for stream, no 'endstream' found")
-                    break
         doc = self.doc
-        return ContentStream(dic, bytes(data), None if doc is None else doc.decipher)
+        decipher = None if doc is None else doc.decipher
+        # sec 7.3.8.1: There should be an end-of-line marker after the
+        # data and before endstream; this marker shall not be included
+        # in the stream length.
+        #
+        # TRANSLATION: We expect either one of PDF's many end-of-line
+        # markers, endstream, or EOL + endstream.  If we get something
+        # else, it's an error in strict mode, otherwise, we throw it
+        # on the pile and keep going.
+        pos = self._parser.tell()
+        m = ENDSTREAMR.match(self._parser._lexer.data, pos)
+        if m is not None:
+            return ContentStream(dic, bytes(data), decipher)
+        # We already know it's an error in strict mode, but read the
+        # line anyway to show the user what's wrong
+        pos, line = self._parser.nextline()
+        if self.strict:
+            raise PDFSyntaxError(
+                "Expected newline or 'endstream', got %r", line
+            )
+        # Now glom on all the data until we see endstream
+        while True:
+            if b"endstream" in line:
+                idx = line.index(b"endstream")
+                data += line[:idx]
+                self._parser.seek(pos + idx)
+                break
+            data += line
+            pos, line = self._parser.nextline()
+            if line == b"":  # Means EOF
+                log.warning("Incorrect length for stream, no 'endstream' found")
+                break
+        return ContentStream(dic, bytes(data), decipher)
 
     # Delegation follows
     def seek(self, pos: int) -> None:

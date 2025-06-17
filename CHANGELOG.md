@@ -3,6 +3,8 @@
 - Add method for PNM extraction to streams
 - Extract masks, softmasks, and alternates (if they exist, which they
   never seem to) along with images in CLI
+- Correctly extract JBIG2 images
+- Fix (again) stream parsing to avoid extraneous EOLs
 
 ## PLAYA 0.6.0: 2025-06-13
 
