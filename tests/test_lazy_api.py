@@ -273,3 +273,19 @@ def test_jbig2(tmp_path) -> None:
         with pytest.raises(ValueError):
             with open(outpath, "wb") as outfh:
                 img.stream.write_jbig2(outfh)
+
+
+@pytest.mark.skipif(not CONTRIB.exists(), reason="contrib samples not present")
+def test_indexed_images(tmp_path) -> None:
+    """Verify that we can extract (at least some) Indexed images
+    correctly."""
+    with playa.open(CONTRIB / "issue-1062-filters.pdf") as pdf:
+        (img,) = pdf.pages[0].images
+        outpath = tmp_path / "page1.ppm"
+        with open(outpath, "wb") as outfh:
+            img.stream.write_pnm(outfh)
+        refpath = CONTRIB / "page1-0-00005.ppm"
+        assert outpath.read_bytes() == refpath.read_bytes()
+    with playa.open(CONTRIB / "inline-indexed-images.pdf") as pdf:
+        imgs = list(pdf.pages[0].images)
+        assert len(imgs) == 7

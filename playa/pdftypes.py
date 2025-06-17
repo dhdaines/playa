@@ -663,7 +663,6 @@ class ContentStream:
                 for b in lookup[channels * i : channels * (i + 1)]
             )
         else:
-            breakpoint()
             raise ValueError("Unsupported colorspace: %r" % (self.colorspace,))
         max_value = (1 << bits) - 1
         outfh.write(b"%s %d %d\n" % (ftype, self.width, self.height))
