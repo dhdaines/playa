@@ -652,12 +652,13 @@ class ContentStream:
         # write the rest of the data
         outfh.write(self.buffer)
         # and an eof segment
-        outfh.write(b"\x00\x00\x00\x00"  # number (bogus!)
-                    b"\x33"              # flags: SEG_TYPE_END_OF_FILE
-                    b"\x00"              # retention_flags: empty
-                    b"\x00"              # page_assoc: 0
-                    b"\x00\x00\x00\x00"  # data_length: 0
-                    )
+        outfh.write(
+            b"\x00\x00\x00\x00"  # number (bogus!)
+            b"\x33"  # flags: SEG_TYPE_END_OF_FILE
+            b"\x00"  # retention_flags: empty
+            b"\x00"  # page_assoc: 0
+            b"\x00\x00\x00\x00"  # data_length: 0
+        )
 
     @property
     def buffer(self) -> bytes:
