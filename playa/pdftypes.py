@@ -555,7 +555,7 @@ class ContentStream:
         """Bits per component for an image stream.
 
         Default is 1."""
-        return self.get_any(("BPC", "BitsPerComponent"), 1)
+        return int_value(self.get_any(("BPC", "BitsPerComponent"), 1))
 
     @property
     def ncomponents(self) -> int:
@@ -565,33 +565,35 @@ class ContentStream:
         return self.colorspace.ncomponents
 
     @property
-    def width(self) -> float:
+    def width(self) -> int:
         """Width in pixels of an image stream.
 
         It may be the case that a stream has no inherent width, in
-        which case the default width is 1.0.
+        which case the default width is 1.
         """
-        return self.get_any(("W", "Width"), 1.0)
+        return int_value(self.get_any(("W", "Width"), 1))
 
     @property
-    def height(self) -> float:
+    def height(self) -> int:
         """Height in pixels for an image stream.
 
         It may be the case that a stream has no inherent height, in
-        which case the default height is 1.0."""
-        return self.get_any(("H", "Height"), 1.0)
+        which case the default height is 1."""
+        return int_value(self.get_any(("H", "Height"), 1))
 
     @property
     def colorspace(self) -> "ColorSpace":
         """Colorspace for an image stream.
 
-        Default is DeviceGray (1 component) """
+        Default is DeviceGray (1 component)"""
         from playa.color import get_colorspace, LITERAL_DEVICE_GRAY
 
         if hasattr(self, "_colorspace"):
             return self._colorspace
         spec = resolve1(self.get_any(("CS", "ColorSpace"), LITERAL_DEVICE_GRAY))
-        self._colorspace = get_colorspace(spec)
+        cs = get_colorspace(spec)
+        assert cs is not None
+        self._colorspace: "ColorSpace" = cs
         return self._colorspace
 
     def write_pnm(self, outfh: BinaryIO) -> None:

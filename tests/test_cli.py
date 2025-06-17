@@ -5,6 +5,7 @@ Test the CLI
 from pathlib import Path
 
 import pytest
+import tempfile
 
 from playa import PDFPasswordIncorrect
 from playa.cli import main
@@ -54,6 +55,23 @@ def test_cli_structure(path: Path):
             main(
                 ["--password", password, "--non-interactive", "--structure", str(path)]
             )
+        except PDFPasswordIncorrect:
+            pass
+        except PDFEncryptionError:
+            pytest.skip("cryptography package not installed")
+
+
+@pytest.mark.parametrize("path", ALLPDFS, ids=str)
+def test_cli_images(path: Path):
+    if path.name in XFAILS:
+        pytest.xfail("Intentionally corrupt file: %s" % path.name)
+    passwords = PASSWORDS.get(path.name, [""])
+    for password in passwords:
+        try:
+            with tempfile.TemporaryDirectory() as tempdir:
+                main(
+                    ["--password", password, "--non-interactive", "--images", tempdir, str(path)]
+                )
         except PDFPasswordIncorrect:
             pass
         except PDFEncryptionError:

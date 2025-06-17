@@ -552,8 +552,9 @@ def get_images(page: Page, imgdir: Path) -> List[Tuple[Path, Image]]:
         alts = resolve1(img.get("Alternates"))
         if isinstance(alts, list):
             for idx, alt in enumerate(alts):
-                imgpath = imgdir / f"{imgname}-alt{idx}"
-                images.append((get_one_image(alt, imgpath), asobj(alt)))
+                if isinstance(alt, ContentStream):
+                    imgpath = imgdir / f"{imgname}-alt{idx}"
+                    images.append((get_one_image(alt, imgpath), asobj(alt)))
 
     return images
 
