@@ -529,8 +529,9 @@ def get_one_image(stream: ContentStream, path: Path) -> Path:
                 stream.write_pnm(outfh)
         except ValueError:
             # Fall back to a binary file
-            path = path.with_suffix(".dat")
-            with open(path, "wb") as outfh:
+            datpath = path.with_suffix(".dat")
+            LOG.warning("Failed to write PNM to %s, writing data to %s", path, datpath)
+            with open(datpath, "wb") as outfh:
                 outfh.write(stream.buffer)
     return path
 

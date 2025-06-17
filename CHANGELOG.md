@@ -5,6 +5,7 @@
   never seem to) along with images in CLI
 - Correctly extract JBIG2 images
 - Fix (again) stream parsing to avoid extraneous EOLs
+- Extract images with Indexed color space to PNM
 
 ## PLAYA 0.6.0: 2025-06-13
 

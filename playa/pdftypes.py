@@ -596,16 +596,29 @@ class ContentStream:
     def colorspace(self) -> "ColorSpace":
         """Colorspace for an image stream.
 
-        Default is DeviceGray (1 component)"""
+        Default is DeviceGray (1 component).
+
+        Raises: ValueError if the colorspace is invalid, or
+                unfortunately also in the case where it is a named
+                resource in the containing page (or Form XObject, in
+                the case of an inline image) and the stream is
+                accessed from outside an interpreter for that
+                page/object.
+        """
         from playa.color import get_colorspace, LITERAL_DEVICE_GRAY
 
         if hasattr(self, "_colorspace"):
             return self._colorspace
         spec = resolve1(self.get_any(("CS", "ColorSpace"), LITERAL_DEVICE_GRAY))
         cs = get_colorspace(spec)
-        assert cs is not None
+        if cs is None:
+            raise ValueError("Unknown or undefined colour space: %r" % (spec,))
         self._colorspace: "ColorSpace" = cs
         return self._colorspace
+
+    @colorspace.setter
+    def colorspace(self, cs: "ColorSpace") -> None:
+        self._colorspace = cs
 
     def write_pnm(self, outfh: BinaryIO) -> None:
         """Write stream data to a PBM/PGM/PPM file.
@@ -624,24 +637,50 @@ class ContentStream:
             if f in LITERALS_JBIG2_DECODE:
                 raise ValueError("Stream is JBIG2 data, save it with write_jbig2")
         bits = self.bits
-        ncomponents = self.ncomponents
+        colorspace = self.colorspace
+        data = self.buffer
         if bits == 1:
             ftype = b"P4"
-        elif ncomponents == 1:
+        elif colorspace.name == "DeviceGray":
             ftype = b"P5"
-        elif ncomponents == 3:
+        elif colorspace.name == "DeviceRGB" or colorspace.ncomponents == 3:
             ftype = b"P6"
+        elif colorspace.name == "Indexed":
+            from playa.color import get_colorspace
+            from playa.utils import unpack_indexed_image_data
+
+            assert isinstance(colorspace.spec, list)
+            _, underlying, hival, lookup = colorspace.spec
+            underlying = get_colorspace(resolve1(underlying))
+            if underlying is None:
+                raise ValueError(
+                    "Unknown underlying colorspace in Indexed image: %r" % (underlying,)
+                )
+            if underlying.name == "DeviceGray":
+                ftype = b"P5"
+            elif underlying.name == "DeviceRGB" or underlying.ncomponents == 3:
+                ftype = b"P6"
+            hival = int_value(hival)
+            if not isinstance(lookup, bytes):
+                lookup = stream_value(lookup).buffer
+            channels = len(lookup) // (hival + 1)
+            data = bytes(
+                b
+                for i in unpack_indexed_image_data(data, bits, self.width, self.height)
+                for b in lookup[channels * i : channels * (i + 1)]
+            )
         else:
+            breakpoint()
             raise ValueError("Unsupported colorspace: %r" % (self.colorspace,))
         max_value = (1 << bits) - 1
         outfh.write(b"%s %d %d\n" % (ftype, self.width, self.height))
         if bits == 1:
             # Have to invert the bits! OMG! (FIXME: is there a more
             # efficient way to do this?)
-            outfh.write(bytes(x ^ 0xFF for x in self.buffer))
+            outfh.write(bytes(x ^ 0xFF for x in data))
         else:
             outfh.write(b"%d\n" % max_value)
-            outfh.write(self.buffer)
+            outfh.write(data)
 
     def write_jbig2(self, outfh: BinaryIO) -> None:
         """Write stream data to a JBIG2 file.
