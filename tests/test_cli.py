@@ -70,7 +70,14 @@ def test_cli_images(path: Path):
         try:
             with tempfile.TemporaryDirectory() as tempdir:
                 main(
-                    ["--password", password, "--non-interactive", "--images", tempdir, str(path)]
+                    [
+                        "--password",
+                        password,
+                        "--non-interactive",
+                        "--images",
+                        tempdir,
+                        str(path),
+                    ]
                 )
         except PDFPasswordIncorrect:
             pass

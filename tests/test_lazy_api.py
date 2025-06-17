@@ -249,3 +249,16 @@ def test_glyph_properties(name: str) -> None:
                     next_origin = (gx + dx, gy + dy)
                     assert glyph.size > 0
                 assert text.size > 0
+
+
+@pytest.mark.skipif(not CONTRIB.exists(), reason="contrib samples not present")
+def test_jbig2(tmp_path) -> None:
+    """Verify that we can extract JBIG2 images."""
+    with playa.open(CONTRIB / "pdf-with-jbig2.pdf") as pdf:
+        img = next(pdf.pages[0].images)
+        hyppath = tmp_path / "XIPLAYER0.jb2"
+        with open(hyppath, "wb") as outfh:
+            img.stream.write_jbig2(outfh)
+        refdata = (CONTRIB / "XIPLAYER0.jb2").read_bytes()
+        hypdata = hyppath.read_bytes()
+        assert refdata == hypdata

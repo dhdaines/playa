@@ -392,6 +392,9 @@ def decompress_corrupted(data: bytes) -> bytes:
     return result_str
 
 
+JBIG2_HEADER = b"\x97JB2\r\n\x1a\n"
+
+
 class ContentStream:
     def __init__(
         self,
@@ -604,8 +607,8 @@ class ContentStream:
         (perhaps an exception will be thrown in the future)
 
         Raises:
-          TypeError: if stream data cannot be written to a PNM, because of an
-                     unsupported colour space.
+          ValueError: if stream data cannot be written to a PNM, because of an
+                      unsupported colour space.
 
         """
         bits = self.bits
@@ -627,6 +630,35 @@ class ContentStream:
         else:
             outfh.write(b"%d\n" % max_value)
             outfh.write(self.buffer)
+
+    def write_jbig2(self, outfh: BinaryIO) -> None:
+        """Write stream data to a JBIG2 file.
+
+        Raises:
+          ValueError: if stream data is not JBIG2.
+        """
+        globals_stream = None
+        decode_parms = resolve1(self.get("DecodeParms"))
+        if isinstance(decode_parms, dict):
+            globals_stream = resolve1(decode_parms.get("JBIG2Globals"))
+        outfh.write(JBIG2_HEADER)
+        # flags
+        outfh.write(b"\x01")
+        # number of pages
+        outfh.write(b"\x00\x00\x00\x01")
+        # write global segments
+        if isinstance(globals_stream, ContentStream):
+            outfh.write(globals_stream.buffer)
+        # write the rest of the data
+        outfh.write(self.buffer)
+        # and an eof segment
+        outfh.write(
+            b"\x00\x00\x00\x00"  # number (bogus!)
+            b"\x33"  # flags: SEG_TYPE_END_OF_FILE
+            b"\x00"  # retention_flags: empty
+            b"\x00"  # page_assoc: 0
+            b"\x00\x00\x00\x00"  # data_length: 0
+        )
 
     @property
     def buffer(self) -> bytes:

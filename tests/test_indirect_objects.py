@@ -40,7 +40,8 @@ def test_indirect_objects():
     assert objs[2].objid == 5
     assert isinstance(objs[2].obj, ContentStream)
     stream = objs[2].obj
-    assert stream.rawdata == b"150 250 m\n150 350 l\nS\n"
+    # Note absence of trailing \n as the length does not include it
+    assert stream.rawdata == b"150 250 m\n150 350 l\nS"
 
 
 DATA2 = b"""
@@ -53,7 +54,6 @@ A BUNCH OF EXTRA CRAP!!!
 endstream
 endobj
 """
-
 DATA2A = b"""
 5 0 obj << /Length 21 >>
 stream
@@ -62,10 +62,17 @@ stream
 Sendstream
 endobj
 """
-
-
 DATA2B = b"""
 5 0 obj << /Length 22 >>
+stream
+150 250 m
+150 350 l
+S
+endstream
+endobj
+"""
+DATA2Z = b"""
+5 0 obj << /Length 0 >>
 stream
 150 250 m
 150 350 l
@@ -86,12 +93,21 @@ def test_streams():
     stream = objs[2].obj
     assert stream.rawdata == b"150 250 m\n150 350 l\nS"
 
+    # Accept the case where the stream length is much too short
     parser = IndirectObjectParser(DATA2)
     positions, objs = zip(*list(parser))
     assert isinstance(objs[0].obj, ContentStream)
     stream = objs[0].obj
     assert stream.rawdata == b"150 250 m\n150 350 l\nS\nA BUNCH OF EXTRA CRAP!!!\n"
 
+    # Accept the case where the stream length is zero
+    parser = IndirectObjectParser(DATA2Z)
+    positions, objs = zip(*list(parser))
+    assert isinstance(objs[0].obj, ContentStream)
+    stream = objs[0].obj
+    assert stream.rawdata == b"150 250 m\n150 350 l\nS\n"
+
+    # Make sure it is definitely an error in strict mode
     parser = IndirectObjectParser(DATA2, strict=True)
     with pytest.raises(PDFSyntaxError) as e:
         positions, objs = zip(*list(parser))
@@ -113,6 +129,7 @@ def test_streams():
     assert stream.rawdata == b"150 250 m\n150 350 l\nS\n"
 
 
+# Note that the length of the first stream is incorrect!
 DATA3 = rb"""18 0 obj
 <</Type/ObjStm/N 9/First 60/Length 755>>
 stream
@@ -125,7 +142,7 @@ stream
 <</Footnote/Note/Endnote/Note/Textbox/Sect/Header/Sect/Footer/Sect/InlineShape/Sect/Annotation/Sect/Artifact/Sect/Workbook/Document/Worksheet/Part/Macrosheet/Part/Chartsheet/Part/Dialogsheet/Part/Slide/Part/Chart/Sect/Diagram/Figure/Title/H1>>
 <</Nums[ 0 17 0 R] >>
 <</Names[] >>
-[ 16 0 R 19 0 R 20 0 R]
+[ 16 0 R 19 0 R 20 0 R ]
 endstream
 endobj
 """
