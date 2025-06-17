@@ -97,6 +97,7 @@ from playa.pdftypes import (
     LITERALS_JBIG2_DECODE,
     ContentStream,
     ObjRef,
+    resolve1,
     str_value,
     PDFObject,
 )
@@ -489,65 +490,44 @@ def extract_outline(doc: Document, args: argparse.Namespace) -> None:
     _extract_outline_item(doc.outline, 0, args.outfile)
 
 
-def write_pnm(path: Path, img: ImageObject) -> Path:
-    """Create a PBM/PGM/PNM file and return its path."""
-    if img.bits == 1:
-        path = path.with_suffix(".pbm")
-        ftype = b"P4"
-    elif img.colorspace is None:
-        raise ValueError("Unknown colorspace for image %r" % (img,))
-    elif img.colorspace.ncomponents == 1:
-        path = path.with_suffix(".pgm")
-        ftype = b"P5"
-    elif img.colorspace.ncomponents == 3:
-        path = path.with_suffix(".ppm")
-        ftype = b"P6"
-    else:
-        raise ValueError("Unsupported colorspace: %r" % (img.colorspace,))
-    max_value = (1 << img.bits) - 1
-    with open(path, "wb") as outfh:
-        width, height = img.srcsize
-        outfh.write(b"%s %d %d\n" % (ftype, width, height))
-        if img.bits == 1:
-            # Have to invert the bits! OMG! (FIXME: is there a more
-            # efficient way to do this?)
-            outfh.write(bytes(x ^ 0xFF for x in img.buffer))
-        else:
-            outfh.write(b"%d\n" % max_value)
-            outfh.write(img.buffer)
-    return path
-
-
-def get_one_image(img: ImageObject, imgpath: Path) -> Path:
-    fp = img.stream.get_filters()
+def get_one_image(stream: ContentStream, path: Path) -> Path:
+    fp = stream.get_filters()
     if fp:
         filters, params = zip(*fp)
         for f in filters:
             if f in LITERALS_DCT_DECODE:
-                imgpath = imgpath.with_suffix(".jpg")
+                path = path.with_suffix(".jpg")
                 break
             if f in LITERALS_JPX_DECODE:
-                imgpath = imgpath.with_suffix(".jp2")
+                path = path.with_suffix(".jp2")
                 break
             if f in LITERALS_JBIG2_DECODE:
-                imgpath = imgpath.with_suffix(".jb2")
+                path = path.with_suffix(".jb2")
                 break
-    if imgpath.suffix in (".jpg", ".jp2", ".jb2"):
+    if path.suffix in (".jpg", ".jp2", ".jb2"):
         # DCT streams are generally JPEG-compatible.  FIXME:
         # Assumed to be true for JPEG2000 and JBIG2, is it?
-        with open(imgpath, "wb") as outfh:
-            outfh.write(img.stream.buffer)
+        with open(path, "wb") as outfh:
+            outfh.write(stream.buffer)
     else:
-        # Otherwise, try to write a PNM file (TODO: This should go
-        # in ImageObject)
+        # Otherwise, try to write a PNM file
+        bits = stream.bits
+        ncomponents = stream.ncomponents
+        if bits == 1:
+            path = path.with_suffix(".pbm")
+        elif ncomponents == 1:
+            path = path.with_suffix(".pgm")
+        elif ncomponents == 3:
+            path = path.with_suffix(".ppm")
         try:
-            imgpath = write_pnm(imgpath, img)
+            with open(path, "wb") as outfh:
+                stream.write_pnm(outfh)
         except ValueError:
             # Fall back to a binary file
-            imgpath = imgpath.with_suffix(".dat")
-            with open(imgpath, "wb") as outfh:
-                outfh.write(img.stream.buffer)
-    return imgpath
+            path = path.with_suffix(".dat")
+            with open(path, "wb") as outfh:
+                outfh.write(stream.buffer)
+    return path
 
 
 def get_images(page: Page, imgdir: Path) -> List[Tuple[Path, Image]]:
@@ -559,8 +539,23 @@ def get_images(page: Page, imgdir: Path) -> List[Tuple[Path, Image]]:
         else:
             imgname = f"page{page.page_idx + 1}-{idx}-{img.xobjid}"
         imgpath = imgdir / imgname
-        images.append((get_one_image(img, imgpath), asobj(img)))
-        # TODO: Mask, SMask, Alternates, etc
+        images.append((get_one_image(img.stream, imgpath), asobj(img)))
+        mask = resolve1(img.get("Mask"))
+        if isinstance(mask, ContentStream):
+            imgpath = imgdir / f"{imgname}-mask"
+            images.append((get_one_image(mask, imgpath), asobj(mask)))
+        smask = resolve1(img.get("SMask"))
+        if isinstance(smask, ContentStream):
+            imgpath = imgdir / f"{imgname}-smask"
+            images.append((get_one_image(smask, imgpath), asobj(smask)))
+        # In theory this exists, in practice, very unsure
+        alts = resolve1(img.get("Alternates"))
+        if isinstance(alts, list):
+            for idx, alt in enumerate(alts):
+                if isinstance(alt, ContentStream):
+                    imgpath = imgdir / f"{imgname}-alt{idx}"
+                    images.append((get_one_image(alt, imgpath), asobj(alt)))
+
     return images
 
 

@@ -13,6 +13,7 @@ LITERAL_PATTERN = LIT("Pattern")
 LITERAL_INLINE_DEVICE_GRAY = LIT("G")
 LITERAL_INLINE_DEVICE_RGB = LIT("RGB")
 LITERAL_INLINE_DEVICE_CMYK = LIT("CMYK")
+LITERAL_INLINE_INDEXED = LIT("I")
 # Rendering intents
 LITERAL_RELATIVE_COLORIMETRIC = LIT("RelativeColorimetric")
 LITERAL_ABSOLUTE_COLORIMETRIC = LIT("AbsoluteColorimetric")
@@ -73,12 +74,20 @@ for name, n in [
     ("Pattern", 1),
 ]:
     PREDEFINED_COLORSPACE[name] = ColorSpace(name, n)
+PREDEFINED_INLINE_COLORSPACE = {
+    LITERAL_INLINE_DEVICE_GRAY: PREDEFINED_COLORSPACE["DeviceGray"],
+    LITERAL_INLINE_DEVICE_RGB: PREDEFINED_COLORSPACE["DeviceRGB"],
+    LITERAL_INLINE_DEVICE_CMYK: PREDEFINED_COLORSPACE["DeviceCMYK"],
+    LITERAL_INLINE_INDEXED: PREDEFINED_COLORSPACE["Indexed"],
+}
 
 
 def get_colorspace(
     spec: PDFObject, csid: Union[str, None] = None
 ) -> Union[ColorSpace, None]:
     if isinstance(spec, PSLiteral):
+        if spec in PREDEFINED_INLINE_COLORSPACE:
+            return PREDEFINED_INLINE_COLORSPACE[spec]
         name = literal_name(spec)
         return PREDEFINED_COLORSPACE.get(name)
     elif isinstance(spec, list):

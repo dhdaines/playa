@@ -1,3 +1,9 @@
+## PLAYA 0.6.1: Unreleased
+- Fix regression on subset fonts with zero Ascent and Descent
+- Add method for PNM extraction to streams
+- Extract masks, softmasks, and alternates (if they exist, which they
+  never seem to) along with images in CLI
+
 ## PLAYA 0.6.0: 2025-06-13
 
 - Add `structure` to `Page` to access structure elements indexed by

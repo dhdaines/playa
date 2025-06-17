@@ -477,23 +477,14 @@ class LazyInterpreter:
     def render_image(
         self, xobjid: Union[str, None], stream: ContentStream
     ) -> Union[ContentObject, None]:
-        colorspace = get_colorspace(resolve1(stream.get_any(("CS", "ColorSpace"))))
-        width = stream.get_any(("W", "Width"))
-        if width is None:
-            log.debug("Image has no Width: %r", stream)
-            width = 1
-        height = stream.get_any(("H", "Height"))
-        if height is None:
-            log.debug("Image has no Height: %r", stream)
-            height = 1
         obj = self.create(
             ImageObject,
             stream=stream,
             xobjid=xobjid,
-            srcsize=(width, height),
+            srcsize=(stream.width, stream.height),
             imagemask=stream.get_any(("IM", "ImageMask")),
-            bits=stream.get_any(("BPC", "BitsPerComponent"), 1),
-            colorspace=colorspace,
+            bits=stream.bits,
+            colorspace=stream.colorspace,
         )
         # Override parent key if one is defined on the image specifically
         if obj is not None and "StructParent" in stream:
