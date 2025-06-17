@@ -518,15 +518,15 @@ def get_one_image(stream: ContentStream, path: Path) -> Path:
         # Otherwise, try to write a PNM file
         bits = stream.bits
         colorspace = stream.colorspace
+        ncomponents = colorspace.ncomponents
         if colorspace.name == "Indexed":
             from playa.color import get_colorspace
 
             assert isinstance(colorspace.spec, list)
             _, underlying, _, _ = colorspace.spec
             underlying = get_colorspace(resolve1(underlying))
-            ncomponents = underlying.ncomponents
-        else:
-            ncomponents = colorspace.ncomponents
+            if underlying is not None:
+                ncomponents = underlying.ncomponents
         if bits == 1:
             path = path.with_suffix(".pbm")
         elif ncomponents == 1:

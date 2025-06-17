@@ -1,4 +1,4 @@
-## PLAYA 0.6.1: Unreleased
+## PLAYA 0.6.1: 2025-06-17
 - Fix regression on subset fonts with zero Ascent and Descent
 - Add method for PNM extraction to streams
 - Extract masks, softmasks, and alternates (if they exist, which they
