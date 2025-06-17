@@ -441,22 +441,30 @@ class ContentStream:
                 return self.attrs[name]
         return default
 
-    def get_filters(self) -> List[Tuple[Any, Any]]:
-        filters = resolve1(self.get_any(("F", "Filter"), []))
-        params = resolve1(self.get_any(("DP", "DecodeParms", "FDecodeParms"), {}))
+    @property
+    def filters(self) -> List[PSLiteral]:
+        filters = resolve1(self.get_any(("F", "Filter")))
         if not filters:
             return []
         if not isinstance(filters, list):
             filters = [filters]
-        if not isinstance(params, list):
-            # Make sure the parameters list is the same as filters.
-            params = [params] * len(filters)
-        if len(params) != len(filters):
-            raise ValueError("Parameters len filter mismatch")
+        return [f for f in filters if isinstance(f, PSLiteral)]
 
-        resolved_filters = [resolve1(f) for f in filters]
-        resolved_params = [resolve1(param) for param in params]
-        return list(zip(resolved_filters, resolved_params))
+    def get_filters(self) -> List[Tuple[PSLiteral, Dict[str, PDFObject]]]:
+        filters = self.filters
+        params = resolve1(self.get_any(("DP", "DecodeParms", "FDecodeParms")))
+        if not params:
+            params = {}
+        if not isinstance(params, list):
+            params = [params] * len(filters)
+        resolved_params = []
+        for p in params:
+            rp = resolve1(p)
+            if isinstance(rp, dict):
+                resolved_params.append(rp)
+            else:
+                resolved_params.append({})
+        return list(zip(filters, resolved_params))
 
     def decode(self, strict: bool = False) -> None:
         from playa.ascii85 import ascii85decode, asciihexdecode
@@ -602,15 +610,19 @@ class ContentStream:
     def write_pnm(self, outfh: BinaryIO) -> None:
         """Write stream data to a PBM/PGM/PPM file.
 
-        If the stream uses JPEG, JBIG2 or JPEG2000 encoding, the
-        output here will be entirely meaningless!  Don't do that!
-        (perhaps an exception will be thrown in the future)
-
         Raises:
           ValueError: if stream data cannot be written to a PNM, because of an
-                      unsupported colour space.
+                      unsupported colour space, or an unsupported filter (JBIG2,
+                      DCT or JPEG2000)
 
         """
+        for f in self.filters:
+            if f in LITERALS_DCT_DECODE:
+                raise ValueError("Stream is JPEG data, save its buffer directly")
+            if f in LITERALS_JPX_DECODE:
+                raise ValueError("Stream is JPEG2000 data, save its buffer directly")
+            if f in LITERALS_JBIG2_DECODE:
+                raise ValueError("Stream is JBIG2 data, save it with write_jbig2")
         bits = self.bits
         ncomponents = self.ncomponents
         if bits == 1:
@@ -637,6 +649,8 @@ class ContentStream:
         Raises:
           ValueError: if stream data is not JBIG2.
         """
+        if not any(f in LITERALS_JBIG2_DECODE for f in self.filters):
+            raise ValueError("Stream is not JBIG2")
         globals_stream = None
         decode_parms = resolve1(self.get("DecodeParms"))
         if isinstance(decode_parms, dict):

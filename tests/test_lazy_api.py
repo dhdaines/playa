@@ -253,7 +253,8 @@ def test_glyph_properties(name: str) -> None:
 
 @pytest.mark.skipif(not CONTRIB.exists(), reason="contrib samples not present")
 def test_jbig2(tmp_path) -> None:
-    """Verify that we can extract JBIG2 images."""
+    """Verify that we can extract JBIG2 images, and that we don't try
+    to save JBIG2 to PNM and vice versa."""
     with playa.open(CONTRIB / "pdf-with-jbig2.pdf") as pdf:
         img = next(pdf.pages[0].images)
         hyppath = tmp_path / "XIPLAYER0.jb2"
@@ -262,3 +263,13 @@ def test_jbig2(tmp_path) -> None:
         refdata = (CONTRIB / "XIPLAYER0.jb2").read_bytes()
         hypdata = hyppath.read_bytes()
         assert refdata == hypdata
+        outpath = tmp_path / "NOWAYNOHOW.pbm"
+        with pytest.raises(ValueError):
+            with open(outpath, "wb") as outfh:
+                img.stream.write_pnm(outfh)
+    with playa.open(TESTDIR / "structure_xobjects_2.pdf") as pdf:
+        img = next(pdf.pages[0].images)
+        outpath = tmp_path / "NOWAYNOHOW.jb2"
+        with pytest.raises(ValueError):
+            with open(outpath, "wb") as outfh:
+                img.stream.write_jbig2(outfh)
