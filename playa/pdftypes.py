@@ -2,7 +2,9 @@ import io
 import logging
 import zlib
 from typing import (
+    TYPE_CHECKING,
     Any,
+    BinaryIO,
     Dict,
     Generic,
     Iterable,
@@ -18,9 +20,10 @@ from typing import (
 
 from playa.worker import DocumentRef, _deref_document
 
+if TYPE_CHECKING:
+    from playa.color import ColorSpace
+
 logger = logging.getLogger(__name__)
-
-
 PDFObject = Union[
     str,
     float,
@@ -109,6 +112,7 @@ KWD = PSKeywordTable.intern
 
 # Intern a bunch of important literals
 LITERAL_CRYPT = LIT("Crypt")
+LITERAL_IMAGE = LIT("Image")
 # Abbreviation of Filter names in PDF 4.8.6. "Inline Images"
 LITERALS_FLATE_DECODE = (LIT("FlateDecode"), LIT("Fl"))
 LITERALS_LZW_DECODE = (LIT("LZWDecode"), LIT("LZW"))
@@ -545,6 +549,82 @@ class ContentStream:
                     raise NotImplementedError(error_msg)
         self._data = data
         self.rawdata = None
+
+    @property
+    def bits(self) -> int:
+        """Bits per component for an image stream.
+
+        Default is 1."""
+        return self.get_any(("BPC", "BitsPerComponent"), 1)
+
+    @property
+    def ncomponents(self) -> int:
+        """Number of components for an image stream.
+
+        Default is 1."""
+        return self.colorspace.ncomponents
+
+    @property
+    def width(self) -> float:
+        """Width in pixels of an image stream.
+
+        It may be the case that a stream has no inherent width, in
+        which case the default width is 1.0.
+        """
+        return self.get_any(("W", "Width"), 1.0)
+
+    @property
+    def height(self) -> float:
+        """Height in pixels for an image stream.
+
+        It may be the case that a stream has no inherent height, in
+        which case the default height is 1.0."""
+        return self.get_any(("H", "Height"), 1.0)
+
+    @property
+    def colorspace(self) -> "ColorSpace":
+        """Colorspace for an image stream.
+
+        Default is DeviceGray (1 component) """
+        from playa.color import get_colorspace, LITERAL_DEVICE_GRAY
+
+        if hasattr(self, "_colorspace"):
+            return self._colorspace
+        spec = resolve1(self.get_any(("CS", "ColorSpace"), LITERAL_DEVICE_GRAY))
+        self._colorspace = get_colorspace(spec)
+        return self._colorspace
+
+    def write_pnm(self, outfh: BinaryIO) -> None:
+        """Write stream data to a PBM/PGM/PPM file.
+
+        If the stream uses JPEG, JBIG2 or JPEG2000 encoding, the
+        output here will be entirely meaningless!  Don't do that!
+        (perhaps an exception will be thrown in the future)
+
+        Raises:
+          TypeError: if stream data cannot be written to a PNM, because of an
+                     unsupported colour space.
+
+        """
+        bits = self.bits
+        ncomponents = self.ncomponents
+        if bits == 1:
+            ftype = b"P4"
+        elif ncomponents == 1:
+            ftype = b"P5"
+        elif ncomponents == 3:
+            ftype = b"P6"
+        else:
+            raise ValueError("Unsupported colorspace: %r" % (self.colorspace,))
+        max_value = (1 << bits) - 1
+        outfh.write(b"%s %d %d\n" % (ftype, self.width, self.height))
+        if bits == 1:
+            # Have to invert the bits! OMG! (FIXME: is there a more
+            # efficient way to do this?)
+            outfh.write(bytes(x ^ 0xFF for x in self.buffer))
+        else:
+            outfh.write(b"%d\n" % max_value)
+            outfh.write(self.buffer)
 
     @property
     def buffer(self) -> bytes:

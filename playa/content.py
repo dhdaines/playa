@@ -397,6 +397,9 @@ class ImageObject(ContentObject):
     def __getitem__(self, name: str) -> PDFObject:
         return self.stream[name]
 
+    def get(self, name: str, default: PDFObject = None) -> PDFObject:
+        return self.stream.get(name, default)
+
     def __len__(self) -> int:
         """Even though you can __getitem__ from an image you cannot iterate
         over its keys, sorry about that.  Returns zero."""
