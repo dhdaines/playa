@@ -504,11 +504,16 @@ def get_one_image(stream: ContentStream, path: Path) -> Path:
             if f in LITERALS_JBIG2_DECODE:
                 path = path.with_suffix(".jb2")
                 break
-    if path.suffix in (".jpg", ".jp2", ".jb2"):
-        # DCT streams are generally JPEG-compatible.  FIXME:
-        # Assumed to be true for JPEG2000 and JBIG2, is it?
+    if path.suffix in (".jpg", ".jp2"):
+        # DCT streams are generally readable as JPEG files, and this
+        # is also generally true for JPEG2000 streams
         with open(path, "wb") as outfh:
             outfh.write(stream.buffer)
+    elif path.suffix == ".jb2":
+        # This is not however true for JBIG2, which requires a
+        # particular header
+        with open(path, "wb") as outfh:
+            stream.write_jbig2(outfh)
     else:
         # Otherwise, try to write a PNM file
         bits = stream.bits
