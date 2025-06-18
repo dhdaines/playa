@@ -1,10 +1,11 @@
-## PLAYA 0.6.1: Unreleased
+## PLAYA 0.6.1: 2025-06-17
 - Fix regression on subset fonts with zero Ascent and Descent
 - Add method for PNM extraction to streams
 - Extract masks, softmasks, and alternates (if they exist, which they
   never seem to) along with images in CLI
 - Correctly extract JBIG2 images
 - Fix (again) stream parsing to avoid extraneous EOLs
+- Extract images with Indexed color space to PNM
 
 ## PLAYA 0.6.0: 2025-06-13
 

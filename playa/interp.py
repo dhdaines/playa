@@ -477,6 +477,15 @@ class LazyInterpreter:
     def render_image(
         self, xobjid: Union[str, None], stream: ContentStream
     ) -> Union[ContentObject, None]:
+        # Look up colorspace in resources first!
+        cspec = resolve1(stream.get_any(("CS", "ColorSpace")))
+        if isinstance(cspec, PSLiteral) and cspec.name in self.csmap:
+            colorspace: Union[ColorSpace, None] = self.csmap[cspec.name]
+        else:
+            colorspace = get_colorspace(cspec)
+        # Cache it in the stream object to avoid confusion
+        if colorspace is not None:
+            stream.colorspace = colorspace
         obj = self.create(
             ImageObject,
             stream=stream,
@@ -484,7 +493,7 @@ class LazyInterpreter:
             srcsize=(stream.width, stream.height),
             imagemask=stream.get_any(("IM", "ImageMask")),
             bits=stream.bits,
-            colorspace=stream.colorspace,
+            colorspace=colorspace,
         )
         # Override parent key if one is defined on the image specifically
         if obj is not None and "StructParent" in stream:

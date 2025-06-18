@@ -517,7 +517,16 @@ def get_one_image(stream: ContentStream, path: Path) -> Path:
     else:
         # Otherwise, try to write a PNM file
         bits = stream.bits
-        ncomponents = stream.ncomponents
+        colorspace = stream.colorspace
+        ncomponents = colorspace.ncomponents
+        if colorspace.name == "Indexed":
+            from playa.color import get_colorspace
+
+            assert isinstance(colorspace.spec, list)
+            _, underlying, _, _ = colorspace.spec
+            underlying = get_colorspace(resolve1(underlying))
+            if underlying is not None:
+                ncomponents = underlying.ncomponents
         if bits == 1:
             path = path.with_suffix(".pbm")
         elif ncomponents == 1:
@@ -529,8 +538,9 @@ def get_one_image(stream: ContentStream, path: Path) -> Path:
                 stream.write_pnm(outfh)
         except ValueError:
             # Fall back to a binary file
-            path = path.with_suffix(".dat")
-            with open(path, "wb") as outfh:
+            datpath = path.with_suffix(".dat")
+            LOG.warning("Failed to write PNM to %s, writing data to %s", path, datpath)
+            with open(datpath, "wb") as outfh:
                 outfh.write(stream.buffer)
     return path
 

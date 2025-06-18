@@ -2,6 +2,7 @@
 Test the ContentObject API for pages.
 """
 
+import sys
 from pathlib import Path
 
 import playa
@@ -253,7 +254,8 @@ def test_glyph_properties(name: str) -> None:
 
 @pytest.mark.skipif(not CONTRIB.exists(), reason="contrib samples not present")
 def test_jbig2(tmp_path) -> None:
-    """Verify that we can extract JBIG2 images."""
+    """Verify that we can extract JBIG2 images, and that we don't try
+    to save JBIG2 to PNM and vice versa."""
     with playa.open(CONTRIB / "pdf-with-jbig2.pdf") as pdf:
         img = next(pdf.pages[0].images)
         hyppath = tmp_path / "XIPLAYER0.jb2"
@@ -262,3 +264,32 @@ def test_jbig2(tmp_path) -> None:
         refdata = (CONTRIB / "XIPLAYER0.jb2").read_bytes()
         hypdata = hyppath.read_bytes()
         assert refdata == hypdata
+        outpath = tmp_path / "NOWAYNOHOW.pbm"
+        with pytest.raises(ValueError):
+            with open(outpath, "wb") as outfh:
+                img.stream.write_pnm(outfh)
+    with playa.open(TESTDIR / "structure_xobjects_2.pdf") as pdf:
+        img = next(pdf.pages[0].images)
+        outpath = tmp_path / "NOWAYNOHOW.jb2"
+        with pytest.raises(ValueError):
+            with open(outpath, "wb") as outfh:
+                img.stream.write_jbig2(outfh)
+
+
+@pytest.mark.skipif(not CONTRIB.exists(), reason="contrib samples not present")
+def test_indexed_images(tmp_path) -> None:
+    """Verify that we can extract (at least some) Indexed images
+    correctly."""
+    with playa.open(CONTRIB / "issue-1062-filters.pdf") as pdf:
+        (img,) = pdf.pages[0].images
+        outpath = tmp_path / "page1.ppm"
+        with open(outpath, "wb") as outfh:
+            img.stream.write_pnm(outfh)
+        refpath = CONTRIB / "page1-0-00005.ppm"
+        hyp = outpath.read_bytes()
+        ref = refpath.read_bytes()
+        # Testing equality is ABSURDLY STUPIDLY SLOW when it fails
+        assert len(hyp) == len(ref)
+    with playa.open(CONTRIB / "inline-indexed-images.pdf") as pdf:
+        imgs = list(pdf.pages[0].images)
+        assert len(imgs) == 7

@@ -112,7 +112,11 @@ def get_colorspace(
             # has N+1 "components" (the last one being the pattern)
             return ColorSpace(name, underlying.ncomponents + 1, spec)
         else:
-            cs = PREDEFINED_COLORSPACE.get(literal_name(resolve1(spec[0])))
+            # Handle Indexed, ICCBased, etc, etc, generically
+            if spec[0] in PREDEFINED_INLINE_COLORSPACE:
+                cs: Union[ColorSpace, None] = PREDEFINED_INLINE_COLORSPACE[spec[0]]
+            else:
+                cs = PREDEFINED_COLORSPACE.get(literal_name(spec[0]))
             if cs is None:
                 return None
             return ColorSpace(cs.name, cs.ncomponents, spec)

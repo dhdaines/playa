@@ -441,22 +441,30 @@ class ContentStream:
                 return self.attrs[name]
         return default
 
-    def get_filters(self) -> List[Tuple[Any, Any]]:
-        filters = resolve1(self.get_any(("F", "Filter"), []))
-        params = resolve1(self.get_any(("DP", "DecodeParms", "FDecodeParms"), {}))
+    @property
+    def filters(self) -> List[PSLiteral]:
+        filters = resolve1(self.get_any(("F", "Filter")))
         if not filters:
             return []
         if not isinstance(filters, list):
             filters = [filters]
-        if not isinstance(params, list):
-            # Make sure the parameters list is the same as filters.
-            params = [params] * len(filters)
-        if len(params) != len(filters):
-            raise ValueError("Parameters len filter mismatch")
+        return [f for f in filters if isinstance(f, PSLiteral)]
 
-        resolved_filters = [resolve1(f) for f in filters]
-        resolved_params = [resolve1(param) for param in params]
-        return list(zip(resolved_filters, resolved_params))
+    def get_filters(self) -> List[Tuple[PSLiteral, Dict[str, PDFObject]]]:
+        filters = self.filters
+        params = resolve1(self.get_any(("DP", "DecodeParms", "FDecodeParms")))
+        if not params:
+            params = {}
+        if not isinstance(params, list):
+            params = [params] * len(filters)
+        resolved_params = []
+        for p in params:
+            rp = resolve1(p)
+            if isinstance(rp, dict):
+                resolved_params.append(rp)
+            else:
+                resolved_params.append({})
+        return list(zip(filters, resolved_params))
 
     def decode(self, strict: bool = False) -> None:
         from playa.ascii85 import ascii85decode, asciihexdecode
@@ -561,13 +569,6 @@ class ContentStream:
         return int_value(self.get_any(("BPC", "BitsPerComponent"), 1))
 
     @property
-    def ncomponents(self) -> int:
-        """Number of components for an image stream.
-
-        Default is 1."""
-        return self.colorspace.ncomponents
-
-    @property
     def width(self) -> int:
         """Width in pixels of an image stream.
 
@@ -588,37 +589,79 @@ class ContentStream:
     def colorspace(self) -> "ColorSpace":
         """Colorspace for an image stream.
 
-        Default is DeviceGray (1 component)"""
+        Default is DeviceGray (1 component).
+
+        Raises: ValueError if the colorspace is invalid, or
+                unfortunately also in the case where it is a named
+                resource in the containing page (or Form XObject, in
+                the case of an inline image) and the stream is
+                accessed from outside an interpreter for that
+                page/object.
+        """
         from playa.color import get_colorspace, LITERAL_DEVICE_GRAY
 
         if hasattr(self, "_colorspace"):
             return self._colorspace
         spec = resolve1(self.get_any(("CS", "ColorSpace"), LITERAL_DEVICE_GRAY))
         cs = get_colorspace(spec)
-        assert cs is not None
+        if cs is None:
+            raise ValueError("Unknown or undefined colour space: %r" % (spec,))
         self._colorspace: "ColorSpace" = cs
         return self._colorspace
+
+    @colorspace.setter
+    def colorspace(self, cs: "ColorSpace") -> None:
+        self._colorspace = cs
 
     def write_pnm(self, outfh: BinaryIO) -> None:
         """Write stream data to a PBM/PGM/PPM file.
 
-        If the stream uses JPEG, JBIG2 or JPEG2000 encoding, the
-        output here will be entirely meaningless!  Don't do that!
-        (perhaps an exception will be thrown in the future)
-
         Raises:
           ValueError: if stream data cannot be written to a PNM, because of an
-                      unsupported colour space.
+                      unsupported colour space, or an unsupported filter (JBIG2,
+                      DCT or JPEG2000)
 
         """
+        for f in self.filters:
+            if f in LITERALS_DCT_DECODE:
+                raise ValueError("Stream is JPEG data, save its buffer directly")
+            if f in LITERALS_JPX_DECODE:
+                raise ValueError("Stream is JPEG2000 data, save its buffer directly")
+            if f in LITERALS_JBIG2_DECODE:
+                raise ValueError("Stream is JBIG2 data, save it with write_jbig2")
         bits = self.bits
-        ncomponents = self.ncomponents
+        colorspace = self.colorspace
+        data = self.buffer
         if bits == 1:
             ftype = b"P4"
-        elif ncomponents == 1:
+        elif colorspace.name == "DeviceGray":
             ftype = b"P5"
-        elif ncomponents == 3:
+        elif colorspace.name == "DeviceRGB" or colorspace.ncomponents == 3:
             ftype = b"P6"
+        elif colorspace.name == "Indexed":
+            from playa.color import get_colorspace
+            from playa.utils import unpack_indexed_image_data
+
+            assert isinstance(colorspace.spec, list)
+            _, underlying, hival, lookup = colorspace.spec
+            underlying = get_colorspace(resolve1(underlying))
+            if underlying is None:
+                raise ValueError(
+                    "Unknown underlying colorspace in Indexed image: %r" % (underlying,)
+                )
+            if underlying.name == "DeviceGray":
+                ftype = b"P5"
+            elif underlying.name == "DeviceRGB" or underlying.ncomponents == 3:
+                ftype = b"P6"
+            hival = int_value(hival)
+            if not isinstance(lookup, bytes):
+                lookup = stream_value(lookup).buffer
+            channels = len(lookup) // (hival + 1)
+            data = bytes(
+                b
+                for i in unpack_indexed_image_data(data, bits, self.width, self.height)
+                for b in lookup[channels * i : channels * (i + 1)]
+            )
         else:
             raise ValueError("Unsupported colorspace: %r" % (self.colorspace,))
         max_value = (1 << bits) - 1
@@ -626,10 +669,10 @@ class ContentStream:
         if bits == 1:
             # Have to invert the bits! OMG! (FIXME: is there a more
             # efficient way to do this?)
-            outfh.write(bytes(x ^ 0xFF for x in self.buffer))
+            outfh.write(bytes(x ^ 0xFF for x in data))
         else:
             outfh.write(b"%d\n" % max_value)
-            outfh.write(self.buffer)
+            outfh.write(data)
 
     def write_jbig2(self, outfh: BinaryIO) -> None:
         """Write stream data to a JBIG2 file.
@@ -637,6 +680,8 @@ class ContentStream:
         Raises:
           ValueError: if stream data is not JBIG2.
         """
+        if not any(f in LITERALS_JBIG2_DECODE for f in self.filters):
+            raise ValueError("Stream is not JBIG2")
         globals_stream = None
         decode_parms = resolve1(self.get("DecodeParms"))
         if isinstance(decode_parms, dict):
