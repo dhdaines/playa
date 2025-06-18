@@ -632,6 +632,7 @@ class ContentStream:
         bits = self.bits
         colorspace = self.colorspace
         data = self.buffer
+        ftype: Union[bytes, None] = None
         if bits == 1:
             ftype = b"P4"
         elif colorspace.name == "DeviceGray":
@@ -662,7 +663,7 @@ class ContentStream:
                 for i in unpack_indexed_image_data(data, bits, self.width, self.height)
                 for b in lookup[channels * i : channels * (i + 1)]
             )
-        else:
+        if ftype is None:
             raise ValueError("Unsupported colorspace: %r" % (self.colorspace,))
         max_value = (1 << bits) - 1
         outfh.write(b"%s %d %d\n" % (ftype, self.width, self.height))

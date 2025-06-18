@@ -87,6 +87,7 @@ from typing import Any, Deque, Iterable, Iterator, List, TextIO, Tuple, Union
 
 import playa
 from playa import Document, Page, PDFPasswordIncorrect, asobj
+from playa.color import ColorSpace
 from playa.data.content import Image
 from playa.data.metadata import asobj_document
 from playa.outline import Outline
@@ -517,30 +518,50 @@ def get_one_image(stream: ContentStream, path: Path) -> Path:
     else:
         # Otherwise, try to write a PNM file
         bits = stream.bits
-        colorspace = stream.colorspace
-        ncomponents = colorspace.ncomponents
-        if colorspace.name == "Indexed":
-            from playa.color import get_colorspace
+        colorspace: Union[ColorSpace, None] = stream.colorspace
+        ncomponents = 1
+        if colorspace is not None:
+            ncomponents = colorspace.ncomponents
+            if colorspace.name == "Indexed":
+                from playa.color import get_colorspace
 
-            assert isinstance(colorspace.spec, list)
-            _, underlying, _, _ = colorspace.spec
-            underlying = get_colorspace(resolve1(underlying))
-            if underlying is not None:
-                ncomponents = underlying.ncomponents
+                assert isinstance(colorspace.spec, list)
+                _, underlying, _, _ = colorspace.spec
+                colorspace = get_colorspace(resolve1(underlying))
+                if colorspace is not None:
+                    ncomponents = colorspace.ncomponents
         if bits == 1:
             path = path.with_suffix(".pbm")
+        elif colorspace is None or colorspace.name not in ("DeviceGray", "DeviceRGB"):
+            path = path.with_suffix(".dat")
+            LOG.warning(
+                "Unsupported colorspace %s, writing data to %s", asobj(colorspace), path
+            )
         elif ncomponents == 1:
             path = path.with_suffix(".pgm")
         elif ncomponents == 3:
             path = path.with_suffix(".ppm")
-        try:
+        elif ncomponents == 3:
+            path = path.with_suffix(".ppm")
+        else:
+            path = path.with_suffix(".dat")
+            LOG.warning(
+                "Unsupported colorspace %s, writing data to %s", asobj(colorspace), path
+            )
+
+        if path.suffix != ".dat":
+            try:
+                with open(path, "wb") as outfh:
+                    stream.write_pnm(outfh)
+            except ValueError:
+                datpath = path.with_suffix(".dat")
+                LOG.exception(
+                    "Failed to write PNM to %s, writing data to %s", path, datpath
+                )
+                path = datpath
+
+        if path.suffix == ".dat":
             with open(path, "wb") as outfh:
-                stream.write_pnm(outfh)
-        except ValueError:
-            # Fall back to a binary file
-            datpath = path.with_suffix(".dat")
-            LOG.warning("Failed to write PNM to %s, writing data to %s", path, datpath)
-            with open(datpath, "wb") as outfh:
                 outfh.write(stream.buffer)
     return path
 
