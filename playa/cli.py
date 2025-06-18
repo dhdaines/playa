@@ -520,7 +520,7 @@ def get_one_image(stream: ContentStream, path: Path) -> Path:
         bits = stream.bits
         colorspace: Union[ColorSpace, None] = stream.colorspace
         ncomponents = 1
-        if colorspace:
+        if colorspace is not None:
             ncomponents = colorspace.ncomponents
             if colorspace.name == "Indexed":
                 from playa.color import get_colorspace
