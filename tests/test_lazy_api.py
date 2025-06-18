@@ -2,7 +2,6 @@
 Test the ContentObject API for pages.
 """
 
-import sys
 from pathlib import Path
 
 import playa
