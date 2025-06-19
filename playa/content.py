@@ -317,6 +317,12 @@ class ContentObject:
                 "Invalid marked content ID: %d (page has %d MCIDs)", mcid, len(parents)
             )
             return self._parent
+        if parents[mcid] is None:  # This might mean we have the wrong StructParents
+            log.warning(
+                "Marked content ID %d on page_idx %d has no parent element", mcid,
+                self.page.page_idx
+            )
+            return self._parent
         self._parent = Element.from_dict(self.doc, dict_value(parents[mcid]))
         return self._parent
 
