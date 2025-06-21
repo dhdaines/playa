@@ -93,7 +93,19 @@ def get_colorspace(
     elif isinstance(spec, list):
         name = spec[0].name if csid is None else csid
         if spec[0] is LITERAL_ICC_BASED and len(spec) >= 2:
-            n = stream_value(spec[1])["N"]
+            profile = stream_value(spec[1])
+            if "N" in profile:
+                n = profile["N"]
+            else:
+                # Get the color space from the ICC profile
+                space = profile.buffer[16:20]
+                if space == "GRAY":
+                    n = 1
+                elif space == "CMYK":
+                    n = 4
+                else:
+                    # All the other spaces have 3 components
+                    n = 3
             return ColorSpace(name, n, spec)
         elif spec[0] is LITERAL_DEVICE_N and len(spec) >= 2:
             # DeviceN colour spaces (PDF 1.7 sec 8.6.6.5)
