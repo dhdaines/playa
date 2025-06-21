@@ -99,10 +99,12 @@ def get_colorspace(
             else:
                 # Get the color space from the ICC profile
                 space = profile.buffer[16:20]
-                if space == "GRAY":
+                if space == b"GRAY":
                     n = 1
-                elif space == "CMYK":
+                elif space == b"CMYK":
                     n = 4
+                elif space[1:3] == b"CLR":
+                    n = int(space[0:1], base=16)
                 else:
                     # All the other spaces have 3 components
                     n = 3
