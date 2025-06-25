@@ -285,12 +285,14 @@ class Page:
         from typing import Set
 
         def xobjects_one(
-            itor: Iterable["ContentObject"], parents: Set[str]
+            itor: Iterable["ContentObject"], parents: Set[int]
         ) -> Iterator["XObjectObject"]:
             for obj in itor:
-                if isinstance(obj, XObjectObject) and obj.xobjid not in parents:
-                    yield obj
-                    yield from xobjects_one(obj, parents | {obj.xobjid})
+                if isinstance(obj, XObjectObject):
+                    stream_id = 0 if obj.stream.objid is None else obj.stream.objid
+                    if stream_id not in parents:
+                        yield obj
+                        yield from xobjects_one(obj, parents | {stream_id})
 
         for obj in xobjects_one(self, set()):
             if isinstance(obj, XObjectObject):
@@ -401,11 +403,13 @@ class Page:
         from typing import Set
 
         def flatten_one(
-            itor: Iterable["ContentObject"], parents: Set[str]
+            itor: Iterable["ContentObject"], parents: Set[int]
         ) -> Iterator["ContentObject"]:
             for obj in itor:
-                if isinstance(obj, XObjectObject) and obj.xobjid not in parents:
-                    yield from flatten_one(obj, parents | {obj.xobjid})
+                if isinstance(obj, XObjectObject):
+                    stream_id = 0 if obj.stream.objid is None else obj.stream.objid
+                    if stream_id not in parents:
+                        yield from flatten_one(obj, parents | {stream_id})
                 else:
                     yield obj
 
