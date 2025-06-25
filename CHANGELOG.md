@@ -1,3 +1,8 @@
+## PLAYA 0.6.2: Unreleased
+- Look in ICC profile for number of components if missing
+- Accept None in StructParents (this is legal)
+- Use stream object ID, not string XObject ID, to fight evil
+
 ## PLAYA 0.6.1: 2025-06-17
 - Fix regression on subset fonts with zero Ascent and Descent
 - Add method for PNM extraction to streams
