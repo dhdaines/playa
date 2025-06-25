@@ -91,8 +91,13 @@ def get_colorspace(
         name = literal_name(spec)
         return PREDEFINED_COLORSPACE.get(name)
     elif isinstance(spec, list):
-        name = spec[0].name if csid is None else csid
-        if spec[0] is LITERAL_ICC_BASED and len(spec) >= 2:
+        csname = resolve1(spec[0])
+        assert isinstance(
+            csname, PSLiteral
+        ), "Expected a name for color space, got %r" % (csname,)
+        if csid is None:
+            csid = csname.name
+        if csname is LITERAL_ICC_BASED and len(spec) >= 2:
             profile = stream_value(spec[1])
             if "N" in profile:
                 n = profile["N"]
@@ -108,12 +113,12 @@ def get_colorspace(
                 else:
                     # All the other spaces have 3 components
                     n = 3
-            return ColorSpace(name, n, spec)
-        elif spec[0] is LITERAL_DEVICE_N and len(spec) >= 2:
+            return ColorSpace(csid, n, spec)
+        elif csname is LITERAL_DEVICE_N and len(spec) >= 2:
             # DeviceN colour spaces (PDF 1.7 sec 8.6.6.5)
             n = len(list_value(spec[1]))
-            return ColorSpace(name, n, spec)
-        elif spec[0] is LITERAL_PATTERN and len(spec) == 2:
+            return ColorSpace(csid, n, spec)
+        elif csname is LITERAL_PATTERN and len(spec) == 2:
             # Uncoloured tiling patterns (PDF 1.7 sec 8.7.3.3)
             if spec[1] is LITERAL_PATTERN:
                 raise ValueError(
@@ -124,14 +129,15 @@ def get_colorspace(
                 raise ValueError("Unrecognized underlying colour space: %r", (spec,))
             # Not super important what we call it but we need to know it
             # has N+1 "components" (the last one being the pattern)
-            return ColorSpace(name, underlying.ncomponents + 1, spec)
+            return ColorSpace(csid, underlying.ncomponents + 1, spec)
         else:
             # Handle Indexed, ICCBased, etc, etc, generically
-            if spec[0] in PREDEFINED_INLINE_COLORSPACE:
-                cs: Union[ColorSpace, None] = PREDEFINED_INLINE_COLORSPACE[spec[0]]
+            cs: Union[ColorSpace, None] = None
+            if csname in PREDEFINED_INLINE_COLORSPACE:
+                cs = PREDEFINED_INLINE_COLORSPACE[csname]
             else:
-                cs = PREDEFINED_COLORSPACE.get(literal_name(spec[0]))
+                cs = PREDEFINED_COLORSPACE.get(csname.name)
             if cs is None:
                 return None
-            return ColorSpace(cs.name, cs.ncomponents, spec)
+            return ColorSpace(csid, cs.ncomponents, spec)
     return None

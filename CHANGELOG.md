@@ -2,6 +2,7 @@
 - Look in ICC profile for number of components if missing
 - Accept None in StructParents (this is legal)
 - Use stream object ID, not string XObject ID, to fight evil
+- Clarify color space ID vs. name and remember to dereference it
 
 ## PLAYA 0.6.1: 2025-06-17
 - Fix regression on subset fonts with zero Ascent and Descent
