@@ -631,9 +631,15 @@ class ContentStream:
                 raise ValueError("Stream is JBIG2 data, save it with write_jbig2")
         bits = self.bits
         colorspace = self.colorspace
+        ncomponents = colorspace.ncomponents
         data = self.buffer
+        is_bilevel = bits == 1 and ncomponents == 1 and colorspace.name != "Indexed"
+        if not is_bilevel:
+            from playa.utils import unpack_image_data
+
+            data = unpack_image_data(data, bits, self.width, self.height, ncomponents)
         ftype: Union[bytes, None] = None
-        if bits == 1:
+        if is_bilevel:
             ftype = b"P4"
         elif colorspace.name == "DeviceGray":
             ftype = b"P5"
@@ -641,7 +647,6 @@ class ContentStream:
             ftype = b"P6"
         elif colorspace.name == "Indexed":
             from playa.color import get_colorspace
-            from playa.utils import unpack_indexed_image_data
 
             assert isinstance(colorspace.spec, list)
             _, underlying, hival, lookup = colorspace.spec
@@ -659,15 +664,14 @@ class ContentStream:
                 lookup = stream_value(lookup).buffer
             channels = len(lookup) // (hival + 1)
             data = bytes(
-                b
-                for i in unpack_indexed_image_data(data, bits, self.width, self.height)
-                for b in lookup[channels * i : channels * (i + 1)]
+                b for i in data for b in lookup[channels * i : channels * (i + 1)]
             )
+            bits = 8
         if ftype is None:
             raise ValueError("Unsupported colorspace: %r" % (self.colorspace,))
         max_value = (1 << bits) - 1
         outfh.write(b"%s %d %d\n" % (ftype, self.width, self.height))
-        if bits == 1:
+        if is_bilevel:
             # Have to invert the bits! OMG! (FIXME: is there a more
             # efficient way to do this?)
             outfh.write(bytes(x ^ 0xFF for x in data))

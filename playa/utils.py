@@ -178,7 +178,9 @@ def apply_png_predictor(
 # number of data bits per row is not a multiple of 8, the end of the
 # row is padded with extra bits to fill out the last byte. A PDF
 # processor shall ignore these padding bits.
-def unpack_indexed_image_data(s: bytes, bpc: int, width: int, height: int) -> bytes:
+def unpack_image_data(
+    s: bytes, bpc: int, width: int, height: int, ncomponents: int
+) -> bytes:
     if bpc not in (1, 2, 4):
         return s
     if bpc == 4:
@@ -196,10 +198,12 @@ def unpack_indexed_image_data(s: bytes, bpc: int, width: int, height: int) -> by
         def unpack_f(x: int) -> Tuple[int, ...]:
             return tuple(x >> i & 1 for i in reversed(range(8)))
 
-    rowsize = (width * bpc + 7) // 8
+    rowsize = (width * ncomponents * bpc + 7) // 8
     rows = (s[i * rowsize : (i + 1) * rowsize] for i in range(height))
     unpacked_rows = (
-        itertools.islice(itertools.chain.from_iterable(map(unpack_f, row)), width)
+        itertools.islice(
+            itertools.chain.from_iterable(map(unpack_f, row)), width * ncomponents
+        )
         for row in rows
     )
     return bytes(itertools.chain.from_iterable(unpacked_rows))
