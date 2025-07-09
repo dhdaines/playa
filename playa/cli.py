@@ -87,15 +87,12 @@ from typing import Any, Deque, Iterable, Iterator, List, TextIO, Tuple, Union
 
 import playa
 from playa import Document, Page, PDFPasswordIncorrect, asobj
-from playa.color import ColorSpace
 from playa.data.content import Image
 from playa.data.metadata import asobj_document
+from playa.image import get_one_image
 from playa.outline import Outline
 from playa.page import ImageObject
 from playa.pdftypes import (
-    LITERALS_DCT_DECODE,
-    LITERALS_JPX_DECODE,
-    LITERALS_JBIG2_DECODE,
     ContentStream,
     ObjRef,
     resolve1,
@@ -489,81 +486,6 @@ def extract_outline(doc: Document, args: argparse.Namespace) -> None:
         print("{}", file=args.outfile)
         return
     _extract_outline_item(doc.outline, 0, args.outfile)
-
-
-def get_one_image(stream: ContentStream, path: Path) -> Path:
-    fp = stream.get_filters()
-    if fp:
-        filters, params = zip(*fp)
-        for f in filters:
-            if f in LITERALS_DCT_DECODE:
-                path = path.with_suffix(".jpg")
-                break
-            if f in LITERALS_JPX_DECODE:
-                path = path.with_suffix(".jp2")
-                break
-            if f in LITERALS_JBIG2_DECODE:
-                path = path.with_suffix(".jb2")
-                break
-    if path.suffix in (".jpg", ".jp2"):
-        # DCT streams are generally readable as JPEG files, and this
-        # is also generally true for JPEG2000 streams
-        with open(path, "wb") as outfh:
-            outfh.write(stream.buffer)
-    elif path.suffix == ".jb2":
-        # This is not however true for JBIG2, which requires a
-        # particular header
-        with open(path, "wb") as outfh:
-            stream.write_jbig2(outfh)
-    else:
-        # Otherwise, try to write a PNM file
-        bits = stream.bits
-        colorspace: Union[ColorSpace, None] = stream.colorspace
-        ncomponents = 1
-        if colorspace is not None:
-            ncomponents = colorspace.ncomponents
-            if colorspace.name == "Indexed":
-                from playa.color import get_colorspace
-
-                assert isinstance(colorspace.spec, list)
-                _, underlying, _, _ = colorspace.spec
-                colorspace = get_colorspace(resolve1(underlying))
-                if colorspace is not None:
-                    ncomponents = colorspace.ncomponents
-        if bits == 1:
-            path = path.with_suffix(".pbm")
-        elif colorspace is None or colorspace.name not in ("DeviceGray", "DeviceRGB"):
-            path = path.with_suffix(".dat")
-            LOG.warning(
-                "Unsupported colorspace %s, writing data to %s", asobj(colorspace), path
-            )
-        elif ncomponents == 1:
-            path = path.with_suffix(".pgm")
-        elif ncomponents == 3:
-            path = path.with_suffix(".ppm")
-        elif ncomponents == 3:
-            path = path.with_suffix(".ppm")
-        else:
-            path = path.with_suffix(".dat")
-            LOG.warning(
-                "Unsupported colorspace %s, writing data to %s", asobj(colorspace), path
-            )
-
-        if path.suffix != ".dat":
-            try:
-                with open(path, "wb") as outfh:
-                    stream.write_pnm(outfh)
-            except ValueError:
-                datpath = path.with_suffix(".dat")
-                LOG.exception(
-                    "Failed to write PNM to %s, writing data to %s", path, datpath
-                )
-                path = datpath
-
-        if path.suffix == ".dat":
-            with open(path, "wb") as outfh:
-                outfh.write(stream.buffer)
-    return path
 
 
 def get_images(page: Page, imgdir: Path) -> List[Tuple[Path, Image]]:

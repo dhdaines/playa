@@ -4,7 +4,6 @@ import zlib
 from typing import (
     TYPE_CHECKING,
     Any,
-    BinaryIO,
     Dict,
     Generic,
     Iterable,
@@ -392,9 +391,6 @@ def decompress_corrupted(data: bytes) -> bytes:
     return result_str
 
 
-JBIG2_HEADER = b"\x97JB2\r\n\x1a\n"
-
-
 class ContentStream:
     def __init__(
         self,
@@ -612,103 +608,6 @@ class ContentStream:
     @colorspace.setter
     def colorspace(self, cs: "ColorSpace") -> None:
         self._colorspace = cs
-
-    def write_pnm(self, outfh: BinaryIO) -> None:
-        """Write stream data to a PBM/PGM/PPM file.
-
-        Raises:
-          ValueError: if stream data cannot be written to a PNM, because of an
-                      unsupported colour space, or an unsupported filter (JBIG2,
-                      DCT or JPEG2000)
-
-        """
-        for f in self.filters:
-            if f in LITERALS_DCT_DECODE:
-                raise ValueError("Stream is JPEG data, save its buffer directly")
-            if f in LITERALS_JPX_DECODE:
-                raise ValueError("Stream is JPEG2000 data, save its buffer directly")
-            if f in LITERALS_JBIG2_DECODE:
-                raise ValueError("Stream is JBIG2 data, save it with write_jbig2")
-        bits = self.bits
-        colorspace = self.colorspace
-        ncomponents = colorspace.ncomponents
-        data = self.buffer
-        is_bilevel = bits == 1 and ncomponents == 1 and colorspace.name != "Indexed"
-        if not is_bilevel:
-            from playa.utils import unpack_image_data
-
-            data = unpack_image_data(data, bits, self.width, self.height, ncomponents)
-        ftype: Union[bytes, None] = None
-        if is_bilevel:
-            ftype = b"P4"
-        elif colorspace.name == "DeviceGray":
-            ftype = b"P5"
-        elif colorspace.name == "DeviceRGB" or colorspace.ncomponents == 3:
-            ftype = b"P6"
-        elif colorspace.name == "Indexed":
-            from playa.color import get_colorspace
-
-            assert isinstance(colorspace.spec, list)
-            _, underlying, hival, lookup = colorspace.spec
-            underlying = get_colorspace(resolve1(underlying))
-            if underlying is None:
-                raise ValueError(
-                    "Unknown underlying colorspace in Indexed image: %r" % (underlying,)
-                )
-            if underlying.name == "DeviceGray":
-                ftype = b"P5"
-            elif underlying.name == "DeviceRGB" or underlying.ncomponents == 3:
-                ftype = b"P6"
-            hival = int_value(hival)
-            if not isinstance(lookup, bytes):
-                lookup = stream_value(lookup).buffer
-            channels = len(lookup) // (hival + 1)
-            data = bytes(
-                b for i in data for b in lookup[channels * i : channels * (i + 1)]
-            )
-            bits = 8
-        if ftype is None:
-            raise ValueError("Unsupported colorspace: %r" % (self.colorspace,))
-        max_value = (1 << bits) - 1
-        outfh.write(b"%s %d %d\n" % (ftype, self.width, self.height))
-        if is_bilevel:
-            # Have to invert the bits! OMG! (FIXME: is there a more
-            # efficient way to do this?)
-            outfh.write(bytes(x ^ 0xFF for x in data))
-        else:
-            outfh.write(b"%d\n" % max_value)
-            outfh.write(data)
-
-    def write_jbig2(self, outfh: BinaryIO) -> None:
-        """Write stream data to a JBIG2 file.
-
-        Raises:
-          ValueError: if stream data is not JBIG2.
-        """
-        if not any(f in LITERALS_JBIG2_DECODE for f in self.filters):
-            raise ValueError("Stream is not JBIG2")
-        globals_stream = None
-        decode_parms = resolve1(self.get("DecodeParms"))
-        if isinstance(decode_parms, dict):
-            globals_stream = resolve1(decode_parms.get("JBIG2Globals"))
-        outfh.write(JBIG2_HEADER)
-        # flags
-        outfh.write(b"\x01")
-        # number of pages
-        outfh.write(b"\x00\x00\x00\x01")
-        # write global segments
-        if isinstance(globals_stream, ContentStream):
-            outfh.write(globals_stream.buffer)
-        # write the rest of the data
-        outfh.write(self.buffer)
-        # and an eof segment
-        outfh.write(
-            b"\x00\x00\x00\x00"  # number (bogus!)
-            b"\x33"  # flags: SEG_TYPE_END_OF_FILE
-            b"\x00"  # retention_flags: empty
-            b"\x00"  # page_assoc: 0
-            b"\x00\x00\x00\x00"  # data_length: 0
-        )
 
     @property
     def buffer(self) -> bytes:

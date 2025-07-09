@@ -9,6 +9,7 @@ import pytest
 from playa.color import PREDEFINED_COLORSPACE, Color
 from playa.exceptions import PDFEncryptionError
 from playa.utils import get_bound
+from playa.image import write_jbig2, write_pnm
 
 from .data import ALLPDFS, CONTRIB, PASSWORDS, TESTDIR, XFAILS
 
@@ -259,20 +260,20 @@ def test_jbig2(tmp_path) -> None:
         img = next(pdf.pages[0].images)
         hyppath = tmp_path / "XIPLAYER0.jb2"
         with open(hyppath, "wb") as outfh:
-            img.stream.write_jbig2(outfh)
+            write_jbig2(outfh, img.stream)
         refdata = (CONTRIB / "XIPLAYER0.jb2").read_bytes()
         hypdata = hyppath.read_bytes()
         assert refdata == hypdata
         outpath = tmp_path / "NOWAYNOHOW.pbm"
         with pytest.raises(ValueError):
             with open(outpath, "wb") as outfh:
-                img.stream.write_pnm(outfh)
+                write_pnm(outfh, img.stream)
     with playa.open(TESTDIR / "structure_xobjects_2.pdf") as pdf:
         img = next(pdf.pages[0].images)
         outpath = tmp_path / "NOWAYNOHOW.jb2"
         with pytest.raises(ValueError):
             with open(outpath, "wb") as outfh:
-                img.stream.write_jbig2(outfh)
+                write_jbig2(outfh, img.stream)
 
 
 @pytest.mark.skipif(not CONTRIB.exists(), reason="contrib samples not present")
@@ -283,7 +284,7 @@ def test_indexed_images(tmp_path) -> None:
         (img,) = pdf.pages[0].images
         outpath = tmp_path / "page1.ppm"
         with open(outpath, "wb") as outfh:
-            img.stream.write_pnm(outfh)
+            write_pnm(outfh, img.stream)
         refpath = CONTRIB / "page1-0-00005.ppm"
         hyp = outpath.read_bytes()
         ref = refpath.read_bytes()
