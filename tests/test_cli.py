@@ -83,3 +83,27 @@ def test_cli_images(path: Path):
             pass
         except PDFEncryptionError:
             pytest.skip("cryptography package not installed")
+
+
+@pytest.mark.parametrize("path", ALLPDFS, ids=str)
+def test_cli_fonts(path: Path):
+    if path.name in XFAILS:
+        pytest.xfail("Intentionally corrupt file: %s" % path.name)
+    passwords = PASSWORDS.get(path.name, [""])
+    for password in passwords:
+        try:
+            with tempfile.TemporaryDirectory() as tempdir:
+                main(
+                    [
+                        "--password",
+                        password,
+                        "--non-interactive",
+                        "--fonts",
+                        tempdir,
+                        str(path),
+                    ]
+                )
+        except PDFPasswordIncorrect:
+            pass
+        except PDFEncryptionError:
+            pytest.skip("cryptography package not installed")

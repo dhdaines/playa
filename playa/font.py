@@ -6,6 +6,7 @@ Danger: API subject to change.
 
 import logging
 from io import BytesIO
+from pathlib import Path
 from typing import (
     Dict,
     Iterable,
@@ -167,6 +168,19 @@ class Font:
         # We know the matrix is diagonal
         a, _, _, d, _, _ = self.matrix
         return (0, d * self.descent, a * width, d * self.ascent)
+
+    def write_fontfile(self, outdir: Path) -> Optional[Path]:
+        for suffix, key in (
+            (".pfa", "FontFile"),
+            (".ttf", "FontFile2"),
+            (".cff", "FontFile3"),
+        ):
+            if key in self.descriptor:
+                fontfile = stream_value(self.descriptor[key])
+                outpath = outdir / (self.fontname + suffix)
+                outpath.write_bytes(fontfile.buffer)
+                return outpath
+        return None
 
 
 class SimpleFont(Font):
