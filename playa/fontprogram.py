@@ -1471,8 +1471,7 @@ class CFFFontProgram:
         self.subr_index = self.INDEX(self.fp)
         # Top DICT DATA
         self.top_dict = self.getdict(self.dict_index[0])
-        if (12, 30) in self.top_dict:
-            raise NotImplementedError("CFF CIDFont not implemented")
+        self.is_cidfont = (12, 30) in self.top_dict
         (charset_pos,) = self.top_dict.get(15, [0])
         (encoding_pos,) = self.top_dict.get(16, [0])
         (charstring_pos,) = self.top_dict.get(17, [0])
@@ -1481,17 +1480,24 @@ class CFFFontProgram:
         self.charstring = self.INDEX(self.fp)
         self.nglyphs = len(self.charstring)
         self._parse_charset(int(charset_pos))
-        self._parse_encoding(int(encoding_pos))
+        if not self.is_cidfont:
+            self.name2gid = {self.getstr(sid): gid for gid, sid in self.gid2sid.items()}
+            self._parse_encoding(int(encoding_pos))
+            self.code2name = {
+                code: self.getstr(self.gid2sid[gid])
+                for code, gid in self.code2gid.items()
+                if gid in self.gid2sid
+            }
+        else:
+            self.cid2gid = {sid: gid for gid, sid in self.gid2sid.items()}
 
     def _parse_encoding(self, encoding_pos: int) -> None:
         # Encodings
         self.code2gid = {}
-        self.gid2code = {}
         if encoding_pos in (0, 1):
             for code, sid in enumerate(self.PREDEFINED_ENCODINGS[encoding_pos]):
                 if gid := self.name2gid.get(self.getstr(sid)):
                     self.code2gid[code] = gid
-                    self.gid2code[gid] = code
             return
         self.fp.seek(encoding_pos)
         (format,) = self.fp.read(1)
@@ -1504,7 +1510,6 @@ class CFFFontProgram:
                 struct.unpack("B" * n, self.fp.read(n)), start=1
             ):
                 self.code2gid[code] = gid
-                self.gid2code[gid] = code
         elif format == 1:
             # Format 1
             (n,) = struct.unpack("B", self.fp.read(1))
@@ -1513,7 +1518,6 @@ class CFFFontProgram:
                 (first, nleft) = struct.unpack("BB", self.fp.read(2))
                 for code in range(first, first + nleft + 1):
                     self.code2gid[code] = gid
-                    self.gid2code[gid] = code
                     gid += 1
         else:
             raise ValueError("unsupported encoding format: %r" % format)
@@ -1526,13 +1530,12 @@ class CFFFontProgram:
 
     def _parse_charset(self, charset_pos: int) -> None:
         # Charsets
-        self.name2gid = {}
-        self.gid2name = {}
+        self.gid2sid = {}
         if charset_pos in (0, 1, 2):
+            if self.is_cidfont:
+                raise ValueError("no predefined charsets for CID CFF fonts")
             for gid, sid in enumerate(self.PREDEFINED_CHARSETS[charset_pos], start=1):
-                sidname = self.getstr(sid)
-                self.name2gid[sidname] = gid
-                self.gid2name[gid] = sidname
+                self.gid2sid[gid] = sid
             return
         self.fp.seek(charset_pos)
         (format,) = self.fp.read(1)
@@ -1543,9 +1546,7 @@ class CFFFontProgram:
             for gid, sid in enumerate(
                 struct.unpack(">" + "H" * n, self.fp.read(2 * n)), start=1
             ):
-                sidname = self.getstr(sid)
-                self.name2gid[sidname] = gid
-                self.gid2name[gid] = sidname
+                self.gid2sid[gid] = sid
         elif format in (1, 2):
             # Format 1 & 2
             range_f = ">HB" if format == 1 else ">HH"
@@ -1554,9 +1555,7 @@ class CFFFontProgram:
             while gid < self.nglyphs:
                 (first, nleft) = struct.unpack(range_f, self.fp.read(range_f_size))
                 for sid in range(first, first + nleft + 1):
-                    sidname = self.getstr(sid)
-                    self.name2gid[sidname] = gid
-                    self.gid2name[gid] = sidname
+                    self.gid2sid[gid] = sid
                     gid += 1
         else:
             raise ValueError("unsupported charset format: %r" % format)
