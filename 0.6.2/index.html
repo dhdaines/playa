@@ -1,0 +1,1146 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="PLAYA ain't a LAYout Analyzer">
+      
+      
+        <meta name="author" content="David Huggins-Daines">
+      
+      
+        <link rel="canonical" href="https://dhdaines.github.io/playa/0.6.2/">
+      
+      
+      
+        <link rel="next" href="cli/">
+      
+      
+      <link rel="icon" href="assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.6.15">
+    
+    
+      
+        <title>PLAYA</title>
+      
+    
+    
+      <link rel="stylesheet" href="assets/stylesheets/main.342714a4.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="assets/_mkdocstrings.css">
+    
+    <script>__md_scope=new URL(".",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+    
+  </head>
+  
+  
+    <body dir="ltr">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#parallel-andor-lazy-analyzer-for-pdf" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+      <div data-md-color-scheme="default" data-md-component="outdated" hidden>
+        
+      </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="." title="PLAYA" class="md-header__button md-logo" aria-label="PLAYA" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            PLAYA
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Home
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/dhdaines/playa" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 6.7.2 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2024 Fonticons, Inc.--><path d="M439.55 236.05 244 40.45a28.87 28.87 0 0 0-40.81 0l-40.66 40.63 51.52 51.52c27.06-9.14 52.68 16.77 43.39 43.68l49.66 49.66c34.23-11.8 61.18 31 35.47 56.69-26.49 26.49-70.21-2.87-56-37.34L240.22 199v121.85c25.3 12.54 22.26 41.85 9.08 55a34.34 34.34 0 0 1-48.55 0c-17.57-17.6-11.07-46.91 11.25-56v-123c-20.8-8.51-24.6-30.74-18.64-45L142.57 101 8.45 235.14a28.86 28.86 0 0 0 0 40.81l195.61 195.6a28.86 28.86 0 0 0 40.8 0l194.69-194.69a28.86 28.86 0 0 0 0-40.81"/></svg>
+  </div>
+  <div class="md-source__repository">
+    dhdaines/playa
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="." title="PLAYA" class="md-nav__button md-logo" aria-label="PLAYA" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    PLAYA
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/dhdaines/playa" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 6.7.2 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2024 Fonticons, Inc.--><path d="M439.55 236.05 244 40.45a28.87 28.87 0 0 0-40.81 0l-40.66 40.63 51.52 51.52c27.06-9.14 52.68 16.77 43.39 43.68l49.66 49.66c34.23-11.8 61.18 31 35.47 56.69-26.49 26.49-70.21-2.87-56-37.34L240.22 199v121.85c25.3 12.54 22.26 41.85 9.08 55a34.34 34.34 0 0 1-48.55 0c-17.57-17.6-11.07-46.91 11.25-56v-123c-20.8-8.51-24.6-30.74-18.64-45L142.57 101 8.45 235.14a28.86 28.86 0 0 0 0 40.81l195.61 195.6a28.86 28.86 0 0 0 40.8 0l194.69-194.69a28.86 28.86 0 0 0 0-40.81"/></svg>
+  </div>
+  <div class="md-source__repository">
+    dhdaines/playa
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    Home
+    
+  </span>
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="." class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    Home
+    
+  </span>
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#about" class="md-nav__link">
+    <span class="md-ellipsis">
+      About
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#installation" class="md-nav__link">
+    <span class="md-ellipsis">
+      Installation
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#usage" class="md-nav__link">
+    <span class="md-ellipsis">
+      Usage
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#some-by-no-means-all-helpful-metadata" class="md-nav__link">
+    <span class="md-ellipsis">
+      Some (by no means all) helpful metadata
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#accessing-content" class="md-nav__link">
+    <span class="md-ellipsis">
+      Accessing content
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#using-multiple-cpus" class="md-nav__link">
+    <span class="md-ellipsis">
+      Using multiple CPUs
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#an-important-note-about-coordinate-spaces" class="md-nav__link">
+    <span class="md-ellipsis">
+      An important note about coordinate spaces
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#lazy-object-api" class="md-nav__link">
+    <span class="md-ellipsis">
+      Lazy object API
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Lazy object API">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#form-xobjects" class="md-nav__link">
+    <span class="md-ellipsis">
+      Form XObjects
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#graphics-state" class="md-nav__link">
+    <span class="md-ellipsis">
+      Graphics state
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#path-objects" class="md-nav__link">
+    <span class="md-ellipsis">
+      Path Objects
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#text-objects" class="md-nav__link">
+    <span class="md-ellipsis">
+      Text Objects
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#an-important-note-about-text-objects" class="md-nav__link">
+    <span class="md-ellipsis">
+      An important note about text objects
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#conclusion" class="md-nav__link">
+    <span class="md-ellipsis">
+      Conclusion
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#acknowledgement" class="md-nav__link">
+    <span class="md-ellipsis">
+      Acknowledgement
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="cli/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    CLI
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="reference/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Reference
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="data/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    Data API
+    
+  </span>
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#about" class="md-nav__link">
+    <span class="md-ellipsis">
+      About
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#installation" class="md-nav__link">
+    <span class="md-ellipsis">
+      Installation
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#usage" class="md-nav__link">
+    <span class="md-ellipsis">
+      Usage
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#some-by-no-means-all-helpful-metadata" class="md-nav__link">
+    <span class="md-ellipsis">
+      Some (by no means all) helpful metadata
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#accessing-content" class="md-nav__link">
+    <span class="md-ellipsis">
+      Accessing content
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#using-multiple-cpus" class="md-nav__link">
+    <span class="md-ellipsis">
+      Using multiple CPUs
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#an-important-note-about-coordinate-spaces" class="md-nav__link">
+    <span class="md-ellipsis">
+      An important note about coordinate spaces
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#lazy-object-api" class="md-nav__link">
+    <span class="md-ellipsis">
+      Lazy object API
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Lazy object API">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#form-xobjects" class="md-nav__link">
+    <span class="md-ellipsis">
+      Form XObjects
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#graphics-state" class="md-nav__link">
+    <span class="md-ellipsis">
+      Graphics state
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#path-objects" class="md-nav__link">
+    <span class="md-ellipsis">
+      Path Objects
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#text-objects" class="md-nav__link">
+    <span class="md-ellipsis">
+      Text Objects
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#an-important-note-about-text-objects" class="md-nav__link">
+    <span class="md-ellipsis">
+      An important note about text objects
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#conclusion" class="md-nav__link">
+    <span class="md-ellipsis">
+      Conclusion
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#acknowledgement" class="md-nav__link">
+    <span class="md-ellipsis">
+      Acknowledgement
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="parallel-andor-lazy-analyzer-for-pdf"><strong>P</strong>arallel and/or <strong>LA</strong>z<strong>Y</strong> <strong>A</strong>nalyzer for <strong>PDF</strong> 🏖️</h1>
+<h2 id="about">About</h2>
+<p>There are already too many PDF libraries, unfortunately none of which
+does everything that everybody wants it to do, and we probably don't
+need another one. It is not recommended that you use this library for
+anything at all, but if you were going to use it for something, it
+would be specifically one of these things and nothing else:</p>
+<ol>
+<li>Accessing the document catalog, page tree, structure tree, outline,
+   content streams, cross-reference table, XObjects, fonts,
+   annotations, and other low-level PDF metadata.</li>
+<li>Obtaining the absolute position and attributes of every character,
+   line, path, and image in every page of a PDF.</li>
+</ol>
+<p>The purpose of PLAYA is to provide an efficent, parallel and
+parallelizable, pure-Python and Pythonic (for its author's definition
+of the term), lazy interface to the internals of PDF files.</p>
+<p>But, it does more than that!  It also includes a command-line
+interface which can dump out various types of PDF data and metadata
+quickly.  For instance, you might want to dump out all the PDF
+operators in all the content streams on all the pages:</p>
+<pre><code>playa --content-streams my-awesome-document.pdf
+</code></pre>
+<p>Or you could look at the document outline or logical structure tree:</p>
+<pre><code>playa --outline some-interesting-stuff.pdf
+playa --structure tagged-pdf-wow.pdf
+</code></pre>
+<p>And, yes, it does extract text, or also text objects (with associated
+metadata):</p>
+<pre><code>playa --text fascinating-research-paper.pdf
+playa --text-objects colorful-presentation.pdf
+</code></pre>
+<p>Or images, in JPEG and PNM format (may not work for all images):</p>
+<pre><code>playa --images imagedir splashy-resume.pdf
+</code></pre>
+<p>Or fonts, in various esoteric formats (may not work for all fonts):</p>
+<pre><code>playa --fonts fontdir typographic-horror.pdf
+</code></pre>
+<p>If you just want to extract text from a PDF, there are better and/or
+faster tools and libraries out there, notably
+<a href="https://pypi.org/project/pypdfium2/">pypdfium2</a> and
+<a href="https://pypi.org/project/pypdf/">pypdf</a>, among others.  See <a href="https://github.com/dhdaines/benchmarks">these
+benchmarks</a> for a comparison.
+Nonetheless, you will notice in this comparison that:</p>
+<ul>
+<li>PLAYA (using 2 CPUs) is the fastest pure-Python PDF reader by far</li>
+<li>PLAYA has no dependencies and no C++</li>
+<li>PLAYA is MIT licensed</li>
+</ul>
+<p>PLAYA is also very good at reading logical structure trees.  On my
+town's 486-page zoning bylaw, extracting the entire tree with its text
+contents as JSON using <code>playa --structure</code> takes only 23 seconds,
+whereas <code>pdfplumber --structure-text</code> takes 69 seconds and <code>pdfinfo
+-struct-text</code> (which doesn't output JSON) takes 110 seconds.</p>
+<p>I cannot stress this enough, <em>text extraction is not the primary use
+case for PLAYA</em>, because <a href="https://pypdf.readthedocs.io/en/latest/user/extract-text.html#why-text-extraction-is-hard">extracting text from PDFs is not
+fun</a>,
+and I like fun.  Do you like fun?  Then read on.</p>
+<h2 id="installation">Installation</h2>
+<p>Installing it should be really simple as long as you have Python 3.8
+or newer:</p>
+<pre><code>pipx install playa-pdf
+</code></pre>
+<p>Yes it's not just "playa".  Sorry about that.  If you wish to read
+certain encrypted PDFs then you will need the <code>crypto</code> add-on:</p>
+<pre><code>pipx install playa-pdf[crypto]
+</code></pre>
+<h2 id="usage">Usage</h2>
+<p>Do you want to get stuff out of a PDF?  You have come to the right
+place!  Let's open up a PDF and see what's in it:</p>
+<pre><code class="language-python">pdf = playa.open(&quot;my_awesome_document.pdf&quot;)
+raw_byte_stream = pdf.buffer
+a_bunch_of_tokens = list(pdf.tokens)
+a_bunch_of_indirect_objects = list(pdf)
+</code></pre>
+<p>The raw PDF tokens and objects are probably not terribly useful to
+you, but you might find them interesting.  Note that these are
+"indirect objects" where the actual object is accompanied by an object
+number and generation number:</p>
+<pre><code class="language-python">for objid, genno, obj in pdf:
+    ...
+# or also
+for obj in pdf:
+    obj.objid, obj.genno, obj.obj
+</code></pre>
+<p>Also, these will only be the top-level objects and not those found
+inside object streams (the streams are themselves indirect objects).
+You can iterate over all indirect objects including object streams
+using the <code>objects</code> property:</p>
+<pre><code class="language-python">for obj in pdf.objects:
+    obj.objid, obj.genno, obj.obj
+</code></pre>
+<p>In this case it is possible you will encounter multiple objects with
+the same <code>objid</code> due to the "incremental updates" feature of PDF.
+Currently, iterating over the objects in a particular stream is
+possible, but complicated.</p>
+<p>You can also access indirect objects by number (this will return the
+object with most recent generation number):</p>
+<pre><code class="language-python">a_particular_object = pdf[42]
+</code></pre>
+<p>Your PDF document probably has some pages.  How many?  What are their
+numbers/labels?  They could be things like "xvi" (pronounced
+"gzvee"), 'a", or "42", for instance!</p>
+<pre><code class="language-python">npages = len(pdf.pages)
+page_numbers = [page.label for page in pdf.pages]
+</code></pre>
+<p>You can also subscript <code>pdf.pages</code> in various other ways, using a
+slice or an iterable of <code>int</code>, which will give you a page list object
+that behaves similarly to <code>pdf.pages</code>.  Pages and page lists can refer
+back to their document (using weak reference magic to avoid memory
+leaks) with the <code>doc</code> property.</p>
+<h2 id="some-by-no-means-all-helpful-metadata">Some (by no means all) helpful metadata</h2>
+<p>A PDF often contains a "document outline" which is a sequence of trees
+representing the coarse-grained logical structure of the document.</p>
+<pre><code class="language-python">for entry in pdf.outline:
+    entry.title, entry.destination, entry.action, entry.element
+    for child in entry:
+        child.title, child.destination, child.action, child.element
+        ...
+</code></pre>
+<p>If you are lucky it has a "logical structure tree".  The elements here
+might even be referenced from the <code>outline</code> above!  (or, they might
+not... with PDF you never know).</p>
+<pre><code class="language-python">for element in pdf.structure:
+   for child in element:
+       ...
+sections = structure.find_all(&quot;Sect&quot;)
+first_p = structure.find(&quot;P&quot;)
+</code></pre>
+<p>Now perhaps we want to look at a specific page.  Okay!  You can also
+look at its contents, more on that in a bit:</p>
+<pre><code class="language-python">page = pdf.pages[0]        # they are numbered from 0
+page = pdf.pages[&quot;xviii&quot;]  # but you can get them by label (a string)
+page = pdf.pages[&quot;42&quot;]     # or &quot;logical&quot; page number (also a string)
+print(f&quot;Page {page.label} is {page.width} x {page.height}&quot;)
+</code></pre>
+<p>Since PDF is at heart a page-oriented, presentation format, many types
+of metadata are mostly accessible via the page objects.  For instance
+you can access the fonts used in page with, obviously, the <code>fonts</code>
+property, or the annotations via the <code>annotations</code> property.</p>
+<p>For example, annotations (internal or external links) are defined on
+pages (since their position would not make any sense otherwise).
+There are umpteen zillion kinds of annotations (PDF 1.7 sect 12.5.6)
+but they all have at least these attributes in common:</p>
+<pre><code class="language-python">for annot in page.annotations:
+    annot.subtype, annot.rect, annot.props
+</code></pre>
+<p>The set of possible entries in annotation dictionaries (PDF 1.7 sect
+12.5.2) is vast and confusing and inconsistently implemented, but you
+can always access them by their names (as defined in the PDF standard)
+via <code>annot.props</code>.</p>
+<h2 id="accessing-content">Accessing content</h2>
+<p>What are these "contents" of which you speak, which were surely
+created by a Content Creator?  Well, you can look at the stream of
+tokens or mysterious PDF objects:</p>
+<pre><code class="language-python">for token in page.tokens:
+    ...
+for object in page.contents:
+    ...
+</code></pre>
+<p>But that isn't very useful, so you can also access actual textual and
+graphical objects (if you wanted to, for instance, do layout
+analysis).</p>
+<pre><code class="language-python">for item in page:
+    ...
+</code></pre>
+<p>Because it is quite inefficient to expand, calculate, and copy every
+possible piece of information, PLAYA gives you some options here.
+Wherever possible this information can be computed lazily, but this
+involves some more work on the user's part.</p>
+<h2 id="using-multiple-cpus">Using multiple CPUs</h2>
+<p>You may be wondering, what does "Parallel and Lazy" really mean?
+PLAYA allows you to take advantage of multiple CPUs, which can greatly
+speed up some operations on large documents.  This parallelism
+currently operates at the page level since this is the most logical
+way to split up a PDF.  To enable it, pass the <code>max_workers</code> argument
+to <code>playa.open</code> with the number of cores you wish to use (you can also
+explicitly pass <code>None</code> to use the maximum):</p>
+<pre><code class="language-python">with playa.open(path, max_workers=4) as pdf:
+    ...
+</code></pre>
+<p>Now, you can apply a function across the pages of the PDF in parallel
+using the <code>map</code> method of <code>pdf.pages</code>, for example:</p>
+<pre><code class="language-python">def get_page_size(page: Page) -&gt; Tuple[int, int]:
+    return page.width, page.height
+
+page_sizes = pdf.pages.map(get_page_size)
+</code></pre>
+<p>You could also just do this for certain pages by subscripting
+<code>pdf.pages</code> (this can be a slice, an iterable of <code>int</code>, or a
+generator expression over <code>int</code> and/or <code>str</code>):</p>
+<pre><code class="language-python">some_page_sizes = pdf.pages[2:5].map(get_page_size)
+</code></pre>
+<p>There are some limitations to this, because it uses <code>multiprocessing</code>.
+The function you pass to <code>map</code> must be serializable by <code>pickle</code>, which
+in practice means that an inner function or lambda generally doesn't
+work.  You can get around this in a very Java-like way by passing a
+callable object that encapsulates the necessary state.  If you wish to
+avoid traumatising readers of your code, then use <code>functools.partial</code>
+instead:</p>
+<pre><code class="language-python">pdf.pages.map(partial(myfunc, arg1=value1, arg2=value2))
+</code></pre>
+<p>Also, any value returned by your function must also be serializable.
+There is a bit of magic that enables this to work for PDF objects
+containing indirect object references, so you should be able to, for
+instance, get the <code>dests</code> or <code>annots</code> from every page without any
+trouble.  But if you have your own complex objects that you return you
+may encounter problems (or slowness).</p>
+<h2 id="an-important-note-about-coordinate-spaces">An important note about coordinate spaces</h2>
+<p>Wait, what is this "absolute position" of which you speak, and which
+PLAYA gives you?  It's important to understand that there is no
+definition of "device space" in the PDF standard, and I quote (PDF 1.7
+sec 8.3.2.2):</p>
+<blockquote>
+<p>A particular device’s coordinate system is called its device
+space. The origin of the device space on different devices can fall in
+different places on the output page; on displays, the origin can vary
+depending on the window system. Because the paper or other output
+medium moves through different printers and imagesetters in different
+directions, the axes of their device spaces may be oriented
+differently.</p>
+</blockquote>
+<p>You may immediately think of CSS when you hear the phrase "absolute
+position" and this is exactly what PLAYA gives you as its default
+device space, specifically:</p>
+<ul>
+<li>Units are default user space units (1/72 of an inch).</li>
+<li><code>(0, 0)</code> is the top-left corner of the page, as defined by its
+  <code>MediaBox</code> after rotation is applied.</li>
+<li>Coordinates increase from the top-left corner of the page towards
+  the bottom-right corner.</li>
+</ul>
+<p>However, for compatibility with <code>pdfminer.six</code>, you can also pass
+<code>space="page"</code> to <code>playa.open</code>.  In this case, <code>(0, 0)</code> is the
+bottom-left corner of the page as defined by the <code>MediaBox</code>, after
+rotation, and coordinates increase from the bottom-left corner of the
+page towards the top-right, as they do in PDF user space.</p>
+<p>If you don't care about absolute positioning, you can use
+<code>space="default"</code>, which may be somewhat faster in the future (currently
+it isn't).  In this case, no translation or rotation of the default
+user space is done (in other words any values of <code>MediaBox</code> or
+<code>Rotate</code> in the page dictionary are simply ignored).</p>
+<p>In general, where the API provides you with coordinates, they are
+translated to the device space, unless indicated otherwise (for
+example, sometimes there is a <code>rect</code> property which gives the default
+user-space rectangle, and a <code>bbox</code> property which gives device space).</p>
+<h2 id="lazy-object-api">Lazy object API</h2>
+<p>Fundamentally you may just want to know <em>what</em> is <em>where</em> on the page,
+and PLAYA has you covered there (note that the bbox is normalized, and
+in the aforementioned interpretation of "device space"):</p>
+<pre><code class="language-python">for obj in page:
+    print(f&quot;{obj.object_type} at {obj.bbox}&quot;)
+
+    # With space=&quot;screen&quot; (the default)
+    left, top, right, bottom = obj.bbox
+    print(f&quot;  top left is {left, top}&quot;)
+    print(f&quot;  bottom right is {right, bottom}&quot;)
+
+    # With space=&quot;page&quot; or space=&quot;default&quot;
+    left, bottom, right, top = obj.bbox
+    print(f&quot;  bottom left is {left, bottom}&quot;)
+    print(f&quot;  top right is {right, top}&quot;)
+</code></pre>
+<p>Another important piece of information (which <code>pdfminer.six</code> does not
+really handle) is the relationship between layout and logical
+structure, done using <em>marked content sections</em>:</p>
+<pre><code class="language-python">for obj in page:
+    print(f&quot;{obj.object_type} is in marked content section {obj.mcs.mcid}&quot;)
+    print(f&quot;    which is tag {obj.mcs.tag.name}&quot;)
+    print(f&quot;    with properties {obj.mcs.tag.props}&quot;)
+    print(f&quot;    in structure element {obj.parent}&quot;)
+</code></pre>
+<p>The <code>mcid</code> here is the same one referenced in elements of the
+structure tree as shown above (but remember that <code>tag</code> has nothing to
+do with the structure tree element, because Reasons).  Logical
+structure elements can contain one or more marked content sections,
+and the parent element can be found using the <code>parent</code> property on
+content objects or the <code>structure</code> property on pages and Form
+XObjects, which contains them indexed by <code>mcid</code>.</p>
+<p>A marked content section does not necessarily have a <code>mcid</code> or
+<code>props</code>, but it will <em>always</em> have a <code>tag</code>.  Exceptionally, because
+marked content sections may (unfortunately) be nested, you can find
+the <code>mcid</code> of the nearest <em>containing</em> marked content section, if one
+exists, with the <code>mcid</code> property on objects.</p>
+<p>PDF also has the concept of "marked content points". PLAYA suports
+these with objects of <code>object_type == "tag"</code>.  The tag name and
+properties are also accessible via the <code>mcs</code> attribute.</p>
+<p>You may also wish to know the complete stack of enclosing marked
+content sections.  This is accessible from the <code>mcstack</code> property.
+Note that though it's called a "stack", it's actually a tuple.  This
+means that it is immutable, and you can check if it has changed from
+one object to the next using the <code>is</code> operator.</p>
+<p>All content objects can also refer back to their containing <code>Page</code>
+from the <code>page</code> property.  This uses weak reference magic in order to
+avoid causing memory leaks.</p>
+<h3 id="form-xobjects">Form XObjects</h3>
+<p>A PDF page may also contain "Form XObjects" which are like tiny
+embedded PDF documents (they have nothing to do with fillable forms).
+Simply iterating over a <code>Page</code> <strong>will not expand these for you</strong> which
+may be a source of surprise, but you can recurse into them with the
+<code>flatten</code> method, or with the convenience properties <code>paths</code>,
+<code>images</code>, <code>texts</code> and <code>glyphs</code>.  You can also identify them in
+iteration because they have <code>object_type == "xobject"</code>.  The layout
+objects inside are accessible by iteration, as with pages:</p>
+<pre><code class="language-python">for obj in page:
+    if obj.object_type == &quot;xobject&quot;:
+        for item in obj:
+            ...
+</code></pre>
+<p>You can also iterate over them in the page context with
+<code>page.xobjects</code> (this will also find Form XObjects contained inside
+other Form XObjects, which is unfortunately a thing):</p>
+<pre><code class="language-python">for xobj in page.xobjects:
+    for item in xobj:
+        ...
+</code></pre>
+<p>Exceptionally, these have a few more features than the ordinary
+<code>ContentObject</code> - you can look at their raw stream contents as well as
+the tokens, and you can also see raw, mysterious PDF objects with
+<code>contents</code>.</p>
+<h3 id="graphics-state">Graphics state</h3>
+<p>You may also wish to know what color an object is, and other aspects
+of what PDF refers to as the <em>graphics state</em>, which is accessible
+through <code>obj.gstate</code>.  This is a mutable object, and since there are
+quite a few parameters in the graphics state, PLAYA does not create a
+copy of it for every object in the layout - you are responsible for
+saving them yourself if you should so desire.  This is not
+particularly onerous, because the parameters themselves are immutable:</p>
+<pre><code class="language-python">for obj in page:
+    print(f&quot;{obj.object_type} at {obj.bbox} is:&quot;)
+    print(f&quot;    {obj.gstate.scolor} stroking color&quot;)
+    print(f&quot;    {obj.gstate.ncolor} non-stroking color&quot;)
+    print(f&quot;    {obj.gstate.dash} dashing style&quot;)
+    my_stuff = (obj.dash, obj.gstate.scolor, obj.gstate.ncolor)
+    other_stuff.append(my_stuff)  # it's safe there
+</code></pre>
+<p>You should however definitely be aware that storing content objects to
+a list, then iterating over that list, will give unpredictable and
+undefined results!  Don't do this, for instance:</p>
+<pre><code class="language-python"># DO NOT do this
+objs = list(page)
+for obj in objs:
+    obj.gstate  # ...is now undefined
+</code></pre>
+<h3 id="path-objects">Path Objects</h3>
+<p>Unlike pdfminer.six, PLAYA does not try to interpret paths (as
+rectangles or whatever) nor does it break them into "subpaths".  You
+just get path segments (it does, however, do some basic normalization
+to remove redundant segments).  You can look at the actual path
+segments in user space (fast):</p>
+<pre><code class="language-python">for seg in path.raw_segments:
+   print(f&quot;segment: {seg}&quot;)
+</code></pre>
+<p>Or in PLAYA's "device space" (not so fast):</p>
+<pre><code class="language-python">for seg in path.segments:
+   print(f&quot;segment: {seg}&quot;)
+</code></pre>
+<h3 id="text-objects">Text Objects</h3>
+<p>Since most PDFs consist primarily of text, obviously you may wish to
+know something about the actual text (or the <code>ActualText</code>, which you
+can sometimes find in <code>obj.mcs.tag.props["ActualText"]</code>).  This is
+more difficult than it looks, as fundamentally PDF just positions
+arbitrarily numbered glyphs on a page, and the vast majority of PDFs
+embed their own fonts, using <em>subsetting</em> to include only the glyphs
+actually used.</p>
+<p>Whereas <code>pdfminer.six</code> would break down text objects into their
+individual glyphs (which might or might not correspond to characters),
+this is not always what you want, and moreover it is computationally
+quite expensive.  So PLAYA, by default, does not do this.  If you
+don't need to know the actual bounding box of a text object, then
+don't access <code>obj.bbox</code> and it won't be computed.  If you don't need
+to know the position of each glyph but simply want the Unicode
+characters, then just look at <code>obj.chars</code>.</p>
+<p>It is also important to understand that <code>obj.chars</code> may or may not
+correspond to the actual text that a human will read on the page.  To
+actually extract <em>text</em> from a PDF necessarily involves Heuristics or
+Machine Learning (yes, capitalized, like that) and PLAYA does not do
+either of those things.</p>
+<p>This is because PDFs, especially ones produced by OCR, don't organize
+text objects in any meaningful fashion, so you will want to actually
+look at the glyphs.  This becomes a matter of iterating over the item,
+giving you, well, more items, which are the individual glyphs:</p>
+<pre><code class="language-python">for glyph in item:
+    print(&quot;Glyph has CID {glyph.cid} and Unicode {glyph.text}&quot;)
+</code></pre>
+<p>Note that the actual positioning of the glyphs is only done once you
+actually look at their <code>bbox</code> property, so for instance, if you wish
+to ignore glyphs with <code>glyph.gstate.render_mode == 3</code> (which means
+"invisible") or <code>glyph.gstate.scolor.values == (1.0,)</code> (which means
+"written in white ink") then you could do that.</p>
+<p>For text extraction you really don't care about the <code>bbox</code>, but you
+probably <em>do</em> care about the origin of each glyph relative to its
+neighbours.  For this reason PLAYA provides you with two convenience
+properties, <code>origin</code> and <code>displacement</code>, which are considerably faster
+to compute than the <code>bbox</code>.</p>
+<p>PLAYA doesn't guarantee that text objects come at you in anything
+other than the order they occur in the file (but it does guarantee
+that).</p>
+<h3 id="an-important-note-about-text-objects">An important note about text objects</h3>
+<p>But wait!  What do we mean by "Text Objects"?  What is "text", anyway?
+While philosophers have debated this question for millennia, PDF has a
+somewhat more precise definition (PDF 1.7, sec 9.4.1):</p>
+<blockquote>
+<p>A PDF text object consists of operators that may show text strings,
+move the text position, and set text state and certain other
+parameters ... A text object begins with the <code>BT</code> operator and ends with
+the <code>ET</code> operator ... specific categories of text-related operators may
+appear in a text object ...</p>
+</blockquote>
+<p>Except that this is not entirely true!  Many <em>other</em> operators may
+also appear in a text object (PDF 1.7, sec 8.2, table 9):</p>
+<blockquote>
+<p>Text object: Allowed operators:</p>
+<ul>
+<li>General graphics state</li>
+<li>Color</li>
+<li>Text state</li>
+<li>Text-showing</li>
+<li>Text-positioning</li>
+<li>Marked-content</li>
+</ul>
+</blockquote>
+<p>In other words, as usual:</p>
+<p><img alt="Adobe is Spiderman" src="adobe-spiderman.jpg" /></p>
+<p>(above meme does not apply to PDF 2.0, where you, yes you, can help
+to eradicate the <a href="https://github.com/pdf-association/pdf-issues">numerous inconsistencies, contradictions, and
+ambiguities</a> of the
+previous standard)</p>
+<p>In particular, we care <strong>a lot</strong> about marked content operators, because
+of the abovementioned <code>ActualText</code> property.  For this reason a
+<code>TextObject</code> in PLAYA <strong>does not</strong> and <strong>will never</strong> correspond to a
+PDF text object as defined by the <code>BT</code> and <code>ET</code> operators.  For the
+moment, every text-showing operator triggers a new <code>TextObject</code>.  It
+is possible (though unlikely) that in the future, only changes in marked
+content or graphics state will do this.</p>
+<h2 id="conclusion">Conclusion</h2>
+<p>As mentioned earlier, if you really just want to do text extraction,
+there's always pdfplumber, pymupdf, pypdfium2, pikepdf, pypdf, borb,
+etc, etc, etc.</p>
+<h2 id="acknowledgement">Acknowledgement</h2>
+<p>This repository obviously includes code from <code>pdfminer.six</code>.  Original
+license text is included in
+<a href="https://github.com/dhdaines/playa/blob/main/LICENSE">LICENSE</a>.  The
+license itself has not changed!</p>
+<p>For the moment PLAYA is developed and maintained by <a href="https://ecolingui.ca/">David
+Huggins-Daines</a>.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      Copyright &copy; David Huggins-Daines 2024-present
+    </div>
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      <script id="__config" type="application/json">{"base": ".", "features": [], "search": "assets/javascripts/workers/search.d50fe291.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": {"provider": "mike"}}</script>
+    
+    
+      <script src="assets/javascripts/bundle.56ea9cef.min.js"></script>
+      
+    
+  </body>
+</html>
