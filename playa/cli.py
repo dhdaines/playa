@@ -624,29 +624,44 @@ def extract_images(doc: Document, args: argparse.Namespace) -> None:
 def extract_fonts(doc: Document, args: argparse.Namespace) -> None:
     """Extract fonts."""
     pages = decode_page_spec(doc, args.pages)
-    print("[", file=args.outfile, end="")
+    print("{", file=args.outfile, end="")
     if args.fonts is not None:
         args.fonts.mkdir(exist_ok=True, parents=True)
     extracted = set()
     last = None
     for page in doc.pages[pages]:
-        # Iterate through all TextObject to cover fonts in XObject resources
-        # Very non-optimal
-        for text in page.texts:
-            font = text.gstate.font
+        fontiter = itertools.chain(
+            page.fonts.values(), *(xobj.fonts.values() for xobj in page.xobjects)
+        )
+        for font in fontiter:
             # Fonts can have identical fontnames, but normally these are just
             # the same font with different encodings, so no point in extracting
             # them multiple times.
-            if font is not None and font.fontname not in extracted:
-                path = font.write_fontfile(args.fonts)
-                if path is not None:
-                    extracted.add(font.fontname)
-                    if last is not None:
-                        print(last, end=",\n", sep="", file=args.outfile)
-                    last = path
+            if font.fontname in extracted:
+                continue
+            path = font.write_fontfile(args.fonts)
+            if path is not None:
+                extracted.add(font.fontname)
+                if last is not None:
+                    lastpath, lastfont = last
+                    print(
+                        json.dumps(str(lastpath)),
+                        end=": ",
+                        sep="",
+                        file=args.outfile,
+                    )
+                    print(
+                        json.dumps(asobj(lastfont)),
+                        end=",\n",
+                        sep="",
+                        file=args.outfile,
+                    )
+                last = (path, font)
     if last is not None:
-        print(last, file=args.outfile)
-    print("]", file=args.outfile)
+        lastpath, lastfont = last
+        print(json.dumps(str(lastpath)), end=": ", sep="", file=args.outfile)
+        print(json.dumps(asobj(lastfont)), end="\n", sep="", file=args.outfile)
+    print("}", file=args.outfile)
 
 
 def main(argv: Union[List[str], None] = None) -> None:
