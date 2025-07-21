@@ -237,7 +237,7 @@ class Page:
     @property
     def contents(self) -> Iterator[PDFObject]:
         """Iterator over PDF objects in the content streams."""
-        for _, obj in ContentParser(self._contents):
+        for _, obj in ContentParser(self._contents, self.doc):
             yield obj
 
     def __iter__(self) -> Iterator["ContentObject"]:
@@ -301,7 +301,7 @@ class Page:
     @property
     def tokens(self) -> Iterator[Token]:
         """Iterator over tokens in the content streams."""
-        parser = ContentParser(self._contents)
+        parser = ContentParser(self._contents, self.doc)
         while True:
             try:
                 pos, tok = parser.nexttoken()

@@ -53,6 +53,7 @@ from playa.parser import (
 from playa.pdftypes import (
     ContentStream,
     DecipherCallable,
+    InlineImage,
     ObjRef,
     dict_value,
     int_value,
@@ -203,6 +204,9 @@ class Document:
         self._cached_objs: Dict[int, PDFObject] = {}
         self._parsed_objs: Dict[int, Tuple[List[PDFObject], int]] = {}
         self._cached_fonts: Dict[int, Font] = {}
+        self._cached_inline_images: Dict[
+            Tuple[int, int], Tuple[int, Optional[InlineImage]]
+        ] = {}
         if isinstance(fp, io.TextIOBase):
             raise TypeError("fp is not a binary file")
         self.pdf_version, self.offset, self.buffer = _open_input(fp)

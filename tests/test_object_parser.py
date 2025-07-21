@@ -3,6 +3,7 @@ from typing import Any, List
 
 import pytest
 
+from playa.document import Document
 from playa.parser import (
     KEYWORD_DICT_BEGIN,
     KEYWORD_DICT_END,
@@ -429,6 +430,15 @@ def test_inline_images():
     pos, img = next(parser)
     assert isinstance(img, InlineImage)
     assert img.buffer == b"OLDMACDONALDEIEIO"
+
+
+def test_cached_inline_images():
+    doc = Document(b"")
+    first = list(ObjectParser(INLINEDATA1, doc, streamid=0))
+    second = list(ObjectParser(INLINEDATA1, doc, streamid=0))
+    assert first == second
+    third = list(ObjectParser(INLINEDATA1, doc, streamid=1))
+    assert first != third
 
 
 def test_reverse_solidus():

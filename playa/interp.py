@@ -227,7 +227,7 @@ class LazyInterpreter:
         return x
 
     def __iter__(self) -> Iterator[ContentObject]:
-        parser = ContentParser(self.contents)
+        parser = ContentParser(self.contents, self.page.doc)
         for _, obj in parser:
             # These are handled inside the parser as they don't obey
             # the normal syntax rules (PDF 1.7 sec 8.9.7)
