@@ -8,6 +8,7 @@ from typing import (
     Iterable,
     Iterator,
     List,
+    Mapping,
     Tuple,
     TypeVar,
     Union,
@@ -687,3 +688,17 @@ def format_int_alpha(value: int) -> str:
 
     result.reverse()
     return "".join(result)
+
+
+class IdentityMapping(Mapping[_T, _T]):
+    def __getitem__(self, key: _T) -> _T:
+        return key
+
+    def __iter__(self) -> Iterator[_T]:
+        yield from ()
+
+    def __len__(self) -> int:
+        return 0
+
+
+IDENTITY_MAPPING: IdentityMapping = IdentityMapping()

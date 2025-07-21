@@ -5,12 +5,14 @@ Danger: API subject to change.
 """
 
 import logging
+import struct
 from io import BytesIO
 from pathlib import Path
 from typing import (
     Dict,
     Iterable,
     List,
+    Mapping,
     Optional,
     Tuple,
     Union,
@@ -61,10 +63,12 @@ from playa.utils import (
     choplist,
     decode_text,
     transform_bbox,
+    IDENTITY_MAPPING,
 )
 
 log = logging.getLogger(__name__)
 LITERAL_STANDARD_ENCODING = LIT("StandardEncoding")
+LITERAL_CIDFONT_TYPE0 = LIT("CIDFontType0")
 
 
 class Font:
@@ -292,12 +296,13 @@ class Type1Font(SimpleFont):
             self.fontfile3 = stream_value(descriptor.get("FontFile3"))
             try:
                 cfffont = CFFFontProgram(self.basefont, BytesIO(self.fontfile3.buffer))
-                self.cfffont = cfffont
-                return {
-                    cid: cfffont.gid2name[gid]
-                    for cid, gid in cfffont.code2gid.items()
-                    if gid in cfffont.gid2name
-                }
+                assert not cfffont.is_cidfont
+                return cfffont.code2name
+            except AssertionError:
+                log.warning(
+                    "Embedded CFFFont %r for Type1 font is a CIDFont", self.fontfile3
+                )
+                return LITERAL_STANDARD_ENCODING
             except Exception:
                 log.debug("Failed to parse CFFFont %r", self.fontfile3, exc_info=True)
                 return LITERAL_STANDARD_ENCODING
@@ -515,6 +520,8 @@ class CIDFont(Font):
         self,
         spec: Dict[str, PDFObject],
     ) -> None:
+        self.spec = spec
+        self.subtype = resolve1(spec.get("Subtype"))
         self.basefont = get_basefont(spec)
         self.cidsysteminfo = dict_value(spec.get("CIDSystemInfo", {}))
         # These are *supposed* to be ASCII (PDF 1.7 section 9.7.3),
@@ -621,7 +628,43 @@ class CIDFont(Font):
             self.default_vdisp = 0
             self.positions = {}
             self.vdisps = {}
+
         Font.__init__(self, descriptor, widths, default_width=default_width)
+
+    @property
+    def cid2gid(self) -> Optional[Mapping[int, int]]:
+        """According to PDF 2.0 Sec 9.7.4.2 Glyph selection in CIDFonts:
+        The CID to glyph id mapping, or None in the case of external TrueType
+        font program (Type2 CIDFont), because "...In this case, CIDs shall not
+        participate in glyph selection..."
+        Note that this is not exactly equivalent to the CIDToGIDMap entry,
+        despite what the name might suggest.
+        """
+        if "FontFile2" in self.descriptor:
+            # Type 2, embedded
+            cid2gidmap = resolve1(self.spec.get("CIDToGIDMap"))
+            if isinstance(cid2gidmap, ContentStream):
+                buffer = cid2gidmap.buffer
+                return dict(
+                    enumerate(struct.unpack(">" + "H" * (len(buffer) // 2), buffer))
+                )
+            else:
+                return IDENTITY_MAPPING
+        elif "FontFile3" in self.descriptor:
+            # Type 0, embedded
+            try:
+                fontfile3 = stream_value(self.descriptor.get("FontFile3"))
+                cfffont = CFFFontProgram(self.basefont, BytesIO(fontfile3.buffer))
+                return cfffont.cid2gid if cfffont.is_cidfont else IDENTITY_MAPPING
+            except Exception:
+                log.debug("Failed to parse CFFFont %r", fontfile3, exc_info=True)
+                return IDENTITY_MAPPING
+        elif self.subtype == LITERAL_CIDFONT_TYPE0:
+            # Type 0, external
+            return IDENTITY_MAPPING
+        else:
+            # Type 2, external
+            return None
 
     def get_cmap_from_spec(self, spec: Dict[str, PDFObject]) -> CMapBase:
         """Get cmap from font specification
