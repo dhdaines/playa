@@ -40,6 +40,10 @@ Or images, in JPEG and PNM format (may not work for all images):
 
     playa --images imagedir splashy-resume.pdf
 
+Or fonts, in various esoteric formats (may not work for all fonts):
+
+    playa --fonts fontdir typographic-horror.pdf
+
 If you just want to extract text from a PDF, there are better and/or
 faster tools and libraries out there, notably
 [pypdfium2](https://pypi.org/project/pypdfium2/) and
