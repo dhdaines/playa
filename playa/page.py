@@ -376,6 +376,12 @@ class Page:
             generally considered to be globally unique, it may be
             possible to access fonts by them in the future.
 
+        Note: This does not include fonts specific to Form XObjects.
+            Since it is possible for the resource names to collide,
+            this will only return the fonts for a page and not for any
+            Form XObjects invoked on it.  You may use
+            `XObjectObject.fonts` to access these.
+
         Danger: Do not rely on this being a `dict`.
             Currently this is implemented eagerly, but in the future it
             may return a lazy object which only loads fonts on demand.

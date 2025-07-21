@@ -630,6 +630,34 @@ class XObjectObject(ContentObject):
         self._textmap: Mapping[int, List[str]] = _extract_mcid_texts(self)
         return self._textmap
 
+    @property
+    def fonts(self) -> Mapping[str, Font]:
+        """Mapping of resource names to fonts for this Form XObject.
+
+        Note: This is not the same as `playa.Document.fonts`.
+            The resource names (e.g. `F1`, `F42`, `FooBar`) here are
+            specific to a page (or Form XObject) resource dictionary
+            and have no relation to the font name as commonly
+            understood (e.g. `Helvetica`,
+            `WQERQE+Arial-SuperBold-HJRE-UTF-8`).  Since font names are
+            generally considered to be globally unique, it may be
+            possible to access fonts by them in the future.
+
+        Danger: Do not rely on this being a `dict`.
+            Currently this is implemented eagerly, but in the future it
+            may return a lazy object which only loads fonts on demand.
+
+        """
+        from playa.interp import _make_fontmap
+
+        if hasattr(self, "_fontmap"):
+            return self._fontmap
+        if self.resources is None or "Font" not in self.resources:
+            self._fontmap: Dict[str, Font] = {}
+        else:
+            self._fontmap = _make_fontmap(self.resources["Font"], self.doc)
+        return self._fontmap
+
     @classmethod
     def from_stream(
         cls,
