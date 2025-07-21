@@ -174,6 +174,11 @@ def make_argparse() -> argparse.ArgumentParser:
         help="Extract image files here (default is not to extract).",
     )
     parser.add_argument(
+        "--fonts",
+        type=Path,
+        help="Extract font files here (default is not to extract).",
+    )
+    parser.add_argument(
         "-o",
         "--outfile",
         help="File to write output (or - for standard output)",
@@ -538,6 +543,49 @@ def extract_images(doc: Document, args: argparse.Namespace) -> None:
     print("]", file=args.outfile)
 
 
+def extract_fonts(doc: Document, args: argparse.Namespace) -> None:
+    """Extract fonts."""
+    pages = decode_page_spec(doc, args.pages)
+    print("{", file=args.outfile, end="")
+    if args.fonts is not None:
+        args.fonts.mkdir(exist_ok=True, parents=True)
+    extracted = set()
+    last = None
+    for page in doc.pages[pages]:
+        fontiter = (text.gstate.font for text in page.texts)
+        for font in fontiter:
+            if font is None:
+                continue
+            # Fonts can have identical fontnames, but normally these are just
+            # the same font with different encodings, so no point in extracting
+            # them multiple times.
+            if font.fontname in extracted:
+                continue
+            path = font.write_fontfile(args.fonts)
+            if path is not None:
+                extracted.add(font.fontname)
+                if last is not None:
+                    lastpath, lastfont = last
+                    print(
+                        json.dumps(str(lastpath)),
+                        end=": ",
+                        sep="",
+                        file=args.outfile,
+                    )
+                    print(
+                        json.dumps(asobj(lastfont)),
+                        end=",\n",
+                        sep="",
+                        file=args.outfile,
+                    )
+                last = (path, font)
+    if last is not None:
+        lastpath, lastfont = last
+        print(json.dumps(str(lastpath)), end=": ", sep="", file=args.outfile)
+        print(json.dumps(asobj(lastfont)), end="\n", sep="", file=args.outfile)
+    print("}", file=args.outfile)
+
+
 def main(argv: Union[List[str], None] = None) -> None:
     parser = make_argparse()
     args = parser.parse_args(argv)
@@ -584,6 +632,8 @@ def main(argv: Union[List[str], None] = None) -> None:
                 extract_outline(doc, args)
             elif args.images:
                 extract_images(doc, args)
+            elif args.fonts:
+                extract_fonts(doc, args)
             else:
                 extract_metadata(doc, args)
             doc.close()
