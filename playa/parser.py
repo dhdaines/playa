@@ -347,7 +347,6 @@ class ObjectParser:
                         raise e
                     log.warning("When constructing array from %r: %s", obj, e)
                 if pos == top:
-                    top = None
                     return pos, obj
                 self.stack.append((pos, obj))
             elif token is KEYWORD_DICT_BEGIN:
@@ -372,7 +371,6 @@ class ObjectParser:
                         raise e
                     log.warning("When constructing dict from %r: %s", self.stack, e)
                 if pos == top:
-                    top = None
                     return pos, obj
                 self.stack.append((pos, obj))
             elif token is KEYWORD_PROC_BEGIN:
@@ -387,7 +385,6 @@ class ObjectParser:
                         raise e
                     log.warning("When constructing proc from %r: %s", obj, e)
                 if pos == top:
-                    top = None
                     return pos, obj
                 self.stack.append((pos, obj))
             elif token is KEYWORD_NULL:
@@ -414,8 +411,7 @@ class ObjectParser:
             elif token is KEYWORD_ID:
                 obj = self.get_inline_image(pos, token)
                 if obj is not None:
-                    top = None
-                    return pos, obj
+                    return top, obj
             else:
                 # Literally anything else, including any other keyword
                 # (will be returned above if top is None, or later if
