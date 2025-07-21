@@ -630,10 +630,10 @@ def extract_fonts(doc: Document, args: argparse.Namespace) -> None:
     extracted = set()
     last = None
     for page in doc.pages[pages]:
-        fontiter = itertools.chain(
-            page.fonts.values(), *(xobj.fonts.values() for xobj in page.xobjects)
-        )
+        fontiter = (text.gstate.font for text in page.texts)
         for font in fontiter:
+            if font is None:
+                continue
             # Fonts can have identical fontnames, but normally these are just
             # the same font with different encodings, so no point in extracting
             # them multiple times.
