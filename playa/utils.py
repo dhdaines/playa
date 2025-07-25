@@ -629,6 +629,7 @@ def decode_text(s: Union[str, bytes]) -> str:
         try:
             return s.decode("UTF-16")
         except UnicodeDecodeError:
+            # Sure, it could have a BOM and not actually be UTF-16, \/\/TF...
             s = s[2:]
     try:
         # FIXME: This seems bad. If it's already a `str` then what are

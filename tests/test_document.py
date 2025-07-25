@@ -260,3 +260,10 @@ def test_extgstate() -> None:
         assert gstate.linecap == 1
         assert gstate.linejoin == 2
         assert gstate.dash == DashPattern((20,), 10)
+
+
+@pytest.mark.skipif(not CONTRIB.exists(), reason="contrib samples not present")
+def test_root_damage() -> None:
+    """Fail gracefully if the document root is damaged (issue #154)"""
+    with playa.open(CONTRIB / "issue-154.pdf") as doc:
+        assert isinstance(doc[827], playa.ContentStream)

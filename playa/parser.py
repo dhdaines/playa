@@ -839,6 +839,10 @@ class IndirectObjectParser:
         """Seek to a position."""
         self._parser.seek(pos)
 
+    def tell(self) -> int:
+        """Get the current position in the file."""
+        return self._parser.tell()
+
     def reset(self) -> None:
         """Clear internal parser state."""
         self._parser.reset()

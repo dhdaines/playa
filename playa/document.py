@@ -97,6 +97,7 @@ LITERAL_CATALOG = LIT("Catalog")
 LITERAL_PAGE = LIT("Page")
 LITERAL_PAGES = LIT("Pages")
 INHERITABLE_PAGE_ATTRS = {"Resources", "MediaBox", "CropBox", "Rotate"}
+INDOBJR = re.compile(rb"\d+\s+\d+\s+obj")
 
 
 def _find_header(buffer: Union[bytes, mmap.mmap]) -> Tuple[bytes, int]:
@@ -432,34 +433,51 @@ class Document:
         assert self.parser is not None
         self.parser.seek(pos)
         try:
+            m = INDOBJR.match(self.buffer, pos)
+            if m is None:
+                raise PDFSyntaxError(
+                    f"Not an indirect object at position {pos}: "
+                    f"{self.buffer[pos:pos+8]!r}"
+                )
             _, obj = next(self.parser)
             if obj.objid != objid:
                 raise PDFSyntaxError(f"objid mismatch: {obj.objid!r}={objid!r}")
         except (ValueError, IndexError, PDFSyntaxError) as e:
-            log.warning(
-                "Indirect object %d not found at position %d: %r", objid, pos, e
-            )
-            # In case of malformed pdf files where the offset in the
-            # xref table doesn't point exactly at the object
-            # definition (probably more frequent than you think), just
-            # use a regular expression to find the object because we
-            # can do that.
-            realpos = -1
-            lastgen = -1
-            for m in re.finditer(rb"%d\s+(\d+)\s+obj" % objid, self.buffer):
-                genno = int(m.group(1))
-                if genno > lastgen:
-                    lastgen = genno
-                    realpos = m.start(0)
-            if realpos == -1:
+            if self.parser.strict:
                 raise PDFSyntaxError(
-                    f"Indirect object {objid!r} not found in document"
-                ) from e
-            self.parser.seek(realpos)
-            (_, obj) = next(self.parser)
+                    "Indirect object %d not found at position %d"
+                    % (
+                        objid,
+                        pos,
+                    )
+                )
+            else:
+                log.warning(
+                    "Indirect object %d not found at position %d: %r", objid, pos, e
+                )
+            obj = self._getobj_parse_approx(objid, pos)
         if obj.objid != objid:
             raise PDFSyntaxError(f"objid mismatch: {obj.objid!r}={objid!r}")
         return obj.obj
+
+    def _getobj_parse_approx(self, pos: int, objid: int) -> IndirectObject:
+        # In case of malformed pdf files where the offset in the
+        # xref table doesn't point exactly at the object
+        # definition (probably more frequent than you think), just
+        # use a regular expression to find the object because we
+        # can do that.
+        realpos = -1
+        lastgen = -1
+        for m in re.finditer(rb"\b%d\s+(\d+)\s+obj" % objid, self.buffer):
+            genno = int(m.group(1))
+            if genno > lastgen:
+                lastgen = genno
+                realpos = m.start(0)
+        if realpos == -1:
+            raise PDFSyntaxError(f"Indirect object {objid} not found in document")
+        self.parser.seek(realpos)
+        (_, obj) = next(self.parser)
+        return obj
 
     def __getitem__(self, objid: int) -> PDFObject:
         """Get an indirect object from the PDF.
