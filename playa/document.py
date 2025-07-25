@@ -460,7 +460,7 @@ class Document:
             raise PDFSyntaxError(f"objid mismatch: {obj.objid!r}={objid!r}")
         return obj.obj
 
-    def _getobj_parse_approx(self, pos: int, objid: int) -> PDFObject:
+    def _getobj_parse_approx(self, pos: int, objid: int) -> IndirectObject:
         # In case of malformed pdf files where the offset in the
         # xref table doesn't point exactly at the object
         # definition (probably more frequent than you think), just
