@@ -950,9 +950,13 @@ class TextObject(ContentObject):
         # shall be a number specified in unscaled text space units
         # (although it shall be subject to scaling by the Th parameter
         # if the writing mode is horizontal).
-        scaled_charspace = self.gstate.charspace / fontsize
-        # Section 9.3.3: Word spacing "works the same way"
-        scaled_wordspace = self.gstate.wordspace / fontsize
+        if fontsize == 0.0:
+            # A particular way of "hiding" text...
+            scaled_charspace = scaled_wordspace = 0.0
+        else:
+            scaled_charspace = self.gstate.charspace / fontsize
+            # Section 9.3.3: Word spacing "works the same way"
+            scaled_wordspace = self.gstate.wordspace / fontsize
 
         # PDF 2.0 section 9.4.4: Conceptually, the entire
         # transformation from text space to device space can be
