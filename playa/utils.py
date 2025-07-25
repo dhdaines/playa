@@ -626,7 +626,10 @@ def decode_text(s: Union[str, bytes]) -> str:
     if isinstance(s, bytes) and (
         s.startswith(b"\xfe\xff") or s.startswith(b"\xff\xfe")
     ):
-        return s.decode("UTF-16")
+        try:
+            return s.decode("UTF-16")
+        except UnicodeDecodeError:
+            s = s[2:]
     try:
         # FIXME: This seems bad. If it's already a `str` then what are
         # those PDFDocEncoding characters doing in it?!?
