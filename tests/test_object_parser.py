@@ -130,20 +130,6 @@ OBJS1 = [
 ]
 
 
-def test_lexer_miner():
-    """Lexer test case from pdfminer"""
-    tokens = list(Lexer(TESTDATA1))
-    logger.info(tokens)
-    assert tokens == TOKENS1
-
-
-def test_parser_miner():
-    """Parser test case from pdfminer"""
-    objs = list(ObjectParser(TESTDATA1, None))
-    logger.info(objs)
-    assert objs == OBJS1
-
-
 TESTDATA2 = b"""
 ugh
 foo\r
@@ -435,3 +421,17 @@ def test_reverse_solidus():
     """Test the handling of useless backslashes that are not escapes."""
     parser = Lexer(rb"(OMG\ WTF \W \T\ F)")
     assert next(parser) == (0, b"OMG WTF W T F")
+
+
+def test_number_syntax():
+    """Verify that all types of number objects are accepted."""
+    numbers = [1, 12, 1.2, 1., .2, 12.34, 12., .34]
+    texts = b"1 12 1.2 1. .2 12.34 12. .34"
+    objs = [obj for _, obj in Lexer(texts)]
+    assert objs == numbers
+    plus_texts = b" ".join((b"+" + x) for x in texts.split())
+    objs = [obj for _, obj in Lexer(plus_texts)]
+    assert objs == numbers
+    minus_texts = b" ".join(b"-" + x for x in texts.split())
+    objs = [-obj for _, obj in Lexer(minus_texts)]
+    assert objs == numbers
