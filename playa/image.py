@@ -47,7 +47,7 @@ def get_one_image(stream: ContentStream, path: Path) -> Path:
         # Otherwise, try to write a PNM file
         bits = stream.bits
         colorspace: Union[ColorSpace, None] = stream.colorspace
-        ncomponents = 1
+        ncomponents = 0
         if colorspace is not None:
             ncomponents = colorspace.ncomponents
             if colorspace.name == "Indexed":
@@ -60,15 +60,8 @@ def get_one_image(stream: ContentStream, path: Path) -> Path:
                     ncomponents = colorspace.ncomponents
         if bits == 1:
             path = path.with_suffix(".pbm")
-        elif colorspace is None or colorspace.name not in ("DeviceGray", "DeviceRGB"):
-            path = path.with_suffix(".dat")
-            LOG.warning(
-                "Unsupported colorspace %s, writing data to %s", asobj(colorspace), path
-            )
         elif ncomponents == 1:
             path = path.with_suffix(".pgm")
-        elif ncomponents == 3:
-            path = path.with_suffix(".ppm")
         elif ncomponents == 3:
             path = path.with_suffix(".ppm")
         else:
@@ -119,14 +112,8 @@ def write_pnm(outfh: BinaryIO, stream: ContentStream) -> None:
         from playa.utils import unpack_image_data
 
         data = unpack_image_data(data, bits, stream.width, stream.height, ncomponents)
-    ftype: Union[bytes, None] = None
-    if is_bilevel:
-        ftype = b"P4"
-    elif colorspace.name == "DeviceGray":
-        ftype = b"P5"
-    elif colorspace.name == "DeviceRGB" or colorspace.ncomponents == 3:
-        ftype = b"P6"
-    elif colorspace.name == "Indexed":
+    # TODO: Decode array goes here
+    if colorspace.name == "Indexed":
         from playa.color import get_colorspace
 
         assert isinstance(colorspace.spec, list)
@@ -136,17 +123,21 @@ def write_pnm(outfh: BinaryIO, stream: ContentStream) -> None:
             raise ValueError(
                 "Unknown underlying colorspace in Indexed image: %r" % (underlying,)
             )
-        if underlying.name == "DeviceGray":
-            ftype = b"P5"
-        elif underlying.name == "DeviceRGB" or underlying.ncomponents == 3:
-            ftype = b"P6"
-        hival = int_value(hival)
+        ncomponents = underlying.ncomponents
         if not isinstance(lookup, bytes):
             lookup = stream_value(lookup).buffer
-        channels = len(lookup) // (hival + 1)
-        data = bytes(b for i in data for b in lookup[channels * i : channels * (i + 1)])
+        data = bytes(
+            b for i in data for b in lookup[ncomponents * i : ncomponents * (i + 1)]
+        )
         bits = 8
-    if ftype is None:
+    ftype: bytes
+    if is_bilevel:
+        ftype = b"P4"
+    elif ncomponents == 1:
+        ftype = b"P5"
+    elif ncomponents == 3:
+        ftype = b"P6"
+    else:
         raise ValueError("Unsupported colorspace: %r" % (stream.colorspace,))
     max_value = (1 << bits) - 1
     outfh.write(b"%s %d %d\n" % (ftype, stream.width, stream.height))
