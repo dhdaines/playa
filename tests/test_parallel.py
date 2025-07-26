@@ -3,12 +3,21 @@
 import operator
 from typing import List
 
-import pytest
-
 import playa
-import playa.document
+import pytest
 from playa.page import Page, XObjectObject
-from playa.worker import _get_document, in_worker
+from playa.worker import (
+    _deref_document,
+    _deref_page,
+    _get_document,
+    _init_worker,
+    _init_worker_buffer,
+    _ref_document,
+    _ref_page,
+    _set_document,
+    in_worker,
+)
+
 from tests.data import CONTRIB, TESTDIR
 
 
@@ -86,6 +95,30 @@ def test_map_parallel():
         parallel_texts = list(pdf.pages[3:8].map(get_text))
         print(parallel_texts)
         assert parallel_texts != texts
+
+
+def test_worker():
+    """Ensure coverage of worker functions (even though they are tested above)."""
+    _init_worker(123456, TESTDIR / "pdf_structure.pdf")
+    pdf1 = _get_document()
+    assert pdf1
+    assert in_worker()
+    docref = _ref_document(pdf1)
+    assert docref == 123456
+    assert _deref_document(docref) is pdf1
+    pageref = _ref_page(pdf1.pages[0])
+    assert pageref == (123456, 0)
+    assert _deref_page(pageref) is pdf1.pages[0]
+    _set_document(None, 0)
+    assert not in_worker()
+    with pytest.raises(RuntimeError):
+        _deref_document(docref)
+    with playa.open(TESTDIR / "image_structure.pdf") as pdf2:
+        _set_document(pdf2, 654321)
+        assert _get_document() is pdf2
+    with open(TESTDIR / "image_structure.pdf", "rb") as fh:
+        _init_worker_buffer(654321, fh.read())
+        assert _get_document()
 
 
 if __name__ == "__main__":
