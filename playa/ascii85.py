@@ -40,9 +40,9 @@ def asciihexdecode(data: bytes) -> bytes:
     will behave as if a 0 followed the last digit.
     """
     data = bws_re.sub(b"", data)
-    idx = data.find(b">")
-    if idx != -1:
-        data = data[:idx]
-        if idx % 2 == 1:
-            data += b"0"
+    end = data.find(b">")
+    if end != -1:
+        data = data[:end]
+    if len(data) % 2 == 1:
+        data += b"0"
     return unhexlify(data)

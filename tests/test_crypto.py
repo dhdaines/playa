@@ -57,6 +57,8 @@ class TestAscii85:
         assert asciihexdecode(b"61 62 2e6364   65") == b"ab.cde"
         assert asciihexdecode(b"61 62 2e6364   657>") == b"ab.cdep"
         assert asciihexdecode(b"7>") == b"p"
+        assert asciihexdecode(b"123") == b"\x12\x30"
+        assert asciihexdecode(b"123>") == b"\x12\x30"
 
 
 class TestArcfour:
