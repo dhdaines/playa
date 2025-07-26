@@ -382,8 +382,7 @@ class ObjectParser:
                     self.stack.append((pos, token))
                 else:
                     obj = self.get_object_reference(pos, token)
-                    if obj is not None:
-                        self.stack.append((pos, obj))
+                    self.stack.append((pos, obj))
             elif token is KEYWORD_BI:
                 # Inline images must occur at the top level, otherwise
                 # something is wrong (probably a corrupt file)
