@@ -642,23 +642,14 @@ def decode_text(s: Union[str, bytes]) -> str:
         return str(s)
 
 
-def bbox2str(bbox: Rect) -> str:
-    (x0, y0, x1, y1) = bbox
-    return f"{x0:.3f},{y0:.3f},{x1:.3f},{y1:.3f}"
-
-
-def matrix2str(m: Matrix) -> str:
-    (a, b, c, d, e, f) = m
-    return f"[{a:.2f},{b:.2f},{c:.2f},{d:.2f}, ({e:.2f},{f:.2f})]"
-
-
 ROMAN_ONES = ["i", "x", "c", "m"]
 ROMAN_FIVES = ["v", "l", "d"]
 
 
 def format_int_roman(value: int) -> str:
     """Format a number as lowercase Roman numerals."""
-    assert 0 < value < 4000
+    if value <= 0 or value >= 4000:
+        raise ValueError(f"Romanes eunt domus: {value}")
     result: List[str] = []
     index = 0
 
@@ -683,7 +674,8 @@ def format_int_roman(value: int) -> str:
 
 def format_int_alpha(value: int) -> str:
     """Format a number as lowercase letters a-z, aa-zz, etc."""
-    assert value > 0
+    if value <= 0:
+        raise ValueError(f"No alphabetic page number for {value}")
     result: List[str] = []
 
     while value != 0:
