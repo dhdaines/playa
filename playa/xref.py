@@ -64,56 +64,45 @@ class XRefTable:
     plain text at the end of the file.
     """
 
-    def __init__(self, parser: ObjectParser, offset: int = 0) -> None:
+    def __init__(
+        self, parser: ObjectParser, offset: int = 0, startobj: int = 0, nobjs: int = 0
+    ) -> None:
         self.offsets: Dict[int, XRefPos] = {}
         self.trailer: Dict[str, Any] = {}
-        self._load(parser, offset)
+        self._load(parser, offset, startobj, nobjs)
 
-    def _load(self, parser: ObjectParser, offset: int) -> None:
-        while True:
+    def _load(self, parser: ObjectParser, offset: int, start: int, nobjs: int) -> None:
+        log.debug("reading positions of objects %d to %d", start, start + nobjs - 1)
+        objid = start
+        while objid < start + nobjs:
+            # FIXME: It's supposed to be exactly 20 bytes, not
+            # necessarily a line
             pos, line = parser.nextline()
+            log.debug("%r %r", pos, line)
             if line == b"":  # EOF
                 break
             line = line.strip()
-            if line == b"":  # Blank line
-                continue
-            if line.startswith(b"trailer"):
+            if line == b"trailer":  # oops!
                 parser.seek(pos)
                 break
+            # We need to tolerate blank lines here in case someone
+            # has creatively ended an entry with \r\r or \n\n
+            if line == b"":  # Blank line
+                continue
             f = line.split(b" ")
-            if len(f) != 2:
-                error_msg = f"start and nobjs not found: line={line!r}"
-                raise IndexError(error_msg)
-            try:
-                (start, nobjs) = map(int, f)
-            except ValueError:
-                error_msg = f"Invalid line: line={line!r}"
+            if len(f) != 3:
+                error_msg = f"Invalid XRef format: line={line!r}"
                 raise ValueError(error_msg)
-            log.debug("reading positions of objects %d to %d", start, start + nobjs - 1)
-            objid = start
-            while objid < start + nobjs:
-                # FIXME: It's supposed to be exactly 20 bytes, not
-                # necessarily a line
-                _, line = parser.nextline()
-                if line == b"":  # EOF
-                    break
-                line = line.strip()
-                # We need to tolerate blank lines here in case someone
-                # has creatively ended an entry with \r\r or \n\n
-                if line == b"":  # Blank line
-                    continue
-                f = line.split(b" ")
-                if len(f) != 3:
-                    error_msg = f"Invalid XRef format: line={line!r}"
-                    raise ValueError(error_msg)
-                (pos_b, genno_b, use_b) = f
-                if use_b != b"n":
-                    # Ignore free entries, we don't care
-                    objid += 1
-                    continue
-                log.debug("object %d %d at pos %d", objid, int(genno_b), int(pos_b))
-                self.offsets[objid] = XRefPos(None, int(pos_b) + offset, int(genno_b))
+            (pos_b, genno_b, use_b) = f
+            if use_b != b"n":
+                # Ignore free entries, we don't care
                 objid += 1
+                continue
+            log.debug(
+                "object %d %d at pos %d", objid, int(genno_b), int(pos_b) + offset
+            )
+            self.offsets[objid] = XRefPos(None, int(pos_b) + offset, int(genno_b))
+            objid += 1
         self._load_trailer(parser)
 
     def _load_trailer(self, parser: ObjectParser) -> None:

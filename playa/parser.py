@@ -90,25 +90,6 @@ ESC_STRING = {
 }
 
 
-def reverse_iter_lines(buffer: Union[bytes, mmap.mmap]) -> Iterator[Tuple[int, bytes]]:
-    """Iterate backwards over lines starting at the current position.
-
-    This is used to locate the trailers at the end of a file.
-    """
-    pos = endline = len(buffer)
-    while True:
-        nidx = buffer.rfind(b"\n", 0, pos)
-        ridx = buffer.rfind(b"\r", 0, pos)
-        best = max(nidx, ridx)
-        yield best + 1, buffer[best + 1 : endline]
-        if best == -1:
-            break
-        endline = best + 1
-        pos = best
-        if pos > 0 and buffer[pos - 1 : pos + 1] == b"\r\n":
-            pos -= 1
-
-
 Token = Union[float, bool, PSLiteral, PSKeyword, bytes]
 LEXER = re.compile(
     rb"""(?:

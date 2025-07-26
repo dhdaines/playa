@@ -36,7 +36,6 @@ from playa.page import (
     Page,
 )
 from playa.parser import (
-    KEYWORD_OBJ,
     KEYWORD_XREF,
     LIT,
     IndirectObject,
@@ -48,7 +47,6 @@ from playa.parser import (
     PSLiteral,
     Token,
     literal_name,
-    reverse_iter_lines,
 )
 from playa.pdftypes import (
     ContentStream,
@@ -98,7 +96,9 @@ LITERAL_CATALOG = LIT("Catalog")
 LITERAL_PAGE = LIT("Page")
 LITERAL_PAGES = LIT("Pages")
 INHERITABLE_PAGE_ATTRS = {"Resources", "MediaBox", "CropBox", "Rotate"}
-INDOBJR = re.compile(rb"\d+\s+\d+\s+obj")
+INDOBJR = re.compile(rb"\s*\d+\s+\d+\s+obj")
+XREFR = re.compile(rb"\s*xref\s*(\d+)\s+(\d+)\s*")
+STARTXREFR = re.compile(rb"startxref\s+(\d+)")
 
 
 def _find_header(buffer: Union[bytes, mmap.mmap]) -> Tuple[bytes, int]:
@@ -730,30 +730,21 @@ class Document:
 
     def _find_xref(self) -> int:
         """Internal function used to locate the first XRef."""
-        # search the last xref table by scanning the file backwards.
-        prev = b""
-        for pos, line in reverse_iter_lines(self.buffer):
-            line = line.strip()
-            if line == b"startxref":
-                if not prev.isdigit():
-                    log.warning("Invalid startxref position: %r", prev)
-                    continue
-                start = int(prev)
-                if not start >= 0:
-                    raise ValueError("Invalid negative startxref position: %d" % start)
-                elif start > pos:
+        # Look for startxref and try to get a position from the
+        # following token (there is supposed to be a newline, but...)
+        pos = self.buffer.rfind(b"startxref")
+        if pos != -1:
+            m = STARTXREFR.match(self.buffer, pos)
+            if m is not None:
+                start = int(m[1])
+                if start > pos:
                     raise ValueError(
                         "Invalid startxref position (> %d): %d" % (pos, start)
                     )
                 return start + self.offset
-            elif line == b"xref":
-                return pos
-            elif line == b"endobj":
-                # Okay, we're probably not in Kansas anymore...
-                break
-            if line:
-                prev = line
-        raise ValueError("No xref table found at end of file")
+
+        # Otherwise, just look for an xref, raising ValueError
+        return self.buffer.rindex(b"xref")
 
     # read xref table
     def _read_xref_from(
@@ -765,29 +756,35 @@ class Document:
         if start in self._xrefpos:
             log.warning("Detected circular xref chain at %d", start)
             return
-        parser = ObjectParser(self.buffer, self, start)
-        try:
-            (pos, token) = parser.nexttoken()
-        except StopIteration:
-            raise ValueError(f"Unexpected EOF at {start}")
-        if token is KEYWORD_XREF:
-            log.debug("Reading xref table at %d", pos)
-            parser.nextline()
-            xref: XRef = XRefTable(parser, self.offset)
+        # Look for an XRefStream first, then an XRefTable
+        if INDOBJR.match(self.buffer, start):
+            log.debug("Reading xref stream at %d", start)
+            # XRefStream: PDF-1.5
+            self.parser.seek(start)
+            self.parser.reset()
+            xref = XRefStream(self.parser, self.offset)
+        elif m := XREFR.match(self.buffer, start):
+            startobj = int(m[1])
+            nobjs = int(m[2])
+            log.debug("Reading xref table at %d", start)
+
+            xref: XRef = XRefTable(
+                ObjectParser(self.buffer, self, pos=m.end(0)),
+                self.offset,
+                startobj,
+                nobjs,
+            )
         else:
-            # It might be an XRefStream, if this is an indirect object...
-            _, token = parser.nexttoken()
-            _, token = parser.nexttoken()
-            if token is KEYWORD_OBJ:
-                # XRefStream: PDF-1.5
-                self.parser.seek(pos)
-                self.parser.reset()
-                xref = XRefStream(self.parser, self.offset)
-            else:
-                # Well, maybe it's an XRef table without "xref" (but
-                # probably not)
-                parser.seek(pos)
-                xref = XRefTable(parser, self.offset)
+            # Well, maybe it's an XRef table without "xref" (but
+            # probably not)
+            parser = ObjectParser(self.buffer, self, pos=start)
+            _, startobj = next(parser)
+            _, nobjs = next(parser)
+            if not isinstance(startobj, int) or not isinstance(nobjs, int):
+                raise PDFSyntaxError(
+                    f"Expected two integers before xrefs, got {startobj!r} {nobjs!r}"
+                )
+            xref = XRefTable(parser, self.offset, startobj, nobjs)
         self._xrefpos.add(start)
         xrefs.append(xref)
         trailer = xref.trailer
