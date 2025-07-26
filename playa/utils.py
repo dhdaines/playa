@@ -2,9 +2,7 @@
 
 import itertools
 import string
-import warnings
 from typing import (
-    Any,
     Iterable,
     Iterator,
     List,
@@ -266,12 +264,6 @@ def apply_matrix_norm(m: Matrix, v: Point) -> Point:
 
 
 #  Utility functions
-
-
-def isnumber(x: Any) -> bool:
-    return isinstance(x, (int, float))
-
-
 _T = TypeVar("_T")
 
 
