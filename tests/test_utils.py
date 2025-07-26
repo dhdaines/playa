@@ -111,3 +111,11 @@ def test_format_alphas() -> None:
         ),
     ]
     assert ALPHAS == [x.upper() for x in alphas]
+
+
+def test_normalize_rect() -> None:
+    """Normalize rects"""
+    r1 = (1, 1, 5, 5)
+    assert normalize_rect(r1) == r1
+    r2 = (5, 5, 1, 1)
+    assert normalize_rect(r2) == r1
