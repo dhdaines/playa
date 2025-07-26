@@ -10,7 +10,6 @@ from playa.parser import (
     InlineImage,
     Lexer,
     ObjectParser,
-    reverse_iter_lines,
 )
 from playa.pdftypes import (
     KWD,
@@ -129,29 +128,6 @@ OBJS1 = [
     (246, [1, b"z", KWD(b"!")]),
     (258, {"foo": b"bar", "": b"baz"}),
 ]
-
-
-TESTDATA2 = b"""
-ugh
-foo\r
-bar\rbaz
-quxx
-bog"""
-EXPECTED2 = [
-    (0, b"\n"),
-    (1, b"ugh\n"),
-    (5, b"foo\r\n"),
-    (10, b"bar\r"),
-    (14, b"baz\n"),
-    (18, b"quxx\n"),
-    (23, b"bog"),
-]
-
-
-def test_revlines() -> None:
-    """Verify that we replicate the old revreadlines method."""
-    output = list(reverse_iter_lines(TESTDATA2))
-    assert output == list(reversed(EXPECTED2))
 
 
 SIMPLE1 = b"""1 0 obj

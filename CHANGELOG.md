@@ -1,4 +1,17 @@
-## PLAYA 0.6.3: 2025-07-25
+## PLAYA 0.7.0: Unreleased
+
+- TODO: Optimize marked content section access
+- TODO: Add method to complete parent tree for page
+- TODO: Fail fast for incorrect stream lengths
+- TODO: Parse indirect objects with regex
+
+## PLAYA 0.6.4: 2025-07-26
+
+- Fix terrible error in fallback indirect object parsing
+- Simplify and robustify xref detection
+- Stop stream parsing on endobj as well as endstream
+
+## PLAYA 0.6.3: 2025-07-26
 
 - Correct and slightly optimize PNG predictor
 - Accept all standard number syntaxes (oops)
@@ -6,8 +19,10 @@
 - Accept fontsize of 0
 - Don't throw an exception on malformed text strings
 - Extract images with any colorspace
-- Correct ASCIIHexDecode for all odd-length strings (not just some)
+- Correct `ASCIIHexDecode` for all odd-length strings (not just some)
 - Remove sketchy characters from image and font filenames
+- Track streamid in `ObjectParser` (this will become useful with time)
+- Cache inline images in `ObjectParser`
 
 ## PLAYA 0.6.2: 2025-07-21
 

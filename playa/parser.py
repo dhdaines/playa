@@ -90,25 +90,6 @@ ESC_STRING = {
 }
 
 
-def reverse_iter_lines(buffer: Union[bytes, mmap.mmap]) -> Iterator[Tuple[int, bytes]]:
-    """Iterate backwards over lines starting at the current position.
-
-    This is used to locate the trailers at the end of a file.
-    """
-    pos = endline = len(buffer)
-    while True:
-        nidx = buffer.rfind(b"\n", 0, pos)
-        ridx = buffer.rfind(b"\r", 0, pos)
-        best = max(nidx, ridx)
-        yield best + 1, buffer[best + 1 : endline]
-        if best == -1:
-            break
-        endline = best + 1
-        pos = best
-        if pos > 0 and buffer[pos - 1 : pos + 1] == b"\r\n":
-            pos -= 1
-
-
 Token = Union[float, bool, PSLiteral, PSKeyword, bytes]
 LEXER = re.compile(
     rb"""(?:
@@ -401,8 +382,7 @@ class ObjectParser:
                     self.stack.append((pos, token))
                 else:
                     obj = self.get_object_reference(pos, token)
-                    if obj is not None:
-                        self.stack.append((pos, obj))
+                    self.stack.append((pos, obj))
             elif token is KEYWORD_BI:
                 # Inline images must occur at the top level, otherwise
                 # something is wrong (probably a corrupt file)
@@ -842,6 +822,10 @@ class IndirectObjectParser:
                 idx = line.index(b"endstream")
                 data += line[:idx]
                 self._parser.seek(pos + idx)
+                break
+            if b"endobj" in line:
+                # Oh no! We've really gone too far now!  Stop before it gets worse
+                self._parser.seek(pos)
                 break
             data += line
             pos, line = self._parser.nextline()
