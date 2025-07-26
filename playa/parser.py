@@ -302,11 +302,13 @@ class ObjectParser:
         doc: Union["Document", None] = None,
         pos: int = 0,
         strict: bool = False,
+        streamid: Union[int, None] = None,
     ) -> None:
         self._lexer = Lexer(data, pos)
         self.stack: List[StackEntry] = []
         self.docref = None if doc is None else _ref_document(doc)
         self.strict = strict
+        self.streamid = streamid
 
     @property
     def doc(self) -> Union["Document", None]:
@@ -315,9 +317,12 @@ class ObjectParser:
             return None
         return _deref_document(self.docref)
 
-    def newstream(self, data: Union[bytes, mmap.mmap]) -> None:
+    def newstream(
+        self, data: Union[bytes, mmap.mmap], streamid: Union[int, None] = None
+    ) -> None:
         """Continue parsing from a new data stream."""
         self._lexer = Lexer(data)
+        self.streamid = streamid
 
     def reset(self) -> None:
         """Clear internal parser state."""
@@ -347,7 +352,6 @@ class ObjectParser:
                         raise e
                     log.warning("When constructing array from %r: %s", obj, e)
                 if pos == top:
-                    top = None
                     return pos, obj
                 self.stack.append((pos, obj))
             elif token is KEYWORD_DICT_BEGIN:
@@ -372,7 +376,6 @@ class ObjectParser:
                         raise e
                     log.warning("When constructing dict from %r: %s", self.stack, e)
                 if pos == top:
-                    top = None
                     return pos, obj
                 self.stack.append((pos, obj))
             elif token is KEYWORD_PROC_BEGIN:
@@ -387,7 +390,6 @@ class ObjectParser:
                         raise e
                     log.warning("When constructing proc from %r: %s", obj, e)
                 if pos == top:
-                    top = None
                     return pos, obj
                 self.stack.append((pos, obj))
             elif token is KEYWORD_NULL:
@@ -409,13 +411,27 @@ class ObjectParser:
                         "Inline image not at top level of stream "
                         f"({pos} != {top}, {self.stack})"
                     )
-                top = pos
-                self.stack.append((pos, token))
+                if (
+                    self.doc is not None
+                    and self.streamid is not None
+                    and (inline_image_id := (self.streamid, pos))
+                    in self.doc._cached_inline_images
+                ):
+                    end, obj = self.doc._cached_inline_images[inline_image_id]
+                    self.seek(end)
+                    if obj is not None:
+                        return pos, obj
+                else:
+                    top = pos
+                    self.stack.append((pos, token))
             elif token is KEYWORD_ID:
                 obj = self.get_inline_image(pos, token)
+                assert top is not None
+                if self.doc is not None and self.streamid is not None:
+                    inline_image_id = (self.streamid, top)
+                    self.doc._cached_inline_images[inline_image_id] = self.tell(), obj
                 if obj is not None:
-                    top = None
-                    return pos, obj
+                    return top, obj
             else:
                 # Literally anything else, including any other keyword
                 # (will be returned above if top is None, or later if
@@ -902,11 +918,11 @@ class ContentParser(ObjectParser):
     the page’s logical content or organization.
     """
 
-    def __init__(self, streams: Iterable[PDFObject]) -> None:
+    def __init__(self, streams: Iterable[PDFObject], doc: "Document") -> None:
         self.streamiter = iter(streams)
         try:
             stream = stream_value(next(self.streamiter))
-            super().__init__(stream.buffer)
+            super().__init__(stream.buffer, doc, streamid=stream.objid)
         except StopIteration:
             super().__init__(b"")
         except TypeError:
@@ -928,6 +944,6 @@ class ContentParser(ObjectParser):
                 try:
                     ref = next(self.streamiter)
                     stream = stream_value(ref)
-                    self.newstream(stream.buffer)
+                    self.newstream(stream.buffer, streamid=stream.objid)
                 except TypeError:
                     log.warning("Found non-stream in contents: %r", ref)
