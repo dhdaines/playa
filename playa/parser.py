@@ -823,6 +823,10 @@ class IndirectObjectParser:
                 data += line[:idx]
                 self._parser.seek(pos + idx)
                 break
+            if b"endobj" in line:
+                # Oh no! We've really gone too far now!  Stop before it gets worse
+                self._parser.seek(pos)
+                break
             data += line
             pos, line = self._parser.nextline()
             if line == b"":  # Means EOF

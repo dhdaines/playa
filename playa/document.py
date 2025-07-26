@@ -744,7 +744,10 @@ class Document:
                 return start + self.offset
 
         # Otherwise, just look for an xref, raising ValueError
-        return self.buffer.rindex(b"xref")
+        pos = self.buffer.rfind(b"xref")
+        if pos == -1:
+            raise ValueError("xref not found in document")
+        return pos
 
     # read xref table
     def _read_xref_from(
@@ -762,26 +765,29 @@ class Document:
             # XRefStream: PDF-1.5
             self.parser.seek(start)
             self.parser.reset()
-            xref = XRefStream(self.parser, self.offset)
+            xref: XRef = XRefStream(self.parser, self.offset)
         elif m := XREFR.match(self.buffer, start):
             startobj = int(m[1])
             nobjs = int(m[2])
             log.debug("Reading xref table at %d", start)
 
-            xref: XRef = XRefTable(
-                ObjectParser(self.buffer, self, pos=m.end(0)), self.offset, startobj, nobjs
+            xref = XRefTable(
+                ObjectParser(self.buffer, self, pos=m.end(0)),
+                self.offset,
+                startobj,
+                nobjs,
             )
         else:
             # Well, maybe it's an XRef table without "xref" (but
             # probably not)
             parser = ObjectParser(self.buffer, self, pos=start)
-            _, startobj = next(parser)
-            _, nobjs = next(parser)
-            if not isinstance(startobj, int) or not isinstance(nobjs, int):
+            _, _startobj = next(parser)
+            _, _nobjs = next(parser)
+            if not isinstance(_startobj, int) or not isinstance(_nobjs, int):
                 raise PDFSyntaxError(
-                    f"Expected two integers before xrefs, got {startobj!r} {nobjs!r}"
+                    f"Expected two integers before xrefs, got {_startobj!r} {_nobjs!r}"
                 )
-            xref = XRefTable(parser, self.offset, startobj, nobjs)
+            xref = XRefTable(parser, self.offset, _startobj, _nobjs)
         self._xrefpos.add(start)
         xrefs.append(xref)
         trailer = xref.trailer
