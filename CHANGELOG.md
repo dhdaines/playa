@@ -1,5 +1,7 @@
 ## PLAYA 0.7.0: Unreleased
 
+- TODO: Maximize test coverage
+- TODO: Support CCITT one-dimensional and mixed encodings
 - TODO: Optimize marked content section access
 - TODO: Add method to complete parent tree for page
 - TODO: Fail fast for incorrect stream lengths

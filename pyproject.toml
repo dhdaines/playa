@@ -75,6 +75,7 @@ markers = [ "contrib", "thirdparty" ]
 
 [tool.hatch.envs.hatch-test]
 extra-dependencies = [ "cryptography", "pdfminer.six" ]
+parallel = true
 
 [tool.hatch.envs.default]
 dependencies = [ "cryptography", "pytest", "pytest-xdist", "pdfminer.six" ]
@@ -112,4 +113,18 @@ extra-dependencies = [ "pydantic > 2" ]
 extra-dependencies = [ "paves", "jupyterlab" ]
 
 [tool.coverage.run]
-omit = [ "tests/*" ]
+omit = [ "tests/*", "/etc/python*/*" ]
+
+[tool.coverage.report]
+exclude_also = [
+    'def __repr__',
+    'if self.debug:',
+    'if settings.DEBUG',
+    'raise AssertionError',
+    'raise NotImplementedError',
+    'if 0:',
+    'if __name__ == .__main__.:',
+    'if TYPE_CHECKING:',
+    'class .*\bProtocol\):',
+    '@(abc\.)?abstractmethod',
+]
