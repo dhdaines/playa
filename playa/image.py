@@ -10,7 +10,6 @@ from playa.pdftypes import (
     LITERALS_JBIG2_DECODE,
     ContentStream,
     resolve1,
-    int_value,
     stream_value,
 )
 

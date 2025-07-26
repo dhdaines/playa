@@ -425,7 +425,7 @@ def test_reverse_solidus():
 
 def test_number_syntax():
     """Verify that all types of number objects are accepted."""
-    numbers = [1, 12, 1.2, 1., .2, 12.34, 12., .34]
+    numbers = [1, 12, 1.2, 1.0, 0.2, 12.34, 12.0, 0.34]
     texts = b"1 12 1.2 1. .2 12.34 12. .34"
     objs = [obj for _, obj in Lexer(texts)]
     assert objs == numbers
