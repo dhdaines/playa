@@ -5,6 +5,7 @@ Danger: API subject to change.
 """
 
 import logging
+import re
 import struct
 from io import BytesIO
 from pathlib import Path
@@ -181,7 +182,8 @@ class Font:
         ):
             if key in self.descriptor:
                 fontfile = stream_value(self.descriptor[key])
-                outpath = outdir / (self.fontname + suffix)
+                fontname = re.sub(r"[^\w\+]", "", self.fontname)
+                outpath = outdir / (fontname + suffix)
                 outpath.write_bytes(fontfile.buffer)
                 return outpath
         return None

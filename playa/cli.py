@@ -81,6 +81,7 @@ import getpass
 import itertools
 import json
 import logging
+import re
 from collections import deque
 from pathlib import Path
 from typing import Any, Deque, Iterable, Iterator, List, TextIO, Tuple, Union
@@ -500,7 +501,8 @@ def get_images(page: Page, imgdir: Path) -> List[Tuple[Path, Image]]:
             text_bbox = ",".join(str(round(x)) for x in img.bbox)
             imgname = f"page{page.page_idx + 1}-{idx}-inline-{text_bbox}"
         else:
-            imgname = f"page{page.page_idx + 1}-{idx}-{img.xobjid}"
+            imgid = re.sub(r"\W", "", img.xobjid)
+            imgname = f"page{page.page_idx + 1}-{idx}-{imgid}"
         imgpath = imgdir / imgname
         images.append((get_one_image(img.stream, imgpath), asobj(img)))
         mask = resolve1(img.get("Mask"))

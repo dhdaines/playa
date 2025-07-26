@@ -6,6 +6,8 @@
 - Accept fontsize of 0
 - Don't throw an exception on malformed text strings
 - Extract images with any colorspace
+- Correct ASCIIHexDecode for all odd-length strings (not just some)
+- Remove sketchy characters from image and font filenames
 
 ## PLAYA 0.6.2: 2025-07-21
 

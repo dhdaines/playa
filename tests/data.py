@@ -57,6 +57,7 @@ XFAILS = {
     # really rather broken.
     "issue9418.pdf",
     "bug1250079.pdf",
+    "issue13147.pdf",
     # FIXME: These seem to be due to problems in the Unicode mappings
     # we inherited from pdfminer.six
     "JST2007-5.pdf",
