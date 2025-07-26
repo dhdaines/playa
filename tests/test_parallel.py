@@ -119,6 +119,7 @@ def test_worker():
     with open(TESTDIR / "image_structure.pdf", "rb") as fh:
         _init_worker_buffer(654321, fh.read())
         assert _get_document()
+    _set_document(None, 0)
 
 
 if __name__ == "__main__":
