@@ -213,7 +213,7 @@ def unpack_image_data(
 def normalize_rect(r: Rect) -> Rect:
     (x0, y0, x1, y1) = r
     if x1 < x0:
-        x1, x0 = x1, x0
+        x1, x0 = x0, x1
     if y1 < y0:
         y1, y0 = y0, y1
     return x0, y0, x1, y1
