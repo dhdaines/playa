@@ -459,7 +459,7 @@ class Document:
                 log.warning(
                     "Indirect object %d not found at position %d: %r", objid, pos, e
                 )
-            obj = self._getobj_parse_approx(objid, pos)
+            obj = self._getobj_parse_approx(pos, objid)
         if obj.objid != objid:
             raise PDFSyntaxError(f"objid mismatch: {obj.objid!r}={objid!r}")
         return obj.obj
@@ -769,10 +769,7 @@ class Document:
             log.debug("Reading xref table at %d", start)
 
             xref: XRef = XRefTable(
-                ObjectParser(self.buffer, self, pos=m.end(0)),
-                self.offset,
-                startobj,
-                nobjs,
+                ObjectParser(self.buffer, self, pos=m.end(0)), self.offset, startobj, nobjs
             )
         else:
             # Well, maybe it's an XRef table without "xref" (but
