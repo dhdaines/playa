@@ -83,16 +83,16 @@ def apply_png_predictor(
 
     nbytes = colors * columns * bitspercomponent // 8
     bpp = colors * bitspercomponent // 8  # number of bytes per complete pixel
-    buf = []
-    line_above = list(b"\x00" * columns)
+    buf = bytearray()
+    line_above = bytearray(nbytes)
     for scanline_i in range(0, len(data), nbytes + 1):
         filter_type = data[scanline_i]
         line_encoded = data[scanline_i + 1 : scanline_i + 1 + nbytes]
-        raw = []
+        raw = bytearray()
 
         if filter_type == 0:
             # Filter type 0: None
-            raw = list(line_encoded)
+            raw = bytearray(line_encoded)
 
         elif filter_type == 1:
             # Filter type 1: Sub
@@ -105,7 +105,7 @@ def apply_png_predictor(
                 if j - bpp < 0:
                     raw_x_bpp = 0
                 else:
-                    raw_x_bpp = int(raw[j - bpp])
+                    raw_x_bpp = raw[j - bpp]
                 raw_x = (sub_x + raw_x_bpp) & 255
                 raw.append(raw_x)
 
@@ -133,8 +133,8 @@ def apply_png_predictor(
                 if j - bpp < 0:
                     raw_x_bpp = 0
                 else:
-                    raw_x_bpp = int(raw[j - bpp])
-                prior_x = int(line_above[j])
+                    raw_x_bpp = raw[j - bpp]
+                prior_x = line_above[j]
                 raw_x = (average_x + (raw_x_bpp + prior_x) // 2) & 255
                 raw.append(raw_x)
 
@@ -152,9 +152,9 @@ def apply_png_predictor(
                     raw_x_bpp = 0
                     prior_x_bpp = 0
                 else:
-                    raw_x_bpp = int(raw[j - bpp])
-                    prior_x_bpp = int(line_above[j - bpp])
-                prior_x = int(line_above[j])
+                    raw_x_bpp = raw[j - bpp]
+                    prior_x_bpp = line_above[j - bpp]
+                prior_x = line_above[j]
                 paeth = paeth_predictor(raw_x_bpp, prior_x, prior_x_bpp)
                 raw_x = (paeth_x + paeth) & 255
                 raw.append(raw_x)
