@@ -1,8 +1,12 @@
 import itertools
 from typing import cast
 
+import pytest
 from playa.data import asobj
-from playa.utils import (Matrix, apply_matrix_pt, decode_text, get_bound,
+from playa.document import PageLabels
+from playa.pdftypes import LIT
+from playa.utils import (Matrix, apply_matrix_pt, decode_text,
+                         format_int_alpha, format_int_roman, get_bound,
                          normalize_rect, transform_bbox)
 
 
@@ -43,3 +47,67 @@ def test_normalize_rect() -> None:
     assert normalize_rect(r1) == r1
     r2 = (5, 5, 1, 1)
     assert normalize_rect(r2) == r1
+
+
+def test_format_romans() -> None:
+    """Chic, des Romains."""
+    with pytest.raises(ValueError):
+        format_int_roman(4000)
+    with pytest.raises(ValueError):
+        format_int_roman(-1)
+    with pytest.raises(ValueError):
+        format_int_roman(0)
+
+    romans = ["", *(format_int_roman(x) for x in range(1, 4000))]
+    assert romans[9] == "ix"
+    for x in range(10, 50):
+        assert romans[x].startswith("x")
+    for x in range(50, 90):
+        assert romans[x].startswith("l")
+    for x in range(90, 100):
+        assert romans[x].startswith("xc")
+    for x in range(100, 500):
+        assert romans[x].startswith("c")
+    for x in range(500, 900):
+        assert romans[x].startswith("d")
+    for x in range(900, 1000):
+        assert romans[x].startswith("cm")
+
+    romans2 = [
+        "",
+        *(PageLabels._format_page_label(x, LIT("r")) for x in range(1, 4000)),
+    ]
+    assert romans2 == romans
+
+    ROMANS = ["", *(PageLabels._format_page_label(x, LIT("R")) for x in range(1, 4000))]
+    assert ROMANS == [x.upper() for x in romans]
+
+
+def test_format_alphas() -> None:
+    """Vendeurs de thermopompes."""
+
+    with pytest.raises(ValueError):
+        format_int_alpha(0)
+
+    two_letters = (26 + 1) * 26
+    alphas = ["", *(format_int_alpha(x) for x in range(1, two_letters + 1))]
+    assert alphas[-1] == "zz"
+    assert format_int_alpha(two_letters + 1) == "aaa"
+
+    alphas2 = [
+        "",
+        *(
+            PageLabels._format_page_label(x, LIT("a"))
+            for x in range(1, two_letters + 1)
+        ),
+    ]
+    assert alphas2 == alphas
+
+    ALPHAS = [
+        "",
+        *(
+            PageLabels._format_page_label(x, LIT("A"))
+            for x in range(1, two_letters + 1)
+        ),
+    ]
+    assert ALPHAS == [x.upper() for x in alphas]
