@@ -77,12 +77,12 @@ def apply_png_predictor(
 
     Documentation: http://www.libpng.org/pub/png/spec/1.2/PNG-Filters.html
     """
-    if bitspercomponent not in [8, 1]:
+    if bitspercomponent not in (8, 1):
         msg = "Unsupported `bitspercomponent': %d" % bitspercomponent
         raise ValueError(msg)
 
-    nbytes = colors * columns * bitspercomponent // 8
-    bpp = colors * bitspercomponent // 8  # number of bytes per complete pixel
+    nbytes = (colors * columns * bitspercomponent + 7) // 8
+    bpp = (colors * bitspercomponent + 7) // 8
     buf = bytearray()
     line_above = bytearray(nbytes)
     for scanline_i in range(0, len(data), nbytes + 1):
