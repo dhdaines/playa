@@ -1,13 +1,24 @@
-## PLAYA 0.6.2: 2026-07-21
+## PLAYA 0.6.3: 2025-07-25
+
+- Correct and slightly optimize PNG predictor
+- Accept all standard number syntaxes (oops)
+- Fail fast on incorrect or damaged xref pointers
+- Accept fontsize of 0
+- Don't throw an exception on malformed text strings
+- Extract images with any colorspace
+
+## PLAYA 0.6.2: 2025-07-21
+
 - Look in ICC profile for number of components if missing
 - Accept `None` in `StructParents` (this is legal)
 - Use stream object ID, not string XObject ID, to fight evil
 - Clarify color space ID vs. name and remember to dereference it
-- Add `--fonts` to CLI to get fonts used in a docuent or its pages
+- Add `--fonts` to CLI to get fonts used in a document or its pages
 - Correct handling of indexed images with 1/2/4 bits per component
 - Add `cid2gid` for CFF fonts
 
 ## PLAYA 0.6.1: 2025-06-17
+
 - Fix regression on subset fonts with zero Ascent and Descent
 - Add method for PNM extraction to streams
 - Extract masks, softmasks, and alternates (if they exist, which they
