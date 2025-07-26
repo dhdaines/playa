@@ -1,4 +1,4 @@
-## PLAYA 0.6.3: 2025-07-25
+## PLAYA 0.6.3: 2025-07-26
 
 - Correct and slightly optimize PNG predictor
 - Accept all standard number syntaxes (oops)
@@ -8,6 +8,8 @@
 - Extract images with any colorspace
 - Correct ASCIIHexDecode for all odd-length strings (not just some)
 - Remove sketchy characters from image and font filenames
+- Track streamid in ObjectParser (this will become useful with time)
+- Cache inline images in ObjectParser
 
 ## PLAYA 0.6.2: 2025-07-21
 
