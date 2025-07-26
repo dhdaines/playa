@@ -322,20 +322,6 @@ def transform_bbox(matrix: Matrix, bbox: Rect) -> Rect:
     )
 
 
-def get_transformed_bound(matrix: Matrix, bbox: Rect) -> Rect:
-    """Deprecated name for transform_bbox.
-
-    Danger: Deprecated
-        This function is deprecated and will be removed in
-        PLAYA-PDF 1.0.
-    """
-    warnings.warn(
-        "get_transformed_bound is deprecated, please use" "transform_bbox instead now.",
-        DeprecationWarning,
-    )
-    return transform_bbox(matrix, bbox)
-
-
 def choplist(n: int, seq: Iterable[_T]) -> Iterator[Tuple[_T, ...]]:
     """Groups every n elements of the list."""
     r = []
