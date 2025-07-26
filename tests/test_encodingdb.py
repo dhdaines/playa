@@ -25,6 +25,8 @@ def test_name2unicode():
     assert name2unicode("fi") == "\ufb01"
     # Make sure suffixes are disregarded
     assert name2unicode("T.swash") == "T"
+    # Make sure surrogates are ignored
+    assert name2unicode("unid800") == ""
 
 
 def test_get_encoding():
