@@ -5,9 +5,10 @@ import pytest
 from playa.data import asobj
 from playa.document import PageLabels
 from playa.pdftypes import LIT
-from playa.utils import (Matrix, apply_matrix_pt, decode_text,
-                         format_int_alpha, format_int_roman, get_bound,
-                         normalize_rect, transform_bbox)
+from playa.utils import (IDENTITY_MAPPING, Matrix, apply_matrix_norm,
+                         apply_matrix_pt, decode_text, format_int_alpha,
+                         format_int_roman, get_bound, normalize_rect,
+                         transform_bbox)
 
 
 def test_rotated_bboxes() -> None:
@@ -119,3 +120,18 @@ def test_normalize_rect() -> None:
     assert normalize_rect(r1) == r1
     r2 = (5, 5, 1, 1)
     assert normalize_rect(r2) == r1
+
+
+def test_apply_matrix_norm() -> None:
+    m = (1, 0.75, -0.75, 1, 3, 4)
+    x, y = (123, 456)
+    nx, ny = apply_matrix_norm(m, (x, y))
+    zx, zy = apply_matrix_pt(m, (0, 0))
+    px, py = apply_matrix_pt(m, (x, y))
+    assert nx == px - zx
+    assert ny == py - zy
+
+
+def test_identity_mapping() -> None:
+    assert IDENTITY_MAPPING[42] == 42
+    assert IDENTITY_MAPPING["xviii"] == "xviii"
