@@ -285,9 +285,8 @@ def test_indexed_images(tmp_path) -> None:
 
 
 @pytest.mark.skipif(not CONTRIB.exists(), reason="contrib samples not present")
-def test_ccitt_endofblock(tmp_path) -> None:
+def test_ccitt(tmp_path) -> None:
     """Verify that we can extract CCITT compressed images correctly."""
     with playa.open(CONTRIB / "ccitt_EndOfBlock_false.pdf") as pdf:
         for img in pdf.pages[0].images:
-            if img.xobjid == "Im4":
-                get_one_image(img.stream, tmp_path / img.xobjid)
+            get_one_image(img.stream, tmp_path / img.xobjid)

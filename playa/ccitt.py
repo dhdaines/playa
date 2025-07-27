@@ -75,7 +75,11 @@ class BitParser:
             self._state = v
         else:
             LOG.debug(
-                "%s: %s => %r", self._statename, self._codebits.decode("ascii"), v
+                "%s (%d): %s => %r",
+                self._statename,
+                self._pos,
+                self._codebits.decode("ascii"),
+                v,
             )
             self._codebits.clear()
             assert self._accept is not None
@@ -119,12 +123,13 @@ class CCITTG4Parser(BitParser):
     BitParser.add(MODE, "x5", "0000001100")
     BitParser.add(MODE, "x6", "0000001101")
     BitParser.add(MODE, "x7", "0000001110")
-    # EOF (which is actually EOL+EOL)
-    BitParser.add(MODE, "e", "000000000001000000000001")
+    BitParser.add(MODE, "e", "000000000001")
+
+    NEXT2D = [None, None]
+    BitParser.add(NEXT2D, 0, "1")
+    BitParser.add(NEXT2D, 1, "0")
 
     WHITE = [None, None]
-    BitParser.add(WHITE, "eob", "000000000000")
-    BitParser.add(WHITE, "eol", "000000000001")
     BitParser.add(WHITE, 0, "00110101")
     BitParser.add(WHITE, 1, "000111")
     BitParser.add(WHITE, 2, "0111")
@@ -229,10 +234,9 @@ class CCITTG4Parser(BitParser):
     BitParser.add(WHITE, 2432, "000000011101")
     BitParser.add(WHITE, 2496, "000000011110")
     BitParser.add(WHITE, 2560, "000000011111")
+    BitParser.add(WHITE, "e", "000000000001")
 
     BLACK = [None, None]
-    BitParser.add(BLACK, "eob", "000000000000")
-    BitParser.add(BLACK, "eol", "000000000001")
     BitParser.add(BLACK, 0, "0000110111")
     BitParser.add(BLACK, 1, "010")
     BitParser.add(BLACK, 2, "11")
@@ -337,6 +341,7 @@ class CCITTG4Parser(BitParser):
     BitParser.add(BLACK, 2432, "000000011101")
     BitParser.add(BLACK, 2496, "000000011110")
     BitParser.add(BLACK, 2560, "000000011111")
+    BitParser.add(BLACK, "e", "000000000001")
 
     UNCOMPRESSED = [None, None]
     BitParser.add(UNCOMPRESSED, "1", "1")
@@ -353,9 +358,11 @@ class CCITTG4Parser(BitParser):
     BitParser.add(UNCOMPRESSED, "T1000", "0000000010")
     BitParser.add(UNCOMPRESSED, "T00000", "00000000011")
     BitParser.add(UNCOMPRESSED, "T10000", "00000000010")
+    BitParser.add(UNCOMPRESSED, "e", "000000000001")
 
     _statenames = {
         id(MODE): "MODE",
+        id(NEXT2D): "NEXT2D",
         id(BLACK): "BLACK",
         id(WHITE): "WHITE",
         id(UNCOMPRESSED): "UNCOMPRESSED",
@@ -397,8 +404,8 @@ class CCITTG4Parser(BitParser):
         elif mode == "u":  # uncompressed (unsupported by pdf.js?)
             self._accept = self._parse_uncompressed
             return self.UNCOMPRESSED
-        elif mode == "e":
-            raise EOFB
+        elif mode == "e":  # EOL, just ignore this
+            return self.MODE
         elif isinstance(mode, int):  # twoDimVert[LR]\d
             self._do_vertical(mode)
             self._flush_line()
@@ -623,7 +630,7 @@ class CCITTFaxDecoder1D(CCITTFaxDecoder):
     def _parse_horiz(self, n: Any) -> BitParserState:
         if n is None:
             raise InvalidData
-        elif n in ("eob", "eol"):
+        elif n == "e":
             # Soft reset
             self._reset_line()
             self._color = 1
@@ -665,6 +672,211 @@ class CCITTFaxDecoder1D(CCITTFaxDecoder):
         )
 
 
+class CCITTFaxDecoderMixed(CCITTFaxDecoder):
+    def feedbytes(self, data: bytes) -> None:
+        for byte in data:
+            try:
+                for m in (128, 64, 32, 16, 8, 4, 2, 1):
+                    self._parse_bit(byte & m)
+            except ByteSkip:
+                self._accept = self._parse_mode
+                self._state = self.MODE
+                self._statename = self._statenames.get(id(self._state), "MODE")
+            except EOFB:
+                break
+
+    def _parse_mode(self, mode: Any) -> BitParserState:
+        # Act on a code from the leaves of MODE
+        if mode == "p":  # twoDimPass
+            self._do_pass()
+            self._flush_line()
+            return self.MODE
+        elif mode == "h":  # twoDimHoriz
+            self._n1 = 0
+            self._accept = self._parse_horiz1
+            if self._color:
+                return self.WHITE
+            else:
+                return self.BLACK
+        elif mode == "u":  # uncompressed (unsupported by pdf.js?)
+            self._accept = self._parse_uncompressed
+            return self.UNCOMPRESSED
+        elif mode == "e":
+            self._accept = self._parse_next2d
+            return self.NEXT2D
+        elif isinstance(mode, int):  # twoDimVert[LR]\d
+            self._do_vertical(mode)
+            self._flush_line()
+            return self.MODE
+        else:
+            raise InvalidData(mode)
+
+    def _parse_next2d(self, n: Any) -> BitParserState:
+        if n:  # 2D mode
+            self._accept = self._parse_mode
+            return self.MODE
+        # Otherwise, 1D mode
+        self._n1 = 0
+        self._accept = self._parse_horiz
+        return self.WHITE if self._color else self.BLACK
+
+    def _parse_horiz1(self, n: Any) -> BitParserState:
+        if n is None:
+            raise InvalidData
+        self._n1 += n
+        if n < 64:
+            self._n2 = 0
+            self._color = 1 - self._color
+            self._accept = self._parse_horiz2
+        return self.WHITE if self._color else self.BLACK
+
+    def _parse_horiz2(self, n: Any) -> BitParserState:
+        if n is None:
+            raise InvalidData
+        self._n2 += n
+        if n < 64:
+            # Set this back to what it was for _parse_horiz1, then
+            # output the two stretches of white/black or black/white
+            self._color = 1 - self._color
+            self._accept = self._parse_mode
+            self._do_horizontal(self._n1, self._n2)
+            self._flush_line()
+            return self.MODE
+        return self.WHITE if self._color else self.BLACK
+
+    def _parse_uncompressed(self, bits: Optional[str]) -> BitParserState:
+        if not bits:
+            raise InvalidData
+        if bits.startswith("T"):
+            self._accept = self._parse_mode
+            self._color = int(bits[1])
+            self._do_uncompressed(bits[2:])
+            return self.MODE
+        else:
+            self._do_uncompressed(bits)
+            return self.UNCOMPRESSED
+
+    def reset(self) -> None:
+        self._y = 0
+        self._curline = array.array("b", [1] * self.width)
+        self._reset_line()
+        self._accept = self._parse_mode
+        self._state = self.MODE
+        self._statename = self._statenames.get(id(self._state), "MODE")
+
+    def _reset_line(self) -> None:
+        self._refline = self._curline
+        self._curline = array.array("b", [1] * self.width)
+        self._curpos = -1
+        self._color = 1
+
+    def _flush_line(self) -> None:
+        if self.width <= self._curpos:
+            self.output_line(self._y, self._curline)
+            self._y += 1
+            self._reset_line()
+            if self.bytealign:
+                raise ByteSkip
+
+    def _do_vertical(self, dx: int) -> None:
+        x1 = self._curpos + 1
+        while 1:
+            if x1 == 0:
+                if self._color == 1 and self._refline[x1] != self._color:
+                    break
+            elif x1 == len(self._refline) or (
+                self._refline[x1 - 1] == self._color
+                and self._refline[x1] != self._color
+            ):
+                break
+            x1 += 1
+        x1 += dx
+        x0 = max(0, self._curpos)
+        x1 = max(0, min(self.width, x1))
+        if x1 < x0:
+            for x in range(x1, x0):
+                self._curline[x] = self._color
+        elif x0 < x1:
+            for x in range(x0, x1):
+                self._curline[x] = self._color
+        self._curpos = x1
+        self._color = 1 - self._color
+
+    def _do_pass(self) -> None:
+        x1 = self._curpos + 1
+        while True:
+            if x1 == 0:
+                if self._color == 1 and self._refline[x1] != self._color:
+                    break
+            elif x1 == len(self._refline) or (
+                self._refline[x1 - 1] == self._color
+                and self._refline[x1] != self._color
+            ):
+                break
+            x1 += 1
+        while True:
+            if x1 == 0:
+                if self._color == 0 and self._refline[x1] == self._color:
+                    break
+            elif x1 == len(self._refline) or (
+                self._refline[x1 - 1] != self._color
+                and self._refline[x1] == self._color
+            ):
+                break
+            x1 += 1
+        for x in range(self._curpos, x1):
+            self._curline[x] = self._color
+        self._curpos = x1
+
+    def _do_horizontal(self, n1: int, n2: int) -> None:
+        if self._curpos < 0:
+            self._curpos = 0
+        x = self._curpos
+        for _ in range(n1):
+            if len(self._curline) <= x:
+                break
+            self._curline[x] = self._color
+            x += 1
+        for _ in range(n2):
+            if len(self._curline) <= x:
+                break
+            self._curline[x] = 1 - self._color
+            x += 1
+        self._curpos = x
+
+    def _do_uncompressed(self, bits: str) -> None:
+        for c in bits:
+            self._curline[self._curpos] = int(c)
+            self._curpos += 1
+            self._flush_line()
+
+    def _parse_horiz(self, n: Any) -> BitParserState:
+        if n is None:
+            raise InvalidData
+        elif n == "e":
+            # Decide if we continue in 1D mode or not
+            self._accept = self._parse_next2d
+            return self.NEXT2D
+        self._n1 += n
+        if n < 64:
+            self._do_horizontal_one(self._n1)
+            self._n1 = 0
+            self._color = 1 - self._color
+            self._flush_line()
+        return self.WHITE if self._color else self.BLACK
+
+    def _do_horizontal_one(self, n: int) -> None:
+        if self._curpos < 0:
+            self._curpos = 0
+        x = self._curpos
+        for _ in range(n):
+            if len(self._curline) <= x:
+                break
+            self._curline[x] = self._color
+            x += 1
+        self._curpos = x
+
+
 def ccittfaxdecode(data: bytes, params: Dict[str, PDFObject]) -> bytes:
     LOG.debug("CCITT decode parms: %r", params)
     K = params.get("K", 0)
@@ -673,6 +885,6 @@ def ccittfaxdecode(data: bytes, params: Dict[str, PDFObject]) -> bytes:
     elif K == 0:
         parser = CCITTFaxDecoder1D(params)
     else:
-        raise ValueError(K)
+        parser = CCITTFaxDecoderMixed(params)
     parser.feedbytes(data)
     return parser.close()
