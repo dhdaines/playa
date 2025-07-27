@@ -65,6 +65,23 @@ def test_cli_structure(path: Path):
 
 
 @pytest.mark.parametrize("path", ALLPDFS, ids=str)
+def test_cli_text(path: Path):
+    if path.name in XFAILS:
+        pytest.xfail("Intentionally corrupt file: %s" % path.name)
+    passwords = PASSWORDS.get(path.name, [""])
+    for password in passwords:
+        try:
+            # FIXME: Verify that output is valid JSON
+            main(
+                ["--password", password, "--non-interactive", "--text", str(path)]
+            )
+        except PDFPasswordIncorrect:
+            pass
+        except PDFEncryptionError:
+            pytest.skip("cryptography package not installed")
+
+
+@pytest.mark.parametrize("path", ALLPDFS, ids=str)
 def test_cli_images(path: Path):
     if path.name in XFAILS:
         pytest.xfail("Intentionally corrupt file: %s" % path.name)
