@@ -113,9 +113,10 @@ extra-dependencies = [ "pydantic > 2" ]
 extra-dependencies = [ "paves", "jupyterlab" ]
 
 [tool.coverage.run]
-omit = [ "tests/*", "/etc/python*/*" ]
+omit = [ "tests/*" ]
 
 [tool.coverage.report]
+omit = [ "/etc/python*/*" ]
 exclude_also = [
     'except ImportError:',
     'raise NotImplementedError',
