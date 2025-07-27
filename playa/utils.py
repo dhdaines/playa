@@ -14,10 +14,6 @@ from typing import (
 
 from playa.pdftypes import Point, Rect, Matrix
 
-# from sys import maxint as INF doesn't work anymore under Python3, but PDF
-# still uses 32 bits ints
-INF = (1 << 31) - 1
-
 
 def paeth_predictor(left: int, above: int, upper_left: int) -> int:
     # From http://www.libpng.org/pub/png/spec/1.2/PNG-Filters.html
