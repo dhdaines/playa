@@ -89,16 +89,17 @@ class ByteSkip(CCITTException):
 
 class CCITTG4Parser(BitParser):
     MODE = [None, None]
-    BitParser.add(MODE, 0, "1")
-    BitParser.add(MODE, +1, "011")
-    BitParser.add(MODE, -1, "010")
-    BitParser.add(MODE, "h", "001")
-    BitParser.add(MODE, "p", "0001")
-    BitParser.add(MODE, +2, "000011")
-    BitParser.add(MODE, -2, "000010")
-    BitParser.add(MODE, +3, "0000011")
-    BitParser.add(MODE, -3, "0000010")
-    BitParser.add(MODE, "u", "0000001111")
+    BitParser.add(MODE, 0, "1")  # twoDimVert0
+    BitParser.add(MODE, +1, "011")  # twoDimVertR1
+    BitParser.add(MODE, -1, "010")  # twoDimVertL1
+    BitParser.add(MODE, "h", "001")   # twoDimHoriz
+    BitParser.add(MODE, "p", "0001")  # twoDimPass
+    BitParser.add(MODE, +2, "000011")  # twoDimVertR2
+    BitParser.add(MODE, -2, "000010")  # twoDimVertR3
+    BitParser.add(MODE, +3, "0000011")  # twoDimVertR3
+    BitParser.add(MODE, -3, "0000010")  # twoDimVertL3
+    BitParser.add(MODE, "u", "0000001111")  # uncompressed
+    # These are all unsupported (raise InvalidData)
     BitParser.add(MODE, "x1", "0000001000")
     BitParser.add(MODE, "x2", "0000001001")
     BitParser.add(MODE, "x3", "0000001010")
@@ -106,6 +107,7 @@ class CCITTG4Parser(BitParser):
     BitParser.add(MODE, "x5", "0000001100")
     BitParser.add(MODE, "x6", "0000001101")
     BitParser.add(MODE, "x7", "0000001110")
+    # EOF
     BitParser.add(MODE, "e", "000000000001000000000001")
 
     WHITE = [None, None]
@@ -356,23 +358,24 @@ class CCITTG4Parser(BitParser):
                 break
 
     def _parse_mode(self, mode: Any) -> BitParserState:
-        if mode == "p":
+        # Act on a code from the leaves of MODE
+        if mode == "p":  # twoDimPass
             self._do_pass()
             self._flush_line()
             return self.MODE
-        elif mode == "h":
+        elif mode == "h":  # twoDimHoriz
             self._n1 = 0
             self._accept = self._parse_horiz1
             if self._color:
                 return self.WHITE
             else:
                 return self.BLACK
-        elif mode == "u":
+        elif mode == "u":  # uncompressed (unsupported by pdf.js?)
             self._accept = self._parse_uncompressed
             return self.UNCOMPRESSED
         elif mode == "e":
             raise EOFB
-        elif isinstance(mode, int):
+        elif isinstance(mode, int):  # twoDimVert[LR]\d
             self._do_vertical(mode)
             self._flush_line()
             return self.MODE
@@ -486,7 +489,7 @@ class CCITTG4Parser(BitParser):
 
     def _do_pass(self) -> None:
         x1 = self._curpos + 1
-        while 1:
+        while True:
             if x1 == 0:
                 if self._color == 1 and self._refline[x1] != self._color:
                     break
@@ -496,7 +499,7 @@ class CCITTG4Parser(BitParser):
             ):
                 break
             x1 += 1
-        while 1:
+        while True:
             if x1 == 0:
                 if self._color == 0 and self._refline[x1] == self._color:
                     break
@@ -557,15 +560,73 @@ class CCITTFaxDecoder(CCITTG4Parser):
         self._buf.append(arr)
 
 
+class CCITTFaxDecoder1D(CCITTFaxDecoder):
+    def __init__(
+        self,
+        width: int,
+        bytealign: bool = False,
+        reversed: bool = False,
+    ) -> None:
+        super().__init__(width, bytealign=bytealign, reversed=reversed)
+
+    def feedbytes(self, data: bytes) -> None:
+        for byte in data:
+            try:
+                for m in (128, 64, 32, 16, 8, 4, 2, 1):
+                    self._parse_bit(byte & m)
+            except ByteSkip:
+                self._accept = self._parse_horiz1
+                self._n1 = 0
+                self._state = self.WHITE if self._color else self.BLACK
+            except EOFB:
+                break
+
+    def reset(self) -> None:
+        self._y = 0
+        self._curline = array.array("b", [1] * self.width)
+        self._reset_line()
+        self._accept = self._parse_horiz1
+        self._n1 = 0
+        self._state = self.WHITE
+
+    def _parse_horiz1(self, n: Any) -> BitParserState:
+        if n is None:
+            # FIXME: Not really correct as there are EOF/EOL codes
+            # that we are supposed to handle, but for the moment
+            # simply ignoring them will work fine in 1D mode...
+            raise EOFB
+        self._n1 += n
+        if n < 64:
+            self._n2 = 0
+            self._color = 1 - self._color
+            self._accept = self._parse_horiz2
+        return self.WHITE if self._color else self.BLACK
+
+    def _parse_horiz2(self, n: Any) -> BitParserState:
+        if n is None:
+            # FIXME: See above...
+            raise EOFB
+        self._n2 += n
+        if n < 64:
+            self._color = 1 - self._color
+            self._accept = self._parse_horiz1
+            self._do_horizontal(self._n1, self._n2)
+            self._flush_line()
+            self._n1 = 0
+        return self.WHITE if self._color else self.BLACK
+
+
 def ccittfaxdecode(data: bytes, params: Dict[str, PDFObject]) -> bytes:
     from playa.pdftypes import int_value
 
+    cols = int_value(params.get("Columns"))
+    bytealign = not not params.get("EncodedByteAlign")
+    reversed = not not params.get("BlackIs1")
     K = params.get("K")
     if K == -1:
-        cols = int_value(params.get("Columns"))
-        bytealign = not not params.get("EncodedByteAlign")
-        reversed = not not params.get("BlackIs1")
         parser = CCITTFaxDecoder(cols, bytealign=bytealign, reversed=reversed)
+    elif K == 0:
+        parser = CCITTFaxDecoder1D(cols, bytealign=bytealign, reversed=reversed)
     else:
         raise ValueError(K)
     parser.feedbytes(data)

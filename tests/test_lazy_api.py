@@ -291,5 +291,5 @@ def test_ccitt(tmp_path) -> None:
     with playa.open(CONTRIB / "ccitt_EndOfBlock_false.pdf") as pdf:
         for img in pdf.pages[0].images:
             parms = dict_value(img["DecodeParms"])
-            if parms["K"] == -1:
+            if parms["K"] <= 0:
                 _ = img.buffer
