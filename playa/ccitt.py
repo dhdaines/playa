@@ -573,6 +573,8 @@ class CCITTFaxDecoder(CCITTG4Parser):
         bytealign = not not params.get("EncodedByteAlign", False)
         super().__init__(width, height, bytealign=bytealign)
         self.reversed = not not params.get("BlackIs1", False)
+        self.eoline = not not params.get("EndOfLine", False)
+        self.eoblock = not not params.get("EndOfBlock", True)
         self._buf: List[bytearray] = []
 
     def close(self) -> bytes:
@@ -589,14 +591,6 @@ class CCITTFaxDecoder(CCITTG4Parser):
 
 
 class CCITTFaxDecoder1D(CCITTFaxDecoder):
-    def __init__(
-        self,
-        params: Dict[str, PDFObject],
-    ) -> None:
-        super().__init__(params)
-        self.eoline = not not params.get("EndOfLine", False)
-        self.eoblock = not not params.get("EndOfBlock", True)
-
     def feedbytes(self, data: bytes) -> None:
         for byte in data:
             try:
