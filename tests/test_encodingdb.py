@@ -26,7 +26,7 @@ def test_name2unicode():
     # Make sure suffixes are disregarded
     assert name2unicode("T.swash") == "T"
     # Make sure surrogates are ignored
-    assert name2unicode("unid800") == ""
+    assert name2unicode("ud800") == ""
 
 
 def test_get_encoding():

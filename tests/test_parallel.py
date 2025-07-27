@@ -120,6 +120,12 @@ def test_worker():
         _init_worker_buffer(654321, fh.read())
         assert _get_document()
     _set_document(None, 0)
+    pdf3 = playa.open(TESTDIR / "image_structure.pdf")
+    docref = _ref_document(pdf3)
+    assert _deref_document(docref) is pdf3
+    del pdf3
+    with pytest.raises(RuntimeError):
+        _deref_document(docref)
 
 
 if __name__ == "__main__":
