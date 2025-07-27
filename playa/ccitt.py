@@ -16,7 +16,6 @@ from typing import (
     Any,
     Callable,
     Dict,
-    Iterator,
     List,
     MutableSequence,
     Optional,
@@ -24,10 +23,6 @@ from typing import (
     Union,
 )
 from playa.pdftypes import PDFObject
-
-
-def get_bytes(data: bytes) -> Iterator[int]:
-    yield from data
 
 
 # Workaround https://github.com/python/mypy/issues/731
@@ -63,16 +58,11 @@ class BitParser:
         assert b is not None
         p[b] = v
 
-    def feedbytes(self, data: bytes) -> None:
-        for byte in get_bytes(data):
-            for m in (128, 64, 32, 16, 8, 4, 2, 1):
-                self._parse_bit(byte & m)
-
     def _parse_bit(self, x: int) -> None:
-        if x:
-            v = self._state[1]
-        else:
-            v = self._state[0]
+        # self._state is actually a tree-encoded lookup for variable
+        # length bit sequences.  Here we read one bit and descend the
+        # tree or act on a leaf node (with self._accept)
+        v = self._state[not not x]
         self._pos += 1
         if isinstance(v, list):
             self._state = v
@@ -349,13 +339,13 @@ class CCITTG4Parser(BitParser):
     _color: int
 
     def __init__(self, width: int, bytealign: bool = False) -> None:
-        BitParser.__init__(self)
+        super().__init__()
         self.width = width
         self.bytealign = bytealign
         self.reset()
 
     def feedbytes(self, data: bytes) -> None:
-        for byte in get_bytes(data):
+        for byte in data:
             try:
                 for m in (128, 64, 32, 16, 8, 4, 2, 1):
                     self._parse_bit(byte & m)
@@ -550,21 +540,21 @@ class CCITTFaxDecoder(CCITTG4Parser):
         bytealign: bool = False,
         reversed: bool = False,
     ) -> None:
-        CCITTG4Parser.__init__(self, width, bytealign=bytealign)
+        super().__init__(width, bytealign=bytealign)
         self.reversed = reversed
-        self._buf = b""
+        self._buf: List[bytearray] = []
 
     def close(self) -> bytes:
-        return self._buf
+        return b"".join(self._buf)
 
     def output_line(self, y: int, bits: Sequence[int]) -> None:
-        arr = array.array("B", [0] * ((len(bits) + 7) // 8))
+        arr = bytearray((len(bits) + 7) // 8)
         if self.reversed:
-            bits = [1 - b for b in bits]
+            bits = [~b for b in bits]
         for i, b in enumerate(bits):
             if b:
                 arr[i // 8] += (128, 64, 32, 16, 8, 4, 2, 1)[i % 8]
-        self._buf += arr.tobytes()
+        self._buf.append(arr)
 
 
 def ccittfaxdecode(data: bytes, params: Dict[str, PDFObject]) -> bytes:
@@ -580,39 +570,3 @@ def ccittfaxdecode(data: bytes, params: Dict[str, PDFObject]) -> bytes:
         raise ValueError(K)
     parser.feedbytes(data)
     return parser.close()
-
-
-# test
-def main(argv: List[str]) -> None:
-    if not argv[1:]:
-        import unittest
-
-        unittest.main()
-        return
-
-    class Parser(CCITTG4Parser):
-        def __init__(self, width: int, bytealign: bool = False) -> None:
-            import pygame  # type: ignore[import]
-
-            CCITTG4Parser.__init__(self, width, bytealign=bytealign)
-            self.img = pygame.Surface((self.width, 1000))
-
-        def output_line(self, y: int, bits: Sequence[int]) -> None:
-            for x, b in enumerate(bits):
-                if b:
-                    self.img.set_at((x, y), (255, 255, 255))
-                else:
-                    self.img.set_at((x, y), (0, 0, 0))
-
-        def close(self) -> None:
-            import pygame
-
-            pygame.image.save(self.img, "out.bmp")
-
-    for path in argv[1:]:
-        fp = open(path, "rb")
-        (_, _, k, w, h, _) = path.split(".")
-        parser = Parser(int(w))
-        parser.feedbytes(fp.read())
-        parser.close()
-        fp.close()
