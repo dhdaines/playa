@@ -10,7 +10,6 @@ from playa.color import PREDEFINED_COLORSPACE, Color
 from playa.exceptions import PDFEncryptionError
 from playa.utils import get_bound
 from playa.image import get_one_image
-from playa.pdftypes import dict_value
 
 from .data import ALLPDFS, CONTRIB, PASSWORDS, TESTDIR, XFAILS
 
@@ -286,10 +285,9 @@ def test_indexed_images(tmp_path) -> None:
 
 
 @pytest.mark.skipif(not CONTRIB.exists(), reason="contrib samples not present")
-def test_ccitt(tmp_path) -> None:
+def test_ccitt_endofblock(tmp_path) -> None:
     """Verify that we can extract CCITT compressed images correctly."""
     with playa.open(CONTRIB / "ccitt_EndOfBlock_false.pdf") as pdf:
         for img in pdf.pages[0].images:
-            parms = dict_value(img["DecodeParms"])
-            if parms["K"] <= 0:
-                _ = img.buffer
+            if img.xobjid == "Im4":
+                get_one_image(img.stream, tmp_path / img.xobjid)

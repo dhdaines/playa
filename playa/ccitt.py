@@ -119,10 +119,12 @@ class CCITTG4Parser(BitParser):
     BitParser.add(MODE, "x5", "0000001100")
     BitParser.add(MODE, "x6", "0000001101")
     BitParser.add(MODE, "x7", "0000001110")
-    # EOF
+    # EOF (which is actually EOL+EOL)
     BitParser.add(MODE, "e", "000000000001000000000001")
 
     WHITE = [None, None]
+    BitParser.add(WHITE, "eob", "000000000000")
+    BitParser.add(WHITE, "eol", "000000000001")
     BitParser.add(WHITE, 0, "00110101")
     BitParser.add(WHITE, 1, "000111")
     BitParser.add(WHITE, 2, "0111")
@@ -229,6 +231,8 @@ class CCITTG4Parser(BitParser):
     BitParser.add(WHITE, 2560, "000000011111")
 
     BLACK = [None, None]
+    BitParser.add(BLACK, "eob", "000000000000")
+    BitParser.add(BLACK, "eol", "000000000001")
     BitParser.add(BLACK, 0, "0000110111")
     BitParser.add(BLACK, 1, "010")
     BitParser.add(BLACK, 2, "11")
@@ -610,36 +614,65 @@ class CCITTFaxDecoder1D(CCITTFaxDecoder):
         self._y = 0
         self._curline = array.array("b", [1] * self.width)
         self._reset_line()
-        self._accept = self._parse_horiz1
+        self._accept = self._parse_horiz
         self._n1 = 0
+        self._color = 1
         self._state = self.WHITE
+        self._statename = self._statenames.get(id(self._state), "MODE")
 
-    def _parse_horiz1(self, n: Any) -> BitParserState:
+    def _reset_line(self) -> None:
+        # NOTE: do not reset color to white on new line
+        self._refline = self._curline
+        self._curline = array.array("b", [1] * self.width)
+        self._curpos = -1
+
+    def _parse_horiz(self, n: Any) -> BitParserState:
         if n is None:
-            # FIXME: Handle EOL/EOB codes here (needed for issue5747.pdf)
-            raise EOFB
+            raise InvalidData
+        elif n in ("eob", "eol"):
+            # Soft reset
+            self._reset_line()
+            self._color = 1
+            self._n1 = 0
+            return self.WHITE
         self._n1 += n
         if n < 64:
-            self._n2 = 0
+            self._do_horizontal_one(self._n1)
+            self._n1 = 0
             self._color = 1 - self._color
-            self._accept = self._parse_horiz2
+            self._flush_line()
         return self.WHITE if self._color else self.BLACK
 
-    def _parse_horiz2(self, n: Any) -> BitParserState:
-        if n is None:
-            # FIXME: Handle EOL/EOB codes here (needed for issue5747.pdf)
-            raise EOFB
-        self._n2 += n
-        if n < 64:
-            self._color = 1 - self._color
-            self._accept = self._parse_horiz1
-            self._do_horizontal(self._n1, self._n2)
-            self._flush_line()
-            self._n1 = 0
-        return self.WHITE if self._color else self.BLACK
+    def _do_horizontal_one(self, n: int) -> None:
+        if self._curpos < 0:
+            self._curpos = 0
+        x = self._curpos
+        for _ in range(n):
+            if len(self._curline) <= x:
+                break
+            self._curline[x] = self._color
+            x += 1
+        self._curpos = x
+
+    def _flush_line(self) -> None:
+        if self._curpos < self.width:
+            return
+        self.output_line(self._y, self._curline)
+        self._y += 1
+        self._reset_line()
+        if self.bytealign:
+            raise ByteSkip
+        LOG.debug(
+            "EndOfBlock %r, EndOfLine %r, row %d of %d",
+            self.eoblock,
+            self.eoline,
+            self._y,
+            self.height,
+        )
 
 
 def ccittfaxdecode(data: bytes, params: Dict[str, PDFObject]) -> bytes:
+    LOG.debug("CCITT decode parms: %r", params)
     K = params.get("K", 0)
     if K == -1:
         parser = CCITTFaxDecoder(params)
