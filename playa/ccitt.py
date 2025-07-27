@@ -591,9 +591,7 @@ class CCITTFaxDecoder1D(CCITTFaxDecoder):
 
     def _parse_horiz1(self, n: Any) -> BitParserState:
         if n is None:
-            # FIXME: Not really correct as there are EOF/EOL codes
-            # that we are supposed to handle, but for the moment
-            # simply ignoring them will work fine in 1D mode...
+            # FIXME: Handle EOL/EOB codes here (needed for issue5747.pdf)
             raise EOFB
         self._n1 += n
         if n < 64:
@@ -604,7 +602,7 @@ class CCITTFaxDecoder1D(CCITTFaxDecoder):
 
     def _parse_horiz2(self, n: Any) -> BitParserState:
         if n is None:
-            # FIXME: See above...
+            # FIXME: Handle EOL/EOB codes here (needed for issue5747.pdf)
             raise EOFB
         self._n2 += n
         if n < 64:
@@ -622,7 +620,7 @@ def ccittfaxdecode(data: bytes, params: Dict[str, PDFObject]) -> bytes:
     cols = int_value(params.get("Columns"))
     bytealign = not not params.get("EncodedByteAlign")
     reversed = not not params.get("BlackIs1")
-    K = params.get("K")
+    K = params.get("K", 0)
     if K == -1:
         parser = CCITTFaxDecoder(cols, bytealign=bytealign, reversed=reversed)
     elif K == 0:
