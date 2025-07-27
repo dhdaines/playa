@@ -12,6 +12,7 @@
 
 
 import array
+import logging
 from typing import (
     Any,
     Callable,
@@ -25,6 +26,7 @@ from typing import (
 from playa.pdftypes import PDFObject, int_value
 
 
+LOG = logging.getLogger(__name__)
 # Workaround https://github.com/python/mypy/issues/731
 BitParserState = MutableSequence[Any]
 # A better definition (not supported by mypy) would be:
@@ -33,6 +35,9 @@ BitParserState = MutableSequence[Any]
 
 class BitParser:
     _state: BitParserState
+    _codebits = bytearray()
+    _statename = "MODE"
+    _statenames: Dict[int, str]
 
     # _accept is declared Optional solely as a workaround for
     # https://github.com/python/mypy/issues/708
@@ -62,13 +67,20 @@ class BitParser:
         # self._state is actually a tree-encoded lookup for variable
         # length bit sequences.  Here we read one bit and descend the
         # tree or act on a leaf node (with self._accept)
-        v = self._state[not not x]
+        bit = not not x
+        v = self._state[bit]
+        self._codebits.append(ord("1") if bit else ord("0"))
         self._pos += 1
         if isinstance(v, list):
             self._state = v
         else:
+            LOG.debug(
+                "%s: %s => %r", self._statename, self._codebits.decode("ascii"), v
+            )
+            self._codebits.clear()
             assert self._accept is not None
             self._state = self._accept(v)
+            self._statename = self._statenames.get(id(self._state), "MODE")
 
 
 class CCITTException(Exception):
@@ -338,6 +350,12 @@ class CCITTG4Parser(BitParser):
     BitParser.add(UNCOMPRESSED, "T00000", "00000000011")
     BitParser.add(UNCOMPRESSED, "T10000", "00000000010")
 
+    _statenames = {
+        id(MODE): "MODE",
+        id(BLACK): "BLACK",
+        id(WHITE): "WHITE",
+        id(UNCOMPRESSED): "UNCOMPRESSED",
+    }
     _color: int
 
     def __init__(self, width: int, height: int, bytealign: bool = False) -> None:
@@ -355,6 +373,7 @@ class CCITTG4Parser(BitParser):
             except ByteSkip:
                 self._accept = self._parse_mode
                 self._state = self.MODE
+                self._statename = self._statenames.get(id(self._state), "MODE")
             except EOFB:
                 break
 
@@ -401,6 +420,8 @@ class CCITTG4Parser(BitParser):
             raise InvalidData
         self._n2 += n
         if n < 64:
+            # Set this back to what it was for _parse_horiz1, then
+            # output the two stretches of white/black or black/white
             self._color = 1 - self._color
             self._accept = self._parse_mode
             self._do_horizontal(self._n1, self._n2)
@@ -446,6 +467,7 @@ class CCITTG4Parser(BitParser):
         self._reset_line()
         self._accept = self._parse_mode
         self._state = self.MODE
+        self._statename = self._statenames.get(id(self._state), "MODE")
 
     def output_line(self, y: int, bits: Sequence[int]) -> None:
         print(y, "".join(str(b) for b in bits))
@@ -580,6 +602,7 @@ class CCITTFaxDecoder1D(CCITTFaxDecoder):
                 self._accept = self._parse_horiz1
                 self._n1 = 0
                 self._state = self.WHITE if self._color else self.BLACK
+                self._statename = self._statenames.get(id(self._state), "MODE")
             except EOFB:
                 break
 
