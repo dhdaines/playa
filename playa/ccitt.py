@@ -22,7 +22,7 @@ from typing import (
     Sequence,
     Union,
 )
-from playa.pdftypes import PDFObject
+from playa.pdftypes import PDFObject, int_value
 
 
 # Workaround https://github.com/python/mypy/issues/731
@@ -92,7 +92,7 @@ class CCITTG4Parser(BitParser):
     BitParser.add(MODE, 0, "1")  # twoDimVert0
     BitParser.add(MODE, +1, "011")  # twoDimVertR1
     BitParser.add(MODE, -1, "010")  # twoDimVertL1
-    BitParser.add(MODE, "h", "001")   # twoDimHoriz
+    BitParser.add(MODE, "h", "001")  # twoDimHoriz
     BitParser.add(MODE, "p", "0001")  # twoDimPass
     BitParser.add(MODE, +2, "000011")  # twoDimVertR2
     BitParser.add(MODE, -2, "000010")  # twoDimVertR3
@@ -340,9 +340,10 @@ class CCITTG4Parser(BitParser):
 
     _color: int
 
-    def __init__(self, width: int, bytealign: bool = False) -> None:
+    def __init__(self, width: int, height: int, bytealign: bool = False) -> None:
         super().__init__()
         self.width = width
+        self.height = height
         self.bytealign = bytealign
         self.reset()
 
@@ -539,12 +540,13 @@ class CCITTG4Parser(BitParser):
 class CCITTFaxDecoder(CCITTG4Parser):
     def __init__(
         self,
-        width: int,
-        bytealign: bool = False,
-        reversed: bool = False,
+        params: Dict[str, PDFObject],
     ) -> None:
-        super().__init__(width, bytealign=bytealign)
-        self.reversed = reversed
+        width = int_value(params.get("Columns", 1728))
+        height = int_value(params.get("Rows", 0))
+        bytealign = not not params.get("EncodedByteAlign", False)
+        super().__init__(width, height, bytealign=bytealign)
+        self.reversed = not not params.get("BlackIs1", False)
         self._buf: List[bytearray] = []
 
     def close(self) -> bytes:
@@ -563,11 +565,11 @@ class CCITTFaxDecoder(CCITTG4Parser):
 class CCITTFaxDecoder1D(CCITTFaxDecoder):
     def __init__(
         self,
-        width: int,
-        bytealign: bool = False,
-        reversed: bool = False,
+        params: Dict[str, PDFObject],
     ) -> None:
-        super().__init__(width, bytealign=bytealign, reversed=reversed)
+        super().__init__(params)
+        self.eoline = not not params.get("EndOfLine", False)
+        self.eoblock = not not params.get("EndOfBlock", True)
 
     def feedbytes(self, data: bytes) -> None:
         for byte in data:
@@ -615,16 +617,11 @@ class CCITTFaxDecoder1D(CCITTFaxDecoder):
 
 
 def ccittfaxdecode(data: bytes, params: Dict[str, PDFObject]) -> bytes:
-    from playa.pdftypes import int_value
-
-    cols = int_value(params.get("Columns"))
-    bytealign = not not params.get("EncodedByteAlign")
-    reversed = not not params.get("BlackIs1")
     K = params.get("K", 0)
     if K == -1:
-        parser = CCITTFaxDecoder(cols, bytealign=bytealign, reversed=reversed)
+        parser = CCITTFaxDecoder(params)
     elif K == 0:
-        parser = CCITTFaxDecoder1D(cols, bytealign=bytealign, reversed=reversed)
+        parser = CCITTFaxDecoder1D(params)
     else:
         raise ValueError(K)
     parser.feedbytes(data)
