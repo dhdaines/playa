@@ -9,8 +9,7 @@ The following data were extracted from the AFM files:
 
 """
 
-###  BEGIN Verbatim copy of the license part
-
+#  BEGIN Verbatim copy of the license part
 #
 # Adobe Core 35 AFM Files with 314 Glyph Entries - ReadMe
 #
@@ -23,52 +22,9 @@ The following data were extracted from the AFM files:
 # paragraph is not modified. Adobe Systems has no responsibility or
 # obligation to support the use of the AFM files.
 #
-
-###  END Verbatim copy of the license part
+#  END Verbatim copy of the license part
 
 from typing import Any, Dict, Tuple
-
-
-def convert_font_metrics(path: str) -> None:
-    """Convert an AFM file to a mapping of font metrics.
-
-    See below for the output.
-    """
-    fonts = {}
-    with open(path) as fileinput:
-        for line in fileinput.readlines():
-            f = line.strip().split(" ")
-            if not f:
-                continue
-            k = f[0]
-            if k == "FontName":
-                fontname = f[1]
-                props = {"FontName": fontname, "Flags": 0}
-                chars: Dict[int, int] = {}
-                fonts[fontname] = (props, chars)
-            elif k == "C":
-                cid = int(f[1])
-                if 0 <= cid and cid <= 255:
-                    width = int(f[4])
-                    chars[cid] = width
-            elif k in ("CapHeight", "XHeight", "ItalicAngle", "Ascender", "Descender"):
-                k = {"Ascender": "Ascent", "Descender": "Descent"}.get(k, k)
-                props[k] = float(f[1])
-            elif k in ("FontName", "FamilyName", "Weight"):
-                k = {"FamilyName": "FontFamily", "Weight": "FontWeight"}.get(k, k)
-                props[k] = f[1]
-            elif k == "IsFixedPitch":
-                if f[1].lower() == "true":
-                    props["Flags"] = 64
-            elif k == "FontBBox":
-                props[k] = tuple(map(float, f[1:5]))
-        print("# -*- python -*-")
-        print("from typing import Any, Dict, Tuple")
-        print("FONT_METRICS: Dict[str, Tuple[Dict[str, Any], Dict[str, int]]] = {")
-        for fontname, (props, chars) in fonts.items():
-            print(f" {fontname!r}: {(props, chars)!r},")
-        print("}")
-
 
 FONT_METRICS: Dict[str, Tuple[Dict[str, Any], Dict[str, int]]] = {
     "Courier": (
