@@ -170,6 +170,7 @@ def test_text_objects():
 def test_content_objects():
     testpdf = str(TESTDIR / "font-size-test.pdf")
     main(["--pages", "1,3", "--content-objects", testpdf])
+    main(["--pages", "1,3", "--content-objects", "--explode-text", testpdf])
 
 
 def test_content_streams():
