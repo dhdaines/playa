@@ -463,12 +463,6 @@ class ContentStream:
         return list(zip(filters, resolved_params))
 
     def decode(self, strict: bool = False) -> None:
-        from playa.ascii85 import ascii85decode, asciihexdecode
-        from playa.ccitt import ccittfaxdecode
-        from playa.lzw import lzwdecode
-        from playa.runlength import rldecode
-        from playa.utils import apply_png_predictor, apply_tiff_predictor
-
         assert self._data is None and self.rawdata is not None, str(
             (self._data, self.rawdata),
         )
@@ -499,14 +493,24 @@ class ContentStream:
                         data = b""
 
             elif f in LITERALS_LZW_DECODE:
+                from playa.lzw import lzwdecode
+
                 data = lzwdecode(data)
             elif f in LITERALS_ASCII85_DECODE:
+                from playa.ascii85 import ascii85decode
+
                 data = ascii85decode(data)
             elif f in LITERALS_ASCIIHEX_DECODE:
+                from playa.ascii85 import asciihexdecode
+
                 data = asciihexdecode(data)
             elif f in LITERALS_RUNLENGTH_DECODE:
+                from playa.runlength import rldecode
+
                 data = rldecode(data)
             elif f in LITERALS_CCITTFAX_DECODE:
+                from playa.ccitt import ccittfaxdecode
+
                 data = ccittfaxdecode(data, params)
             elif f in LITERALS_DCT_DECODE:
                 # This is probably a JPG stream
@@ -528,6 +532,8 @@ class ContentStream:
                     pass
                 elif pred == 2:
                     # TIFF predictor 2
+                    from playa.utils import apply_tiff_predictor
+
                     colors = int_value(params.get("Colors", 1))
                     columns = int_value(params.get("Columns", 1))
                     raw_bits_per_component = params.get("BitsPerComponent", 8)
@@ -540,6 +546,8 @@ class ContentStream:
                     )
                 elif pred >= 10:
                     # PNG predictor
+                    from playa.utils import apply_png_predictor
+
                     colors = int_value(params.get("Colors", 1))
                     columns = int_value(params.get("Columns", 1))
                     raw_bits_per_component = params.get("BitsPerComponent", 8)
