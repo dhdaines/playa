@@ -160,3 +160,18 @@ def test_bad_page_spec():
     with pytest.raises(SystemExit):
         testpdf = str(TESTDIR / "font-size-test.pdf")
         main(["--pages", "10-4,goodbuddy", "--text", testpdf])
+
+
+def test_text_objects():
+    testpdf = str(TESTDIR / "font-size-test.pdf")
+    main(["--pages", "1,3", "--text-objects", testpdf])
+
+
+def test_content_objects():
+    testpdf = str(TESTDIR / "font-size-test.pdf")
+    main(["--pages", "1,3", "--content-objects", testpdf])
+
+
+def test_content_streams():
+    testpdf = str(TESTDIR / "font-size-test.pdf")
+    main(["--pages", "1", "--content-streams", testpdf])
