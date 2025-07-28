@@ -604,7 +604,7 @@ class CCITTFaxDecoder1D(CCITTFaxDecoder):
         self._curpos = -1
 
     def _parse_horiz(self, n: BitParserNode) -> BitParserState:
-        if not isinstance(n, (int, str)):
+        if n is None:
             raise InvalidData
         elif n == "e":
             # Soft reset
@@ -612,6 +612,7 @@ class CCITTFaxDecoder1D(CCITTFaxDecoder):
             self._color = 1
             self._n1 = 0
             return WHITE
+        assert isinstance(n, int)
         self._n1 += n
         if n < 64:
             self._do_horizontal_one(self._n1)
@@ -789,12 +790,13 @@ class CCITTFaxDecoderMixed(CCITTFaxDecoder):
             self._flush_line()
 
     def _parse_horiz(self, n: BitParserNode) -> BitParserState:
-        if not isinstance(n, (int, str)):
+        if n is None:
             raise InvalidData
         elif n == "e":
             # Decide if we continue in 1D mode or not
             self._accept = self._parse_next2d
             return NEXT2D
+        assert isinstance(n, int)
         self._n1 += n
         if n < 64:
             self._do_horizontal_one(self._n1)
