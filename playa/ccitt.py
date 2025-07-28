@@ -18,73 +18,13 @@ from typing import (
     Callable,
     Dict,
     List,
-    MutableSequence,
-    Optional,
     Sequence,
     Union,
 )
 from playa.pdftypes import PDFObject, int_value
 
-
 LOG = logging.getLogger(__name__)
-# Workaround https://github.com/python/mypy/issues/731
-BitParserState = MutableSequence[Any]
-# A better definition (not supported by mypy) would be:
-# BitParserState = MutableSequence[Union["BitParserState", int, str, None]]
-
-
-class BitParser:
-    _state: BitParserState
-    _codebits = bytearray()
-    _statename = "MODE"
-    _statenames: Dict[int, str]
-
-    # _accept is declared Optional solely as a workaround for
-    # https://github.com/python/mypy/issues/708
-    _accept: Optional[Callable[[Any], BitParserState]]
-
-    def __init__(self) -> None:
-        self._pos = 0
-
-    @classmethod
-    def add(cls, root: BitParserState, v: Union[int, str], bits: str) -> None:
-        p: BitParserState = root
-        b = None
-        for i in range(len(bits)):
-            if i > 0:
-                assert b is not None
-                if p[b] is None:
-                    p[b] = [None, None]
-                p = p[b]
-            if bits[i] == "1":
-                b = 1
-            else:
-                b = 0
-        assert b is not None
-        p[b] = v
-
-    def _parse_bit(self, x: int) -> None:
-        # self._state is actually a tree-encoded lookup for variable
-        # length bit sequences.  Here we read one bit and descend the
-        # tree or act on a leaf node (with self._accept)
-        bit = not not x
-        v = self._state[bit]
-        self._codebits.append(ord("1") if bit else ord("0"))
-        self._pos += 1
-        if isinstance(v, list):
-            self._state = v
-        else:
-            LOG.debug(
-                "%s (%d): %s => %r",
-                self._statename,
-                self._pos,
-                self._codebits.decode("ascii"),
-                v,
-            )
-            self._codebits.clear()
-            assert self._accept is not None
-            self._state = self._accept(v)
-            self._statename = self._statenames.get(id(self._state), "MODE")
+BitParserNode = Union[int, str, None, List]
 
 
 class CCITTException(Exception):
@@ -103,270 +43,319 @@ class ByteSkip(CCITTException):
     pass
 
 
+class BitParserState:
+    def __init__(self, name: str) -> None:
+        self.root: BitParserNode = [None, None]
+        self.name = name
+
+    def add(self, v: Union[int, str], bits: str) -> None:
+        p = self.root
+        b = None
+        for i in range(len(bits)):
+            if i > 0:
+                assert b is not None
+                assert isinstance(p, list)
+                if p[b] is None:
+                    p[b] = [None, None]
+                p = p[b]
+            b = int(bits[i])
+        assert b is not None
+        assert isinstance(p, list)
+        p[b] = v
+
+
+MODE = BitParserState("MODE")
+MODE.add(0, "1")  # twoDimVert0
+MODE.add(+1, "011")  # twoDimVertR1
+MODE.add(-1, "010")  # twoDimVertL1
+MODE.add("h", "001")  # twoDimHoriz
+MODE.add("p", "0001")  # twoDimPass
+MODE.add(+2, "000011")  # twoDimVertR2
+MODE.add(-2, "000010")  # twoDimVertR3
+MODE.add(+3, "0000011")  # twoDimVertR3
+MODE.add(-3, "0000010")  # twoDimVertL3
+MODE.add("u", "0000001111")  # uncompressed
+# These are all unsupported (raise InvalidData)
+MODE.add("x1", "0000001000")
+MODE.add("x2", "0000001001")
+MODE.add("x3", "0000001010")
+MODE.add("x4", "0000001011")
+MODE.add("x5", "0000001100")
+MODE.add("x6", "0000001101")
+MODE.add("x7", "0000001110")
+MODE.add("e", "000000000001")
+
+NEXT2D = BitParserState("NEXT2D")
+NEXT2D.add(0, "1")
+NEXT2D.add(1, "0")
+
+WHITE = BitParserState("WHITE")
+WHITE.add(0, "00110101")
+WHITE.add(1, "000111")
+WHITE.add(2, "0111")
+WHITE.add(3, "1000")
+WHITE.add(4, "1011")
+WHITE.add(5, "1100")
+WHITE.add(6, "1110")
+WHITE.add(7, "1111")
+WHITE.add(8, "10011")
+WHITE.add(9, "10100")
+WHITE.add(10, "00111")
+WHITE.add(11, "01000")
+WHITE.add(12, "001000")
+WHITE.add(13, "000011")
+WHITE.add(14, "110100")
+WHITE.add(15, "110101")
+WHITE.add(16, "101010")
+WHITE.add(17, "101011")
+WHITE.add(18, "0100111")
+WHITE.add(19, "0001100")
+WHITE.add(20, "0001000")
+WHITE.add(21, "0010111")
+WHITE.add(22, "0000011")
+WHITE.add(23, "0000100")
+WHITE.add(24, "0101000")
+WHITE.add(25, "0101011")
+WHITE.add(26, "0010011")
+WHITE.add(27, "0100100")
+WHITE.add(28, "0011000")
+WHITE.add(29, "00000010")
+WHITE.add(30, "00000011")
+WHITE.add(31, "00011010")
+WHITE.add(32, "00011011")
+WHITE.add(33, "00010010")
+WHITE.add(34, "00010011")
+WHITE.add(35, "00010100")
+WHITE.add(36, "00010101")
+WHITE.add(37, "00010110")
+WHITE.add(38, "00010111")
+WHITE.add(39, "00101000")
+WHITE.add(40, "00101001")
+WHITE.add(41, "00101010")
+WHITE.add(42, "00101011")
+WHITE.add(43, "00101100")
+WHITE.add(44, "00101101")
+WHITE.add(45, "00000100")
+WHITE.add(46, "00000101")
+WHITE.add(47, "00001010")
+WHITE.add(48, "00001011")
+WHITE.add(49, "01010010")
+WHITE.add(50, "01010011")
+WHITE.add(51, "01010100")
+WHITE.add(52, "01010101")
+WHITE.add(53, "00100100")
+WHITE.add(54, "00100101")
+WHITE.add(55, "01011000")
+WHITE.add(56, "01011001")
+WHITE.add(57, "01011010")
+WHITE.add(58, "01011011")
+WHITE.add(59, "01001010")
+WHITE.add(60, "01001011")
+WHITE.add(61, "00110010")
+WHITE.add(62, "00110011")
+WHITE.add(63, "00110100")
+WHITE.add(64, "11011")
+WHITE.add(128, "10010")
+WHITE.add(192, "010111")
+WHITE.add(256, "0110111")
+WHITE.add(320, "00110110")
+WHITE.add(384, "00110111")
+WHITE.add(448, "01100100")
+WHITE.add(512, "01100101")
+WHITE.add(576, "01101000")
+WHITE.add(640, "01100111")
+WHITE.add(704, "011001100")
+WHITE.add(768, "011001101")
+WHITE.add(832, "011010010")
+WHITE.add(896, "011010011")
+WHITE.add(960, "011010100")
+WHITE.add(1024, "011010101")
+WHITE.add(1088, "011010110")
+WHITE.add(1152, "011010111")
+WHITE.add(1216, "011011000")
+WHITE.add(1280, "011011001")
+WHITE.add(1344, "011011010")
+WHITE.add(1408, "011011011")
+WHITE.add(1472, "010011000")
+WHITE.add(1536, "010011001")
+WHITE.add(1600, "010011010")
+WHITE.add(1664, "011000")
+WHITE.add(1728, "010011011")
+WHITE.add(1792, "00000001000")
+WHITE.add(1856, "00000001100")
+WHITE.add(1920, "00000001101")
+WHITE.add(1984, "000000010010")
+WHITE.add(2048, "000000010011")
+WHITE.add(2112, "000000010100")
+WHITE.add(2176, "000000010101")
+WHITE.add(2240, "000000010110")
+WHITE.add(2304, "000000010111")
+WHITE.add(2368, "000000011100")
+WHITE.add(2432, "000000011101")
+WHITE.add(2496, "000000011110")
+WHITE.add(2560, "000000011111")
+WHITE.add("e", "000000000001")
+
+BLACK = BitParserState("BLACK")
+BLACK.add(0, "0000110111")
+BLACK.add(1, "010")
+BLACK.add(2, "11")
+BLACK.add(3, "10")
+BLACK.add(4, "011")
+BLACK.add(5, "0011")
+BLACK.add(6, "0010")
+BLACK.add(7, "00011")
+BLACK.add(8, "000101")
+BLACK.add(9, "000100")
+BLACK.add(10, "0000100")
+BLACK.add(11, "0000101")
+BLACK.add(12, "0000111")
+BLACK.add(13, "00000100")
+BLACK.add(14, "00000111")
+BLACK.add(15, "000011000")
+BLACK.add(16, "0000010111")
+BLACK.add(17, "0000011000")
+BLACK.add(18, "0000001000")
+BLACK.add(19, "00001100111")
+BLACK.add(20, "00001101000")
+BLACK.add(21, "00001101100")
+BLACK.add(22, "00000110111")
+BLACK.add(23, "00000101000")
+BLACK.add(24, "00000010111")
+BLACK.add(25, "00000011000")
+BLACK.add(26, "000011001010")
+BLACK.add(27, "000011001011")
+BLACK.add(28, "000011001100")
+BLACK.add(29, "000011001101")
+BLACK.add(30, "000001101000")
+BLACK.add(31, "000001101001")
+BLACK.add(32, "000001101010")
+BLACK.add(33, "000001101011")
+BLACK.add(34, "000011010010")
+BLACK.add(35, "000011010011")
+BLACK.add(36, "000011010100")
+BLACK.add(37, "000011010101")
+BLACK.add(38, "000011010110")
+BLACK.add(39, "000011010111")
+BLACK.add(40, "000001101100")
+BLACK.add(41, "000001101101")
+BLACK.add(42, "000011011010")
+BLACK.add(43, "000011011011")
+BLACK.add(44, "000001010100")
+BLACK.add(45, "000001010101")
+BLACK.add(46, "000001010110")
+BLACK.add(47, "000001010111")
+BLACK.add(48, "000001100100")
+BLACK.add(49, "000001100101")
+BLACK.add(50, "000001010010")
+BLACK.add(51, "000001010011")
+BLACK.add(52, "000000100100")
+BLACK.add(53, "000000110111")
+BLACK.add(54, "000000111000")
+BLACK.add(55, "000000100111")
+BLACK.add(56, "000000101000")
+BLACK.add(57, "000001011000")
+BLACK.add(58, "000001011001")
+BLACK.add(59, "000000101011")
+BLACK.add(60, "000000101100")
+BLACK.add(61, "000001011010")
+BLACK.add(62, "000001100110")
+BLACK.add(63, "000001100111")
+BLACK.add(64, "0000001111")
+BLACK.add(128, "000011001000")
+BLACK.add(192, "000011001001")
+BLACK.add(256, "000001011011")
+BLACK.add(320, "000000110011")
+BLACK.add(384, "000000110100")
+BLACK.add(448, "000000110101")
+BLACK.add(512, "0000001101100")
+BLACK.add(576, "0000001101101")
+BLACK.add(640, "0000001001010")
+BLACK.add(704, "0000001001011")
+BLACK.add(768, "0000001001100")
+BLACK.add(832, "0000001001101")
+BLACK.add(896, "0000001110010")
+BLACK.add(960, "0000001110011")
+BLACK.add(1024, "0000001110100")
+BLACK.add(1088, "0000001110101")
+BLACK.add(1152, "0000001110110")
+BLACK.add(1216, "0000001110111")
+BLACK.add(1280, "0000001010010")
+BLACK.add(1344, "0000001010011")
+BLACK.add(1408, "0000001010100")
+BLACK.add(1472, "0000001010101")
+BLACK.add(1536, "0000001011010")
+BLACK.add(1600, "0000001011011")
+BLACK.add(1664, "0000001100100")
+BLACK.add(1728, "0000001100101")
+BLACK.add(1792, "00000001000")
+BLACK.add(1856, "00000001100")
+BLACK.add(1920, "00000001101")
+BLACK.add(1984, "000000010010")
+BLACK.add(2048, "000000010011")
+BLACK.add(2112, "000000010100")
+BLACK.add(2176, "000000010101")
+BLACK.add(2240, "000000010110")
+BLACK.add(2304, "000000010111")
+BLACK.add(2368, "000000011100")
+BLACK.add(2432, "000000011101")
+BLACK.add(2496, "000000011110")
+BLACK.add(2560, "000000011111")
+BLACK.add("e", "000000000001")
+
+UNCOMPRESSED = BitParserState("UNCOMPRESSED")
+UNCOMPRESSED.add("1", "1")
+UNCOMPRESSED.add("01", "01")
+UNCOMPRESSED.add("001", "001")
+UNCOMPRESSED.add("0001", "0001")
+UNCOMPRESSED.add("00001", "00001")
+UNCOMPRESSED.add("00000", "000001")
+UNCOMPRESSED.add("T00", "00000011")
+UNCOMPRESSED.add("T10", "00000010")
+UNCOMPRESSED.add("T000", "000000011")
+UNCOMPRESSED.add("T100", "000000010")
+UNCOMPRESSED.add("T0000", "0000000011")
+UNCOMPRESSED.add("T1000", "0000000010")
+UNCOMPRESSED.add("T00000", "00000000011")
+UNCOMPRESSED.add("T10000", "00000000010")
+UNCOMPRESSED.add("e", "000000000001")
+
+
+class BitParser:
+    _state: BitParserState
+    _node: BitParserNode
+    _codebits = bytearray()
+    _accept: Callable[[BitParserNode], BitParserState]
+
+    def __init__(self) -> None:
+        self._pos = 0
+        self._node = None
+
+    def _parse_bit(self, x: int) -> None:
+        if self._node is None:
+            self._node = self._state.root
+        bit = not not x
+        assert isinstance(self._node, list)
+        v = self._node[bit]
+        self._codebits.append(ord("1") if bit else ord("0"))
+        self._pos += 1
+        if isinstance(v, list):
+            self._node = v
+        else:
+            LOG.debug(
+                "%s (%d): %s => %r",
+                self._state.name,
+                self._pos,
+                self._codebits.decode("ascii"),
+                v,
+            )
+            self._codebits.clear()
+            assert self._accept is not None
+            self._state = self._accept(v)
+            self._node = self._state.root
+
+
 class CCITTG4Parser(BitParser):
-    MODE = [None, None]
-    BitParser.add(MODE, 0, "1")  # twoDimVert0
-    BitParser.add(MODE, +1, "011")  # twoDimVertR1
-    BitParser.add(MODE, -1, "010")  # twoDimVertL1
-    BitParser.add(MODE, "h", "001")  # twoDimHoriz
-    BitParser.add(MODE, "p", "0001")  # twoDimPass
-    BitParser.add(MODE, +2, "000011")  # twoDimVertR2
-    BitParser.add(MODE, -2, "000010")  # twoDimVertR3
-    BitParser.add(MODE, +3, "0000011")  # twoDimVertR3
-    BitParser.add(MODE, -3, "0000010")  # twoDimVertL3
-    BitParser.add(MODE, "u", "0000001111")  # uncompressed
-    # These are all unsupported (raise InvalidData)
-    BitParser.add(MODE, "x1", "0000001000")
-    BitParser.add(MODE, "x2", "0000001001")
-    BitParser.add(MODE, "x3", "0000001010")
-    BitParser.add(MODE, "x4", "0000001011")
-    BitParser.add(MODE, "x5", "0000001100")
-    BitParser.add(MODE, "x6", "0000001101")
-    BitParser.add(MODE, "x7", "0000001110")
-    BitParser.add(MODE, "e", "000000000001")
-
-    NEXT2D = [None, None]
-    BitParser.add(NEXT2D, 0, "1")
-    BitParser.add(NEXT2D, 1, "0")
-
-    WHITE = [None, None]
-    BitParser.add(WHITE, 0, "00110101")
-    BitParser.add(WHITE, 1, "000111")
-    BitParser.add(WHITE, 2, "0111")
-    BitParser.add(WHITE, 3, "1000")
-    BitParser.add(WHITE, 4, "1011")
-    BitParser.add(WHITE, 5, "1100")
-    BitParser.add(WHITE, 6, "1110")
-    BitParser.add(WHITE, 7, "1111")
-    BitParser.add(WHITE, 8, "10011")
-    BitParser.add(WHITE, 9, "10100")
-    BitParser.add(WHITE, 10, "00111")
-    BitParser.add(WHITE, 11, "01000")
-    BitParser.add(WHITE, 12, "001000")
-    BitParser.add(WHITE, 13, "000011")
-    BitParser.add(WHITE, 14, "110100")
-    BitParser.add(WHITE, 15, "110101")
-    BitParser.add(WHITE, 16, "101010")
-    BitParser.add(WHITE, 17, "101011")
-    BitParser.add(WHITE, 18, "0100111")
-    BitParser.add(WHITE, 19, "0001100")
-    BitParser.add(WHITE, 20, "0001000")
-    BitParser.add(WHITE, 21, "0010111")
-    BitParser.add(WHITE, 22, "0000011")
-    BitParser.add(WHITE, 23, "0000100")
-    BitParser.add(WHITE, 24, "0101000")
-    BitParser.add(WHITE, 25, "0101011")
-    BitParser.add(WHITE, 26, "0010011")
-    BitParser.add(WHITE, 27, "0100100")
-    BitParser.add(WHITE, 28, "0011000")
-    BitParser.add(WHITE, 29, "00000010")
-    BitParser.add(WHITE, 30, "00000011")
-    BitParser.add(WHITE, 31, "00011010")
-    BitParser.add(WHITE, 32, "00011011")
-    BitParser.add(WHITE, 33, "00010010")
-    BitParser.add(WHITE, 34, "00010011")
-    BitParser.add(WHITE, 35, "00010100")
-    BitParser.add(WHITE, 36, "00010101")
-    BitParser.add(WHITE, 37, "00010110")
-    BitParser.add(WHITE, 38, "00010111")
-    BitParser.add(WHITE, 39, "00101000")
-    BitParser.add(WHITE, 40, "00101001")
-    BitParser.add(WHITE, 41, "00101010")
-    BitParser.add(WHITE, 42, "00101011")
-    BitParser.add(WHITE, 43, "00101100")
-    BitParser.add(WHITE, 44, "00101101")
-    BitParser.add(WHITE, 45, "00000100")
-    BitParser.add(WHITE, 46, "00000101")
-    BitParser.add(WHITE, 47, "00001010")
-    BitParser.add(WHITE, 48, "00001011")
-    BitParser.add(WHITE, 49, "01010010")
-    BitParser.add(WHITE, 50, "01010011")
-    BitParser.add(WHITE, 51, "01010100")
-    BitParser.add(WHITE, 52, "01010101")
-    BitParser.add(WHITE, 53, "00100100")
-    BitParser.add(WHITE, 54, "00100101")
-    BitParser.add(WHITE, 55, "01011000")
-    BitParser.add(WHITE, 56, "01011001")
-    BitParser.add(WHITE, 57, "01011010")
-    BitParser.add(WHITE, 58, "01011011")
-    BitParser.add(WHITE, 59, "01001010")
-    BitParser.add(WHITE, 60, "01001011")
-    BitParser.add(WHITE, 61, "00110010")
-    BitParser.add(WHITE, 62, "00110011")
-    BitParser.add(WHITE, 63, "00110100")
-    BitParser.add(WHITE, 64, "11011")
-    BitParser.add(WHITE, 128, "10010")
-    BitParser.add(WHITE, 192, "010111")
-    BitParser.add(WHITE, 256, "0110111")
-    BitParser.add(WHITE, 320, "00110110")
-    BitParser.add(WHITE, 384, "00110111")
-    BitParser.add(WHITE, 448, "01100100")
-    BitParser.add(WHITE, 512, "01100101")
-    BitParser.add(WHITE, 576, "01101000")
-    BitParser.add(WHITE, 640, "01100111")
-    BitParser.add(WHITE, 704, "011001100")
-    BitParser.add(WHITE, 768, "011001101")
-    BitParser.add(WHITE, 832, "011010010")
-    BitParser.add(WHITE, 896, "011010011")
-    BitParser.add(WHITE, 960, "011010100")
-    BitParser.add(WHITE, 1024, "011010101")
-    BitParser.add(WHITE, 1088, "011010110")
-    BitParser.add(WHITE, 1152, "011010111")
-    BitParser.add(WHITE, 1216, "011011000")
-    BitParser.add(WHITE, 1280, "011011001")
-    BitParser.add(WHITE, 1344, "011011010")
-    BitParser.add(WHITE, 1408, "011011011")
-    BitParser.add(WHITE, 1472, "010011000")
-    BitParser.add(WHITE, 1536, "010011001")
-    BitParser.add(WHITE, 1600, "010011010")
-    BitParser.add(WHITE, 1664, "011000")
-    BitParser.add(WHITE, 1728, "010011011")
-    BitParser.add(WHITE, 1792, "00000001000")
-    BitParser.add(WHITE, 1856, "00000001100")
-    BitParser.add(WHITE, 1920, "00000001101")
-    BitParser.add(WHITE, 1984, "000000010010")
-    BitParser.add(WHITE, 2048, "000000010011")
-    BitParser.add(WHITE, 2112, "000000010100")
-    BitParser.add(WHITE, 2176, "000000010101")
-    BitParser.add(WHITE, 2240, "000000010110")
-    BitParser.add(WHITE, 2304, "000000010111")
-    BitParser.add(WHITE, 2368, "000000011100")
-    BitParser.add(WHITE, 2432, "000000011101")
-    BitParser.add(WHITE, 2496, "000000011110")
-    BitParser.add(WHITE, 2560, "000000011111")
-    BitParser.add(WHITE, "e", "000000000001")
-
-    BLACK = [None, None]
-    BitParser.add(BLACK, 0, "0000110111")
-    BitParser.add(BLACK, 1, "010")
-    BitParser.add(BLACK, 2, "11")
-    BitParser.add(BLACK, 3, "10")
-    BitParser.add(BLACK, 4, "011")
-    BitParser.add(BLACK, 5, "0011")
-    BitParser.add(BLACK, 6, "0010")
-    BitParser.add(BLACK, 7, "00011")
-    BitParser.add(BLACK, 8, "000101")
-    BitParser.add(BLACK, 9, "000100")
-    BitParser.add(BLACK, 10, "0000100")
-    BitParser.add(BLACK, 11, "0000101")
-    BitParser.add(BLACK, 12, "0000111")
-    BitParser.add(BLACK, 13, "00000100")
-    BitParser.add(BLACK, 14, "00000111")
-    BitParser.add(BLACK, 15, "000011000")
-    BitParser.add(BLACK, 16, "0000010111")
-    BitParser.add(BLACK, 17, "0000011000")
-    BitParser.add(BLACK, 18, "0000001000")
-    BitParser.add(BLACK, 19, "00001100111")
-    BitParser.add(BLACK, 20, "00001101000")
-    BitParser.add(BLACK, 21, "00001101100")
-    BitParser.add(BLACK, 22, "00000110111")
-    BitParser.add(BLACK, 23, "00000101000")
-    BitParser.add(BLACK, 24, "00000010111")
-    BitParser.add(BLACK, 25, "00000011000")
-    BitParser.add(BLACK, 26, "000011001010")
-    BitParser.add(BLACK, 27, "000011001011")
-    BitParser.add(BLACK, 28, "000011001100")
-    BitParser.add(BLACK, 29, "000011001101")
-    BitParser.add(BLACK, 30, "000001101000")
-    BitParser.add(BLACK, 31, "000001101001")
-    BitParser.add(BLACK, 32, "000001101010")
-    BitParser.add(BLACK, 33, "000001101011")
-    BitParser.add(BLACK, 34, "000011010010")
-    BitParser.add(BLACK, 35, "000011010011")
-    BitParser.add(BLACK, 36, "000011010100")
-    BitParser.add(BLACK, 37, "000011010101")
-    BitParser.add(BLACK, 38, "000011010110")
-    BitParser.add(BLACK, 39, "000011010111")
-    BitParser.add(BLACK, 40, "000001101100")
-    BitParser.add(BLACK, 41, "000001101101")
-    BitParser.add(BLACK, 42, "000011011010")
-    BitParser.add(BLACK, 43, "000011011011")
-    BitParser.add(BLACK, 44, "000001010100")
-    BitParser.add(BLACK, 45, "000001010101")
-    BitParser.add(BLACK, 46, "000001010110")
-    BitParser.add(BLACK, 47, "000001010111")
-    BitParser.add(BLACK, 48, "000001100100")
-    BitParser.add(BLACK, 49, "000001100101")
-    BitParser.add(BLACK, 50, "000001010010")
-    BitParser.add(BLACK, 51, "000001010011")
-    BitParser.add(BLACK, 52, "000000100100")
-    BitParser.add(BLACK, 53, "000000110111")
-    BitParser.add(BLACK, 54, "000000111000")
-    BitParser.add(BLACK, 55, "000000100111")
-    BitParser.add(BLACK, 56, "000000101000")
-    BitParser.add(BLACK, 57, "000001011000")
-    BitParser.add(BLACK, 58, "000001011001")
-    BitParser.add(BLACK, 59, "000000101011")
-    BitParser.add(BLACK, 60, "000000101100")
-    BitParser.add(BLACK, 61, "000001011010")
-    BitParser.add(BLACK, 62, "000001100110")
-    BitParser.add(BLACK, 63, "000001100111")
-    BitParser.add(BLACK, 64, "0000001111")
-    BitParser.add(BLACK, 128, "000011001000")
-    BitParser.add(BLACK, 192, "000011001001")
-    BitParser.add(BLACK, 256, "000001011011")
-    BitParser.add(BLACK, 320, "000000110011")
-    BitParser.add(BLACK, 384, "000000110100")
-    BitParser.add(BLACK, 448, "000000110101")
-    BitParser.add(BLACK, 512, "0000001101100")
-    BitParser.add(BLACK, 576, "0000001101101")
-    BitParser.add(BLACK, 640, "0000001001010")
-    BitParser.add(BLACK, 704, "0000001001011")
-    BitParser.add(BLACK, 768, "0000001001100")
-    BitParser.add(BLACK, 832, "0000001001101")
-    BitParser.add(BLACK, 896, "0000001110010")
-    BitParser.add(BLACK, 960, "0000001110011")
-    BitParser.add(BLACK, 1024, "0000001110100")
-    BitParser.add(BLACK, 1088, "0000001110101")
-    BitParser.add(BLACK, 1152, "0000001110110")
-    BitParser.add(BLACK, 1216, "0000001110111")
-    BitParser.add(BLACK, 1280, "0000001010010")
-    BitParser.add(BLACK, 1344, "0000001010011")
-    BitParser.add(BLACK, 1408, "0000001010100")
-    BitParser.add(BLACK, 1472, "0000001010101")
-    BitParser.add(BLACK, 1536, "0000001011010")
-    BitParser.add(BLACK, 1600, "0000001011011")
-    BitParser.add(BLACK, 1664, "0000001100100")
-    BitParser.add(BLACK, 1728, "0000001100101")
-    BitParser.add(BLACK, 1792, "00000001000")
-    BitParser.add(BLACK, 1856, "00000001100")
-    BitParser.add(BLACK, 1920, "00000001101")
-    BitParser.add(BLACK, 1984, "000000010010")
-    BitParser.add(BLACK, 2048, "000000010011")
-    BitParser.add(BLACK, 2112, "000000010100")
-    BitParser.add(BLACK, 2176, "000000010101")
-    BitParser.add(BLACK, 2240, "000000010110")
-    BitParser.add(BLACK, 2304, "000000010111")
-    BitParser.add(BLACK, 2368, "000000011100")
-    BitParser.add(BLACK, 2432, "000000011101")
-    BitParser.add(BLACK, 2496, "000000011110")
-    BitParser.add(BLACK, 2560, "000000011111")
-    BitParser.add(BLACK, "e", "000000000001")
-
-    UNCOMPRESSED = [None, None]
-    BitParser.add(UNCOMPRESSED, "1", "1")
-    BitParser.add(UNCOMPRESSED, "01", "01")
-    BitParser.add(UNCOMPRESSED, "001", "001")
-    BitParser.add(UNCOMPRESSED, "0001", "0001")
-    BitParser.add(UNCOMPRESSED, "00001", "00001")
-    BitParser.add(UNCOMPRESSED, "00000", "000001")
-    BitParser.add(UNCOMPRESSED, "T00", "00000011")
-    BitParser.add(UNCOMPRESSED, "T10", "00000010")
-    BitParser.add(UNCOMPRESSED, "T000", "000000011")
-    BitParser.add(UNCOMPRESSED, "T100", "000000010")
-    BitParser.add(UNCOMPRESSED, "T0000", "0000000011")
-    BitParser.add(UNCOMPRESSED, "T1000", "0000000010")
-    BitParser.add(UNCOMPRESSED, "T00000", "00000000011")
-    BitParser.add(UNCOMPRESSED, "T10000", "00000000010")
-    BitParser.add(UNCOMPRESSED, "e", "000000000001")
-
-    _statenames = {
-        id(MODE): "MODE",
-        id(NEXT2D): "NEXT2D",
-        id(BLACK): "BLACK",
-        id(WHITE): "WHITE",
-        id(UNCOMPRESSED): "UNCOMPRESSED",
-    }
     _color: int
 
     def __init__(self, width: int, height: int, bytealign: bool = False) -> None:
@@ -383,51 +372,44 @@ class CCITTG4Parser(BitParser):
                     self._parse_bit(byte & m)
             except ByteSkip:
                 self._accept = self._parse_mode
-                self._state = self.MODE
-                self._statename = self._statenames.get(id(self._state), "MODE")
+                self._state = MODE
             except EOFB:
                 break
 
-    def _parse_mode(self, mode: Any) -> BitParserState:
+    def _parse_mode(self, mode: BitParserNode) -> BitParserState:
         # Act on a code from the leaves of MODE
         if mode == "p":  # twoDimPass
             self._do_pass()
             self._flush_line()
-            return self.MODE
+            return MODE
         elif mode == "h":  # twoDimHoriz
             self._n1 = 0
             self._accept = self._parse_horiz1
-            if self._color:
-                return self.WHITE
-            else:
-                return self.BLACK
+            return WHITE if self._color else BLACK
         elif mode == "u":  # uncompressed (unsupported by pdf.js?)
             self._accept = self._parse_uncompressed
-            return self.UNCOMPRESSED
+            return UNCOMPRESSED
         elif mode == "e":  # EOL, just ignore this
-            return self.MODE
+            return MODE
         elif isinstance(mode, int):  # twoDimVert[LR]\d
             self._do_vertical(mode)
             self._flush_line()
-            return self.MODE
+            return MODE
         else:
             raise InvalidData(mode)
 
-    def _parse_horiz1(self, n: Any) -> BitParserState:
-        if n is None:
+    def _parse_horiz1(self, n: BitParserNode) -> BitParserState:
+        if not isinstance(n, int):
             raise InvalidData
         self._n1 += n
         if n < 64:
             self._n2 = 0
             self._color = 1 - self._color
             self._accept = self._parse_horiz2
-        if self._color:
-            return self.WHITE
-        else:
-            return self.BLACK
+        return WHITE if self._color else BLACK
 
-    def _parse_horiz2(self, n: Any) -> BitParserState:
-        if n is None:
+    def _parse_horiz2(self, n: BitParserNode) -> BitParserState:
+        if not isinstance(n, int):
             raise InvalidData
         self._n2 += n
         if n < 64:
@@ -437,23 +419,20 @@ class CCITTG4Parser(BitParser):
             self._accept = self._parse_mode
             self._do_horizontal(self._n1, self._n2)
             self._flush_line()
-            return self.MODE
-        elif self._color:
-            return self.WHITE
-        else:
-            return self.BLACK
+            return MODE
+        return WHITE if self._color else BLACK
 
-    def _parse_uncompressed(self, bits: Optional[str]) -> BitParserState:
-        if not bits:
+    def _parse_uncompressed(self, bits: BitParserNode) -> BitParserState:
+        if not isinstance(bits, str):
             raise InvalidData
         if bits.startswith("T"):
             self._accept = self._parse_mode
             self._color = int(bits[1])
             self._do_uncompressed(bits[2:])
-            return self.MODE
+            return MODE
         else:
             self._do_uncompressed(bits)
-            return self.UNCOMPRESSED
+            return UNCOMPRESSED
 
     def _get_bits(self) -> str:
         return "".join(str(b) for b in self._curline[: self._curpos])
@@ -477,8 +456,7 @@ class CCITTG4Parser(BitParser):
         self._curline = array.array("b", [1] * self.width)
         self._reset_line()
         self._accept = self._parse_mode
-        self._state = self.MODE
-        self._statename = self._statenames.get(id(self._state), "MODE")
+        self._state = MODE
 
     def output_line(self, y: int, bits: Sequence[int]) -> None:
         print(y, "".join(str(b) for b in bits))
@@ -606,8 +584,7 @@ class CCITTFaxDecoder1D(CCITTFaxDecoder):
             except ByteSkip:
                 self._accept = self._parse_horiz1
                 self._n1 = 0
-                self._state = self.WHITE if self._color else self.BLACK
-                self._statename = self._statenames.get(id(self._state), "MODE")
+                self._state = WHITE if self._color else BLACK
             except EOFB:
                 break
 
@@ -618,8 +595,7 @@ class CCITTFaxDecoder1D(CCITTFaxDecoder):
         self._accept = self._parse_horiz
         self._n1 = 0
         self._color = 1
-        self._state = self.WHITE
-        self._statename = self._statenames.get(id(self._state), "MODE")
+        self._state = WHITE
 
     def _reset_line(self) -> None:
         # NOTE: do not reset color to white on new line
@@ -627,22 +603,22 @@ class CCITTFaxDecoder1D(CCITTFaxDecoder):
         self._curline = array.array("b", [1] * self.width)
         self._curpos = -1
 
-    def _parse_horiz(self, n: Any) -> BitParserState:
-        if n is None:
+    def _parse_horiz(self, n: BitParserNode) -> BitParserState:
+        if not isinstance(n, (int, str)):
             raise InvalidData
         elif n == "e":
             # Soft reset
             self._reset_line()
             self._color = 1
             self._n1 = 0
-            return self.WHITE
+            return WHITE
         self._n1 += n
         if n < 64:
             self._do_horizontal_one(self._n1)
             self._n1 = 0
             self._color = 1 - self._color
             self._flush_line()
-        return self.WHITE if self._color else self.BLACK
+        return WHITE if self._color else BLACK
 
     def _do_horizontal_one(self, n: int) -> None:
         if self._curpos < 0:
@@ -680,8 +656,7 @@ class CCITTFaxDecoderMixed(CCITTFaxDecoder):
                     self._parse_bit(byte & m)
             except ByteSkip:
                 self._accept = self._parse_mode
-                self._state = self.MODE
-                self._statename = self._statenames.get(id(self._state), "MODE")
+                self._state = MODE
             except EOFB:
                 break
 
@@ -690,79 +665,42 @@ class CCITTFaxDecoderMixed(CCITTFaxDecoder):
         if mode == "p":  # twoDimPass
             self._do_pass()
             self._flush_line()
-            return self.MODE
+            return MODE
         elif mode == "h":  # twoDimHoriz
             self._n1 = 0
             self._accept = self._parse_horiz1
             if self._color:
-                return self.WHITE
+                return WHITE
             else:
-                return self.BLACK
+                return BLACK
         elif mode == "u":  # uncompressed (unsupported by pdf.js?)
             self._accept = self._parse_uncompressed
-            return self.UNCOMPRESSED
+            return UNCOMPRESSED
         elif mode == "e":
             self._accept = self._parse_next2d
-            return self.NEXT2D
+            return NEXT2D
         elif isinstance(mode, int):  # twoDimVert[LR]\d
             self._do_vertical(mode)
             self._flush_line()
-            return self.MODE
+            return MODE
         else:
             raise InvalidData(mode)
 
-    def _parse_next2d(self, n: Any) -> BitParserState:
+    def _parse_next2d(self, n: BitParserNode) -> BitParserState:
         if n:  # 2D mode
             self._accept = self._parse_mode
-            return self.MODE
+            return MODE
         # Otherwise, 1D mode
         self._n1 = 0
         self._accept = self._parse_horiz
-        return self.WHITE if self._color else self.BLACK
-
-    def _parse_horiz1(self, n: Any) -> BitParserState:
-        if n is None:
-            raise InvalidData
-        self._n1 += n
-        if n < 64:
-            self._n2 = 0
-            self._color = 1 - self._color
-            self._accept = self._parse_horiz2
-        return self.WHITE if self._color else self.BLACK
-
-    def _parse_horiz2(self, n: Any) -> BitParserState:
-        if n is None:
-            raise InvalidData
-        self._n2 += n
-        if n < 64:
-            # Set this back to what it was for _parse_horiz1, then
-            # output the two stretches of white/black or black/white
-            self._color = 1 - self._color
-            self._accept = self._parse_mode
-            self._do_horizontal(self._n1, self._n2)
-            self._flush_line()
-            return self.MODE
-        return self.WHITE if self._color else self.BLACK
-
-    def _parse_uncompressed(self, bits: Optional[str]) -> BitParserState:
-        if not bits:
-            raise InvalidData
-        if bits.startswith("T"):
-            self._accept = self._parse_mode
-            self._color = int(bits[1])
-            self._do_uncompressed(bits[2:])
-            return self.MODE
-        else:
-            self._do_uncompressed(bits)
-            return self.UNCOMPRESSED
+        return WHITE if self._color else BLACK
 
     def reset(self) -> None:
         self._y = 0
         self._curline = array.array("b", [1] * self.width)
         self._reset_line()
         self._accept = self._parse_mode
-        self._state = self.MODE
-        self._statename = self._statenames.get(id(self._state), "MODE")
+        self._state = MODE
 
     def _reset_line(self) -> None:
         self._refline = self._curline
@@ -850,20 +788,20 @@ class CCITTFaxDecoderMixed(CCITTFaxDecoder):
             self._curpos += 1
             self._flush_line()
 
-    def _parse_horiz(self, n: Any) -> BitParserState:
-        if n is None:
+    def _parse_horiz(self, n: BitParserNode) -> BitParserState:
+        if not isinstance(n, (int, str)):
             raise InvalidData
         elif n == "e":
             # Decide if we continue in 1D mode or not
             self._accept = self._parse_next2d
-            return self.NEXT2D
+            return NEXT2D
         self._n1 += n
         if n < 64:
             self._do_horizontal_one(self._n1)
             self._n1 = 0
             self._color = 1 - self._color
             self._flush_line()
-        return self.WHITE if self._color else self.BLACK
+        return WHITE if self._color else BLACK
 
     def _do_horizontal_one(self, n: int) -> None:
         if self._curpos < 0:
