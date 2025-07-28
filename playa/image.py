@@ -109,14 +109,14 @@ def get_image_suffix_and_writer(
     if colorspace.name == "Indexed":
         assert isinstance(colorspace.spec, list)
         _, underlying, hival, lookup = colorspace.spec
-        colorspace = get_colorspace(resolve1(underlying))
-        if colorspace is None:
+        underlying_colorspace = get_colorspace(resolve1(underlying))
+        if underlying_colorspace is None:
             LOG.warning(
                 "Unknown underlying colorspace in Indexed image: %r, writing as grayscale",
                 resolve1(underlying),
             )
         else:
-            ncomponents = colorspace.ncomponents
+            ncomponents = underlying_colorspace.ncomponents
             if not isinstance(lookup, bytes):
                 lookup = stream_value(lookup).buffer
             data = bytes(
