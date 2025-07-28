@@ -1,5 +1,6 @@
 ## PLAYA 0.7.0: Unreleased
 
+- Support 1D and mixed CCITT fax decoding
 - TODO: Optimize marked content section access
 - TODO: Add method to complete parent tree for page
 - TODO: Fail fast for incorrect stream lengths
