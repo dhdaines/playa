@@ -10,7 +10,7 @@ import tempfile
 from playa import PDFPasswordIncorrect
 from playa.cli import main
 from playa.exceptions import PDFEncryptionError
-from tests.data import ALLPDFS, PASSWORDS, XFAILS
+from tests.data import ALLPDFS, PASSWORDS, XFAILS, TESTDIR
 
 
 @pytest.mark.parametrize("path", ALLPDFS, ids=str)
@@ -72,9 +72,7 @@ def test_cli_text(path: Path):
     for password in passwords:
         try:
             # FIXME: Verify that output is valid JSON
-            main(
-                ["--password", password, "--non-interactive", "--text", str(path)]
-            )
+            main(["--password", password, "--non-interactive", "--text", str(path)])
         except PDFPasswordIncorrect:
             pass
         except PDFEncryptionError:
@@ -129,3 +127,36 @@ def test_cli_fonts(path: Path):
             pass
         except PDFEncryptionError:
             pytest.skip("cryptography package not installed")
+
+
+def test_extract_stream():
+    """Verify that stream extractor works right."""
+    main(["-t", "2", str(TESTDIR / "pdf_structure.pdf")])
+
+
+def test_extract_catalog():
+    """Verify that catalog extractor works right."""
+    main(["--catalog", str(TESTDIR / "pdf_structure.pdf")])
+
+
+def test_page_specs():
+    """Verify page specifications."""
+    testpdf = str(TESTDIR / "font-size-test.pdf")
+    main(["--pages", "all", "--text", testpdf])
+    main(["--pages", "all,1,3", "--text", testpdf])
+    main(["--pages", "1-2", "--text", testpdf])
+    main(["--pages", "1-2,4,5", "--text", testpdf])
+    main(["--pages", "10-4", "--text", testpdf])
+    main(["--pages", "666-668", "--text", testpdf])
+    main(["--pages", "668-666", "--text", testpdf])
+
+
+def test_no_args():
+    with pytest.raises(SystemExit):
+        main([])
+
+
+def test_bad_page_spec():
+    with pytest.raises(SystemExit):
+        testpdf = str(TESTDIR / "font-size-test.pdf")
+        main(["--pages", "10-4,goodbuddy", "--text", testpdf])

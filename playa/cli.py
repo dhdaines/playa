@@ -269,14 +269,31 @@ def extract_metadata(doc: Document, args: argparse.Namespace) -> None:
 
 
 def decode_page_spec(doc: Document, spec: str) -> Iterator[int]:
+    npages = len(doc.pages)
     for page_spec in spec.split(","):
         start, _, end = page_spec.partition("-")
+        if start == "all":
+            yield from range(npages)
+            continue
+        start = int(start) - 1
+        if start >= npages:
+            LOG.warning(
+                "start page %d is after last page %d, skipping", start + 1, npages
+            )
+            continue
         if end:
-            pages: Iterable[int] = range(int(start) - 1, int(end))
-        elif start == "all":
-            pages = range(len(doc.pages))
+            end = int(end)
+            if end > npages:
+                LOG.warning("end page %d is after last page %d, clipping", end, npages)
+                end = npages
+            elif end <= start:
+                LOG.warning(
+                    "end page %d is before start page %d, reversing", end, start + 1
+                )
+                start, end = max(0, end - 1), start + 1
+            pages: Iterable[int] = range(start, end)
         else:
-            pages = (int(start) - 1,)
+            pages = (start,)
         yield from pages
 
 
@@ -639,6 +656,8 @@ def main(argv: Union[List[str], None] = None) -> None:
             else:
                 extract_metadata(doc, args)
             doc.close()
+    except ValueError as e:
+        parser.error(f"Invalid argument: {e}")
     except RuntimeError as e:
         parser.error(f"Something went wrong:\n{e}")
 
