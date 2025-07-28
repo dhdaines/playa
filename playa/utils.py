@@ -167,49 +167,6 @@ def apply_png_predictor(
     return bytes(buf)
 
 
-# PDF 2.0, sec 8.9.3 Sample data shall be represented as a stream of
-# bytes, interpreted as 8-bit unsigned integers in the range 0 to
-# 255. The bytes constitute a continuous bit stream, with the
-# high-order bit of each byte first.  This bit stream, in turn, is
-# divided into units of n bits each, where n is the number of bits per
-# component.  Each unit encodes a colour component value, given with
-# high-order bit first; units of 16 bits shall be given with the most
-# significant byte first. Byte boundaries shall be ignored, except
-# that each row of sample data shall begin on a byte boundary. If the
-# number of data bits per row is not a multiple of 8, the end of the
-# row is padded with extra bits to fill out the last byte. A PDF
-# processor shall ignore these padding bits.
-def unpack_image_data(
-    s: bytes, bpc: int, width: int, height: int, ncomponents: int
-) -> bytes:
-    if bpc not in (1, 2, 4):
-        return s
-    if bpc == 4:
-
-        def unpack_f(x: int) -> Tuple[int, ...]:
-            return (x >> 4, x & 15)
-
-    elif bpc == 2:
-
-        def unpack_f(x: int) -> Tuple[int, ...]:
-            return (x >> 6, x >> 4 & 3, x >> 2 & 3, x & 3)
-
-    else:  # bpc == 1
-
-        def unpack_f(x: int) -> Tuple[int, ...]:
-            return tuple(x >> i & 1 for i in reversed(range(8)))
-
-    rowsize = (width * ncomponents * bpc + 7) // 8
-    rows = (s[i * rowsize : (i + 1) * rowsize] for i in range(height))
-    unpacked_rows = (
-        itertools.islice(
-            itertools.chain.from_iterable(map(unpack_f, row)), width * ncomponents
-        )
-        for row in rows
-    )
-    return bytes(itertools.chain.from_iterable(unpacked_rows))
-
-
 def normalize_rect(r: Rect) -> Rect:
     (x0, y0, x1, y1) = r
     if x1 < x0:
