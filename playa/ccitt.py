@@ -44,7 +44,7 @@ class ByteSkip(CCITTException):
     pass
 
 
-class BitParserState:
+class BitParserTree:
     def __init__(self, name: str, *tree: Tuple[Union[int, str], str]) -> None:
         self.root: BitParserNode = [None, None]
         self.name = name
@@ -67,7 +67,7 @@ class BitParserState:
         p[b] = v
 
 
-MODE = BitParserState(
+MODE = BitParserTree(
     "MODE",
     (0, "1"),
     (+1, "011"),
@@ -90,9 +90,9 @@ MODE = BitParserState(
     ("e", "000000000001"),
 )
 
-NEXT2D = BitParserState("NEXT2D", (0, "1"), (1, "0"))
+NEXT2D = BitParserTree("NEXT2D", (0, "1"), (1, "0"))
 
-WHITE = BitParserState(
+WHITE = BitParserTree(
     "WHITE",
     (0, "00110101"),
     (1, "000111"),
@@ -201,7 +201,7 @@ WHITE = BitParserState(
     ("e", "000000000001"),
 )
 
-BLACK = BitParserState(
+BLACK = BitParserTree(
     "BLACK",
     (0, "0000110111"),
     (1, "010"),
@@ -310,7 +310,7 @@ BLACK = BitParserState(
     ("e", "000000000001"),
 )
 
-UNCOMPRESSED = BitParserState(
+UNCOMPRESSED = BitParserTree(
     "UNCOMPRESSED",
     ("1", "1"),
     ("01", "01"),
@@ -331,10 +331,10 @@ UNCOMPRESSED = BitParserState(
 
 
 class BitParser:
-    _state: BitParserState
+    _state: BitParserTree
     _node: BitParserNode
     _codebits = bytearray()
-    _accept: Callable[[BitParserNode], BitParserState]
+    _accept: Callable[[BitParserNode], BitParserTree]
 
     def __init__(self) -> None:
         self._pos = 0
@@ -385,7 +385,7 @@ class CCITTG4Parser(BitParser):
             except EOFB:
                 break
 
-    def _parse_mode(self, mode: BitParserNode) -> BitParserState:
+    def _parse_mode(self, mode: BitParserNode) -> BitParserTree:
         # Act on a code from the leaves of MODE
         if mode == "p":  # twoDimPass
             self._do_pass()
@@ -407,7 +407,7 @@ class CCITTG4Parser(BitParser):
         else:
             raise InvalidData(mode)
 
-    def _parse_horiz1(self, n: BitParserNode) -> BitParserState:
+    def _parse_horiz1(self, n: BitParserNode) -> BitParserTree:
         if not isinstance(n, int):
             raise InvalidData
         self._n1 += n
@@ -417,7 +417,7 @@ class CCITTG4Parser(BitParser):
             self._accept = self._parse_horiz2
         return WHITE if self._color else BLACK
 
-    def _parse_horiz2(self, n: BitParserNode) -> BitParserState:
+    def _parse_horiz2(self, n: BitParserNode) -> BitParserTree:
         if not isinstance(n, int):
             raise InvalidData
         self._n2 += n
@@ -431,7 +431,7 @@ class CCITTG4Parser(BitParser):
             return MODE
         return WHITE if self._color else BLACK
 
-    def _parse_uncompressed(self, bits: BitParserNode) -> BitParserState:
+    def _parse_uncompressed(self, bits: BitParserNode) -> BitParserTree:
         if not isinstance(bits, str):
             raise InvalidData
         if bits.startswith("T"):
@@ -612,7 +612,7 @@ class CCITTFaxDecoder1D(CCITTFaxDecoder):
         self._curline = array.array("b", [1] * self.width)
         self._curpos = -1
 
-    def _parse_horiz(self, n: BitParserNode) -> BitParserState:
+    def _parse_horiz(self, n: BitParserNode) -> BitParserTree:
         if n is None:
             raise InvalidData
         elif n == "e":
@@ -670,7 +670,7 @@ class CCITTFaxDecoderMixed(CCITTFaxDecoder):
             except EOFB:
                 break
 
-    def _parse_mode(self, mode: Any) -> BitParserState:
+    def _parse_mode(self, mode: Any) -> BitParserTree:
         # Act on a code from the leaves of MODE
         if mode == "p":  # twoDimPass
             self._do_pass()
@@ -696,7 +696,7 @@ class CCITTFaxDecoderMixed(CCITTFaxDecoder):
         else:
             raise InvalidData(mode)
 
-    def _parse_next2d(self, n: BitParserNode) -> BitParserState:
+    def _parse_next2d(self, n: BitParserNode) -> BitParserTree:
         if n:  # 2D mode
             self._accept = self._parse_mode
             return MODE
@@ -705,100 +705,7 @@ class CCITTFaxDecoderMixed(CCITTFaxDecoder):
         self._accept = self._parse_horiz
         return WHITE if self._color else BLACK
 
-    def reset(self) -> None:
-        self._y = 0
-        self._curline = array.array("b", [1] * self.width)
-        self._reset_line()
-        self._accept = self._parse_mode
-        self._state = MODE
-
-    def _reset_line(self) -> None:
-        self._refline = self._curline
-        self._curline = array.array("b", [1] * self.width)
-        self._curpos = -1
-        self._color = 1
-
-    def _flush_line(self) -> None:
-        if self.width <= self._curpos:
-            self.output_line(self._y, self._curline)
-            self._y += 1
-            self._reset_line()
-            if self.bytealign:
-                raise ByteSkip
-
-    def _do_vertical(self, dx: int) -> None:
-        x1 = self._curpos + 1
-        while 1:
-            if x1 == 0:
-                if self._color == 1 and self._refline[x1] != self._color:
-                    break
-            elif x1 == len(self._refline) or (
-                self._refline[x1 - 1] == self._color
-                and self._refline[x1] != self._color
-            ):
-                break
-            x1 += 1
-        x1 += dx
-        x0 = max(0, self._curpos)
-        x1 = max(0, min(self.width, x1))
-        if x1 < x0:
-            for x in range(x1, x0):
-                self._curline[x] = self._color
-        elif x0 < x1:
-            for x in range(x0, x1):
-                self._curline[x] = self._color
-        self._curpos = x1
-        self._color = 1 - self._color
-
-    def _do_pass(self) -> None:
-        x1 = self._curpos + 1
-        while True:
-            if x1 == 0:
-                if self._color == 1 and self._refline[x1] != self._color:
-                    break
-            elif x1 == len(self._refline) or (
-                self._refline[x1 - 1] == self._color
-                and self._refline[x1] != self._color
-            ):
-                break
-            x1 += 1
-        while True:
-            if x1 == 0:
-                if self._color == 0 and self._refline[x1] == self._color:
-                    break
-            elif x1 == len(self._refline) or (
-                self._refline[x1 - 1] != self._color
-                and self._refline[x1] == self._color
-            ):
-                break
-            x1 += 1
-        for x in range(self._curpos, x1):
-            self._curline[x] = self._color
-        self._curpos = x1
-
-    def _do_horizontal(self, n1: int, n2: int) -> None:
-        if self._curpos < 0:
-            self._curpos = 0
-        x = self._curpos
-        for _ in range(n1):
-            if len(self._curline) <= x:
-                break
-            self._curline[x] = self._color
-            x += 1
-        for _ in range(n2):
-            if len(self._curline) <= x:
-                break
-            self._curline[x] = 1 - self._color
-            x += 1
-        self._curpos = x
-
-    def _do_uncompressed(self, bits: str) -> None:
-        for c in bits:
-            self._curline[self._curpos] = int(c)
-            self._curpos += 1
-            self._flush_line()
-
-    def _parse_horiz(self, n: BitParserNode) -> BitParserState:
+    def _parse_horiz(self, n: BitParserNode) -> BitParserTree:
         if n is None:
             raise InvalidData
         elif n == "e":
