@@ -333,7 +333,6 @@ UNCOMPRESSED = BitParserTree(
 class BitParser:
     _state: BitParserTree
     _node: BitParserNode
-    _codebits = bytearray()
     _accept: Callable[[BitParserNode], BitParserTree]
 
     def __init__(self) -> None:
@@ -346,19 +345,10 @@ class BitParser:
         bit = not not x
         assert isinstance(self._node, list)
         v = self._node[bit]
-        self._codebits.append(ord("1") if bit else ord("0"))
         self._pos += 1
         if isinstance(v, list):
             self._node = v
         else:
-            LOG.debug(
-                "%s (%d): %s => %r",
-                self._state.name,
-                self._pos,
-                self._codebits.decode("ascii"),
-                v,
-            )
-            self._codebits.clear()
             assert self._accept is not None
             self._state = self._accept(v)
             self._node = self._state.root
@@ -449,7 +439,7 @@ class CCITTG4Parser(BitParser):
     def _get_refline(self, i: int) -> str:
         if i < 0:
             return "[]" + "".join(str(b) for b in self._refline)
-        elif len(self._refline) <= i:
+        elif self.width <= i:
             return "".join(str(b) for b in self._refline) + "[]"
         else:
             return (
@@ -490,7 +480,7 @@ class CCITTG4Parser(BitParser):
             if x1 == 0:
                 if self._color == 1 and self._refline[x1] != self._color:
                     break
-            elif x1 == len(self._refline) or (
+            elif x1 == self.width or (
                 self._refline[x1 - 1] == self._color
                 and self._refline[x1] != self._color
             ):
@@ -514,7 +504,7 @@ class CCITTG4Parser(BitParser):
             if x1 == 0:
                 if self._color == 1 and self._refline[x1] != self._color:
                     break
-            elif x1 == len(self._refline) or (
+            elif x1 == self.width or (
                 self._refline[x1 - 1] == self._color
                 and self._refline[x1] != self._color
             ):
@@ -524,7 +514,7 @@ class CCITTG4Parser(BitParser):
             if x1 == 0:
                 if self._color == 0 and self._refline[x1] == self._color:
                     break
-            elif x1 == len(self._refline) or (
+            elif x1 == self.width or (
                 self._refline[x1 - 1] != self._color
                 and self._refline[x1] == self._color
             ):
@@ -537,18 +527,23 @@ class CCITTG4Parser(BitParser):
     def _do_horizontal(self, n1: int, n2: int) -> None:
         if self._curpos < 0:
             self._curpos = 0
-        x = self._curpos
-        for _ in range(n1):
-            if len(self._curline) <= x:
-                break
-            self._curline[x] = self._color
-            x += 1
-        for _ in range(n2):
-            if len(self._curline) <= x:
-                break
-            self._curline[x] = 1 - self._color
-            x += 1
-        self._curpos = x
+        endpos = min(self.width, self._curpos + n1)
+        for idx in range(self._curpos, endpos):
+            self._curline[idx] = self._color
+        self._curpos = endpos
+        endpos = min(self.width, self._curpos + n2)
+        for idx in range(self._curpos, endpos):
+            self._curline[idx] = 1 - self._color
+        self._curpos = endpos
+
+    def _do_horizontal_one(self, n: int) -> None:
+        if self._curpos < 0:
+            self._curpos = 0
+        endpos = min(self.width, self._curpos + n)
+        self._curline[self._curpos : endpos] = array.array(
+            "b", [self._color] * (endpos - self._curpos)
+        )
+        self._curpos = endpos
 
     def _do_uncompressed(self, bits: str) -> None:
         for c in bits:
@@ -630,17 +625,6 @@ class CCITTFaxDecoder1D(CCITTFaxDecoder):
             self._flush_line()
         return WHITE if self._color else BLACK
 
-    def _do_horizontal_one(self, n: int) -> None:
-        if self._curpos < 0:
-            self._curpos = 0
-        x = self._curpos
-        for _ in range(n):
-            if len(self._curline) <= x:
-                break
-            self._curline[x] = self._color
-            x += 1
-        self._curpos = x
-
     def _flush_line(self) -> None:
         if self._curpos < self.width:
             return
@@ -649,13 +633,6 @@ class CCITTFaxDecoder1D(CCITTFaxDecoder):
         self._reset_line()
         if self.bytealign:
             raise ByteSkip
-        LOG.debug(
-            "EndOfBlock %r, EndOfLine %r, row %d of %d",
-            self.eoblock,
-            self.eoline,
-            self._y,
-            self.height,
-        )
 
 
 class CCITTFaxDecoderMixed(CCITTFaxDecoder):
@@ -720,17 +697,6 @@ class CCITTFaxDecoderMixed(CCITTFaxDecoder):
             self._color = 1 - self._color
             self._flush_line()
         return WHITE if self._color else BLACK
-
-    def _do_horizontal_one(self, n: int) -> None:
-        if self._curpos < 0:
-            self._curpos = 0
-        x = self._curpos
-        for _ in range(n):
-            if len(self._curline) <= x:
-                break
-            self._curline[x] = self._color
-            x += 1
-        self._curpos = x
 
 
 def ccittfaxdecode(data: bytes, params: Dict[str, PDFObject]) -> bytes:
