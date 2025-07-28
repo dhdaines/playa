@@ -11,7 +11,6 @@
 #    FOR GROUP 4 FACSIMILE APPARATUS"
 
 
-import array
 import logging
 from typing import (
     Any,
@@ -452,7 +451,7 @@ class CCITTG4Parser(BitParser):
 
     def reset(self) -> None:
         self._y = 0
-        self._curline = array.array("b", [1] * self.width)
+        self._curline = bytearray(b"\x01" * self.width)
         self._reset_line()
         self._accept = self._parse_mode
         self._state = MODE
@@ -462,7 +461,7 @@ class CCITTG4Parser(BitParser):
 
     def _reset_line(self) -> None:
         self._refline = self._curline
-        self._curline = array.array("b", [1] * self.width)
+        self._curline = bytearray(b"\x01" * self.width)
         self._curpos = -1
         self._color = 1
 
@@ -540,8 +539,8 @@ class CCITTG4Parser(BitParser):
         if self._curpos < 0:
             self._curpos = 0
         endpos = min(self.width, self._curpos + n)
-        self._curline[self._curpos : endpos] = array.array(
-            "b", [self._color] * (endpos - self._curpos)
+        self._curline[self._curpos : endpos] = bytes([self._color]) * (
+            endpos - self._curpos
         )
         self._curpos = endpos
 
@@ -594,7 +593,7 @@ class CCITTFaxDecoder1D(CCITTFaxDecoder):
 
     def reset(self) -> None:
         self._y = 0
-        self._curline = array.array("b", [1] * self.width)
+        self._curline = bytearray(b"\x01" * self.width)
         self._reset_line()
         self._accept = self._parse_horiz
         self._n1 = 0
@@ -604,7 +603,7 @@ class CCITTFaxDecoder1D(CCITTFaxDecoder):
     def _reset_line(self) -> None:
         # NOTE: do not reset color to white on new line
         self._refline = self._curline
-        self._curline = array.array("b", [1] * self.width)
+        self._curline = bytearray(b"\x01" * self.width)
         self._curpos = -1
 
     def _parse_horiz(self, n: BitParserNode) -> BitParserTree:
