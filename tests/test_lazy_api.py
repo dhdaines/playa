@@ -287,6 +287,12 @@ def test_indexed_images(tmp_path) -> None:
 @pytest.mark.skipif(not CONTRIB.exists(), reason="contrib samples not present")
 def test_ccitt(tmp_path) -> None:
     """Verify that we can extract CCITT compressed images correctly."""
-    with playa.open(CONTRIB / "ccitt_EndOfBlock_false.pdf") as pdf:
-        for img in pdf.pages[0].images:
-            get_one_image(img.stream, tmp_path / img.xobjid)
+    for name in "ccitt-default-k.pdf", "ccitt_EndOfBlock_false.pdf":
+        with playa.open(CONTRIB / name) as pdf:
+            for img in pdf.pages[0].images:
+                get_one_image(img.stream, tmp_path / img.xobjid)
+                with open(CONTRIB / "ccitt" / f"{img.xobjid}.pbm", "rb") as fh:
+                    ref = fh.read()
+                with open(tmp_path / f"{img.xobjid}.pbm", "rb") as fh:
+                    hyp = fh.read()
+                assert ref == hyp
