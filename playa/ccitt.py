@@ -86,7 +86,7 @@ MODE = BitParserTree(
     ("x5", "0000001100"),
     ("x6", "0000001101"),
     ("x7", "0000001110"),
-    ("e", "000000000001"),
+    ("e",  "000000000001"),
 )
 
 NEXT2D = BitParserTree("NEXT2D", (0, "1"), (1, "0"))
@@ -333,6 +333,7 @@ class BitParser:
     _state: BitParserTree
     _node: BitParserNode
     _accept: Callable[[BitParserNode], BitParserTree]
+    _bits = bytearray()
 
     def __init__(self) -> None:
         self._pos = 0
@@ -342,6 +343,7 @@ class BitParser:
         if self._node is None:
             self._node = self._state.root
         bit = not not x
+        self._bits.append(bit)
         assert isinstance(self._node, list)
         v = self._node[bit]
         self._pos += 1
@@ -351,6 +353,15 @@ class BitParser:
             assert self._accept is not None
             self._state = self._accept(v)
             self._node = self._state.root
+            self._bits.clear()
+
+    @property
+    def state_name(self) -> str:
+        return self._state.name
+
+    @property
+    def code_bits(self) -> str:
+        return "".join("1" if bit else "0" for bit in self._bits)
 
 
 class CCITTG4Parser(BitParser):
@@ -371,6 +382,8 @@ class CCITTG4Parser(BitParser):
             except ByteSkip:
                 self._accept = self._parse_mode
                 self._state = MODE
+            except InvalidData:
+                LOG.warning("Unknown %s code: %r", self.state_name, self.code_bits)
             except EOFB:
                 break
 
@@ -394,7 +407,7 @@ class CCITTG4Parser(BitParser):
             self._flush_line()
             return MODE
         else:
-            raise InvalidData(mode)
+            raise InvalidData
 
     def _parse_horiz1(self, n: BitParserNode) -> BitParserTree:
         if not isinstance(n, int):
@@ -588,6 +601,8 @@ class CCITTFaxDecoder1D(CCITTFaxDecoder):
                 self._accept = self._parse_horiz1
                 self._n1 = 0
                 self._state = WHITE if self._color else BLACK
+            except InvalidData:
+                LOG.warning("Unknown %s code: %r", self.state_name, self.code_bits)
             except EOFB:
                 break
 
@@ -635,17 +650,6 @@ class CCITTFaxDecoder1D(CCITTFaxDecoder):
 
 
 class CCITTFaxDecoderMixed(CCITTFaxDecoder):
-    def feedbytes(self, data: bytes) -> None:
-        for byte in data:
-            try:
-                for m in (128, 64, 32, 16, 8, 4, 2, 1):
-                    self._parse_bit(byte & m)
-            except ByteSkip:
-                self._accept = self._parse_mode
-                self._state = MODE
-            except EOFB:
-                break
-
     def _parse_mode(self, mode: Any) -> BitParserTree:
         # Act on a code from the leaves of MODE
         if mode == "p":  # twoDimPass
@@ -707,5 +711,8 @@ def ccittfaxdecode(data: bytes, params: Dict[str, PDFObject]) -> bytes:
         parser = CCITTFaxDecoder1D(params)
     else:
         parser = CCITTFaxDecoderMixed(params)
-    parser.feedbytes(data)
+    try:
+        parser.feedbytes(data)
+    except CCITTException as e:
+        LOG.warning("Exception in CCITT parsing: %r", e)
     return parser.close()
