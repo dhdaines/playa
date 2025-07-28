@@ -3,7 +3,7 @@ from playa.ccitt import CCITTFaxDecoder, CCITTG4Parser
 
 class TestCCITTG4Parser:
     def get_parser(self, bits):
-        parser = CCITTG4Parser(len(bits))
+        parser = CCITTG4Parser(len(bits), 2)
         parser._curline = [int(c) for c in bits]
         parser._reset_line()
         return parser
@@ -139,6 +139,6 @@ class TestCCITTG4Parser:
 
 class TestCCITTFaxDecoder:
     def test_b1(self):
-        decoder = CCITTFaxDecoder(5)
+        decoder = CCITTFaxDecoder({"Columns": 5})
         decoder.output_line(0, b"0")
         assert decoder.close() == b"\x80"
