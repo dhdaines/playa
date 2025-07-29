@@ -4,17 +4,11 @@ Test the actual parser.
 
 import logging
 
+import pytest
 from playa.document import Document
-from playa.parser import (
-    InlineImage,
-    Lexer,
-    ObjectParser,
-)
-from playa.pdftypes import (
-    KWD,
-    LIT,
-    ObjRef,
-)
+from playa.exceptions import PDFSyntaxError
+from playa.parser import InlineImage, ObjectParser
+from playa.pdftypes import KWD, LIT, ObjRef
 
 logger = logging.getLogger(__name__)
 
@@ -156,21 +150,38 @@ def test_cached_inline_images():
     assert first != third
 
 
-def test_reverse_solidus():
-    """Test the handling of useless backslashes that are not escapes."""
-    parser = Lexer(rb"(OMG\ WTF \W \T\ F)")
-    assert next(parser) == (0, b"OMG WTF W T F")
+def test_strict_errors() -> None:
+    """Verify that the strict parser is strict."""
+    with pytest.raises(PDFSyntaxError):
+        list(ObjectParser(b"1 2 3]", strict=True))
+    with pytest.raises(PDFSyntaxError):
+        list(ObjectParser(b"[ 1 2 BI", strict=True))
+    with pytest.raises(PDFSyntaxError):
+        list(ObjectParser(b"[ 0 0 R ]", strict=True))
+    with pytest.raises(PDFSyntaxError):
+        list(ObjectParser(b"[ 2 R ]", strict=True))
+    with pytest.raises(PDFSyntaxError):
+        list(ObjectParser(b"""BI /L 42 /WTF ID
+012345678901234567890123456789012345678901
+EI
+        """, strict=True))
+    with pytest.raises(PDFSyntaxError):
+        list(ObjectParser(b"""BI /L 20 ID
+012345678901234567890123456789012345678901
+EI
+        """, strict=True))
+    with pytest.raises(PDFSyntaxError):
+        list(ObjectParser(b"""BI ID
+012345678901234567890123456789012345678901
+        """, strict=True))
 
 
-def test_number_syntax():
-    """Verify that all types of number objects are accepted."""
-    numbers = [1, 12, 1.2, 1.0, 0.2, 12.34, 12.0, 0.34]
-    texts = b"1 12 1.2 1. .2 12.34 12. .34"
-    objs = [obj for _, obj in Lexer(texts)]
-    assert objs == numbers
-    plus_texts = b" ".join((b"+" + x) for x in texts.split())
-    objs = [obj for _, obj in Lexer(plus_texts)]
-    assert objs == numbers
-    minus_texts = b" ".join(b"-" + x for x in texts.split())
-    objs = [-obj for _, obj in Lexer(minus_texts)]
-    assert objs == numbers
+def test_warn_inlines() -> None:
+    """Invoke various warnings for inline images"""
+    list(ObjectParser(b"""BI /L 20 ID
+012345678901234567890123456789012345678901
+EI
+    """))
+    list(ObjectParser(b"""BI ID
+012345678901234567890123456789012345678901
+    """))
