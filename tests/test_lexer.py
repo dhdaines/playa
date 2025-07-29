@@ -5,8 +5,7 @@ Test the basic lexer.
 from typing import Any, List
 
 import pytest
-from playa.parser import (KEYWORD_DICT_BEGIN, KEYWORD_DICT_END,
-                          Lexer)
+from playa.parser import KEYWORD_DICT_BEGIN, KEYWORD_DICT_END, Lexer
 from playa.pdftypes import KWD, LIT, keyword_name, literal_name
 
 TESTDATA1 = rb"""%!PS

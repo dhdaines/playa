@@ -439,8 +439,7 @@ class ObjectParser:
                     f"Expected object number and generation id, got {objid!r} {genno!r}"
                 )
             log.warning(
-                "Expected object number and generation id, got %r %r",
-                objid, genno
+                "Expected object number and generation id, got %r %r", objid, genno
             )
             return None
         if objid == 0:

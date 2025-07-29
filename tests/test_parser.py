@@ -199,8 +199,7 @@ EI
         # ID must be followed by whitespace when ASCII filters not used
         list(
             ObjectParser(
-                b"""BI ID/12345678901234567890123456789012345678901 EI""",
-                strict=True
+                b"""BI ID/12345678901234567890123456789012345678901 EI""", strict=True
             )
         )
 
