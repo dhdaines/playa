@@ -683,7 +683,7 @@ class IndirectObjectParser:
                     self.objstack.append((pos, stream))
                 elif obj is KEYWORD_ENDSTREAM:
                     if not isinstance(self.objstack[-1][1], ContentStream):
-                        log.warning("Got endstream without a stream, ignoring!")
+                        raise PDFSyntaxError("Got endstream without a stream")
                 elif isinstance(obj, PSKeyword) and obj.name.startswith(b"endstream"):
                     # Some broken PDFs have junk after "endstream"
                     errmsg = "Expected 'endstream', got %r" % (obj,)
@@ -691,7 +691,10 @@ class IndirectObjectParser:
                 elif isinstance(obj, PSKeyword) and obj.name.startswith(b"endobj"):
                     # Some broken PDFs have junk after "endobj"
                     errmsg = "Expected 'endobj', got %r" % (obj,)
-                    raise PDFSyntaxError(errmsg)
+                    if self.strict:
+                        raise PDFSyntaxError(errmsg)
+                    log.warning(errmsg)
+                    return self._endobj(pos, obj)
                 else:
                     self.objstack.append((pos, obj))
             except StopIteration:

@@ -183,7 +183,7 @@ def test_object_streams():
 def test_strict_errors() -> None:
     """Verify that the strict parser is strict."""
     with pytest.raises(PDFSyntaxError):
-        list(IndirectObjectParser(b"endstream", strict=True))
+        list(IndirectObjectParser(b"123 endstream", strict=True))
     with pytest.raises(PDFSyntaxError):
         list(
             IndirectObjectParser(
