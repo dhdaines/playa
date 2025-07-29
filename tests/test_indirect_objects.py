@@ -2,8 +2,10 @@ from pathlib import Path
 
 import pytest
 
+import playa
 from playa.parser import (
     LIT,
+    ContentParser,
     ContentStream,
     IndirectObjectParser,
     ObjectStreamParser,
@@ -244,7 +246,7 @@ endobj
         )
 
 
-def test_warn_errors() -> None:
+def test_warn_errors(caplog) -> None:
     """Invoke various warnings."""
     list(
         IndirectObjectParser(
@@ -257,6 +259,7 @@ endobj
 """
         )
     )
+    assert "Syntax error" in caplog.text
     list(
         IndirectObjectParser(
             b"""1 0 obj
@@ -266,3 +269,15 @@ stream
 """
         )
     )
+    assert "Incorrect length" in caplog.text
+    list(ObjectStreamParser(ContentStream({"N": 1, "First": 1}, b"[1 2 3")))
+    assert "Unexpected EOF" in caplog.text
+
+
+def test_content_parser_warnings(caplog) -> None:
+    """Expect warnings from ContentParser."""
+    with playa.open(TESTDIR / "simple1.pdf") as pdf:
+        ContentParser(streams=[123], doc=pdf)
+        assert "non-stream" in caplog.text
+        list(ContentParser(streams=[pdf[5], 42], doc=pdf))
+        assert "42" in caplog.text
