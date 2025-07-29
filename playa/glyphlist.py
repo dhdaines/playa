@@ -3,81 +3,54 @@
 In some CMap tables, Adobe glyph names are used for specifying
 Unicode characters instead of using decimal/hex character code.
 
-The following data was taken by
+The following data was obtained from
+https://raw.githubusercontent.com/adobe-type-tools/agl-aglfn/refs/heads/master/glyphlist.txt
 
-  $ wget https://partners.adobe.com/public/developer/en/opentype/glyphlist.txt
+"""
 
-```python
-from playa.glyphlist import convert_glyphlist
-
-convert_glyphlist("glyphlist.txt")"""
-
-# ###################################################################################
-# Copyright (c) 1997,1998,2002,2007 Adobe Systems Incorporated
+# -----------------------------------------------------------
+# Copyright 2002-2019 Adobe (http://www.adobe.com/).
 #
-# Permission is hereby granted, free of charge, to any person obtaining a
-# copy of this documentation file to use, copy, publish, distribute,
-# sublicense, and/or sell copies of the documentation, and to permit
-# others to do the same, provided that:
-# - No modification, editing or other alteration of this document is
-# allowed; and
-# - The above copyright notice and this permission notice shall be
-# included in all copies of the documentation.
+# Redistribution and use in source and binary forms, with or
+# without modification, are permitted provided that the
+# following conditions are met:
 #
-# Permission is hereby granted, free of charge, to any person obtaining a
-# copy of this documentation file, to create their own derivative works
-# from the content of this document to use, copy, publish, distribute,
-# sublicense, and/or sell the derivative works, and to permit others to do
-# the same, provided that the derived work is not represented as being a
-# copy or version of this document.
+# Redistributions of source code must retain the above
+# copyright notice, this list of conditions and the following
+# disclaimer.
 #
-# Adobe shall not be liable to any party for any loss of revenue or profit
-# or for indirect, incidental, special, consequential, or other similar
-# damages, whether based on tort (including without limitation negligence
-# or strict liability), contract or other legal or equitable grounds even
-# if Adobe has been advised or had reason to know of the possibility of
-# such damages. The Adobe materials are provided on an "AS IS" basis.
-# Adobe specifically disclaims all express, statutory, or implied
-# warranties relating to the Adobe materials, including but not limited to
-# those concerning merchantability or fitness for a particular purpose or
-# non-infringement of any third party rights regarding the Adobe
-# materials.
-# ###################################################################################
+# Redistributions in binary form must reproduce the above
+# copyright notice, this list of conditions and the following
+# disclaimer in the documentation and/or other materials
+# provided with the distribution.
+#
+# Neither the name of Adobe nor the names of its contributors
+# may be used to endorse or promote products derived from this
+# software without specific prior written permission.
+#
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND
+# CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES,
+# INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+# MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+# DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR
+# CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+# SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT
+# NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+# LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+# HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
+# CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
+# OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+# SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+# -----------------------------------------------------------
 # Name:          Adobe Glyph List
 # Table version: 2.0
 # Date:          September 20, 2002
+# URL:           https://github.com/adobe-type-tools/agl-aglfn
 #
-# See http://partners.adobe.com/asn/developer/typeforum/unicodegn.html
+# Format: two semicolon-delimited fields:
+#   (1) glyph name--upper/lowercase letters and digits
+#   (2) Unicode scalar value--four uppercase hexadecimal digits
 #
-# Format: Semicolon-delimited fields:
-#            (1) glyph name
-#            (2) Unicode scalar value
-
-
-def convert_glyphlist(path: str) -> None:
-    """Convert a glyph list into a python representation.
-
-    See output below.
-    """
-    state = 0
-    with open(path) as fileinput:
-        for line in fileinput.readlines():
-            line = line.strip()
-            if not line or line.startswith("#"):
-                if state == 1:
-                    state = 2
-                    print("}\n")
-                print(line)
-                continue
-            if state == 0:
-                print("\nglyphname2unicode = {")
-                state = 1
-            (name, x) = line.split(";")
-            codes = x.split(" ")
-            print(
-                " {!r}: u'{}',".format(name, "".join("\\u%s" % code for code in codes)),
-            )
-
 
 glyphname2unicode = {
     "A": "\u0041",
@@ -4362,4 +4335,5 @@ glyphname2unicode = {
     "zuhiragana": "\u305a",
     "zukatakana": "\u30ba",
 }
-# --end
+
+# END

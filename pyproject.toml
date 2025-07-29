@@ -75,6 +75,7 @@ markers = [ "contrib", "thirdparty" ]
 
 [tool.hatch.envs.hatch-test]
 extra-dependencies = [ "cryptography", "pdfminer.six" ]
+parallel = true
 
 [tool.hatch.envs.default]
 dependencies = [ "cryptography", "pytest", "pytest-xdist", "pdfminer.six" ]
@@ -113,3 +114,12 @@ extra-dependencies = [ "paves", "jupyterlab" ]
 
 [tool.coverage.run]
 omit = [ "tests/*" ]
+
+[tool.coverage.report]
+omit = [ "/etc/python*/*" ]
+exclude_also = [
+    'except ImportError:',
+    'raise NotImplementedError',
+    'if 0:',
+    'if TYPE_CHECKING:',
+]

@@ -478,7 +478,7 @@ def _get_widths(seq: Iterable[PDFObject]) -> Dict[int, float]:
                 for i, w in enumerate(v):
                     widths[int_value(char1) + i] = num_value(w)
                 r = []
-        elif isinstance(v, (int, float)):  # == utils.isnumber(v)
+        elif isinstance(v, (int, float)):
             r.append(v)
             if len(r) == 3:
                 (char1, char2, w) = r
@@ -502,7 +502,7 @@ def _get_widths2(seq: Iterable[PDFObject]) -> Dict[int, Tuple[float, Point]]:
                         (num_value(vx), num_value(vy)),
                     )
                 r = []
-        elif isinstance(v, (int, float)):  # == utils.isnumber(v)
+        elif isinstance(v, (int, float)):
             r.append(v)
             if len(r) == 5:
                 (char1, char2, w, vx, vy) = r

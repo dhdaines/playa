@@ -298,7 +298,7 @@ def float_value(x: PDFObject) -> float:
 
 def num_value(x: PDFObject) -> float:
     x = resolve1(x)
-    if not isinstance(x, (int, float)):  # == utils.isnumber(x)
+    if not isinstance(x, (int, float)):
         raise TypeError("Int or Float required: %r" % x)
     return x
 
