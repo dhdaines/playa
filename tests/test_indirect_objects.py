@@ -32,6 +32,7 @@ def test_indirect_objects():
     """Verify that indirect objects are parsed properly."""
     parser = IndirectObjectParser(DATA)
     positions, objs = zip(*list(parser))
+    assert parser.tell() == len(DATA)
     assert len(objs) == 3
     assert objs[0].objid == 1
     assert isinstance(objs[0].obj, dict) and objs[0].obj["Type"] == LIT("Catalog")
@@ -175,3 +176,93 @@ def test_object_streams():
     objects = list(parser)
     assert objects[0][1].obj == 333
     assert objects[1][1].obj == 666
+
+
+def test_strict_errors() -> None:
+    """Verify that the strict parser is strict."""
+    with pytest.raises(PDFSyntaxError):
+        list(IndirectObjectParser(b"endstream", strict=True))
+    with pytest.raises(PDFSyntaxError):
+        list(
+            IndirectObjectParser(
+                b"""1 0 obj
+<< /Length 5 >>
+stream
+12345
+endstreamOMGWTF
+endobj
+""",
+                strict=True,
+            )
+        )
+    with pytest.raises(PDFSyntaxError):
+        list(
+            IndirectObjectParser(
+                b"""1 0 obj
+<< /Length 5 >>
+stream
+12345
+endstream
+endobjOMGWTF
+""",
+                strict=True,
+            )
+        )
+    with pytest.raises(PDFSyntaxError):
+        list(IndirectObjectParser(b"""1 0 << /Foo 42 >> endobj """, strict=True))
+    with pytest.raises(PDFSyntaxError):
+        list(
+            IndirectObjectParser(
+                b"""/Squirrel 0 obj << /Foo 42 >> endobj """, strict=True
+            )
+        )
+    with pytest.raises(PDFSyntaxError):
+        list(
+            IndirectObjectParser(
+                b"""1 0 obj
+[ /Length 5 ]
+stream
+12345
+endstream
+endobj
+""",
+                strict=True,
+            )
+        )
+    with pytest.raises(PDFSyntaxError):
+        list(
+            IndirectObjectParser(
+                b"""1 0 obj
+<< /Length (squirrel) >>
+stream
+12345
+endstream
+endobj
+""",
+                strict=True,
+            )
+        )
+
+
+def test_warn_errors() -> None:
+    """Invoke various warnings."""
+    list(
+        IndirectObjectParser(
+            b"""1 0 obj
+<< /Length 5 >>
+stream
+12345
+endstreamOMGWTF
+endobj
+"""
+        )
+    )
+    list(
+        IndirectObjectParser(
+            b"""1 0 obj
+<< /Length 5 >>
+stream
+12345
+"""
+        )
+    )
