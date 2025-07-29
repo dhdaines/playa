@@ -155,33 +155,81 @@ def test_strict_errors() -> None:
     with pytest.raises(PDFSyntaxError):
         list(ObjectParser(b"1 2 3]", strict=True))
     with pytest.raises(PDFSyntaxError):
+        list(ObjectParser(b"<< /Foo (bar) /Baz >>", strict=True))
+    with pytest.raises(TypeError):
+        list(ObjectParser(b"<< 32 /WTF >>", strict=True))
+    with pytest.raises(PDFSyntaxError):
+        list(ObjectParser(b"1 2 3}", strict=True))
+    with pytest.raises(PDFSyntaxError):
         list(ObjectParser(b"[ 1 2 BI", strict=True))
     with pytest.raises(PDFSyntaxError):
         list(ObjectParser(b"[ 0 0 R ]", strict=True))
     with pytest.raises(PDFSyntaxError):
         list(ObjectParser(b"[ 2 R ]", strict=True))
     with pytest.raises(PDFSyntaxError):
-        list(ObjectParser(b"""BI /L 42 /WTF ID
+        list(
+            ObjectParser(
+                b"""BI /L 42 /WTF ID
 012345678901234567890123456789012345678901
 EI
-        """, strict=True))
+        """,
+                strict=True,
+            )
+        )
     with pytest.raises(PDFSyntaxError):
-        list(ObjectParser(b"""BI /L 20 ID
+        list(
+            ObjectParser(
+                b"""BI /L 20 ID
 012345678901234567890123456789012345678901
 EI
-        """, strict=True))
+        """,
+                strict=True,
+            )
+        )
     with pytest.raises(PDFSyntaxError):
-        list(ObjectParser(b"""BI ID
+        list(
+            ObjectParser(
+                b"""BI ID
 012345678901234567890123456789012345678901
-        """, strict=True))
+        """,
+                strict=True,
+            )
+        )
+    with pytest.raises(PDFSyntaxError):
+        # ID must be followed by whitespace when ASCII filters not used
+        list(
+            ObjectParser(
+                b"""BI ID/12345678901234567890123456789012345678901 EI""",
+                strict=True
+            )
+        )
 
 
-def test_warn_inlines() -> None:
-    """Invoke various warnings for inline images"""
-    list(ObjectParser(b"""BI /L 20 ID
+def test_warn_errors() -> None:
+    """Invoke various warnings."""
+    list(ObjectParser(b"<< /Foo (bar) /Baz >>"))
+    list(ObjectParser(b"<< 32 /WTF >>"))
+    list(ObjectParser(b"[ 2 R ]"))
+    list(
+        ObjectParser(
+            b"""BI /L 42 /WTF ID
 012345678901234567890123456789012345678901
 EI
-    """))
-    list(ObjectParser(b"""BI ID
+    """
+        )
+    )
+    list(
+        ObjectParser(
+            b"""BI /L 20 ID
 012345678901234567890123456789012345678901
-    """))
+EI
+    """
+        )
+    )
+    list(
+        ObjectParser(
+            b"""BI ID
+012345678901234567890123456789012345678901
+    """
+        )
+    )
