@@ -677,7 +677,7 @@ class IndirectObjectParser:
         while True:
             try:
                 pos, obj = next(self._parser)
-                if isinstance(obj, PSKeyword) and obj.name.startswith(b"endobj"):
+                if obj is KEYWORD_ENDOBJ:
                     return self._endobj(pos, obj)
                 elif obj is KEYWORD_STREAM:
                     stream = self._stream(pos, obj)
@@ -688,6 +688,10 @@ class IndirectObjectParser:
                 elif isinstance(obj, PSKeyword) and obj.name.startswith(b"endstream"):
                     # Some broken PDFs have junk after "endstream"
                     errmsg = "Expected 'endstream', got %r" % (obj,)
+                    raise PDFSyntaxError(errmsg)
+                elif isinstance(obj, PSKeyword) and obj.name.startswith(b"endobj"):
+                    # Some broken PDFs have junk after "endobj"
+                    errmsg = "Expected 'endobj', got %r" % (obj,)
                     raise PDFSyntaxError(errmsg)
                 else:
                     self.objstack.append((pos, obj))
