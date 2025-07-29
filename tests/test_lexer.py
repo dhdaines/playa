@@ -265,14 +265,21 @@ def test_lexer_eof() -> None:
     ]
 
 
-def test_lexer_numbers() -> None:
-    """Verify that numbers of all sorts are parsed."""
-    lex = Lexer(b"1.2 3. 4.56 .7 .891 0.11")
-    assert list(lex) == [
-        (0, 1.2),
-        (4, 3.0),
-        (7, 4.56),
-        (12, 0.7),
-        (15, 0.891),
-        (20, 0.11),
-    ]
+def test_reverse_solidus():
+    """Test the handling of useless backslashes that are not escapes."""
+    parser = Lexer(rb"(OMG\ WTF \W \T\ F)")
+    assert next(parser) == (0, b"OMG WTF W T F")
+
+
+def test_number_syntax():
+    """Verify that all types of number objects are accepted."""
+    numbers = [1, 12, 1.2, 1.0, 0.2, 12.34, 12.0, 0.34]
+    texts = b"1 12 1.2 1. .2 12.34 12. .34"
+    objs = [obj for _, obj in Lexer(texts)]
+    assert objs == numbers
+    plus_texts = b" ".join((b"+" + x) for x in texts.split())
+    objs = [obj for _, obj in Lexer(plus_texts)]
+    assert objs == numbers
+    minus_texts = b" ".join(b"-" + x for x in texts.split())
+    objs = [-obj for _, obj in Lexer(minus_texts)]
+    assert objs == numbers
