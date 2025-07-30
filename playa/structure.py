@@ -17,6 +17,7 @@ from typing import (
     Union,
 )
 
+
 from playa.data_structures import NumberTree
 from playa.parser import LIT, PDFObject, PSLiteral
 from playa.pdftypes import (
@@ -53,6 +54,7 @@ if TYPE_CHECKING:
     from playa.document import Document
     from playa.page import Annotation, Page
     from playa.content import ImageObject, XObjectObject
+    from playa.content import ContentObject as PageContentObject
 
 
 @dataclass
@@ -62,6 +64,9 @@ class ContentItem:
     This corresponds to an individual marked content section on a
     specific page, and can be used to (lazily) find that section if
     desired.
+
+    One can also iterate over ContentObjects inside it, which is
+    currently slow, but will get faster soon.
     """
 
     _pageref: PageRef
@@ -99,35 +104,40 @@ class ContentItem:
             return self._bbox
         page = self.page
         if page is None:
+            # We *really* should have a page!
             self._bbox = BBOX_NONE
         else:
-            itor: Union["Page", "XObjectObject"] = page
-            if self.stream is not None:
-                for obj in page.xobjects:
-                    if obj.stream.objid == self.stream.objid:
-                        itor = obj
             self._bbox = get_bound_rects(
-                obj.bbox for obj in itor if obj.mcid == self.mcid
+                obj.bbox for obj in self
             )
         return self._bbox
 
     @property
     def text(self) -> Union[str, None]:
         """Unicode text contained in this structure element."""
-        page = self.page
-        if page is None:
-            return None
-        itor: Union["Page", "XObjectObject"] = page
-        if self.stream is not None:
-            # FIXME: Potentially quite slow, but we hope this never happens
-            for obj in page.xobjects:
-                if obj.stream.objid == self.stream.objid:
-                    itor = obj
-            # FIXME: if we don't find it... then what? (probably None, but...)
-        texts = itor.mcid_texts.get(self.mcid)
+        texts = self._page_or_xobject().mcid_texts.get(self.mcid)
         if texts is None:
             return None
         return "".join(texts)
+
+    def _page_or_xobject(self) -> Union["Page", "XObjectObject"]:
+        if self.stream is not None:
+            for obj in self.page.xobjects:
+                if obj.stream.objid == self.stream.objid:
+                    return obj
+        return self.page
+
+    def __iter__(self) -> Iterator["PageContentObject"]:
+        """Iterate over `playa.content.ContentObject` (not to be confused with
+        `playa.structure.ContentObject`) in this marked content section.
+
+        This is pretty slow at the moment but will get faster as it is
+        a rather important thing to be able to do.
+        """
+        if self.page is None:
+            return iter(())
+        return (obj for obj in self._page_or_xobject()
+                if obj.mcid == self.mcid)
 
 
 @dataclass
@@ -144,7 +154,7 @@ class ContentObject:
     annotation dictionary we presume that this is an annotation if
     it's not present.
 
-    Not to be confused with `playa.page.ContentObject`.  While you
+    Not to be confused with `playa.content.ContentObject`.  While you
     *can* get there from here with the `obj` property, it may not be a
     great idea, because the only way to do that correctly in the case
     of an `XObject` (or image) is to interpret the containing page.
@@ -399,7 +409,8 @@ class Element(Findable):
         contained by this element (which may take some time to compute).
 
         Note that this is currently quite inefficient as it involves
-        interpreting the entire page.
+        interpreting the entire page for
+        every.single.marked.content.section.omg.yikes
 
         Note: Elements may span multiple pages!
             In the case of an element (such as a `Document` for
