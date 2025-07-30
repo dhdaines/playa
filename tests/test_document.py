@@ -110,6 +110,16 @@ def test_fonts():
         assert doc.pages[2].fonts.keys() == {"TT2", "TT16"}
 
 
+def test_pagelist_abc() -> None:
+    """Verify that the PageList works (more or less) like a Sequence."""
+    with playa.open(TESTDIR / "font-size-test.pdf") as doc:
+        assert doc.pages[0] in doc.pages
+        assert doc.pages[0] not in doc.pages[1:]
+        assert [page.page_idx for page in reversed(doc.pages)] == [2, 1, 0]
+        assert doc.pages.index(doc.pages[1]) == 1
+        assert doc.pages[1:].index(doc.pages[1]) == 0
+
+
 @pytest.mark.skipif(not CONTRIB.exists(), reason="contrib samples not present")
 def test_page_labels():
     with playa.open(CONTRIB / "pagelabels.pdf") as doc:

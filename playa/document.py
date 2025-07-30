@@ -7,6 +7,7 @@ import itertools
 import logging
 import mmap
 import re
+from collections.abc import Sequence as ABCSequence
 from concurrent.futures import Executor
 from typing import (
     Any,
@@ -808,7 +809,7 @@ def call_page(func: Callable[[Page], Any], pageref: PageRef) -> Any:
     return func(_deref_page(pageref))
 
 
-class PageList:
+class PageList(ABCSequence):
     """List of pages indexable by 0-based index or string label.
 
     Attributes:
@@ -882,13 +883,19 @@ class PageList:
     @overload
     def __getitem__(self, key: Iterator[Union[int, str]]) -> "PageList": ...
 
-    def __getitem__(self, key):
+    def __getitem__(
+        self, key: Union[int, str, slice, Iterable[int], Iterator[Union[int, str]]]
+    ) -> Union[Page, "PageList"]:
         if isinstance(key, int):
             return self._pages[key]
         elif isinstance(key, str):
             return self._labels[key]
         elif isinstance(key, slice):
             return PageList(_deref_document(self.docref), self._pages[key])
+        elif isinstance(key, Page):  # Need this so __contains__ will work
+            if key in self._pages:
+                return key
+            raise KeyError("Page not in PageList")
         else:
             return PageList(_deref_document(self.docref), (self[k] for k in key))
 
