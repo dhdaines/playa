@@ -31,7 +31,7 @@ from playa.pdftypes import (
     rect_value,
     stream_value,
 )
-from playa.utils import transform_bbox, get_bound_rects
+from playa.utils import decode_text, transform_bbox, get_bound_rects
 from playa.worker import (
     DocumentRef,
     PageRef,
@@ -436,6 +436,17 @@ class Element(Findable):
                 for item in self.contents
                 if item.page is page and item.bbox is not BBOX_NONE
             )
+
+    @property
+    def alt(self) -> Union[str, None]:
+        """Alternate text for a figure element."""
+        if "Alt" not in self.props:
+            return None
+        alttext = resolve1(self.props["Alt"])
+        if not isinstance(alttext, (str, bytes)):
+            LOG.warning("Alt text is not a string: %r", self.props)
+            return None
+        return decode_text(alttext)
 
     def __iter__(self) -> Iterator[Union["Element", ContentItem, ContentObject]]:
         if "K" in self.props:
