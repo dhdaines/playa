@@ -416,9 +416,10 @@ You may also wish to know what color an object is, and other aspects
 of what PDF refers to as the *graphics state*, which is accessible
 through `obj.gstate`.  This is a mutable object, and since there are
 quite a few parameters in the graphics state, PLAYA does not create a
-copy of it for every object in the layout - you are responsible for
-saving them yourself if you should so desire.  This is not
-particularly onerous, because the parameters themselves are immutable:
+copy of it for every object in the layout.  If you wish to reuse these
+objects, you should call `finalize` on them, which will freeze the
+graphics state and any other necessary context, allowing the object to
+be stored and reused *as long as the document exists*:
 
 ```python
 for obj in page:
@@ -426,19 +427,22 @@ for obj in page:
     print(f"    {obj.gstate.scolor} stroking color")
     print(f"    {obj.gstate.ncolor} non-stroking color")
     print(f"    {obj.gstate.dash} dashing style")
-    my_stuff = (obj.dash, obj.gstate.scolor, obj.gstate.ncolor)
-    other_stuff.append(my_stuff)  # it's safe there
+    object_of_interest = obj.finalize()
+print("interesting object:", playa.asobj(obj))
 ```
 
-You should however definitely be aware that storing content objects to
+You should thus be aware that storing content objects to
 a list, then iterating over that list, will give unpredictable and
-undefined results!  Don't do this, for instance:
+undefined results!  Don't do this:
 
 ```python
-# DO NOT do this
-objs = list(page)
-for obj in objs:
-    obj.gstate  # ...is now undefined
+objs = list(page)  # DO NOT do this
+```
+
+Do this instead:
+
+```python
+objs = [obj.finalize() for obj in page]  # DO this instead
 ```
 
 ### Path Objects

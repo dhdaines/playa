@@ -1,6 +1,10 @@
 ## PLAYA 0.7.0: Unreleased
 
 - Support 1D and mixed CCITT fax decoding
+- Remove long-deprecated functions
+- Correct `normalize_rect` (oops!)
+- Add and document `finalize` method on ContentObjects
+- TODO: Maximize test coverage
 - TODO: Optimize marked content section access
 - TODO: Add method to complete parent tree for page
 - TODO: Fail fast for incorrect stream lengths
