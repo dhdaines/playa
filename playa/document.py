@@ -892,10 +892,6 @@ class PageList(ABCSequence):
             return self._labels[key]
         elif isinstance(key, slice):
             return PageList(_deref_document(self.docref), self._pages[key])
-        elif isinstance(key, Page):  # Need this so __contains__ will work
-            if key in self._pages:
-                return key
-            raise KeyError("Page not in PageList")
         else:
             return PageList(_deref_document(self.docref), (self[k] for k in key))
 
