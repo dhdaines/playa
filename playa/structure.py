@@ -115,12 +115,17 @@ class ContentItem:
     @property
     def text(self) -> Union[str, None]:
         """Unicode text contained in this structure element."""
-        texts = self._page_or_xobject().mcid_texts.get(self.mcid)
+        page_or_xobject = self._page_or_xobject()
+        if page_or_xobject is None:
+            return None
+        texts = page_or_xobject.mcid_texts.get(self.mcid)
         if texts is None:
             return None
         return "".join(texts)
 
-    def _page_or_xobject(self) -> Union["Page", "XObjectObject"]:
+    def _page_or_xobject(self) -> Union["Page", "XObjectObject", None]:
+        if self.page is None:
+            return None
         if self.stream is not None:
             for obj in self.page.xobjects:
                 if obj.stream.objid == self.stream.objid:
@@ -134,9 +139,10 @@ class ContentItem:
         This is pretty slow at the moment but will get faster as it is
         a rather important thing to be able to do.
         """
-        if self.page is None:
+        page_or_xobject = self._page_or_xobject()
+        if page_or_xobject is None:
             return iter(())
-        return (obj for obj in self._page_or_xobject()
+        return (obj for obj in page_or_xobject
                 if obj.mcid == self.mcid)
 
 
