@@ -248,6 +248,24 @@ class ContentObject:
         """Return the number of children of this object (generic implementation)."""
         return sum(1 for _ in self)
 
+    def finalize(self) -> "ContentObject":
+        """Finalize this content object so it can be reused.
+
+        Because certain elements (specifically the graphics state) are
+        references to mutable objects that are updated during content
+        parsing, reusing ContentObjects is fraught with peril.  This
+        was a conscious design choice to save time and memory, but
+        perhaps not a good one.
+
+        If you want to reuse a ContentObject, thus, you must call this
+        method on it.  For convenience, it returns the same
+        ContentObject, allowing you to do, for instance:
+
+            objs = [x.finalize() for x in page]
+        """
+        self.gstate = copy(self.gstate)
+        return self
+
     @property
     def object_type(self):
         """Type of this object as a string, e.g. "text", "path", "image"."""
