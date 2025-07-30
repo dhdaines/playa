@@ -3,10 +3,12 @@ Test the ContentObject API for pages.
 """
 
 from pathlib import Path
+from typing import Iterable
 
 import playa
 import pytest
 from playa.color import PREDEFINED_COLORSPACE, Color
+from playa.content import ContentObject
 from playa.exceptions import PDFEncryptionError
 from playa.utils import get_bound
 from playa.image import get_one_image
@@ -296,3 +298,22 @@ def test_ccitt(tmp_path) -> None:
                 with open(tmp_path / f"{img.xobjid}.pbm", "rb") as fh:
                     hyp = fh.read()
                 assert ref == hyp
+
+
+def test_finalize() -> None:
+    """At least minimally verify that finalize() does something useful."""
+    with playa.open(TESTDIR / "graphics_state_in_text_object.pdf") as pdf:
+
+        def compare_objects(page: playa.Page, objects: Iterable[ContentObject]):
+            for ref, hyp in zip(page, objects):
+                for ref_child, hyp_child in zip(ref, hyp):
+                    assert ref_child == hyp_child
+                # Do this after as we need internal properties
+                # (_next_glyph_offset) to exist
+                assert ref == hyp
+
+        # First demonstrate "DO NOT do this" from README.md
+        with pytest.raises(AssertionError):
+            compare_objects(pdf.pages[0], list(pdf.pages[0]))
+        # All clear!
+        compare_objects(pdf.pages[0], [obj.finalize() for obj in pdf.pages[0]])
