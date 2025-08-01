@@ -277,3 +277,9 @@ def test_root_damage() -> None:
     """Fail gracefully if the document root is damaged (issue #154)"""
     with playa.open(CONTRIB / "issue-154.pdf") as doc:
         assert isinstance(doc[827], playa.ContentStream)
+
+
+def test_multi_xrefs(caplog) -> None:
+    """Verify that we correctly read multi-segment xref tables."""
+    with playa.open(TESTDIR / "multi-xrefs.pdf") as doc:
+        assert not caplog.records

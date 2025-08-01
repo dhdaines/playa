@@ -1,4 +1,4 @@
-## PLAYA 0.7.0: Unreleased
+## PLAYA 0.6.5: 2025-08-01
 
 - Remove long-deprecated functions
 - Correct `normalize_rect` (oops!)
@@ -13,7 +13,6 @@
 
 ## PLAYA 0.6.5: 2025-08-01
 - Fix terrible error in xref detection and parsing
-- Correct `normalize_rect` (oops)
 - Support 1D and mixed CCITT fax decoding
 
 ## PLAYA 0.6.4: 2025-07-26

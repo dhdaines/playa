@@ -768,27 +768,17 @@ class Document:
             self.parser.reset()
             xref: XRef = XRefStream(self.parser, self.offset)
         elif m := XREFR.match(self.buffer, start):
-            startobj = int(m[1])
-            nobjs = int(m[2])
-            log.debug("Reading xref table at %d", start)
-
+            log.debug("Reading xref table at %d", m.start(1))
+            parser = ObjectParser(self.buffer, self, pos=m.start(1))
             xref = XRefTable(
-                ObjectParser(self.buffer, self, pos=m.end(0)),
+                parser,
                 self.offset,
-                startobj,
-                nobjs,
             )
         else:
             # Well, maybe it's an XRef table without "xref" (but
             # probably not)
             parser = ObjectParser(self.buffer, self, pos=start)
-            _, _startobj = next(parser)
-            _, _nobjs = next(parser)
-            if not isinstance(_startobj, int) or not isinstance(_nobjs, int):
-                raise PDFSyntaxError(
-                    f"Expected two integers before xrefs, got {_startobj!r} {_nobjs!r}"
-                )
-            xref = XRefTable(parser, self.offset, _startobj, _nobjs)
+            xref = XRefTable(parser, self.offset)
         self._xrefpos.add(start)
         xrefs.append(xref)
         trailer = xref.trailer
