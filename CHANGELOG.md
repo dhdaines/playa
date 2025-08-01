@@ -1,16 +1,8 @@
-## PLAYA 0.7.0: Unreleased
+## PLAYA 0.6.5: 2025-08-01
 
+- Fix terrible error in xref detection and parsing
+- Correct `normalize_rect` (oops)
 - Support 1D and mixed CCITT fax decoding
-- Remove long-deprecated functions
-- Correct `normalize_rect` (oops!)
-- Add and document `finalize` method on ContentObjects
-- Make `PageList` work more or less like a `Sequence`
-- Support iteration over `playa.structure.ContentItem`
-- TODO: Maximize test coverage
-- TODO: Optimize marked content section access
-- TODO: Add method to complete parent tree for page
-- TODO: Fail fast for incorrect stream lengths
-- TODO: Parse indirect objects with regex
 
 ## PLAYA 0.6.4: 2025-07-26
 
