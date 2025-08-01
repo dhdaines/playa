@@ -1,7 +1,9 @@
 import itertools
 from typing import cast
+
 from playa.data import asobj
-from playa.utils import decode_text, normalize_rect, transform_bbox, get_bound, apply_matrix_pt, Matrix
+from playa.utils import (Matrix, apply_matrix_pt, decode_text, get_bound,
+                         normalize_rect, transform_bbox)
 
 
 def test_rotated_bboxes() -> None:
