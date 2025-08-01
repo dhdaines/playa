@@ -78,6 +78,8 @@ class XRefTable:
                 parser.seek(pos)
                 break
             pos, nobjs = next(parser)
+            if not (isinstance(start, int) and isinstance(nobjs, int)):
+                raise PDFSyntaxError(f"Expected object ID and count, got {start!r} {nobjs!r}")
             log.debug("reading positions of objects %d to %d", start, start + nobjs - 1)
             objid = start
             while objid < start + nobjs:
