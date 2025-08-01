@@ -32,7 +32,7 @@ def test_rotation() -> None:
         pdf.pages[0].set_initial_ctm("screen", -90)
         hello = next(pdf.pages[0].texts)
         assert hello.bbox == pytest.approx((74.768, 612 - 224.008, 96.968, 612 - 100))
-        
+
 
 def test_translation() -> None:
     datadir = TESTDIR / "rotation"

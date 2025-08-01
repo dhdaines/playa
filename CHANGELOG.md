@@ -14,6 +14,8 @@
 
 - Correct and test rotation behaviour which was quite incorrect, and
   also allow users to update rotation and space on an existing page
+- Fix a very long-standing and stupid bug in `normalize_rect`
+- Never crash on invalid UTF-16 (we mean it this time)
 
 ## PLAYA 0.6.5: 2025-08-01
 - Fix terrible error in xref detection and parsing
