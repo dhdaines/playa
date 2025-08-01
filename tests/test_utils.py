@@ -1,5 +1,6 @@
 import itertools
 from typing import cast
+from playa.data import asobj
 from playa.utils import decode_text, normalize_rect, transform_bbox, get_bound, apply_matrix_pt, Matrix
 
 
@@ -24,6 +25,14 @@ def test_decode_text() -> None:
         == "Microsoft\xae Word 2010; modified using iText 2.1.7 by 1T3XT"
     )
     assert decode_text(b"\xff\xfeW\x00T\x00F\x00-\x001\x006\x00") == "WTF-16"
+    # Doesn't really belong here but let's test asobj_bytes too
+    assert asobj(
+        b"\xfe\xffMicrosoft\xae Word 2010; modified using iText 2.1.7 by 1T3XT"
+    ) == (
+        "base64:/v9NaWNyb3NvZnSuIFdvcmQgMjAxMDsgbW9kaWZpZWQgdXNpbmcgaVRleHQgMi4xLj"
+        "cgYnkgMVQzWFQ="
+    )
+    assert asobj(b"\xff\xfeW\x00T\x00F\x00-\x001\x006\x00") == "WTF-16"
 
 
 def test_normalize_rect() -> None:

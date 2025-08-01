@@ -42,9 +42,9 @@ def asobj_bytes(obj: bytes) -> str:
     # what we consider a text string.  PDFDocEncoding is impossible to
     # detect so should only be used when we *know* it's a text string
     # according to the PDF standard.
-    if obj.startswith(b"\xfe\xff"):
-        return obj.decode("UTF-16")
     try:
+        if obj.startswith(b"\xfe\xff") or obj.startswith(b"\xff\xfe"):
+            return obj.decode("UTF-16")
         return obj.decode("ascii")
     except UnicodeDecodeError:
         # FIXME: This may be subject to change...
