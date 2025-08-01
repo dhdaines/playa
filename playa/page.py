@@ -552,7 +552,8 @@ class Page:
                 chars = "".join(c)
             else:
                 assert isinstance(actual_text, bytes)
-                chars = actual_text.decode("UTF-16")
+                # It's a text string so decode_text it
+                chars = decode_text(actual_text)
                 # Consume all text objects to ensure correct graphicstate
                 for _ in texts:  # noqa: B031
                     pass

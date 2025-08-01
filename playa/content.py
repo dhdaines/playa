@@ -49,6 +49,7 @@ from playa.pdftypes import (
 )
 from playa.utils import (
     apply_matrix_pt,
+    decode_text,
     get_bound,
     mult_matrix,
     transform_bbox,
@@ -483,7 +484,7 @@ def _extract_mcid_texts(itor: Iterable[ContentObject]) -> Dict[int, List[str]]:
             continue
         if "ActualText" in mcs.props:
             assert isinstance(mcs.props["ActualText"], bytes)
-            chars = mcs.props["ActualText"].decode("UTF-16")
+            chars = decode_text(mcs.props["ActualText"])
         else:
             chars = obj.chars
         # Remove soft hyphens
