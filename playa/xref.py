@@ -65,44 +65,50 @@ class XRefTable:
     """
 
     def __init__(
-        self, parser: ObjectParser, offset: int = 0, startobj: int = 0, nobjs: int = 0
+        self, parser: ObjectParser, offset: int = 0,
     ) -> None:
         self.offsets: Dict[int, XRefPos] = {}
         self.trailer: Dict[str, Any] = {}
-        self._load(parser, offset, startobj, nobjs)
+        self._load(parser, offset)
 
-    def _load(self, parser: ObjectParser, offset: int, start: int, nobjs: int) -> None:
-        log.debug("reading positions of objects %d to %d", start, start + nobjs - 1)
-        objid = start
-        while objid < start + nobjs:
-            # FIXME: It's supposed to be exactly 20 bytes, not
-            # necessarily a line
-            pos, line = parser.nextline()
-            log.debug("%r %r", pos, line)
-            if line == b"":  # EOF
-                break
-            line = line.strip()
-            if line == b"trailer":  # oops!
+    def _load(self, parser: ObjectParser, offset: int) -> None:
+        while True:
+            pos, start = next(parser)
+            if start is KEYWORD_TRAILER:
                 parser.seek(pos)
                 break
-            # We need to tolerate blank lines here in case someone
-            # has creatively ended an entry with \r\r or \n\n
-            if line == b"":  # Blank line
-                continue
-            f = line.split(b" ")
-            if len(f) != 3:
-                error_msg = f"Invalid XRef format: line={line!r}"
-                raise ValueError(error_msg)
-            (pos_b, genno_b, use_b) = f
-            if use_b != b"n":
-                # Ignore free entries, we don't care
+            pos, nobjs = next(parser)
+            log.debug("reading positions of objects %d to %d", start, start + nobjs - 1)
+            objid = start
+            while objid < start + nobjs:
+                # FIXME: It's supposed to be exactly 20 bytes, not
+                # necessarily a line
+                pos, line = parser.nextline()
+                log.debug("%r %r", pos, line)
+                if line == b"":  # EOF
+                    raise PDFSyntaxError("EOF in xref table parsing")
+                line = line.strip()
+                if line == b"trailer":  # oops, nobjs was wrong
+                    log.warning(f"Expect object at {pos}, got trailer")
+                    # We will hit trailer on the next outer loop
+                    parser.seek(pos)
+                # We need to tolerate blank lines here in case someone
+                # has creatively ended an entry with \r\r or \n\n
+                if line == b"":  # Blank line
+                    continue
+                f = line.split(b" ")
+                if len(f) != 3:
+                    raise PDFSyntaxError(f"Invalid XRef format: line={line!r}")
+                (pos_b, genno_b, use_b) = f
+                if use_b != b"n":
+                    # Ignore free entries, we don't care
+                    objid += 1
+                    continue
+                log.debug(
+                    "object %d %d at pos %d", objid, int(genno_b), int(pos_b) + offset
+                )
+                self.offsets[objid] = XRefPos(None, int(pos_b) + offset, int(genno_b))
                 objid += 1
-                continue
-            log.debug(
-                "object %d %d at pos %d", objid, int(genno_b), int(pos_b) + offset
-            )
-            self.offsets[objid] = XRefPos(None, int(pos_b) + offset, int(genno_b))
-            objid += 1
         self._load_trailer(parser)
 
     def _load_trailer(self, parser: ObjectParser) -> None:
