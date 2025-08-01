@@ -1,7 +1,9 @@
 import itertools
 from typing import cast
+
 from playa.data import asobj
-from playa.utils import decode_text, transform_bbox, get_bound, apply_matrix_pt, Matrix
+from playa.utils import (Matrix, apply_matrix_pt, decode_text, get_bound,
+                         normalize_rect, transform_bbox)
 
 
 def test_rotated_bboxes() -> None:
@@ -33,3 +35,11 @@ def test_decode_text() -> None:
         "cgYnkgMVQzWFQ="
     )
     assert asobj(b"\xff\xfeW\x00T\x00F\x00-\x001\x006\x00") == "WTF-16"
+
+
+def test_normalize_rect() -> None:
+    """Normalize rects"""
+    r1 = (1, 1, 5, 5)
+    assert normalize_rect(r1) == r1
+    r2 = (5, 5, 1, 1)
+    assert normalize_rect(r2) == r1
