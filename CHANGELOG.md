@@ -1,4 +1,4 @@
-## PLAYA 0.6.5: 2025-08-01
+## PLAYA 0.7.0: Unreleased
 
 - Remove long-deprecated functions
 - Correct `normalize_rect` (oops!)
