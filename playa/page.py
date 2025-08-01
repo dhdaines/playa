@@ -40,6 +40,7 @@ from playa.parser import ContentParser, PDFObject, Token
 from playa.pdftypes import (
     MATRIX_IDENTITY,
     ContentStream,
+    Matrix,
     ObjRef,
     PSLiteral,
     Point,
@@ -144,44 +145,8 @@ class Page:
                     self.attrs["CropBox"],
                 )
 
-        self.rotate = (int_value(self.attrs.get("Rotate", 0)) + 360) % 360
-        (x0, y0, x1, y1) = self.mediabox
-        width = x1 - x0
-        height = y1 - y0
-        # PDF 1.7 section 8.4.1: Initial value: a matrix that
-        # transforms default user coordinates to device coordinates.
-        #
-        # We keep this as `self.ctm` in order to transform layout
-        # attributes in tagged PDFs which are specified in default
-        # user space (PDF 1.7 section 14.8.5.4.3, table 344)
-        #
-        # "screen" device space: origin is top left of MediaBox
-        if self.space == "screen":
-            self.ctm = (1.0, 0.0, 0.0, -1.0, -x0, y1)
-        # "page" device space: origin is bottom left of MediaBox
-        elif self.space == "page":
-            self.ctm = (1.0, 0.0, 0.0, 1.0, -x0, -y0)
-        # "default" device space: no transformation or rotation
-        else:
-            if self.space != "default":
-                log.warning("Unknown device space: %r", self.space)
-            self.ctm = MATRIX_IDENTITY
-            width = height = 0
-        # If rotation is requested, apply rotation to the initial ctm
-        if self.rotate == 90:
-            # x' = y
-            # y' = width - x
-            self.ctm = mult_matrix((0, -1, 1, 0, 0, width), self.ctm)
-        elif self.rotate == 180:
-            # x' = width - x
-            # y' = height - y
-            self.ctm = mult_matrix((-1, 0, 0, -1, width, height), self.ctm)
-        elif self.rotate == 270:
-            # x' = height - y
-            # y' = x
-            self.ctm = mult_matrix((0, 1, -1, 0, height, 0), self.ctm)
-        elif self.rotate != 0:
-            log.warning("Invalid /Rotate: %r", self.rotate)
+        rotate = int_value(self.attrs.get("Rotate", 0))
+        self.set_initial_ctm(space, rotate)
 
         contents = resolve1(self.attrs.get("Contents"))
         if contents is None:
@@ -191,6 +156,63 @@ class Page:
                 self._contents = contents
             else:
                 self._contents = [contents]
+
+    def set_initial_ctm(self, space: DeviceSpace, rotate: int) -> Matrix:
+        """
+        Set or update initial coordinate transform matrix.
+
+        PDF 1.7 section 8.4.1: Initial value: a matrix that
+        transforms default user coordinates to device coordinates.
+
+        We keep this as `self.ctm` in order to transform layout
+        attributes in tagged PDFs which are specified in default
+        user space (PDF 1.7 section 14.8.5.4.3, table 344)
+
+        If you wish to modify the rotation or the device space of the
+        page, then you can do it with this method (the initial values
+        are in the `rotate` and `space` properties).
+        """
+        # Normalize the rotation value
+        rotate = (rotate + 360) % 360
+        x0, y0, x1, y1 = self.mediabox
+        width = x1 - x0
+        height = y1 - y0
+        self.ctm = MATRIX_IDENTITY
+        if rotate == 90:
+            # x' = y
+            # y' = width - x
+            self.ctm = (0, -1, 1, 0, 0, width)
+        elif rotate == 180:
+            # x' = width - x
+            # y' = height - y
+            self.ctm = (-1, 0, 0, -1, width, height)
+        elif rotate == 270:
+            # x' = height - y
+            # y' = x
+            self.ctm = (0, 1, -1, 0, height, 0)
+        elif rotate != 0:
+            log.warning(
+                "Invalid rotation value %r (only multiples of 90 accepted)", rotate
+            )
+        # Apply this to the mediabox to determine device space
+        (x0, y0, x1, y1) = transform_bbox(self.ctm, self.mediabox)
+        width = x1 - x0
+        height = y1 - y0
+        # "screen" device space: origin is top left of MediaBox
+        if space == "screen":
+            self.ctm = mult_matrix(self.ctm, (1, 0, 0, -1, -x0, y1))
+        # "page" device space: origin is bottom left of MediaBox
+        elif space == "page":
+            self.ctm = mult_matrix(self.ctm, (1, 0, 0, 1, -x0, -y0))
+        # "default" device space: no transformation or rotation
+        else:
+            if space != "default":
+                log.warning("Unknown device space: %r", space)
+            self.ctm = MATRIX_IDENTITY
+            width = height = 0
+        self.space = space
+        self.rotate = rotate
+        return self.ctm
 
     @property
     def annotations(self) -> Iterator["Annotation"]:

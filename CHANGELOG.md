@@ -1,7 +1,6 @@
 ## PLAYA 0.7.0: Unreleased
 
 - Remove long-deprecated functions
-- Correct `normalize_rect` (oops!)
 - Add and document `finalize` method on ContentObjects
 - Make `PageList` work more or less like a `Sequence`
 - Support iteration over `playa.structure.ContentItem`
@@ -10,6 +9,11 @@
 - TODO: Add method to complete parent tree for page
 - TODO: Fail fast for incorrect stream lengths
 - TODO: Parse indirect objects with regex
+
+## PLAYA 0.6.6: 2025-08-01
+
+- Correct and test rotation behaviour which was quite incorrect, and
+  also allow users to update rotation and space on an existing page
 
 ## PLAYA 0.6.5: 2025-08-01
 - Fix terrible error in xref detection and parsing
