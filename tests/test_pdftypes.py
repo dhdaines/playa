@@ -2,8 +2,24 @@
 Test PDF types and data structures.
 """
 
+import pytest
 from playa.data_structures import NameTree, NumberTree
-from playa.pdftypes import ObjRef, resolve1, resolve_all
+from playa.pdftypes import (
+    ObjRef,
+    bool_value,
+    decipher_all,
+    dict_value,
+    float_value,
+    keyword_name,
+    list_value,
+    matrix_value,
+    num_value,
+    point_value,
+    rect_value,
+    resolve1,
+    resolve_all,
+    str_value,
+)
 from playa.runlength import rldecode
 from playa.worker import _ref_document
 
@@ -118,3 +134,39 @@ def test_resolve_all():
     assert bof[1][1][1] is mockdoc[31]
     fob = resolve_all(mockdoc[30][1])
     assert fob[1][1] is mockdoc[31]
+
+
+def test_errors() -> None:
+    """Verify that we get various errors in pdftypes functions."""
+    with pytest.raises(TypeError):
+        keyword_name("NOT A KEYWORD DO NOT EAT")
+    with pytest.raises(ValueError):
+        ObjRef(None, 0)
+    assert ObjRef(None, 1) == ObjRef(None, 1)
+    assert ObjRef(None, 1) != ObjRef(123, 1)
+    assert ObjRef(None, 1).resolve(123) == 123
+    assert decipher_all(lambda *args: b"SOMETHING", 1, 0, b"") == b""
+    with pytest.raises(TypeError):
+        bool_value("Norwegian Blue")
+    with pytest.raises(TypeError):
+        float_value("Romanus eunt domus")
+    with pytest.raises(TypeError):
+        num_value("NaN")
+    with pytest.raises(TypeError):
+        str_value("not bytes")
+    with pytest.raises(TypeError):
+        list_value({"not": "a list"})
+    with pytest.raises(TypeError):
+        dict_value(["not", "a dict"])
+    with pytest.raises(TypeError):
+        point_value((1, 2, 3))  # type: ignore[arg-type]
+    with pytest.raises(TypeError):
+        point_value((32, "skidoo"))  # type: ignore[arg-type]
+    with pytest.raises(TypeError):
+        rect_value((1, 2, 3))  # type: ignore[arg-type]
+    with pytest.raises(TypeError):
+        rect_value((32, "skidoo", 4, 5))  # type: ignore[arg-type]
+    with pytest.raises(TypeError):
+        matrix_value((1, 2, 3))  # type: ignore[arg-type]
+    with pytest.raises(TypeError):
+        matrix_value((32, "skidoo", 4, 5, 6, 7))  # type: ignore[arg-type]

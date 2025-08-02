@@ -9,7 +9,7 @@ import pytest
 import playa
 from playa.content import DashPattern
 from playa.data_structures import NameTree
-from playa.document import Document, XRefTable, _open_input
+from playa.document import Document, _open_input
 from playa.page import TextObject
 from playa.parser import LIT
 from playa.utils import decode_text

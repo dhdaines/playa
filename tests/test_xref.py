@@ -216,16 +216,17 @@ def test_bad_xref_streams() -> None:
 
 def test_xref_fallback() -> None:
     """Reconstruct xref table from a test document."""
+
     class FakeDoc:
         def decipher(self, _objid, _genno, data, *args, **kwargs):
             return data
 
     data = (THISDIR / "fallback-xref.txt").read_bytes()
-    f = XRefFallback(IndirectObjectParser(data, FakeDoc()))
+    f = XRefFallback(IndirectObjectParser(data, FakeDoc()))  # type: ignore[arg-type]
     assert repr(f)
     pos2 = f.get_pos(2)
     assert pos2.genno == 1
-    assert data[pos2.pos:].startswith(b"2 1 obj\n(Hello again)")
+    assert data[pos2.pos :].startswith(b"2 1 obj\n(Hello again)")
     assert list(f.objids) == [1, 2, 3, 4, 7, 6, 5]
     pos7 = f.get_pos(7)
     assert pos7.streamid == 3

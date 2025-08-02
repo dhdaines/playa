@@ -95,6 +95,9 @@ def test_streams():
     assert isinstance(objs[2].obj, ContentStream)
     stream = objs[2].obj
     assert stream.rawdata == b"150 250 m\n150 350 l\nS"
+    assert repr(stream)
+    assert stream.buffer == b"150 250 m\n150 350 l\nS"
+    assert repr(stream)
 
     # Accept the case where the stream length is much too short
     parser = IndirectObjectParser(DATA2)
