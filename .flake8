@@ -3,3 +3,5 @@ max-line-length = 88
 extend-ignore = 
     # See https://github.com/PyCQA/pycodestyle/issues/373
     E203,
+    # OMG STFU about my tests, flake8!!!
+    S101,
