@@ -5,3 +5,5 @@ extend-ignore =
     E203,
     # OMG STFU about my tests, flake8!!!
     S101,
+    # No, flake8, we meant to call that function do_Tf
+    N802,
