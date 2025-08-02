@@ -281,5 +281,5 @@ def test_root_damage() -> None:
 
 def test_multi_xrefs(caplog) -> None:
     """Verify that we correctly read multi-segment xref tables."""
-    with playa.open(TESTDIR / "multi-xrefs.pdf") as doc:
+    with playa.open(TESTDIR / "multi-xrefs.pdf"):
         assert not caplog.records

@@ -65,7 +65,9 @@ class XRefTable:
     """
 
     def __init__(
-        self, parser: ObjectParser, offset: int = 0,
+        self,
+        parser: ObjectParser,
+        offset: int = 0,
     ) -> None:
         self.offsets: Dict[int, XRefPos] = {}
         self.trailer: Dict[str, Any] = {}
@@ -79,7 +81,9 @@ class XRefTable:
                 break
             pos, nobjs = next(parser)
             if not (isinstance(start, int) and isinstance(nobjs, int)):
-                raise PDFSyntaxError(f"Expected object ID and count, got {start!r} {nobjs!r}")
+                raise PDFSyntaxError(
+                    f"Expected object ID and count, got {start!r} {nobjs!r}"
+                )
             log.debug("reading positions of objects %d to %d", start, start + nobjs - 1)
             objid = start
             while objid < start + nobjs:

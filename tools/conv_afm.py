@@ -48,9 +48,7 @@ def main():
     import argparse
 
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument(
-        "afms", nargs="+", type=Path, help="AFM files to convert"
-    )
+    parser.add_argument("afms", nargs="+", type=Path, help="AFM files to convert")
     args = parser.parse_args()
     with fileinput.input(args.afms) as fh:
         convert_font_metrics(fh)

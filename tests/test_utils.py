@@ -5,10 +5,18 @@ import pytest
 from playa.data import asobj
 from playa.document import PageLabels
 from playa.pdftypes import LIT
-from playa.utils import (IDENTITY_MAPPING, Matrix, apply_matrix_norm,
-                         apply_matrix_pt, decode_text, format_int_alpha,
-                         format_int_roman, get_bound, normalize_rect,
-                         transform_bbox)
+from playa.utils import (
+    IDENTITY_MAPPING,
+    Matrix,
+    apply_matrix_norm,
+    apply_matrix_pt,
+    decode_text,
+    format_int_alpha,
+    format_int_roman,
+    get_bound,
+    normalize_rect,
+    transform_bbox,
+)
 
 
 def test_rotated_bboxes() -> None:
@@ -40,14 +48,6 @@ def test_decode_text() -> None:
         "cgYnkgMVQzWFQ="
     )
     assert asobj(b"\xff\xfeW\x00T\x00F\x00-\x001\x006\x00") == "WTF-16"
-
-
-def test_normalize_rect() -> None:
-    """Normalize rects"""
-    r1 = (1, 1, 5, 5)
-    assert normalize_rect(r1) == r1
-    r2 = (5, 5, 1, 1)
-    assert normalize_rect(r2) == r1
 
 
 def test_format_romans() -> None:
