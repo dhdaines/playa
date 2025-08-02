@@ -751,9 +751,7 @@ class LazyInterpreter:
         """Set color for stroking operators."""
         if self.ignore_colours:
             return
-        if self.graphicstate.scs is None:
-            log.warning("No colorspace specified, using default DeviceGray")
-            self.graphicstate.scs = self.csmap["DeviceGray"]
+        assert self.graphicstate.scs is not None  # it is always not None now
         self.graphicstate.scolor = self.graphicstate.scs.make_color(
             *self.pop(self.graphicstate.scs.ncomponents)
         )
@@ -762,9 +760,7 @@ class LazyInterpreter:
         """Set color for nonstroking operators"""
         if self.ignore_colours:
             return
-        if self.graphicstate.ncs is None:
-            log.warning("No colorspace specified, using default DeviceGray")
-            self.graphicstate.ncs = self.csmap["DeviceGray"]
+        assert self.graphicstate.ncs is not None  # it is always not None now
         self.graphicstate.ncolor = self.graphicstate.ncs.make_color(
             *self.pop(self.graphicstate.ncs.ncomponents)
         )
