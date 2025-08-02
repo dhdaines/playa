@@ -158,15 +158,15 @@ def test_errors() -> None:
         list_value({"not": "a list"})
     with pytest.raises(TypeError):
         dict_value(["not", "a dict"])
-    with pytest.raises(TypeError):
+    with pytest.raises(ValueError):
         point_value((1, 2, 3))  # type: ignore[arg-type]
     with pytest.raises(TypeError):
         point_value((32, "skidoo"))  # type: ignore[arg-type]
-    with pytest.raises(TypeError):
+    with pytest.raises(ValueError):
         rect_value((1, 2, 3))  # type: ignore[arg-type]
     with pytest.raises(TypeError):
         rect_value((32, "skidoo", 4, 5))  # type: ignore[arg-type]
-    with pytest.raises(TypeError):
+    with pytest.raises(ValueError):
         matrix_value((1, 2, 3))  # type: ignore[arg-type]
     with pytest.raises(TypeError):
         matrix_value((32, "skidoo", 4, 5, 6, 7))  # type: ignore[arg-type]
