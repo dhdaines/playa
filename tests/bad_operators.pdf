@@ -1,0 +1,108 @@
+%PDF-1.4
+1 0 obj
+<<
+ /Type /Catalog
+ /Outlines 2 0 R
+ /Pages 3 0 R
+>>
+endobj
+2 0 obj
+<<
+ /Type /Outlines
+ /Count 0
+>>
+endobj
+3 0 obj
+<<
+ /Type /Pages
+ /Kids [ 4 0 R ]
+ /Count 1
+>>
+endobj
+4 0 obj
+<<
+ /Type /Page
+ /Parent 3 0 R
+ /MediaBox [ 0 0 612 792 ]
+ /Contents 5 0 R
+ /Resources <<
+  /ProcSet 6 0 R
+  /Font << /F1 7 0 R >>
+  /XObject << /DUDE (not a stream, dude)
+              /Gnarly 5 0 R >>
+  /ExtGState <<
+      /GS0 <<
+          /ML 1.5
+          /RI /RelativeColorimetric
+          /FL 0.5
+          /SMask << /foo (bar) >>  % no idea what this is
+          /UseBlackPtComp /Something
+      >>
+  >>
+ >>
+>>
+endobj
+5 0 obj
+<< /Length 0 >>
+stream
+BT
+/NotAFont 12 Tf
+/F1 24 Tf
+10 700 Td
+0 0 (HACKEM MUCHE) "
+ET
+/F1 Tf    % not enough arguments
+(not a number) w  % wrong type arguments
+/A /BC Td % also wrong type arguments but a different error
+foobie bletch  % unknown operators
+
+f % no current path
+f* % no current path
+F % an operator that is never used
+B % no current path
+B* % no current path
+b* % no current path
+
+/wtf EI % should not be here
+
+/BOGUS Do % non-existent
+/DUDE Do % invalid
+/Gnarly Do % not actually an xobject
+
+/Fnord gs % non-existent
+
+/GS0 gs  % cover some stuff
+
+/Blarg CS  % non-existent
+/Glarg cs  % non-existent
+
+0 SC % cover some stuff
+/Pattern sh % does nothing!
+
+/Blorp DP  % non-existent property
+
+(not a name) << /MCID 0 >> BDC  % not a name
+
+/Bleep /Bloop BDC % not a property
+
+endstream
+endobj
+6 0 obj
+[ /PDF /Text ]
+endobj
+7 0 obj
+<<
+ /Type /Font
+ /Subtype /Type1
+ /Name /F1
+ /BaseFont /Helvetica
+ /Encoding /MacRomanEncoding
+>>
+endobj
+
+trailer 
+<<
+ /Size 8
+ /Root 1 0 R
+>>
+%%EOF
