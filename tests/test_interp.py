@@ -18,7 +18,7 @@ def test_make_fontmap(caplog) -> None:
     """Test fontmap creation"""
     with playa.open(TESTDIR / "pdf_structure.pdf") as pdf:
         assert _make_fontmap([1, 2, 3], pdf) == {}
-        fonts = pdf.pages[0].resources["Font"].resolve()
+        fonts = playa.resolve(pdf.pages[0].resources["Font"])
         fontmap = _make_fontmap(fonts, pdf)
         assert fontmap.keys() == {"F1", "F2"}
         fontmap = _make_fontmap(
