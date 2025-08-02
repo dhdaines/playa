@@ -92,12 +92,13 @@ class XRefTable:
                 pos, line = parser.nextline()
                 log.debug("%r %r", pos, line)
                 if line == b"":  # EOF
-                    raise PDFSyntaxError("EOF in xref table parsing")
+                    raise StopIteration("EOF in xref table parsing")
                 line = line.strip()
                 if line == b"trailer":  # oops, nobjs was wrong
                     log.warning(f"Expect object at {pos}, got trailer")
                     # We will hit trailer on the next outer loop
                     parser.seek(pos)
+                    break
                 # We need to tolerate blank lines here in case someone
                 # has creatively ended an entry with \r\r or \n\n
                 if line == b"":  # Blank line
@@ -119,6 +120,9 @@ class XRefTable:
 
     def _load_trailer(self, parser: ObjectParser) -> None:
         (_, kwd) = next(parser)
+        # FIXME: Might convert this to a warning in the case where we
+        # get a dict, since that would be the trailer (does this
+        # happen in real-world broken PDFs?)
         if kwd is not KEYWORD_TRAILER:
             raise PDFSyntaxError(
                 "Expected %r, got %r"

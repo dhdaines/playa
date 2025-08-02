@@ -1,0 +1,42 @@
+1 0 obj
+123
+endobj
+
+
+
+2 0 obj
+(Hello)
+endobj
+
+2 1 obj
+(Goodbye)
+endobj
+
+2 1 obj
+(Hello again)
+endobj
+
+
+2 0 obj
+[trailer <</Root 3 /Size 5>>]
+endobj
+
+3 0 obj
+<</Type /ObjStm /N 3 /First 4 /Length 91>>
+stream
+4 41 7 45 6 80
+trailer YO! Ig0Nre 4LL th1S d$tA!
+123 456                                789
+endstream
+endobj
+
+5 0 obj
+<</Type /ObjStm /First 8 /Length 0>>
+stream
+endstream
+endobj
+
+trailer
+[1 2 3]
+trailer
+<</Root 1 /Size 7>>
