@@ -446,6 +446,12 @@ class Element(Findable):
             kids = resolve1(self.props["K"])
             yield from _make_kids(kids, self.page, self._docref)
 
+    def __hash__(self) -> int:
+        # Ideally we would have an object ID for self.props, but
+        # structure dictionaries are not required to be indirect
+        # objects, so we use their string representation instead
+        return hash((self._docref, repr(self.props)))
+
 
 @functools.singledispatch
 def _make_kids(
@@ -635,7 +641,8 @@ class Tree(Findable):
     page = None
     parent = None
     bbox = BBOX_NONE
-    type = role = "StructTreeRoot"
+    type = "StructTreeRoot"
+    role = "StructTreeRoot"
 
     def __init__(self, doc: "Document") -> None:
         self._docref = _ref_document(doc)

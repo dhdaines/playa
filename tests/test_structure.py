@@ -189,5 +189,21 @@ def test_content_structure() -> None:
                 assert obj.parent.role in ("P", "H1", "H2", "H3")
 
 
+def test_element_hash():
+    with playa.open(TESTDIR / "pdf_structure.pdf") as pdf:
+        elements = set(pdf.structure.find_all())
+        page = pdf.pages[0]
+        for element in page.structure:
+            if element is not None:
+                if element.parent is not None:
+                    sibs = set(element.parent)
+                    assert element in sibs
+                    # Make sure that we can test for inequality too
+                    if len(sibs) > 1:
+                        assert sum(1 for sib in sibs if sib == element) < len(sibs)
+                assert element in elements
+                assert element == element
+
+
 if __name__ == "__main__":
     test_specific_structure()
