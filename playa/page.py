@@ -378,11 +378,22 @@ class Page:
         # Elements can contain multiple marked content sections, so
         # don't create redundant Element objects for these
         elements: Dict[int, Element] = {}
-        for obj in parents:
-            objid = obj.objid if isinstance(obj, ObjRef) else id(obj)
-            if objid not in elements:
-                elements[objid] = Element.from_dict(self.doc, dict_value(obj))
-            self._structmap.append(elements[objid])
+        for objref in parents:
+            # It should always be null, or an indirect object reference
+            element: Union[None, Element] = None
+            if objref is None:
+                pass
+            elif isinstance(objref, ObjRef):
+                if objref.objid not in elements:
+                    elements[objref.objid] = Element.from_dict(
+                        self.doc, dict_value(objref)
+                    )
+                element = elements[objref.objid]
+            else:
+                log.warning(
+                    "ParentTree element is not an indirect object reference: %r", objref
+                )
+            self._structmap.append(element)
         return self._structmap
 
     @property
