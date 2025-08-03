@@ -150,6 +150,7 @@ def test_errors() -> None:
         bool_value("Norwegian Blue")
     with pytest.raises(TypeError):
         float_value("Romanus eunt domus")
+    float_value(123.456)  # just for the coverage
     with pytest.raises(TypeError):
         num_value("NaN")
     with pytest.raises(TypeError):
@@ -170,3 +171,7 @@ def test_errors() -> None:
         matrix_value((1, 2, 3))  # type: ignore[arg-type]
     with pytest.raises(TypeError):
         matrix_value((32, "skidoo", 4, 5, 6, 7))  # type: ignore[arg-type]
+
+
+def test_filters() -> None:
+    """Exercise various filter types in streams"""

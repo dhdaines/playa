@@ -95,6 +95,7 @@ BAD_XREF4 = b"""0 3
 5 2
 0000000030 00000 n 
 0000000040 00000 n 
+not_a_trailer
 <</Size 7 /Root 1 0 R>>
 startxref
 0
@@ -112,6 +113,9 @@ def test_bad_xref_tables() -> None:
         XRefTable(ObjectParser(BAD_XREF3))
     with pytest.raises(PDFSyntaxError):
         XRefTable(ObjectParser(BAD_XREF4))
+    with pytest.raises(PDFSyntaxError):
+        x = XRefTable(ObjectParser(GOOD_XREF1))
+        x._load_trailer(ObjectParser(b"not_a_trailer"))
 
 
 # F***ed up whitespace but still readable
@@ -231,3 +235,6 @@ def test_xref_fallback() -> None:
     pos7 = f.get_pos(7)
     assert pos7.streamid == 3
     assert f.trailer == {"Root": 1, "Size": 7}
+    f = XRefFallback(
+        IndirectObjectParser(data, FakeDoc(), strict=True)  # type: ignore[arg-type]
+    )

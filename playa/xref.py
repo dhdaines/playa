@@ -76,6 +76,9 @@ class XRefTable:
     def _load(self, parser: ObjectParser, offset: int) -> None:
         while True:
             pos, start = next(parser)
+            # This means that xref table parsing can only end in three
+            # ways: "trailer" (success), EOF (failure) or something
+            # other than two numbers (failure).  Hope that's okay.
             if start is KEYWORD_TRAILER:
                 parser.seek(pos)
                 break
@@ -120,9 +123,8 @@ class XRefTable:
 
     def _load_trailer(self, parser: ObjectParser) -> None:
         (_, kwd) = next(parser)
-        # FIXME: Might convert this to a warning in the case where we
-        # get a dict, since that would be the trailer (does this
-        # happen in real-world broken PDFs?)
+        # This can actually never happen, because if an xref table
+        # doesn't end with "trailer" then some other error happens
         if kwd is not KEYWORD_TRAILER:
             raise PDFSyntaxError(
                 "Expected %r, got %r"
@@ -223,7 +225,10 @@ class XRefFallback:
             log.debug("Found possible trailer at %d", pos)
             try:
                 _, trailer = next(ObjectParser(parser.buffer, doc, pos))
-            except (TypeError, PDFSyntaxError):
+            except (TypeError, PDFSyntaxError):  # pragma: no-cover
+                # This actually can't happen because ObjectParser will
+                # never throw an exception without strict mode (which
+                # we won't turn on when doing fallback parsing)
                 continue
             if not isinstance(trailer, dict):
                 continue
