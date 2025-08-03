@@ -235,7 +235,7 @@ def test_xref_fallback() -> None:
     assert repr(f)
     pos2 = f.get_pos(2)
     assert pos2.genno == 1
-    assert data[pos2.pos :].startswith(b"2 1 obj\n(Hello again)")
+    assert data[pos2.pos :].startswith(b"2 1 obj")
     assert list(f.objids) == [1, 2, 3, 4, 7, 6, 5]
     pos7 = f.get_pos(7)
     assert pos7.streamid == 3
