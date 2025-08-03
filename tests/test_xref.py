@@ -35,19 +35,21 @@ def test_multi_xrefs(caplog) -> None:
         assert not caplog.records
 
 
-GOOD_XREF1 = b"""0 3
-0000000000 65535 f 
-0000000010 00000 n 
-0000000020 00000 n 
-5 2
-0000000030 00000 n 
-0000000040 00000 n 
-trailer
-<</Size 7 /Root 1 0 R>>
-startxref
-0
-%%EOF
-"""
+# OMGFU GIT AND YOUR CRLF TRANSLATION
+GOOD_XREF1 = (
+    b"0 3\n"
+    b"0000000000 65535 f \n"
+    b"0000000010 00000 n \n"
+    b"0000000020 00000 n \n"
+    b"5 2\n"
+    b"0000000030 00000 n \n"
+    b"0000000040 00000 n \n"
+    b"trailer\n"
+    b"<</Size 7 /Root 1 0 R>>\n"
+    b"startxref\n"
+    b"0\n"
+    b"%%EOF\n"
+)
 
 
 def test_xref_tables() -> None:
@@ -61,46 +63,47 @@ def test_xref_tables() -> None:
 
 
 # EOF before trailer (no trailer = fallback)
-BAD_XREF1 = b"""0 3
-0000000000 65535 f 
-0000000010 00000 n 
-0000000020 00000 n 
-5 2
-0000000030 00000 n 
-0000000040 00000 n 
-"""
+BAD_XREF1 = (
+    b"0 3\n"
+    b"0000000000 65535 f \n"
+    b"0000000010 00000 n \n"
+    b"0000000020 00000 n \n"
+    b"5 2\n"
+    b"0000000030 00000 n \n"
+    b"0000000040 00000 n \n"
+)
 
 
 # EOF in table
-BAD_XREF2 = b"""0 5
-0000000000 65535 f 
-0000000010 00000 n 
-0000000020 00000 n 
-"""
+BAD_XREF2 = (
+    b"0 5\n" b"0000000000 65535 f \n" b"0000000010 00000 n \n" b"0000000020 00000 n \n"
+)
 
 
 # Junk in table
-BAD_XREF3 = b"""0 5
-0000000000 65535 f FOOBIE
-0000000010 00000 n BLETCH
-0000000020 00000 n 
-"""
+BAD_XREF3 = (
+    b"0 5\n"
+    b"0000000000 65535 f FOOBIE\n"
+    b"0000000010 00000 n BLETCH\n"
+    b"0000000020 00000 n \n"
+)
 
 
 # Missing "trailer"
-BAD_XREF4 = b"""0 3
-0000000000 65535 f 
-0000000010 00000 n 
-0000000020 00000 n 
-5 2
-0000000030 00000 n 
-0000000040 00000 n 
-not_a_trailer
-<</Size 7 /Root 1 0 R>>
-startxref
-0
-%%EOF
-"""
+BAD_XREF4 = (
+    b"0 3\n"
+    b"0000000000 65535 f \n"
+    b"0000000010 00000 n \n"
+    b"0000000020 00000 n \n"
+    b"5 2\n"
+    b"0000000030 00000 n \n"
+    b"0000000040 00000 n \n"
+    b"not_a_trailer\n"
+    b"<</Size 7 /Root 1 0 R>>\n"
+    b"startxref\n"
+    b"0\n"
+    b"%%EOF\n"
+)
 
 
 def test_bad_xref_tables() -> None:
@@ -119,33 +122,35 @@ def test_bad_xref_tables() -> None:
 
 
 # F***ed up whitespace but still readable
-UGLY_XREF1 = b"""0 3 0000000000 65535 f
-
-0000000010 00000 n
-
-0000000020 00000 n
-
-5 2 0000000030 00000 n
-0000000040 00000 n
-trailer
-<</Size 7 /Root 1 0 R>>
-startxref
-0
-%%EOF
-"""
+UGLY_XREF1 = (
+    b"0 3 0000000000 65535 f\n"
+    b"\n"
+    b"0000000010 00000 n\n"
+    b"\n"
+    b"0000000020 00000 n\n"
+    b"\n"
+    b"5 2 0000000030 00000 n\n"
+    b"0000000040 00000 n\n"
+    b"trailer\n"
+    b"<</Size 7 /Root 1 0 R>>\n"
+    b"startxref\n"
+    b"0\n"
+    b"%%EOF\n"
+)
 # FIXME: Don't yet handle the case of 20-byte records with no newlines
 
 # Object count is greater than number of records
-UGLY_XREF2 = b"""0 5
-0000000000 65535 f 
-0000000010 00000 n 
-0000000020 00000 n 
-trailer
-<</Size 3 /Root 1 0 R>>
-startxref
-0
-%%EOF
-"""
+UGLY_XREF2 = (
+    b"0 5\n"
+    b"0000000000 65535 f \n"
+    b"0000000010 00000 n \n"
+    b"0000000020 00000 n \n"
+    b"trailer\n"
+    b"<</Size 3 /Root 1 0 R>>\n"
+    b"startxref\n"
+    b"0\n"
+    b"%%EOF\n"
+)
 # FIXME: Don't yet handle the case of too small nobjs
 
 
