@@ -2,8 +2,27 @@
 Test PDF types and data structures.
 """
 
+import pytest
 from playa.data_structures import NameTree, NumberTree
-from playa.pdftypes import ObjRef, resolve1, resolve_all
+from playa.pdftypes import (
+    LIT,
+    LITERAL_CRYPT,
+    ContentStream,
+    ObjRef,
+    bool_value,
+    decipher_all,
+    dict_value,
+    float_value,
+    keyword_name,
+    list_value,
+    matrix_value,
+    num_value,
+    point_value,
+    rect_value,
+    resolve1,
+    resolve_all,
+    str_value,
+)
 from playa.runlength import rldecode
 from playa.worker import _ref_document
 
@@ -118,3 +137,93 @@ def test_resolve_all():
     assert bof[1][1][1] is mockdoc[31]
     fob = resolve_all(mockdoc[30][1])
     assert fob[1][1] is mockdoc[31]
+
+
+def test_errors() -> None:
+    """Verify that we get various errors in pdftypes functions."""
+    with pytest.raises(TypeError):
+        keyword_name("NOT A KEYWORD DO NOT EAT")
+    with pytest.raises(ValueError):
+        ObjRef(None, 0)
+    assert ObjRef(None, 1) == ObjRef(None, 1)
+    assert ObjRef(None, 1) != ObjRef(123, 1)
+    assert ObjRef(None, 1).resolve(123) == 123
+    assert decipher_all(lambda *args: b"SOMETHING", 1, 0, b"") == b""
+    with pytest.raises(TypeError):
+        bool_value("Norwegian Blue")
+    with pytest.raises(TypeError):
+        float_value("Romanus eunt domus")
+    float_value(123.456)  # just for the coverage
+    with pytest.raises(TypeError):
+        num_value("NaN")
+    with pytest.raises(TypeError):
+        str_value("not bytes")
+    with pytest.raises(TypeError):
+        list_value({"not": "a list"})
+    with pytest.raises(TypeError):
+        dict_value(["not", "a dict"])
+    with pytest.raises(ValueError):
+        point_value((1, 2, 3))  # type: ignore[arg-type]
+    with pytest.raises(TypeError):
+        point_value((32, "skidoo"))  # type: ignore[arg-type]
+    with pytest.raises(ValueError):
+        rect_value((1, 2, 3))  # type: ignore[arg-type]
+    with pytest.raises(TypeError):
+        rect_value((32, "skidoo", 4, 5))  # type: ignore[arg-type]
+    with pytest.raises(ValueError):
+        matrix_value((1, 2, 3))  # type: ignore[arg-type]
+    with pytest.raises(TypeError):
+        matrix_value((32, "skidoo", 4, 5, 6, 7))  # type: ignore[arg-type]
+    broken_image = ContentStream(
+        {"ColorSpace": LIT("NotAColorSpace")},
+        rawdata=b"""8 0 obj
+<<
+  /Name /X2
+  /Subtype /Image
+  /BitsPerComponent 8
+  /ColorSpace /DeviceRGB
+  /DecodeParms <</BitsPerComponent 8/Colors 3/Columns 3>>
+  /Filter /ASCIIHexDecode
+  /Type /XObject
+  /StructParent 2
+  /Width 3
+  /Height 5
+  /Length 105
+>>
+stream
+AA2222 22AA22 2222AA
+EEEEEE EEEEEE EEEEEE
+AAAAAA AAAAAA AAAAAA
+EEEEEE EEEEEE EEEEEE
+AAAAAA AAAAAA AAAAAA
+endstream
+endobj
+""",
+    )
+    with pytest.raises(ValueError):
+        _ = broken_image.colorspace
+
+
+def test_filters() -> None:
+    """Exercise various filter types in streams"""
+    stream = ContentStream({"Filter": [LITERAL_CRYPT]}, rawdata=b"")
+    with pytest.raises(NotImplementedError):
+        stream.decode()
+    stream = ContentStream({"Filter": [LIT("FlateDecode")]}, rawdata=b"TOTAL NONSENSE")
+    with pytest.raises(ValueError):
+        stream.decode(strict=True)
+    assert stream.buffer == b""
+    stream = ContentStream(
+        {"Filter": [LIT("LZWDecode")]}, rawdata=b"\x80\x0b\x60\x50\x22\x0c\x0c\x85\x01"
+    )
+    assert stream.buffer == b"\x2d\x2d\x2d\x2d\x2d\x41\x2d\x2d\x2d\x42"
+    stream = ContentStream(
+        {"Filter": [LIT("RunLengthDecode")]},
+        rawdata=b"\x05123456\xfa7\x04abcde\x80junk",
+    )
+    assert stream.buffer == b"1234567777777abcde"
+    stream = ContentStream(
+        {"Filter": LIT("FlateDecode"), "DecodeParms": {"Predictor": 3}}, rawdata=b""
+    )
+    with pytest.raises(NotImplementedError):
+        stream.decode()

@@ -2,8 +2,10 @@ from pathlib import Path
 
 import pytest
 
+import playa
 from playa.parser import (
     LIT,
+    ContentParser,
     ContentStream,
     IndirectObjectParser,
     ObjectStreamParser,
@@ -32,6 +34,7 @@ def test_indirect_objects():
     """Verify that indirect objects are parsed properly."""
     parser = IndirectObjectParser(DATA)
     positions, objs = zip(*list(parser))
+    assert parser.tell() == len(DATA)
     assert len(objs) == 3
     assert objs[0].objid == 1
     assert isinstance(objs[0].obj, dict) and objs[0].obj["Type"] == LIT("Catalog")
@@ -92,6 +95,9 @@ def test_streams():
     assert isinstance(objs[2].obj, ContentStream)
     stream = objs[2].obj
     assert stream.rawdata == b"150 250 m\n150 350 l\nS"
+    assert repr(stream)
+    assert stream.buffer == b"150 250 m\n150 350 l\nS"
+    assert repr(stream)
 
     # Accept the case where the stream length is much too short
     parser = IndirectObjectParser(DATA2)
@@ -175,3 +181,106 @@ def test_object_streams():
     objects = list(parser)
     assert objects[0][1].obj == 333
     assert objects[1][1].obj == 666
+
+
+def test_strict_errors() -> None:
+    """Verify that the strict parser is strict."""
+    with pytest.raises(PDFSyntaxError):
+        list(IndirectObjectParser(b"123 endstream", strict=True))
+    with pytest.raises(PDFSyntaxError):
+        list(
+            IndirectObjectParser(
+                b"""1 0 obj
+<< /Length 5 >>
+stream
+12345
+endstreamOMGWTF
+endobj
+""",
+                strict=True,
+            )
+        )
+    with pytest.raises(PDFSyntaxError):
+        list(
+            IndirectObjectParser(
+                b"""1 0 obj
+<< /Length 5 >>
+stream
+12345
+endstream
+endobjOMGWTF
+""",
+                strict=True,
+            )
+        )
+    with pytest.raises(PDFSyntaxError):
+        list(IndirectObjectParser(b"""1 0 << /Foo 42 >> endobj """, strict=True))
+    with pytest.raises(PDFSyntaxError):
+        list(
+            IndirectObjectParser(
+                b"""/Squirrel 0 obj << /Foo 42 >> endobj """, strict=True
+            )
+        )
+    with pytest.raises(PDFSyntaxError):
+        list(
+            IndirectObjectParser(
+                b"""1 0 obj
+[ /Length 5 ]
+stream
+12345
+endstream
+endobj
+""",
+                strict=True,
+            )
+        )
+    with pytest.raises(PDFSyntaxError):
+        list(
+            IndirectObjectParser(
+                b"""1 0 obj
+<< /Length (squirrel) >>
+stream
+12345
+endstream
+endobj
+""",
+                strict=True,
+            )
+        )
+
+
+def test_warn_errors(caplog) -> None:
+    """Invoke various warnings."""
+    list(
+        IndirectObjectParser(
+            b"""1 0 obj
+<< /Length 5 >>
+stream
+12345
+endstreamOMGWTF
+endobj
+"""
+        )
+    )
+    assert "Syntax error" in caplog.text
+    list(
+        IndirectObjectParser(
+            b"""1 0 obj
+<< /Length 5 >>
+stream
+12345
+"""
+        )
+    )
+    assert "Incorrect length" in caplog.text
+    list(ObjectStreamParser(ContentStream({"N": 1, "First": 1}, b"[1 2 3")))
+    assert "Unexpected EOF" in caplog.text
+
+
+def test_content_parser_warnings(caplog) -> None:
+    """Expect warnings from ContentParser."""
+    with playa.open(TESTDIR / "simple1.pdf") as pdf:
+        ContentParser(streams=[123], doc=pdf)
+        assert "non-stream" in caplog.text
+        list(ContentParser(streams=[pdf[5], 42], doc=pdf))
+        assert "42" in caplog.text

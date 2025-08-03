@@ -431,21 +431,17 @@ class ObjectParser:
 
     def get_object_reference(self, pos: int, token: Token) -> Union[ObjRef, None]:
         """Get an indirect object reference upon finding an "R" token."""
-        try:
-            _pos, _genno = self.stack.pop()
-            _pos, objid = self.stack.pop()
-        except ValueError as e:
+        _pos, genno = self.stack.pop()
+        _pos, objid = self.stack.pop()
+        if not isinstance(objid, int):
             if self.strict:
                 raise PDFSyntaxError(
-                    "Expected generation and object id in indirect object reference"
-                ) from e
-            else:
-                log.warning(
-                    "Expected generation and object id in indirect object reference: %s",
-                    e,
+                    f"Expected object number and generation id, got {objid!r} {genno!r}"
                 )
+            log.warning(
+                "Expected object number and generation id, got %r %r", objid, genno
+            )
             return None
-        objid = int_value(objid)
         if objid == 0:
             if self.strict:
                 raise PDFSyntaxError(
@@ -523,9 +519,9 @@ class ObjectParser:
         idpos = pos
         (pos, objs) = self.pop_to(KEYWORD_BI)
         if len(objs) % 2 != 0:
-            error_msg = f"Invalid dictionary construct: {objs!r}"
+            error_msg = f"Dictionary contains odd number of objects: {objs!r}"
             if self.strict:
-                raise TypeError(error_msg)
+                raise PDFSyntaxError(error_msg)
             else:
                 log.warning(error_msg)
         dic = {literal_name(k): v for (k, v) in choplist(2, objs) if v is not None}
@@ -680,18 +676,25 @@ class IndirectObjectParser:
         while True:
             try:
                 pos, obj = next(self._parser)
-                if isinstance(obj, PSKeyword) and obj.name.startswith(b"endobj"):
+                if obj is KEYWORD_ENDOBJ:
                     return self._endobj(pos, obj)
                 elif obj is KEYWORD_STREAM:
                     stream = self._stream(pos, obj)
                     self.objstack.append((pos, stream))
                 elif obj is KEYWORD_ENDSTREAM:
                     if not isinstance(self.objstack[-1][1], ContentStream):
-                        log.warning("Got endstream without a stream, ignoring!")
+                        raise PDFSyntaxError("Got endstream without a stream")
                 elif isinstance(obj, PSKeyword) and obj.name.startswith(b"endstream"):
                     # Some broken PDFs have junk after "endstream"
                     errmsg = "Expected 'endstream', got %r" % (obj,)
                     raise PDFSyntaxError(errmsg)
+                elif isinstance(obj, PSKeyword) and obj.name.startswith(b"endobj"):
+                    # Some broken PDFs have junk after "endobj"
+                    errmsg = "Expected 'endobj', got %r" % (obj,)
+                    if self.strict:
+                        raise PDFSyntaxError(errmsg)
+                    log.warning(errmsg)
+                    return self._endobj(pos, obj)
                 else:
                     self.objstack.append((pos, obj))
             except StopIteration:

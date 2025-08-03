@@ -298,7 +298,7 @@ def float_value(x: PDFObject) -> float:
 
 def num_value(x: PDFObject) -> float:
     x = resolve1(x)
-    if not isinstance(x, (int, float)):  # == utils.isnumber(x)
+    if not isinstance(x, (int, float)):
         raise TypeError("Int or Float required: %r" % x)
     return x
 
@@ -487,10 +487,7 @@ class ContentStream:
                     if strict:
                         error_msg = f"Invalid zlib bytes: {e!r}, {data!r}"
                         raise ValueError(error_msg)
-                    try:
-                        data = decompress_corrupted(data)
-                    except zlib.error:
-                        data = b""
+                    data = decompress_corrupted(data)
 
             elif f in LITERALS_LZW_DECODE:
                 from playa.lzw import lzwdecode

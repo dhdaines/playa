@@ -65,7 +65,9 @@ class XRefTable:
     """
 
     def __init__(
-        self, parser: ObjectParser, offset: int = 0,
+        self,
+        parser: ObjectParser,
+        offset: int = 0,
     ) -> None:
         self.offsets: Dict[int, XRefPos] = {}
         self.trailer: Dict[str, Any] = {}
@@ -74,12 +76,17 @@ class XRefTable:
     def _load(self, parser: ObjectParser, offset: int) -> None:
         while True:
             pos, start = next(parser)
+            # This means that xref table parsing can only end in three
+            # ways: "trailer" (success), EOF (failure) or something
+            # other than two numbers (failure).  Hope that's okay.
             if start is KEYWORD_TRAILER:
                 parser.seek(pos)
                 break
             pos, nobjs = next(parser)
             if not (isinstance(start, int) and isinstance(nobjs, int)):
-                raise PDFSyntaxError(f"Expected object ID and count, got {start!r} {nobjs!r}")
+                raise PDFSyntaxError(
+                    f"Expected object ID and count, got {start!r} {nobjs!r}"
+                )
             log.debug("reading positions of objects %d to %d", start, start + nobjs - 1)
             objid = start
             while objid < start + nobjs:
@@ -88,12 +95,13 @@ class XRefTable:
                 pos, line = parser.nextline()
                 log.debug("%r %r", pos, line)
                 if line == b"":  # EOF
-                    raise PDFSyntaxError("EOF in xref table parsing")
+                    raise StopIteration("EOF in xref table parsing")
                 line = line.strip()
                 if line == b"trailer":  # oops, nobjs was wrong
                     log.warning(f"Expect object at {pos}, got trailer")
                     # We will hit trailer on the next outer loop
                     parser.seek(pos)
+                    break
                 # We need to tolerate blank lines here in case someone
                 # has creatively ended an entry with \r\r or \n\n
                 if line == b"":  # Blank line
@@ -115,6 +123,8 @@ class XRefTable:
 
     def _load_trailer(self, parser: ObjectParser) -> None:
         (_, kwd) = next(parser)
+        # This can actually never happen, because if an xref table
+        # doesn't end with "trailer" then some other error happens
         if kwd is not KEYWORD_TRAILER:
             raise PDFSyntaxError(
                 "Expected %r, got %r"
@@ -215,7 +225,10 @@ class XRefFallback:
             log.debug("Found possible trailer at %d", pos)
             try:
                 _, trailer = next(ObjectParser(parser.buffer, doc, pos))
-            except (TypeError, PDFSyntaxError):
+            except (TypeError, PDFSyntaxError):  # pragma: no cover
+                # This actually can't happen because ObjectParser will
+                # never throw an exception without strict mode (which
+                # we won't turn on when doing fallback parsing)
                 continue
             if not isinstance(trailer, dict):
                 continue

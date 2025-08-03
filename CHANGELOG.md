@@ -4,7 +4,7 @@
 - Add and document `finalize` method on ContentObjects
 - Make `PageList` work more or less like a `Sequence`
 - Support iteration over `playa.structure.ContentItem`
-- TODO: Maximize test coverage
+- Maximize test coverage
 - TODO: Optimize marked content section access
 - TODO: Add method to complete parent tree for page
 - TODO: Fail fast for incorrect stream lengths

@@ -107,9 +107,7 @@ class ContentItem:
             # We *really* should have a page!
             self._bbox = BBOX_NONE
         else:
-            self._bbox = get_bound_rects(
-                obj.bbox for obj in self
-            )
+            self._bbox = get_bound_rects(obj.bbox for obj in self)
         return self._bbox
 
     @property
@@ -142,8 +140,7 @@ class ContentItem:
         page_or_xobject = self._page_or_xobject()
         if page_or_xobject is None:
             return iter(())
-        return (obj for obj in page_or_xobject
-                if obj.mcid == self.mcid)
+        return (obj for obj in page_or_xobject if obj.mcid == self.mcid)
 
 
 @dataclass

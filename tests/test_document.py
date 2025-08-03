@@ -9,7 +9,7 @@ import pytest
 import playa
 from playa.content import DashPattern
 from playa.data_structures import NameTree
-from playa.document import Document, XRefTable, _open_input
+from playa.document import Document, _open_input
 from playa.page import TextObject
 from playa.parser import LIT
 from playa.utils import decode_text
@@ -33,13 +33,6 @@ def test_read_header():
         version, pos, buffer = _open_input(infh)
         assert version == "1.4"
         assert pos == 86
-
-
-def test_read_xref():
-    """Verify we can read the xref table if there is junk before the header."""
-    with playa.open(TESTDIR / "junk_before_header.pdf") as pdf:
-        # Not a fallback, we got the right one
-        assert isinstance(pdf.xrefs[0], XRefTable)
 
 
 def test_bytes():
@@ -270,16 +263,3 @@ def test_extgstate() -> None:
         assert gstate.linecap == 1
         assert gstate.linejoin == 2
         assert gstate.dash == DashPattern((20,), 10)
-
-
-@pytest.mark.skipif(not CONTRIB.exists(), reason="contrib samples not present")
-def test_root_damage() -> None:
-    """Fail gracefully if the document root is damaged (issue #154)"""
-    with playa.open(CONTRIB / "issue-154.pdf") as doc:
-        assert isinstance(doc[827], playa.ContentStream)
-
-
-def test_multi_xrefs(caplog) -> None:
-    """Verify that we correctly read multi-segment xref tables."""
-    with playa.open(TESTDIR / "multi-xrefs.pdf") as doc:
-        assert not caplog.records

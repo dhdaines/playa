@@ -1,25 +1,12 @@
-import logging
+"""
+Test the basic lexer.
+"""
+
 from typing import Any, List
 
 import pytest
-
-from playa.document import Document
-from playa.parser import (
-    KEYWORD_DICT_BEGIN,
-    KEYWORD_DICT_END,
-    InlineImage,
-    Lexer,
-    ObjectParser,
-)
-from playa.pdftypes import (
-    KWD,
-    LIT,
-    ObjRef,
-    keyword_name,
-    literal_name,
-)
-
-logger = logging.getLogger(__name__)
+from playa.parser import KEYWORD_DICT_BEGIN, KEYWORD_DICT_END, Lexer
+from playa.pdftypes import KWD, LIT, keyword_name, literal_name
 
 TESTDATA1 = rb"""%!PS
 begin end
@@ -168,7 +155,7 @@ def list_parsers(data: bytes, expected: List[Any], discard_pos: bool = False) ->
 
 
 def test_new_parser() -> None:
-    # Do a lot of them to make sure buffering works correctly
+    # No more buffering in playa but do make sure we can lex a lot of data
     list_parsers(SIMPLE1 * 100, SIMPLETOK * 100, discard_pos=True)
 
 
@@ -265,142 +252,16 @@ def test_interns():
         _ = LIT(b"not-a-str")
 
 
-STREAMDATA = b"""
-/Hello
-<< /Type/Catalog/Outlines 2 0 R /Pages 3 0 R >>
-[ 1 0 R ]
-(foo (bar) baz...)
-null null null
-4 0 R
-"""
-
-
-def test_objects():
-    """Test the basic object stream parser."""
-    parser = ObjectParser(STREAMDATA)
-    objects = list(parser)
-    assert objects == [
-        (1, LIT("Hello")),
-        (
-            8,
-            {
-                "Type": LIT("Catalog"),
-                "Outlines": ObjRef(None, 2),
-                "Pages": ObjRef(None, 3),
-            },
-        ),
-        (56, [ObjRef(None, 1)]),
-        (66, b"foo (bar) baz..."),
-        (85, None),
-        (90, None),
-        (95, None),
-        # Note unparsed indirect object reference
-        (100, 4),
-        (102, 0),
-        (104, KWD(b"R")),
+def test_lexer_eof() -> None:
+    """Verify lexer works at EOF."""
+    lex = Lexer(b"/Foo /Bar (baz)")
+    assert lex.nextline() == (0, b"/Foo /Bar (baz)")
+    lex.seek(0)
+    assert list(lex) == [
+        (0, LIT("Foo")),
+        (5, LIT("Bar")),
+        (10, b"baz"),
     ]
-
-
-INLINEDATA1 = b"""
-BI /L 42 ID
-012345678901234567890123456789012345678901
-EI
-BI /Length 30 /Filter /A85 ID
-
-
-<^BVT:K:=9<E)pd;BS_1:/aSV;ag~>
-
-
-
-EI
-BI
-/Foo (bar)
-ID
-VARIOUS UTTER NONSENSE
-EI
-BI
-/F /AHx
-ID\r4f 4d 47575446\r\n\r\nEI
-BI /F /AHx ID 4f4d47575446EI
-BI ID(OMG)(WTF)
-EI
-BI
-/F /A85
-ID
-<^BVT:K:=9<E)pd;BS_1:/aSV;ag~>
-EI
-BI
-/F /A85
-ID
-<^BVT:K:=9<E)pd;BS_1:/aSV;ag~
->
-EI
-BI /F /A85 ID<^BVT:K:=9<E)pd;BS_1:/aSV;ag~>EI
-BI
-/OMG (WTF)
-ID
-BLAHEIBLAHBLAH\rEI
-BI ID
-OLD MACDONALD\rEIEIO
-EI
-BI ID OLDMACDONALDEIEIO EI
-BI ID
-OLDMACDONALDEIEIOEI
-(hello world)
-"""
-
-
-def test_inline_images():
-    parser = ObjectParser(INLINEDATA1)
-    pos, img = next(parser)
-    assert isinstance(img, InlineImage)
-    assert img.buffer == b"012345678901234567890123456789012345678901"
-    pos, img = next(parser)
-    assert isinstance(img, InlineImage)
-    assert img.buffer == b"VARIOUS UTTER NONSENSE"
-    pos, img = next(parser)
-    assert isinstance(img, InlineImage)
-    assert img.attrs["Foo"] == b"bar"
-    assert img.rawdata == b"VARIOUS UTTER NONSENSE"
-    pos, img = next(parser)
-    assert isinstance(img, InlineImage)
-    assert img.buffer == b"OMGWTF"
-    pos, img = next(parser)
-    assert isinstance(img, InlineImage)
-    assert img.buffer == b"OMGWTF"
-    pos, img = next(parser)
-    assert isinstance(img, InlineImage)
-    assert img.buffer == b"(OMG)(WTF)"
-    pos, img = next(parser)
-    assert isinstance(img, InlineImage)
-    assert img.buffer == b"VARIOUS UTTER NONSENSE"
-    pos, img = next(parser)
-    assert isinstance(img, InlineImage)
-    assert img.buffer == b"VARIOUS UTTER NONSENSE"
-    pos, img = next(parser)
-    assert isinstance(img, InlineImage)
-    assert img.buffer == b"VARIOUS UTTER NONSENSE"
-    pos, img = next(parser)
-    assert isinstance(img, InlineImage)
-    assert img.buffer == b"BLAHEIBLAHBLAH"
-    pos, img = next(parser)
-    assert isinstance(img, InlineImage)
-    assert img.buffer == b"OLD MACDONALD\rEIEIO"
-    pos, img = next(parser)
-    assert isinstance(img, InlineImage)
-    assert img.buffer == b"OLDMACDONALDEIEIO"
-    pos, img = next(parser)
-    assert isinstance(img, InlineImage)
-    assert img.buffer == b"OLDMACDONALDEIEIO"
-
-
-def test_cached_inline_images():
-    doc = Document(b"")
-    first = list(ObjectParser(INLINEDATA1, doc, streamid=0))
-    second = list(ObjectParser(INLINEDATA1, doc, streamid=0))
-    assert first == second
-    third = list(ObjectParser(INLINEDATA1, doc, streamid=1))
-    assert first != third
 
 
 def test_reverse_solidus():

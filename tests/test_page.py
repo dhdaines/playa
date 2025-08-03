@@ -58,3 +58,30 @@ def test_translation() -> None:
         hello = next(pdf.pages[0].texts)
         # No change here because we cropped the other corner
         assert hello.bbox == pytest.approx((74.768, 612 - 224.008, 96.968, 612 - 100))
+
+
+def test_set_initial_ctm(caplog) -> None:
+    datadir = TESTDIR / "rotation"
+    with playa.open(datadir / "0.pdf") as pdf:
+        hello = next(pdf.pages[0].texts)
+        assert hello.bbox == pytest.approx((100, 74.768, 224.008, 96.968))
+        pdf.pages[0].set_initial_ctm("default", 0)
+        hello = next(pdf.pages[0].texts)
+        assert hello.bbox == pytest.approx((100, 792 - 96.968, 224.008, 792 - 74.768))
+        # Rotation should have no effect on "default" (but it will set
+        # the rotate property anyway)
+        pdf.pages[0].set_initial_ctm("default", 90)
+        hello = next(pdf.pages[0].texts)
+        assert pdf.pages[0].rotate == 90
+        assert hello.bbox == pytest.approx((100, 792 - 96.968, 224.008, 792 - 74.768))
+        # Other spaces should do the same thing as "default"
+        pdf.pages[0].set_initial_ctm("spam", 180)  # type: ignore[arg-type]
+        assert "Unknown device space" in caplog.text
+        hello = next(pdf.pages[0].texts)
+        assert pdf.pages[0].rotate == 180
+        assert hello.bbox == pytest.approx((100, 792 - 96.968, 224.008, 792 - 74.768))
+        # Non-90 degree rotation defaults to 0
+        pdf.pages[0].set_initial_ctm("screen", 42)
+        assert "Invalid rotation" in caplog.text
+        hello = next(pdf.pages[0].texts)
+        assert hello.bbox == pytest.approx((100, 74.768, 224.008, 96.968))

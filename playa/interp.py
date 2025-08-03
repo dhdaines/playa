@@ -15,7 +15,6 @@ from typing import (
     Iterator,
     List,
     Tuple,
-    Type,
     Union,
     cast,
 )
@@ -138,7 +137,6 @@ class LazyInterpreter:
         page: "Page",
         contents: Iterable[PDFObject],
         resources: Union[Dict, None] = None,
-        filter_class: Union[Type[ContentObject], None] = None,
         ctm: Union[Matrix, None] = None,
         gstate: Union[GraphicState, None] = None,
         parent_key: Union[int, None] = None,
@@ -161,7 +159,6 @@ class LazyInterpreter:
             page.attrs.get("StructParents") if parent_key is None else parent_key
         )
         self.contents = contents
-        self.filter_class = filter_class
         self.ignore_colours = ignore_colours
         self.init_resources(page, page.resources if resources is None else resources)
         self.init_state(page.ctm if ctm is None else ctm, gstate)
@@ -270,8 +267,6 @@ class LazyInterpreter:
                 self.push(obj)
 
     def create(self, object_class, **kwargs) -> Union[ContentObject, None]:
-        if self.filter_class is not None and object_class is not self.filter_class:
-            return None
         return object_class(
             _pageref=self.page.pageref,
             _parentkey=self.parent_key,
@@ -445,29 +440,28 @@ class LazyInterpreter:
             return None
         subtype = xobj.get("Subtype")
         if subtype is LITERAL_FORM:
-            if self.filter_class is None or self.filter_class is XObjectObject:
-                # PDF Ref 1.7, # 4.9
-                #
-                # When the Do operator is applied to a form XObject,
-                # it does the following tasks:
-                #
-                # 1. Saves the current graphics state, as if by invoking the q operator
-                # ...
-                # 5. Restores the saved graphics state, as if by invoking the Q operator
-                #
-                # The lazy interpretation of this is, obviously, that
-                # we simply create an XObjectObject with a copy of the
-                # current graphics state.  The copying is actually
-                # done (lazily, of course) when construcitng a new
-                # LazyInterpreter, not here.
-                return XObjectObject.from_stream(
-                    stream=xobj,
-                    page=self.page,
-                    xobjid=xobjid,
-                    ctm=self.ctm,
-                    gstate=self.graphicstate,
-                    mcstack=self.mcstack,
-                )
+            # PDF Ref 1.7, # 4.9
+            #
+            # When the Do operator is applied to a form XObject,
+            # it does the following tasks:
+            #
+            # 1. Saves the current graphics state, as if by invoking the q operator
+            # ...
+            # 5. Restores the saved graphics state, as if by invoking the Q operator
+            #
+            # The lazy interpretation of this is, obviously, that
+            # we simply create an XObjectObject with a copy of the
+            # current graphics state.  The copying is actually
+            # done (lazily, of course) when construcitng a new
+            # LazyInterpreter, not here.
+            return XObjectObject.from_stream(
+                stream=xobj,
+                page=self.page,
+                xobjid=xobjid,
+                ctm=self.ctm,
+                gstate=self.graphicstate,
+                mcstack=self.mcstack,
+            )
         elif subtype is LITERAL_IMAGE:
             return self.render_image(xobjid, xobj)
         else:
@@ -751,9 +745,7 @@ class LazyInterpreter:
         """Set color for stroking operators."""
         if self.ignore_colours:
             return
-        if self.graphicstate.scs is None:
-            log.warning("No colorspace specified, using default DeviceGray")
-            self.graphicstate.scs = self.csmap["DeviceGray"]
+        assert self.graphicstate.scs is not None  # it is always not None now
         self.graphicstate.scolor = self.graphicstate.scs.make_color(
             *self.pop(self.graphicstate.scs.ncomponents)
         )
@@ -762,9 +754,7 @@ class LazyInterpreter:
         """Set color for nonstroking operators"""
         if self.ignore_colours:
             return
-        if self.graphicstate.ncs is None:
-            log.warning("No colorspace specified, using default DeviceGray")
-            self.graphicstate.ncs = self.csmap["DeviceGray"]
+        assert self.graphicstate.ncs is not None  # it is always not None now
         self.graphicstate.ncolor = self.graphicstate.ncs.make_color(
             *self.pop(self.graphicstate.ncs.ncomponents)
         )
@@ -781,6 +771,7 @@ class LazyInterpreter:
         """Paint area defined by shading pattern"""
         if self.ignore_colours:
             return
+        log.debug("sh operator currently unsupported")
 
     def do_BT(self) -> None:
         """Begin text object.
@@ -949,16 +940,14 @@ class LazyInterpreter:
         if isinstance(props, PSLiteral):
             props = self.get_property(props)
         rprops = {} if props is None else dict_value(props)
-        if self.filter_class is None or self.filter_class is TagObject:
-            return TagObject(
-                _pageref=self.page.pageref,
-                _parentkey=self.parent_key,
-                ctm=self.ctm,
-                mcstack=self.mcstack,
-                gstate=self.graphicstate,
-                _mcs=MarkedContent(mcid=None, tag=literal_name(tag), props=rprops),
-            )
-        return None
+        return TagObject(
+            _pageref=self.page.pageref,
+            _parentkey=self.parent_key,
+            ctm=self.ctm,
+            mcstack=self.mcstack,
+            gstate=self.graphicstate,
+            _mcs=MarkedContent(mcid=None, tag=literal_name(tag), props=rprops),
+        )
 
     def begin_tag(self, tag: PDFObject, props: Dict[str, PDFObject]) -> None:
         """Handle beginning of tag, setting current MCID if any."""

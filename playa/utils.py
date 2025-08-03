@@ -2,9 +2,7 @@
 
 import itertools
 import string
-import warnings
 from typing import (
-    Any,
     Iterable,
     Iterator,
     List,
@@ -15,10 +13,6 @@ from typing import (
 )
 
 from playa.pdftypes import Point, Rect, Matrix
-
-# from sys import maxint as INF doesn't work anymore under Python3, but PDF
-# still uses 32 bits ints
-INF = (1 << 31) - 1
 
 
 def paeth_predictor(left: int, above: int, upper_left: int) -> int:
@@ -266,12 +260,6 @@ def apply_matrix_norm(m: Matrix, v: Point) -> Point:
 
 
 #  Utility functions
-
-
-def isnumber(x: Any) -> bool:
-    return isinstance(x, (int, float))
-
-
 _T = TypeVar("_T")
 
 
@@ -320,20 +308,6 @@ def transform_bbox(matrix: Matrix, bbox: Rect) -> Rect:
             apply_matrix_pt(matrix, (x1, y1)),
         )
     )
-
-
-def get_transformed_bound(matrix: Matrix, bbox: Rect) -> Rect:
-    """Deprecated name for transform_bbox.
-
-    Danger: Deprecated
-        This function is deprecated and will be removed in
-        PLAYA-PDF 1.0.
-    """
-    warnings.warn(
-        "get_transformed_bound is deprecated, please use" "transform_bbox instead now.",
-        DeprecationWarning,
-    )
-    return transform_bbox(matrix, bbox)
 
 
 def choplist(n: int, seq: Iterable[_T]) -> Iterator[Tuple[_T, ...]]:
@@ -642,23 +616,14 @@ def decode_text(s: Union[str, bytes]) -> str:
         return str(s)
 
 
-def bbox2str(bbox: Rect) -> str:
-    (x0, y0, x1, y1) = bbox
-    return f"{x0:.3f},{y0:.3f},{x1:.3f},{y1:.3f}"
-
-
-def matrix2str(m: Matrix) -> str:
-    (a, b, c, d, e, f) = m
-    return f"[{a:.2f},{b:.2f},{c:.2f},{d:.2f}, ({e:.2f},{f:.2f})]"
-
-
 ROMAN_ONES = ["i", "x", "c", "m"]
 ROMAN_FIVES = ["v", "l", "d"]
 
 
 def format_int_roman(value: int) -> str:
     """Format a number as lowercase Roman numerals."""
-    assert 0 < value < 4000
+    if value <= 0 or value >= 4000:
+        raise ValueError(f"Romanes eunt domus: {value}")
     result: List[str] = []
     index = 0
 
@@ -683,7 +648,8 @@ def format_int_roman(value: int) -> str:
 
 def format_int_alpha(value: int) -> str:
     """Format a number as lowercase letters a-z, aa-zz, etc."""
-    assert value > 0
+    if value <= 0:
+        raise ValueError(f"No alphabetic page number for {value}")
     result: List[str] = []
 
     while value != 0:
