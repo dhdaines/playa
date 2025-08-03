@@ -80,7 +80,7 @@ b* % no current path
 0 SC % cover some stuff
 /Pattern sh % does nothing!
 
-/Blorp DP  % non-existent property
+/Horp /Blorp DP  % non-existent property
 
 (not a name) << /MCID 0 >> BDC  % not a name
 
