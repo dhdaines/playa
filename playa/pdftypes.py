@@ -487,10 +487,7 @@ class ContentStream:
                     if strict:
                         error_msg = f"Invalid zlib bytes: {e!r}, {data!r}"
                         raise ValueError(error_msg)
-                    try:
-                        data = decompress_corrupted(data)
-                    except zlib.error:
-                        data = b""
+                    data = decompress_corrupted(data)
 
             elif f in LITERALS_LZW_DECODE:
                 from playa.lzw import lzwdecode
