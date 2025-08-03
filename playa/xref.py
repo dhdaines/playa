@@ -225,7 +225,7 @@ class XRefFallback:
             log.debug("Found possible trailer at %d", pos)
             try:
                 _, trailer = next(ObjectParser(parser.buffer, doc, pos))
-            except (TypeError, PDFSyntaxError):  # pragma: no-cover
+            except (TypeError, PDFSyntaxError):  # pragma: no cover
                 # This actually can't happen because ObjectParser will
                 # never throw an exception without strict mode (which
                 # we won't turn on when doing fallback parsing)
