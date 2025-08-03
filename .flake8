@@ -7,3 +7,5 @@ extend-ignore =
     S101,
     # No, flake8, we meant to call that function do_Tf
     N802,
+    # No, flake8, my docstrings are NOT ReStructuredText
+    RST203,

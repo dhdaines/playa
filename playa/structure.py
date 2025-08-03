@@ -622,12 +622,20 @@ class Tree(Findable):
           standard structure types (as strings) (PDF 1.7 section 14.8.4)
       parent_tree: Parent tree linking marked content sections to
           structure elements (PDF 1.7 section 14.7.4.4)
+      parent: A structure tree has no parent element, so this is `None`
+      bbox: A structure tree has no bounding box so this is `BBOX_NONE`
+      type: This is "StructTreeRoot"
+      role: This is also "StructTreeRoot"
     """
 
     _docref: DocumentRef
     props: Dict[str, PDFObject]
     _role_map: Dict[str, str]
     _parent_tree: NumberTree
+    page = None
+    parent = None
+    bbox = BBOX_NONE
+    type = role = "StructTreeRoot"
 
     def __init__(self, doc: "Document") -> None:
         self._docref = _ref_document(doc)
@@ -664,9 +672,10 @@ class Tree(Findable):
         but if you do, here it is.
 
         Unlike the structure tree itself, if there is no parent tree,
-        this will be an empty NumberTree.  This is because the parent
-        tree is required by the spec in the case where structure
-        elements contain marked content, which is nearly all the time.
+        this will be an empty `NumberTree`, not `None`.  This is
+        because the parent tree is required by the spec in the case
+        where structure elements contain marked content, which is
+        nearly all the time.
 
         """
         if hasattr(self, "_parent_tree"):
