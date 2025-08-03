@@ -230,7 +230,7 @@ def test_xref_fallback() -> None:
         def decipher(self, _objid, _genno, data, *args, **kwargs):
             return data
 
-    data = (THISDIR / "fallback-xref.txt").read_bytes()
+    data = (THISDIR / "fallback-xref.pdf").read_bytes()
     f = XRefFallback(IndirectObjectParser(data, FakeDoc()))  # type: ignore[arg-type]
     assert repr(f)
     pos2 = f.get_pos(2)
