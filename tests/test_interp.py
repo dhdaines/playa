@@ -41,8 +41,6 @@ def test_iter(caplog) -> None:
     with playa.open(THISDIR / "bad_operators.pdf") as pdf:
         for _ in pdf.pages[0]:
             pass
-        for _ in pdf.pages[0].texts:
-            pass
     assert "Insufficient arguments" in caplog.text
     assert "Incorrect type" in caplog.text
     assert "Invalid offset" in caplog.text
@@ -98,3 +96,5 @@ def test_type3_interp() -> None:
         for _ in interp:
             pass
         assert interp.width == 800
+        # To get coverage
+        assert interp.pop(0) == []
