@@ -7,7 +7,8 @@ from pathlib import Path
 
 import playa
 from playa.document import LITERAL_TYPE1
-from playa.interp import _make_fontmap
+from playa.interp import _make_fontmap, Type3Interpreter
+from playa.parser import IndirectObjectParser
 
 from .data import TESTDIR
 
@@ -52,3 +53,48 @@ def test_iter(caplog) -> None:
     assert "Undefined Font" in caplog.text
     assert "is not a name object" in caplog.text
     assert "Missing property list" in caplog.text
+
+
+TYPE3_CHAR1 = b"""
+99 0 obj
+<</Length 0>>
+stream
+850 0 0 -200 1000 800 d1
+% execute some color operators which do nothing
+/Foo sh
+0.5 scn
+0.5 SCN
+0.1 0.1 0.1 0.1 k
+0.1 0.1 0.1 0.1 K
+0.5 0.8 0.6 rg
+0.5 0.8 0.6 RG
+0.9 g
+0.9 G
+/DeviceRGB cs
+/DeviceGray CS
+/ReverseColorimetric ri
+endstream
+endobj
+"""
+TYPE3_CHAR2 = b"""
+99 0 obj
+<</Length 0>>
+stream
+800 0 d0
+endstream
+endobj
+"""
+
+
+def test_type3_interp() -> None:
+    with playa.open(TESTDIR / "simple1.pdf") as pdf:
+        _, obj = next(IndirectObjectParser(TYPE3_CHAR1))
+        interp = Type3Interpreter(pdf.pages[0], [obj.obj])
+        for _ in interp:
+            pass
+        assert interp.width == 850
+        _, obj = next(IndirectObjectParser(TYPE3_CHAR2))
+        interp = Type3Interpreter(pdf.pages[0], [obj.obj])
+        for _ in interp:
+            pass
+        assert interp.width == 800

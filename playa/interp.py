@@ -777,6 +777,7 @@ class LazyInterpreter:
         """Paint area defined by shading pattern"""
         if self.ignore_colours:
             return
+        log.debug("sh operator currently unsupported")
 
     def do_BT(self) -> None:
         """Begin text object.
