@@ -2,7 +2,9 @@
 Interpreter for PDF content streams.
 """
 
+import itertools
 import logging
+import operator
 import re
 from copy import copy
 from dataclasses import dataclass
@@ -16,6 +18,7 @@ from typing import (
     List,
     Tuple,
     Union,
+    Sequence,
     cast,
 )
 
@@ -125,6 +128,19 @@ def _make_fontmap(mapping: PDFObject, doc: "Document") -> Dict[str, Font]:
             )
             fontmap[fontid] = doc.get_font(objid, None)
     return fontmap
+
+
+def _make_contentmap(
+    streamer: Iterable["ContentObject"],
+) -> Sequence[Union[None, Iterable["ContentObject"]]]:
+    contents: List[Union[None, Iterable["ContentObject"]]] = []
+    for mcid, objs in itertools.groupby(streamer, operator.attrgetter("mcid")):
+        if mcid is None:
+            continue
+        while len(contents) <= mcid:
+            contents.append(None)
+        contents[mcid] = [obj.finalize() for obj in objs]
+    return contents
 
 
 class LazyInterpreter:

@@ -22,15 +22,15 @@ from typing import (
 
 from playa.color import (
     BASIC_BLACK,
-    LITERAL_RELATIVE_COLORIMETRIC,
-    LITERAL_NORMAL,
     LITERAL_DEFAULT,
+    LITERAL_NORMAL,
+    LITERAL_RELATIVE_COLORIMETRIC,
     PREDEFINED_COLORSPACE,
     Color,
     ColorSpace,
 )
-from playa.font import Font, CIDFont, Type3Font
-from playa.parser import ContentParser, Token, LIT
+from playa.font import CIDFont, Font, Type3Font
+from playa.parser import LIT, ContentParser, Token
 from playa.pdftypes import (
     BBOX_NONE,
     ContentStream,
@@ -55,7 +55,7 @@ from playa.utils import (
     transform_bbox,
     translate_matrix,
 )
-from playa.worker import PageRef, _deref_page, _deref_document
+from playa.worker import PageRef, _deref_document, _deref_page
 
 if TYPE_CHECKING:
     from playa.document import Document
@@ -633,6 +633,41 @@ class XObjectObject(ContentObject):
                 elements[objid] = Element.from_dict(self.doc, dict_value(obj))
             self._structmap.append(elements[objid])
         return self._structmap
+
+    @property
+    def marked_content(self) -> Sequence[Union[None, Iterable["ContentObject"]]]:
+        """Mapping of marked content IDs to iterators over content objects.
+
+        These are the content objects associated with the structural
+        elements in `XObjectObject.structure`.  So, for instance, you can do:
+
+            for element, contents in zip(xobj.structure,
+                                         xobj.marked_content):
+                if element is not None:
+                    if contents is not None:
+                        for obj in contents:
+                            ...  # do something with it
+
+        Or you can also access the contents of a single element:
+
+            if xobj.marked_content[mcid] is not None:
+                for obj in xobj.marked_content[mcid]:
+                    ... # do something with it
+
+        Why do you have to check if it's `None`?  Because the values
+        are not necessarily sequences (they may just be positions in
+        the content stream), it isn't possible to know if they are
+        empty without iterating over them, which you may or may not
+        want to do, because you are Lazy.
+        """
+        from playa.interp import _make_contentmap
+
+        if hasattr(self, "_marked_contents"):
+            return self._marked_contents
+        self._marked_contents: Sequence[Union[None, Iterable["ContentObject"]]] = (
+            _make_contentmap(self)
+        )
+        return self._marked_contents
 
     @property
     def mcid_texts(self) -> Mapping[int, List[str]]:

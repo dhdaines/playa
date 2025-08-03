@@ -65,8 +65,8 @@ class ContentItem:
     specific page, and can be used to (lazily) find that section if
     desired.
 
-    One can also iterate over ContentObjects inside it, which is
-    currently slow, but will get faster soon.
+    One can also iterate over ContentObjects inside it, or extract
+    text from it.
     """
 
     _pageref: PageRef
@@ -92,9 +92,6 @@ class ContentItem:
         """Find the bounding box, if any, of this item, which is the
         smallest rectangle enclosing all objects in its marked content
         section.
-
-        Note that this is currently quite inefficient as it involves
-        interpreting the entire page.
 
         If the `page` attribute is `None`, then `bbox` will be
         `BBOX_NONE`.
@@ -133,14 +130,14 @@ class ContentItem:
     def __iter__(self) -> Iterator["PageContentObject"]:
         """Iterate over `playa.content.ContentObject` (not to be confused with
         `playa.structure.ContentObject`) in this marked content section.
-
-        This is pretty slow at the moment but will get faster as it is
-        a rather important thing to be able to do.
         """
         page_or_xobject = self._page_or_xobject()
         if page_or_xobject is None:
             return iter(())
-        return (obj for obj in page_or_xobject if obj.mcid == self.mcid)
+        contents = page_or_xobject.marked_content[self.mcid]
+        if contents is None:
+            return iter(())
+        return iter(contents)
 
 
 @dataclass
@@ -430,12 +427,8 @@ class Element(Findable):
             rawbox = rect_value(self.props["BBox"])
             return transform_bbox(page.ctm, rawbox)
         else:
-            # NOTE: This is quite slow
-            return get_bound_rects(
-                item.bbox
-                for item in self.contents
-                if item.page is page and item.bbox is not BBOX_NONE
-            )
+            boxes = (item.bbox for item in self.contents if item.page is page)
+            return get_bound_rects(box for box in boxes if box is not BBOX_NONE)
 
     @property
     def alt(self) -> Union[str, None]:

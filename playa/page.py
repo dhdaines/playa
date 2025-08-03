@@ -35,7 +35,7 @@ from playa.content import (
 )
 from playa.exceptions import PDFSyntaxError
 from playa.font import Font
-from playa.interp import LazyInterpreter, _make_fontmap
+from playa.interp import LazyInterpreter, _make_fontmap, _make_contentmap
 from playa.parser import ContentParser, PDFObject, Token
 from playa.pdftypes import (
     MATRIX_IDENTITY,
@@ -397,6 +397,39 @@ class Page:
         return self._structmap
 
     @property
+    def marked_content(self) -> Sequence[Union[None, Iterable["ContentObject"]]]:
+        """Mapping of marked content IDs to iterators over content objects.
+
+        These are the content objects associated with the structural
+        elements in `Page.structure`.  So, for instance, you can do:
+
+            for element, contents in zip(page.structure,
+                                         page.marked_content):
+                if element is not None:
+                    if contents is not None:
+                        for obj in contents:
+                            ...  # do something with it
+
+        Or you can also access the contents of a single element:
+
+            if page.marked_content[mcid] is not None:
+                for obj in page.marked_content[mcid]:
+                    ... # do something with it
+
+        Why do you have to check if it's `None`?  Because the values
+        are not necessarily sequences (they may just be positions in
+        the content stream), it isn't possible to know if they are
+        empty without iterating over them, which you may or may not
+        want to do, because you are Lazy.
+        """
+        if hasattr(self, "_marked_contents"):
+            return self._marked_contents
+        self._marked_contents: Sequence[Union[None, Iterable["ContentObject"]]] = (
+            _make_contentmap(self)
+        )
+        return self._marked_contents
+
+    @property
     def fonts(self) -> Mapping[str, Font]:
         """Mapping of resource names to fonts for this page.
 
@@ -463,11 +496,14 @@ class Page:
     def mcid_texts(self) -> Mapping[int, List[str]]:
         """Mapping of marked content IDs to Unicode text strings.
 
-        For use in text extraction from tagged PDFs.
+        For use in text extraction from tagged PDFs.  This is a
+        special case of `marked_content` which only cares about
+        extracting text (and thus is quite a bit more efficient).
 
         Danger: Do not rely on this being a `dict`.
             Currently this is implemented eagerly, but in the future it
             may return a lazy object.
+
         """
         if hasattr(self, "_textmap"):
             return self._textmap
