@@ -602,18 +602,20 @@ def asobj_content_object(obj: _StructContentObject) -> StructContentObject:
 def asobj_structelement(obj: _Element, recurse: bool = True) -> StructElement:
     el = StructElement(type=obj.type)
     page = obj.page
+    for attr in (
+        "type",
+        "role",
+        "title",
+        "language",
+        "alternate_description",
+        "abbreviation_expansion",
+        "actual_text",
+    ):
+        val = getattr(obj, attr)
+        if val is not None:
+            el[attr] = asobj(val)
     if page is not None:
         el["page_idx"] = page.page_idx
-    if "T" in obj.props:
-        el["title"] = decode_text(str_value(obj.props["T"]))
-    if "Lang" in obj.props:
-        el["language"] = decode_text(str_value(obj.props["Lang"]))
-    if "Alt" in obj.props:
-        el["alternate_description"] = decode_text(str_value(obj.props["Alt"]))
-    if "E" in obj.props:
-        el["abbreviation_expansion"] = decode_text(str_value(obj.props["E"]))
-    if "ActualText" in obj.props:
-        el["actual_text"] = decode_text(str_value(obj.props["ActualText"]))
     if recurse:
         children = [asobj(el) for el in obj]
         if children:

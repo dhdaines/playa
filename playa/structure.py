@@ -31,7 +31,7 @@ from playa.pdftypes import (
     rect_value,
     stream_value,
 )
-from playa.utils import decode_text, transform_bbox, get_bound_rects
+from playa.utils import transform_bbox, get_bound_rects, string_property
 from playa.worker import (
     DocumentRef,
     PageRef,
@@ -431,15 +431,29 @@ class Element(Findable):
             return get_bound_rects(box for box in boxes if box is not BBOX_NONE)
 
     @property
-    def alt(self) -> Union[str, None]:
+    def title(self) -> Union[str, None]:
+        """Title of a structure element."""
+        return string_property(self.props, "T")
+
+    @property
+    def language(self) -> Union[str, None]:
+        """Language code of a structure element."""
+        return string_property(self.props, "Lang")
+
+    @property
+    def alternate_description(self) -> Union[str, None]:
         """Alternate text for a figure element."""
-        if "Alt" not in self.props:
-            return None
-        alttext = resolve1(self.props["Alt"])
-        if not isinstance(alttext, (str, bytes)):
-            LOG.warning("Alt text is not a string: %r", self.props)
-            return None
-        return decode_text(alttext)
+        return string_property(self.props, "Alt")
+
+    @property
+    def abbreviation_expansion(self) -> Union[str, None]:
+        """If element's contents are an abbreviation, the expansion."""
+        return string_property(self.props, "E")
+
+    @property
+    def actual_text(self) -> Union[str, None]:
+        """Replacement text for a structure element."""
+        return string_property(self.props, "ActualText")
 
     def __iter__(self) -> Iterator[Union["Element", ContentItem, ContentObject]]:
         if "K" in self.props:
