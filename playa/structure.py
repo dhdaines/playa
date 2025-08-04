@@ -31,7 +31,7 @@ from playa.pdftypes import (
     rect_value,
     stream_value,
 )
-from playa.utils import transform_bbox, get_bound_rects, string_property
+from playa.utils import transform_bbox, get_bound_rects, string_property, choplist
 from playa.worker import (
     DocumentRef,
     PageRef,
@@ -454,6 +454,50 @@ class Element(Findable):
     def actual_text(self) -> Union[str, None]:
         """Replacement text for a structure element."""
         return string_property(self.props, "ActualText")
+
+    @property
+    def attributes(self) -> Union[Dict[str, PDFObject], None]:
+        """Attribute dictionary"""
+        attrs = resolve1(self.props.get("A"))
+        if attrs is None:
+            return None
+        if isinstance(attrs, dict):
+            return attrs
+        if isinstance(attrs, list):
+            latest: Union[None, Dict[str, PDFObject]] = None
+            latest_revision = 0
+            for attrdict, revision in choplist(2, attrs):
+                attrdict = resolve1(attrdict)
+                if isinstance(attrdict, ContentStream):
+                    attrdict = attrdict.attrs
+                if not isinstance(attrdict, dict):
+                    LOG.warning("A is not dictionary or stream: %r", attrdict)
+                    continue
+                if latest is None or revision > latest_revision:
+                    latest = attrdict
+                    latest_revision = revision
+            return latest
+        LOG.warning("Unrecognizable A property: %r", attrs)
+        return None
+
+    @property
+    def class_name(self) -> Union[str, None]:
+        """Attribute class name"""
+        classes = resolve1(self.props.get("C"))
+        if classes is None:
+            return None
+        if isinstance(classes, PSLiteral):
+            return literal_name(classes)
+        if isinstance(classes, list):
+            latest = None
+            latest_revision = 0
+            for classname, revision in choplist(2, classes):
+                if latest is None or revision > latest_revision:
+                    latest = resolve1(classname)
+                    latest_revision = revision
+            return literal_name(latest)
+        LOG.warning("Unrecognizable C property: %r", classes)
+        return None
 
     def __iter__(self) -> Iterator[Union["Element", ContentItem, ContentObject]]:
         if "K" in self.props:

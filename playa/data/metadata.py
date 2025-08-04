@@ -33,7 +33,6 @@ from playa.pdftypes import (
     matrix_value,
     rect_value,
     resolve1,
-    str_value,
     stream_value,
 )
 from playa.structure import ContentItem as _StructContentItem
@@ -122,6 +121,8 @@ class StructElement(TypedDict, total=False):
 
     type: str
     """Type of structure element (or "StructTreeRoot" for root)."""
+    role: str
+    """Role of structure element (root has no role)."""
     page_idx: int
     """Page on which this structure element's content begins."""
     title: str
@@ -136,6 +137,10 @@ class StructElement(TypedDict, total=False):
     """Unicode text content."""
     children: List["StructElement"]
     """Children of this node."""
+    attributes: dict
+    """Structure attributes."""
+    class_name: str
+    """Structure attribute class name."""
 
 
 class StructTree(TypedDict, total=False):
@@ -610,6 +615,8 @@ def asobj_structelement(obj: _Element, recurse: bool = True) -> StructElement:
         "alternate_description",
         "abbreviation_expansion",
         "actual_text",
+        "attributes",
+        "class_name",
     ):
         val = getattr(obj, attr)
         if val is not None:

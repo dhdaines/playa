@@ -90,7 +90,7 @@ from typing import Any, Deque, Iterable, Iterator, List, TextIO, Tuple, Union
 import playa
 from playa import Document, Page, PDFPasswordIncorrect, asobj
 from playa.data.content import Image
-from playa.data.metadata import asobj_document
+from playa.data.metadata import asobj_document, asobj_structelement
 from playa.image import get_one_image
 from playa.outline import Outline
 from playa.page import ImageObject
@@ -413,7 +413,7 @@ def _extract_element(el: Element, indent: int, outfh: TextIO) -> bool:
     ws = " " * indent
     ss = "  "
 
-    text = json.dumps(asobj(el, recurse=False), indent=2, ensure_ascii=False)
+    text = json.dumps(asobj_structelement(el, recurse=False), indent=2, ensure_ascii=False)
     brace = text.rindex("}")
     print(textwrap.indent(text[:brace].strip(), ws), end="", file=outfh)
     print(f',\n{ws}{ss}"children": [', file=outfh)
