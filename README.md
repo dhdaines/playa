@@ -14,6 +14,15 @@ would be specifically one of these things and nothing else:
 2. Obtaining the absolute position and attributes of every character,
    line, path, and image in every page of a PDF.
    
+Note that **P**LAYA Ain't a **LAY**out **A**nalyzer, because layout
+analysis as done by
+[pdfminer.six](https://github.com/pdfminer/pdfminer.six)) is Heuristic
+and Not Lazy.  But never fear!  You can now use
+[PAVÉS](https://github.com/dhdaines/paves?tab=readme-ov-file#working-in-the-pdf-mine)
+which implements exactly the `LayoutAnalyzer` API from pdfminer.six
+but without the `NumerousLines.of(FrustratingBoilerplate())` that it
+takes get the layout out of a PDF.  (it does other things, too)
+
 The purpose of PLAYA is to provide an efficent, parallel and
 parallelizable, pure-Python and Pythonic (for its author's definition
 of the term), lazy interface to the internals of PDF files.
@@ -194,6 +203,19 @@ The set of possible entries in annotation dictionaries (PDF 1.7 sect
 12.5.2) is vast and confusing and inconsistently implemented, but you
 can always access them by their names (as defined in the PDF standard)
 via `annot.props`.
+
+If the document has logical structure, then the pages will also have a
+slightly different form of logical structure.  You can use the same
+`find` and `find_all` methods to get all of the enclosing structure
+elements of a given type (actually a role) for a page.  So for
+instance if you wanted to get the text contents for all the cells in
+all the tables on a page, assuming the creator of said page was kind
+enough to check the "PDF/UA" box, you can do:
+
+```python
+for table in page.structure.find_all("Table"):
+    print(f"Table at {table.bbox}: {[x.text for x in table.contents]}")
+```
 
 ## Accessing content
 
