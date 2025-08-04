@@ -5,8 +5,8 @@
 - Make `PageList` work more or less like a `Sequence`
 - Support iteration over `playa.structure.ContentItem`
 - Maximize test coverage
-- TODO: Optimize marked content section access
-- TODO: Add method to complete parent tree for page
+- Optimize marked content section access
+- Add method to complete parent tree for page
 - TODO: Fail fast for incorrect stream lengths
 - TODO: Parse indirect objects with regex
 

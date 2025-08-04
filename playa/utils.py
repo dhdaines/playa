@@ -12,7 +12,7 @@ from typing import (
     Union,
 )
 
-from playa.pdftypes import Point, Rect, Matrix
+from playa.pdftypes import PDFObject, Point, Rect, Matrix, dict_value, str_value
 
 
 def paeth_predictor(left: int, above: int, upper_left: int) -> int:
@@ -571,6 +571,28 @@ def decode_text(s: Union[str, bytes]) -> str:
             return "".join(PDFDocEncoding[c] for c in s)
     except IndexError:
         return str(s)
+
+
+def string_property(obj: PDFObject, key: str) -> Union[str, None]:
+    """Retrieve and decode a string property of an object dictionary
+    (such as an annotation, a page, a structure element, etc)
+
+    Takes care of resolving indirect object references in both the
+    object and its values.
+
+    Raises:
+        TypeError: If `obj` is not a dictionary, or if the value
+        requested is not a string
+
+    Returns:
+        The decoded string, or `None` if the property doesn't exist.
+    """
+    objdict = dict_value(obj)
+    val = objdict.get(key)
+    if val is None:
+        return None
+    val = str_value(val)
+    return decode_text(val)
 
 
 ROMAN_ONES = ["i", "x", "c", "m"]

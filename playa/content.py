@@ -22,20 +22,19 @@ from typing import (
 
 from playa.color import (
     BASIC_BLACK,
-    LITERAL_RELATIVE_COLORIMETRIC,
-    LITERAL_NORMAL,
     LITERAL_DEFAULT,
+    LITERAL_NORMAL,
+    LITERAL_RELATIVE_COLORIMETRIC,
     PREDEFINED_COLORSPACE,
     Color,
     ColorSpace,
 )
-from playa.font import Font, CIDFont, Type3Font
-from playa.parser import ContentParser, Token, LIT
+from playa.font import CIDFont, Font, Type3Font
+from playa.parser import LIT, ContentParser, Token
 from playa.pdftypes import (
     BBOX_NONE,
     ContentStream,
     Matrix,
-    ObjRef,
     PDFObject,
     Point,
     PSLiteral,
@@ -55,12 +54,12 @@ from playa.utils import (
     transform_bbox,
     translate_matrix,
 )
-from playa.worker import PageRef, _deref_page, _deref_document
+from playa.worker import PageRef, _deref_document, _deref_page
 
 if TYPE_CHECKING:
     from playa.document import Document
     from playa.page import Page
-    from playa.structure import Element
+    from playa.structure import Element, PageStructure
 
 log = logging.getLogger(__name__)
 
@@ -596,43 +595,67 @@ class XObjectObject(ContentObject):
         return self._parent
 
     @property
-    def structure(self) -> Sequence[Union["Element", None]]:
+    def structure(self) -> "PageStructure":
         """Mapping of marked content IDs to logical structure elements.
 
         As with pages, Form XObjects can also contain their own
         mapping of marked content IDs to structure elements.
-
-        Danger: Do not rely on this being a `list`.
-            Currently this is implemented eagerly, but in the future it
-            may return a lazy object.
-
         """
-        from playa.structure import Element
+        from playa.structure import PageStructure
 
         if hasattr(self, "_structmap"):
             return self._structmap
-        self._structmap: List[Union["Element", None]] = []
+        self._structmap: PageStructure = PageStructure(self._pageref, [])
         if self.doc.structure is None:
             return self._structmap
         if self._parentkey is None:
             return self._structmap
         try:
-            parents = resolve1(self.doc.structure.parent_tree[self._parentkey])
-            if not isinstance(parents, list):
-                # This means that there is a single StructParent, and thus
-                # no internal structure to this Form XObject
-                return self._structmap
-        except IndexError:
-            return self._structmap
-        # Elements can contain multiple marked content sections, so
-        # don't create redundant Element objects for these
-        elements: Dict[int, Element] = {}
-        for obj in parents:
-            objid = obj.objid if isinstance(obj, ObjRef) else id(obj)
-            if objid not in elements:
-                elements[objid] = Element.from_dict(self.doc, dict_value(obj))
-            self._structmap.append(elements[objid])
+            self._structmap = PageStructure(
+                self._pageref, self.doc.structure.parent_tree[self._parentkey]
+            )
+        except IndexError as e:
+            log.warning("Invalid StructParents: %r (%s)", self._parentkey, e)
+        except TypeError:
+            # This means that there is a single StructParent, and thus
+            # no internal structure to this Form XObject
+            pass
         return self._structmap
+
+    @property
+    def marked_content(self) -> Sequence[Union[None, Iterable["ContentObject"]]]:
+        """Mapping of marked content IDs to iterators over content objects.
+
+        These are the content objects associated with the structural
+        elements in `XObjectObject.structure`.  So, for instance, you can do:
+
+            for element, contents in zip(xobj.structure,
+                                         xobj.marked_content):
+                if element is not None:
+                    if contents is not None:
+                        for obj in contents:
+                            ...  # do something with it
+
+        Or you can also access the contents of a single element:
+
+            if xobj.marked_content[mcid] is not None:
+                for obj in xobj.marked_content[mcid]:
+                    ... # do something with it
+
+        Why do you have to check if it's `None`?  Because the values
+        are not necessarily sequences (they may just be positions in
+        the content stream), it isn't possible to know if they are
+        empty without iterating over them, which you may or may not
+        want to do, because you are Lazy.
+        """
+        from playa.interp import _make_contentmap
+
+        if hasattr(self, "_marked_contents"):
+            return self._marked_contents
+        self._marked_contents: Sequence[Union[None, Iterable["ContentObject"]]] = (
+            _make_contentmap(self)
+        )
+        return self._marked_contents
 
     @property
     def mcid_texts(self) -> Mapping[int, List[str]]:

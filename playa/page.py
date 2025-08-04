@@ -35,19 +35,17 @@ from playa.content import (
 )
 from playa.exceptions import PDFSyntaxError
 from playa.font import Font
-from playa.interp import LazyInterpreter, _make_fontmap
+from playa.interp import LazyInterpreter, _make_fontmap, _make_contentmap
 from playa.parser import ContentParser, PDFObject, Token
 from playa.pdftypes import (
     MATRIX_IDENTITY,
     ContentStream,
     Matrix,
-    ObjRef,
     PSLiteral,
     Point,
     Rect,
     dict_value,
     int_value,
-    list_value,
     literal_name,
     rect_value,
     resolve1,
@@ -58,7 +56,7 @@ from playa.worker import PageRef, _deref_document, _deref_page, _ref_document, _
 
 if TYPE_CHECKING:
     from playa.document import Document
-    from playa.structure import Element
+    from playa.structure import Element, PageStructure
 
 log = logging.getLogger(__name__)
 
@@ -90,9 +88,6 @@ class Page:
       ctm: coordinate transformation matrix from default user space to
            page's device space
     """
-
-    _fontmap: Union[Dict[str, Font], None] = None
-    _structmap: Union[List[Union["Element", None]], None] = None
 
     def __init__(
         self,
@@ -339,15 +334,17 @@ class Page:
         return None
 
     @property
-    def structure(self) -> Sequence[Union["Element", None]]:
+    def structure(self) -> "PageStructure":
         """Mapping of marked content IDs to logical structure elements.
 
-        This is actually a list of logical structure elements
-        corresponding to marked content IDs, or `None` for indices
-        which do not correspond to a marked content ID.  Note that
-        because structure elements may contain multiple marked content
-        sections, the same element may occur multiple times in this
-        list.
+        This is a sequence of logical structure elements, or `None`
+        for unused marked content IDs.  Note that because structure
+        elements may contain multiple marked content sections, the
+        same element may occur multiple times in this list.
+
+        It also has `find` and `find_all` methods which allow you to
+        access enclosing structural elements (you can also use the
+        `parent` method of elements for that)
 
         Note: This is not the same as `playa.Document.structure`.
             PDF documents have logical structure, but PDF pages **do
@@ -356,34 +353,57 @@ class Page:
             is marked content sections which correspond to content
             items in the logical structure tree.
 
-        Danger: Do not rely on this being a `list`.
-            Currently this is implemented eagerly, but in the future it
-            may return a lazy object.
-
         """
-        from playa.structure import Element
+        from playa.structure import PageStructure
 
-        if self._structmap is not None:
+        if hasattr(self, "_structmap"):
             return self._structmap
-        self._structmap = []
+        self._structmap: PageStructure = PageStructure(self.pageref, [])
         if self.doc.structure is None:
             return self._structmap
         parent_key = self.parent_key
         if parent_key is None:
             return self._structmap
         try:
-            parents = list_value(self.doc.structure.parent_tree[parent_key])
-        except IndexError:
-            return self._structmap
-        # Elements can contain multiple marked content sections, so
-        # don't create redundant Element objects for these
-        elements: Dict[int, Element] = {}
-        for obj in parents:
-            objid = obj.objid if isinstance(obj, ObjRef) else id(obj)
-            if objid not in elements:
-                elements[objid] = Element.from_dict(self.doc, dict_value(obj))
-            self._structmap.append(elements[objid])
+            self._structmap = PageStructure(
+                self.pageref, self.doc.structure.parent_tree[parent_key]
+            )
+        except (IndexError, TypeError) as e:
+            log.warning("Invalid StructParents: %r (%s)", parent_key, e)
         return self._structmap
+
+    @property
+    def marked_content(self) -> Sequence[Union[None, Iterable["ContentObject"]]]:
+        """Mapping of marked content IDs to iterators over content objects.
+
+        These are the content objects associated with the structural
+        elements in `Page.structure`.  So, for instance, you can do:
+
+            for element, contents in zip(page.structure,
+                                         page.marked_content):
+                if element is not None:
+                    if contents is not None:
+                        for obj in contents:
+                            ...  # do something with it
+
+        Or you can also access the contents of a single element:
+
+            if page.marked_content[mcid] is not None:
+                for obj in page.marked_content[mcid]:
+                    ... # do something with it
+
+        Why do you have to check if it's `None`?  Because the values
+        are not necessarily sequences (they may just be positions in
+        the content stream), it isn't possible to know if they are
+        empty without iterating over them, which you may or may not
+        want to do, because you are Lazy.
+        """
+        if hasattr(self, "_marked_contents"):
+            return self._marked_contents
+        self._marked_contents: Sequence[Union[None, Iterable["ContentObject"]]] = (
+            _make_contentmap(self)
+        )
+        return self._marked_contents
 
     @property
     def fonts(self) -> Mapping[str, Font]:
@@ -409,9 +429,11 @@ class Page:
             may return a lazy object which only loads fonts on demand.
 
         """
-        if self._fontmap is not None:
+        if hasattr(self, "_fontmap"):
             return self._fontmap
-        self._fontmap = _make_fontmap(self.resources.get("Font"), self.doc)
+        self._fontmap: Dict[str, Font] = _make_fontmap(
+            self.resources.get("Font"), self.doc
+        )
         return self._fontmap
 
     def __repr__(self) -> str:
@@ -452,11 +474,14 @@ class Page:
     def mcid_texts(self) -> Mapping[int, List[str]]:
         """Mapping of marked content IDs to Unicode text strings.
 
-        For use in text extraction from tagged PDFs.
+        For use in text extraction from tagged PDFs.  This is a
+        special case of `marked_content` which only cares about
+        extracting text (and thus is quite a bit more efficient).
 
         Danger: Do not rely on this being a `dict`.
             Currently this is implemented eagerly, but in the future it
             may return a lazy object.
+
         """
         if hasattr(self, "_textmap"):
             return self._textmap

@@ -33,7 +33,6 @@ from playa.pdftypes import (
     matrix_value,
     rect_value,
     resolve1,
-    str_value,
     stream_value,
 )
 from playa.structure import ContentItem as _StructContentItem
@@ -122,6 +121,8 @@ class StructElement(TypedDict, total=False):
 
     type: str
     """Type of structure element (or "StructTreeRoot" for root)."""
+    role: str
+    """Role of structure element (root has no role)."""
     page_idx: int
     """Page on which this structure element's content begins."""
     title: str
@@ -136,6 +137,10 @@ class StructElement(TypedDict, total=False):
     """Unicode text content."""
     children: List["StructElement"]
     """Children of this node."""
+    attributes: dict
+    """Structure attributes."""
+    class_name: str
+    """Structure attribute class name."""
 
 
 class StructTree(TypedDict, total=False):
@@ -602,18 +607,22 @@ def asobj_content_object(obj: _StructContentObject) -> StructContentObject:
 def asobj_structelement(obj: _Element, recurse: bool = True) -> StructElement:
     el = StructElement(type=obj.type)
     page = obj.page
+    for attr in (
+        "type",
+        "role",
+        "title",
+        "language",
+        "alternate_description",
+        "abbreviation_expansion",
+        "actual_text",
+        "attributes",
+        "class_name",
+    ):
+        val = getattr(obj, attr)
+        if val is not None:
+            el[attr] = asobj(val)
     if page is not None:
         el["page_idx"] = page.page_idx
-    if "T" in obj.props:
-        el["title"] = decode_text(str_value(obj.props["T"]))
-    if "Lang" in obj.props:
-        el["language"] = decode_text(str_value(obj.props["Lang"]))
-    if "Alt" in obj.props:
-        el["alternate_description"] = decode_text(str_value(obj.props["Alt"]))
-    if "E" in obj.props:
-        el["abbreviation_expansion"] = decode_text(str_value(obj.props["E"]))
-    if "ActualText" in obj.props:
-        el["actual_text"] = decode_text(str_value(obj.props["ActualText"]))
     if recurse:
         children = [asobj(el) for el in obj]
         if children:

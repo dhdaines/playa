@@ -82,6 +82,7 @@ import itertools
 import json
 import logging
 import re
+import textwrap
 from collections import deque
 from pathlib import Path
 from typing import Any, Deque, Iterable, Iterator, List, TextIO, Tuple, Union
@@ -89,7 +90,7 @@ from typing import Any, Deque, Iterable, Iterator, List, TextIO, Tuple, Union
 import playa
 from playa import Document, Page, PDFPasswordIncorrect, asobj
 from playa.data.content import Image
-from playa.data.metadata import asobj_document
+from playa.data.metadata import asobj_document, asobj_structelement
 from playa.image import get_one_image
 from playa.outline import Outline
 from playa.page import ImageObject
@@ -97,7 +98,6 @@ from playa.pdftypes import (
     ContentStream,
     ObjRef,
     resolve1,
-    str_value,
     PDFObject,
 )
 from playa.structure import ContentItem
@@ -412,37 +412,12 @@ def _extract_element(el: Element, indent: int, outfh: TextIO) -> bool:
     """Extract a single structure element."""
     ws = " " * indent
     ss = "  "
-    s = []
 
-    def format_attr(k: Any, v: Any) -> None:
-        k = json.dumps(k, ensure_ascii=False)
-        v = json.dumps(v, ensure_ascii=False)
-        s.append(f"{ws}{ss}{k}: {v}")
-
-    try:
-        format_attr("type", el.type)
-        format_attr("role", el.role)
-    except KeyError:
-        LOG.warning("Structure element with no type ignored: %r", el)
-        return False
-    except TypeError:
-        LOG.warning("Structure element with invalid type ignored: %r", el)
-        return False
-    page = el.page
-    if page is not None:
-        format_attr("page_idx", page.page_idx)
-    if "T" in el.props:
-        format_attr("title", decode_text(str_value(el.props["T"])))
-    if "Lang" in el.props:
-        format_attr("language", decode_text(str_value(el.props["Lang"])))
-    if "Alt" in el.props:
-        format_attr("alternate_description", decode_text(str_value(el.props["Alt"])))
-    if "E" in el.props:
-        format_attr("abbreviation_expansion", decode_text(str_value(el.props["E"])))
-    if "ActualText" in el.props:
-        format_attr("actual_text", decode_text(str_value(el.props["ActualText"])))
-    print(f"{ws}{{", file=outfh)
-    print(",\n".join(s), end="", file=outfh)
+    text = json.dumps(
+        asobj_structelement(el, recurse=False), indent=2, ensure_ascii=False
+    )
+    brace = text.rindex("}")
+    print(textwrap.indent(text[:brace].strip(), ws), end="", file=outfh)
     print(f',\n{ws}{ss}"children": [', file=outfh)
     comma = False
     for kid in el:
@@ -451,6 +426,7 @@ def _extract_element(el: Element, indent: int, outfh: TextIO) -> bool:
         comma = _extract_child(kid, indent + 4, outfh)
     print(f"\n{ws}{ss}]", end="", file=outfh)
     print(f"\n{ws}}}", end="", file=outfh)
+
     return True
 
 

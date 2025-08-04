@@ -176,29 +176,7 @@ def test_errors() -> None:
         matrix_value((32, "skidoo", 4, 5, 6, 7))  # type: ignore[arg-type]
     broken_image = ContentStream(
         {"ColorSpace": LIT("NotAColorSpace")},
-        rawdata=b"""8 0 obj
-<<
-  /Name /X2
-  /Subtype /Image
-  /BitsPerComponent 8
-  /ColorSpace /DeviceRGB
-  /DecodeParms <</BitsPerComponent 8/Colors 3/Columns 3>>
-  /Filter /ASCIIHexDecode
-  /Type /XObject
-  /StructParent 2
-  /Width 3
-  /Height 5
-  /Length 105
->>
-stream
-AA2222 22AA22 2222AA
-EEEEEE EEEEEE EEEEEE
-AAAAAA AAAAAA AAAAAA
-EEEEEE EEEEEE EEEEEE
-AAAAAA AAAAAA AAAAAA
-endstream
-endobj
-""",
+        rawdata=b"IRRELEVANT!",
     )
     with pytest.raises(ValueError):
         _ = broken_image.colorspace

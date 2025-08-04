@@ -391,9 +391,14 @@ class Document:
 
         In the case where no logical structure tree exists, this will
         be `None`.  Otherwise you may iterate over it, search it, etc.
-        We do this instead of simply returning an empty structure
-        tree because the vast majority of PDFs have no logical
-        structure.
+
+        We do this instead of simply returning an empty structure tree
+        because the vast majority of PDFs have no logical structure.
+        Also, because the structure is a lazy object (the type
+        signature here may change to `Iterable[Element]` at some
+        point) there is no way to know if it's empty without iterating
+        over it.
+
         """
         if hasattr(self, "_structure"):
             return self._structure

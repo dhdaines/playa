@@ -5,6 +5,7 @@ Lazy interface to PDF logical structure (PDF 1.7 sect 14.7).
 import functools
 import logging
 import re
+from collections.abc import Sequence as ABCSequence
 from dataclasses import dataclass
 from typing import (
     TYPE_CHECKING,
@@ -14,7 +15,9 @@ from typing import (
     Iterator,
     List,
     Pattern,
+    Sequence,
     Union,
+    overload,
 )
 
 
@@ -26,12 +29,13 @@ from playa.pdftypes import (
     ObjRef,
     Rect,
     dict_value,
+    list_value,
     literal_name,
     resolve1,
     rect_value,
     stream_value,
 )
-from playa.utils import transform_bbox, get_bound_rects
+from playa.utils import transform_bbox, get_bound_rects, string_property, choplist
 from playa.worker import (
     DocumentRef,
     PageRef,
@@ -65,8 +69,8 @@ class ContentItem:
     specific page, and can be used to (lazily) find that section if
     desired.
 
-    One can also iterate over ContentObjects inside it, which is
-    currently slow, but will get faster soon.
+    One can also iterate over ContentObjects inside it, or extract
+    text from it.
     """
 
     _pageref: PageRef
@@ -92,9 +96,6 @@ class ContentItem:
         """Find the bounding box, if any, of this item, which is the
         smallest rectangle enclosing all objects in its marked content
         section.
-
-        Note that this is currently quite inefficient as it involves
-        interpreting the entire page.
 
         If the `page` attribute is `None`, then `bbox` will be
         `BBOX_NONE`.
@@ -133,14 +134,14 @@ class ContentItem:
     def __iter__(self) -> Iterator["PageContentObject"]:
         """Iterate over `playa.content.ContentObject` (not to be confused with
         `playa.structure.ContentObject`) in this marked content section.
-
-        This is pretty slow at the moment but will get faster as it is
-        a rather important thing to be able to do.
         """
         page_or_xobject = self._page_or_xobject()
         if page_or_xobject is None:
             return iter(())
-        return (obj for obj in page_or_xobject if obj.mcid == self.mcid)
+        contents = page_or_xobject.marked_content[self.mcid]
+        if contents is None:
+            return iter(())
+        return iter(contents)
 
 
 @dataclass
@@ -231,14 +232,9 @@ class ContentObject:
         return obj.bbox
 
 
-def _find_all(
-    elements: List["Element"],
+def _make_match_func(
     matcher: Union[str, Pattern[str], MatchFunc, None] = None,
-) -> Iterator["Element"]:
-    """
-    Common code for `find_all()` in trees and elements.
-    """
-
+) -> MatchFunc:
     def match_all(x: "Element") -> bool:
         return True
 
@@ -251,13 +247,23 @@ def _find_all(
         return matcher.match(x.role)  # type: ignore
 
     if matcher is None:
-        match_func = match_all
+        return match_all
     elif isinstance(matcher, str):
-        match_func = match_tag
+        return match_tag
     elif isinstance(matcher, re.Pattern):
-        match_func = match_regex
+        return match_regex
     else:
-        match_func = matcher  # type: ignore
+        return matcher  # type: ignore
+
+
+def _find_all(
+    elements: List["Element"],
+    matcher: Union[str, Pattern[str], MatchFunc, None] = None,
+) -> Iterator["Element"]:
+    """
+    Common code for `find_all()` in trees and elements.
+    """
+    match_func = _make_match_func(matcher)
     elements.reverse()
     while elements:
         el = elements.pop()
@@ -430,17 +436,88 @@ class Element(Findable):
             rawbox = rect_value(self.props["BBox"])
             return transform_bbox(page.ctm, rawbox)
         else:
-            # NOTE: This is quite slow
-            return get_bound_rects(
-                item.bbox
-                for item in self.contents
-                if item.page is page and item.bbox is not BBOX_NONE
-            )
+            boxes = (item.bbox for item in self.contents if item.page is page)
+            return get_bound_rects(box for box in boxes if box is not BBOX_NONE)
+
+    @property
+    def title(self) -> Union[str, None]:
+        """Title of a structure element."""
+        return string_property(self.props, "T")
+
+    @property
+    def language(self) -> Union[str, None]:
+        """Language code of a structure element."""
+        return string_property(self.props, "Lang")
+
+    @property
+    def alternate_description(self) -> Union[str, None]:
+        """Alternate text for a figure element."""
+        return string_property(self.props, "Alt")
+
+    @property
+    def abbreviation_expansion(self) -> Union[str, None]:
+        """If element's contents are an abbreviation, the expansion."""
+        return string_property(self.props, "E")
+
+    @property
+    def actual_text(self) -> Union[str, None]:
+        """Replacement text for a structure element."""
+        return string_property(self.props, "ActualText")
+
+    @property
+    def attributes(self) -> Union[Dict[str, PDFObject], None]:
+        """Attribute dictionary"""
+        attrs = resolve1(self.props.get("A"))
+        if attrs is None:
+            return None
+        if isinstance(attrs, dict):
+            return attrs
+        if isinstance(attrs, list):
+            latest: Union[None, Dict[str, PDFObject]] = None
+            latest_revision = 0
+            for attrdict, revision in choplist(2, attrs):
+                attrdict = resolve1(attrdict)
+                if isinstance(attrdict, ContentStream):
+                    attrdict = attrdict.attrs
+                if not isinstance(attrdict, dict):
+                    LOG.warning("A is not dictionary or stream: %r", attrdict)
+                    continue
+                if latest is None or revision > latest_revision:
+                    latest = attrdict
+                    latest_revision = revision
+            return latest
+        LOG.warning("Unrecognizable A property: %r", attrs)
+        return None
+
+    @property
+    def class_name(self) -> Union[str, None]:
+        """Attribute class name"""
+        classes = resolve1(self.props.get("C"))
+        if classes is None:
+            return None
+        if isinstance(classes, PSLiteral):
+            return literal_name(classes)
+        if isinstance(classes, list):
+            latest = None
+            latest_revision = 0
+            for classname, revision in choplist(2, classes):
+                if latest is None or revision > latest_revision:
+                    latest = resolve1(classname)
+                    latest_revision = revision
+            return literal_name(latest)
+        LOG.warning("Unrecognizable C property: %r", classes)
+        return None
 
     def __iter__(self) -> Iterator[Union["Element", ContentItem, ContentObject]]:
         if "K" in self.props:
             kids = resolve1(self.props["K"])
             yield from _make_kids(kids, self.page, self._docref)
+
+    def __hash__(self) -> int:
+        # Ideally we would have an object ID for self.props, but
+        # structure dictionaries are not required to be indirect
+        # objects, so we use their string representation instead
+        return hash((self._docref, repr(self.props)))
 
 
 @functools.singledispatch
@@ -618,12 +695,21 @@ class Tree(Findable):
           standard structure types (as strings) (PDF 1.7 section 14.8.4)
       parent_tree: Parent tree linking marked content sections to
           structure elements (PDF 1.7 section 14.7.4.4)
+      parent: A structure tree has no parent element, so this is `None`
+      bbox: A structure tree has no bounding box so this is `BBOX_NONE`
+      type: This is "StructTreeRoot"
+      role: This is also "StructTreeRoot"
     """
 
     _docref: DocumentRef
     props: Dict[str, PDFObject]
     _role_map: Dict[str, str]
     _parent_tree: NumberTree
+    page = None
+    parent = None
+    bbox = BBOX_NONE
+    type = "StructTreeRoot"
+    role = "StructTreeRoot"
 
     def __init__(self, doc: "Document") -> None:
         self._docref = _ref_document(doc)
@@ -660,9 +746,10 @@ class Tree(Findable):
         but if you do, here it is.
 
         Unlike the structure tree itself, if there is no parent tree,
-        this will be an empty NumberTree.  This is because the parent
-        tree is required by the spec in the case where structure
-        elements contain marked content, which is nearly all the time.
+        this will be an empty `NumberTree`, not `None`.  This is
+        because the parent tree is required by the spec in the case
+        where structure elements contain marked content, which is
+        nearly all the time.
 
         """
         if hasattr(self, "_parent_tree"):
@@ -687,3 +774,105 @@ class Tree(Findable):
     def doc(self) -> "Document":
         """Document with which this structure tree is associated."""
         return _deref_document(self._docref)
+
+
+class PageStructure(ABCSequence):
+    """
+    Sequence of structural content elements for a page or Form XObject.
+    """
+
+    parents: Sequence[PDFObject]
+    elements: Dict[int, Element]
+
+    def __init__(self, pageref: PageRef, parents: PDFObject) -> None:
+        self.docref, _ = pageref
+        self.pageref = pageref
+        self.parents = list_value(parents)
+        self.elements = {}
+
+    @property
+    def doc(self) -> "Document":
+        """Get associated document if it exists."""
+        return _deref_document(self.docref)
+
+    def __len__(self) -> int:
+        return len(self.parents)
+
+    @overload
+    def __getitem__(self, idx: int) -> Union[Element, None]: ...
+
+    @overload
+    def __getitem__(self, idx: slice) -> "PageStructure": ...
+
+    def __getitem__(
+        self, idx: Union[int, slice]
+    ) -> Union["PageStructure", Element, None]:
+        if isinstance(idx, slice):
+            return PageStructure(
+                self.pageref,
+                [self.parents[x] for x in range(*idx.indices(len(self.parents)))],
+            )
+        objref = self.parents[idx]
+        if objref is None:
+            return None
+        elif isinstance(objref, ObjRef):
+            # Elements can contain multiple marked content sections,
+            # so don't create redundant Element objects for these
+            if objref.objid not in self.elements:
+                self.elements[objref.objid] = Element.from_dict(
+                    self.doc, dict_value(objref)
+                )
+            return self.elements[objref.objid]
+        else:
+            LOG.warning(
+                "ParentTree element is not an indirect object reference: %r", objref
+            )
+            return None
+
+    def find_all(
+        self, matcher: Union[str, Pattern[str], MatchFunc, None] = None
+    ) -> Iterator["Element"]:
+        """Search up depth-first for matching elements in the parent tree.
+
+        The `matcher` argument is either a string, a regular
+        expression, or a function taking a `Element` and returning
+        `True` if the element matches, or `None` (default) to return
+        all descendants in depth-first order.
+
+        For compatibility with `pdfplumber` and consistent behaviour
+        across documents, names and regular expressions are matched
+        against the `role` attribute.  If you wish to match the "raw"
+        structure type from the `type` attribute, you can do this with
+        a matching function.
+
+        """
+        match_func = _make_match_func(matcher)
+        seen = set()
+        for element in self:
+            while element is not None:
+                if match_func(element):
+                    if element not in seen:
+                        yield element
+                    seen.add(element)
+                    break
+                # This isn't necessary but it makes mypy happy
+                if isinstance(element.parent, Tree):
+                    break
+                element = element.parent
+
+    def find(
+        self, matcher: Union[str, Pattern[str], MatchFunc, None] = None
+    ) -> Union["Element", None]:
+        """Find the first matching element in the parent tree.
+
+        The `matcher` argument is either a string or a regular
+        expression to be matched against the `role` attribute, or a
+        function taking a `Element` and returning `True` if the
+        element matches, or `None` (default) to just get the first
+        child element.
+
+        """
+        try:
+            return next(self.find_all(matcher))
+        except StopIteration:
+            return None
