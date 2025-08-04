@@ -1,14 +1,12 @@
-## PLAYA 0.7.0: Unreleased
+## PLAYA 0.7.0: 2025-08-04
 
 - Remove long-deprecated functions
 - Add and document `finalize` method on ContentObjects
 - Make `PageList` work more or less like a `Sequence`
 - Support iteration over `playa.structure.ContentItem`
-- Maximize test coverage
-- Optimize marked content section access
-- Add method to complete parent tree for page
-- TODO: Fail fast for incorrect stream lengths
-- TODO: Parse indirect objects with regex
+- Greatly increase test coverage
+- Greatly optimize marked content section access
+- Add `find` and `find_all` methods to `page.structure`
 
 ## PLAYA 0.6.6: 2025-08-01
 
