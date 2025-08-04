@@ -207,6 +207,7 @@ def test_element_hash():
 
 def test_page_structure() -> None:
     with playa.open(TESTDIR / "pdf_structure.pdf") as pdf:
+        assert pdf.structure is not None
         elements = set(pdf.structure.find_all("Table"))
         assert len(elements) == 1
         page = pdf.pages[0]
@@ -215,6 +216,8 @@ def test_page_structure() -> None:
             assert element in elements
             count += 1
         assert count == 1
+        assert list(page.structure[0:5].find_all("Table")) == []
+        assert len(list(page.structure[-5:].find_all("Table"))) == 1
 
 
 if __name__ == "__main__":

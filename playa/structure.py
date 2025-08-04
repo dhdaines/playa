@@ -15,7 +15,9 @@ from typing import (
     Iterator,
     List,
     Pattern,
+    Sequence,
     Union,
+    overload,
 )
 
 
@@ -251,8 +253,7 @@ def _make_match_func(
     elif isinstance(matcher, re.Pattern):
         return match_regex
     else:
-        assert isinstance(matcher, MatchFunc)
-        return matcher
+        return matcher  # type: ignore
 
 
 def _find_all(
@@ -780,7 +781,7 @@ class PageStructure(ABCSequence):
     Sequence of structural content elements for a page or Form XObject.
     """
 
-    parents: List[PDFObject]
+    parents: Sequence[PDFObject]
     elements: Dict[int, Element]
 
     def __init__(self, pageref: PageRef, parents: PDFObject) -> None:
@@ -797,7 +798,20 @@ class PageStructure(ABCSequence):
     def __len__(self) -> int:
         return len(self.parents)
 
-    def __getitem__(self, idx: int) -> Union[Element, None]:
+    @overload
+    def __getitem__(self, idx: int) -> Union[Element, None]: ...
+
+    @overload
+    def __getitem__(self, idx: slice) -> "PageStructure": ...
+
+    def __getitem__(
+        self, idx: Union[int, slice]
+    ) -> Union["PageStructure", Element, None]:
+        if isinstance(idx, slice):
+            return PageStructure(
+                self.pageref,
+                [self.parents[x] for x in range(*idx.indices(len(self.parents)))],
+            )
         objref = self.parents[idx]
         if objref is None:
             return None

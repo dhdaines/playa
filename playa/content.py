@@ -35,7 +35,6 @@ from playa.pdftypes import (
     BBOX_NONE,
     ContentStream,
     Matrix,
-    ObjRef,
     PDFObject,
     Point,
     PSLiteral,
@@ -60,7 +59,7 @@ from playa.worker import PageRef, _deref_document, _deref_page
 if TYPE_CHECKING:
     from playa.document import Document
     from playa.page import Page
-    from playa.structure import Element
+    from playa.structure import Element, PageStructure
 
 log = logging.getLogger(__name__)
 
@@ -596,42 +595,31 @@ class XObjectObject(ContentObject):
         return self._parent
 
     @property
-    def structure(self) -> Sequence[Union["Element", None]]:
+    def structure(self) -> "PageStructure":
         """Mapping of marked content IDs to logical structure elements.
 
         As with pages, Form XObjects can also contain their own
         mapping of marked content IDs to structure elements.
-
-        Danger: Do not rely on this being a `list`.
-            Currently this is implemented eagerly, but in the future it
-            may return a lazy object.
-
         """
-        from playa.structure import Element
+        from playa.structure import PageStructure
 
         if hasattr(self, "_structmap"):
             return self._structmap
-        self._structmap: List[Union["Element", None]] = []
+        self._structmap: PageStructure = PageStructure(self._pageref, [])
         if self.doc.structure is None:
             return self._structmap
         if self._parentkey is None:
             return self._structmap
         try:
-            parents = resolve1(self.doc.structure.parent_tree[self._parentkey])
-            if not isinstance(parents, list):
-                # This means that there is a single StructParent, and thus
-                # no internal structure to this Form XObject
-                return self._structmap
-        except IndexError:
-            return self._structmap
-        # Elements can contain multiple marked content sections, so
-        # don't create redundant Element objects for these
-        elements: Dict[int, Element] = {}
-        for obj in parents:
-            objid = obj.objid if isinstance(obj, ObjRef) else id(obj)
-            if objid not in elements:
-                elements[objid] = Element.from_dict(self.doc, dict_value(obj))
-            self._structmap.append(elements[objid])
+            self._structmap = PageStructure(
+                self._pageref, self.doc.structure.parent_tree[self._parentkey]
+            )
+        except IndexError as e:
+            log.warning("Invalid StructParents: %r (%s)", self._parentkey, e)
+        except TypeError:
+            # This means that there is a single StructParent, and thus
+            # no internal structure to this Form XObject
+            pass
         return self._structmap
 
     @property

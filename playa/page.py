@@ -56,7 +56,7 @@ from playa.worker import PageRef, _deref_document, _deref_page, _ref_document, _
 
 if TYPE_CHECKING:
     from playa.document import Document
-    from playa.structure import Element
+    from playa.structure import Element, PageStructure
 
 log = logging.getLogger(__name__)
 
@@ -88,9 +88,6 @@ class Page:
       ctm: coordinate transformation matrix from default user space to
            page's device space
     """
-
-    _fontmap: Union[Dict[str, Font], None] = None
-    _structmap: Union[List[Union["Element", None]], None] = None
 
     def __init__(
         self,
@@ -337,15 +334,17 @@ class Page:
         return None
 
     @property
-    def structure(self) -> Sequence[Union["Element", None]]:
+    def structure(self) -> "PageStructure":
         """Mapping of marked content IDs to logical structure elements.
 
-        This is actually a list of logical structure elements
-        corresponding to marked content IDs, or `None` for indices
-        which do not correspond to a marked content ID.  Note that
-        because structure elements may contain multiple marked content
-        sections, the same element may occur multiple times in this
-        list.
+        This is a sequence of logical structure elements, or `None`
+        for unused marked content IDs.  Note that because structure
+        elements may contain multiple marked content sections, the
+        same element may occur multiple times in this list.
+
+        It also has `find` and `find_all` methods which allow you to
+        access enclosing structural elements (you can also use the
+        `parent` method of elements for that)
 
         Note: This is not the same as `playa.Document.structure`.
             PDF documents have logical structure, but PDF pages **do
@@ -354,16 +353,12 @@ class Page:
             is marked content sections which correspond to content
             items in the logical structure tree.
 
-        Danger: Do not rely on this being a `list`.
-            Currently this is implemented eagerly, but in the future it
-            may return a lazy object.
-
         """
         from playa.structure import PageStructure
 
-        if self._structmap is not None:
+        if hasattr(self, "_structmap"):
             return self._structmap
-        self._structmap = []
+        self._structmap: PageStructure = PageStructure(self.pageref, [])
         if self.doc.structure is None:
             return self._structmap
         parent_key = self.parent_key
@@ -375,7 +370,6 @@ class Page:
             )
         except (IndexError, TypeError) as e:
             log.warning("Invalid StructParents: %r (%s)", parent_key, e)
-            pass
         return self._structmap
 
     @property
@@ -435,9 +429,11 @@ class Page:
             may return a lazy object which only loads fonts on demand.
 
         """
-        if self._fontmap is not None:
+        if hasattr(self, "_fontmap"):
             return self._fontmap
-        self._fontmap = _make_fontmap(self.resources.get("Font"), self.doc)
+        self._fontmap: Dict[str, Font] = _make_fontmap(
+            self.resources.get("Font"), self.doc
+        )
         return self._fontmap
 
     def __repr__(self) -> str:
