@@ -413,7 +413,9 @@ def _extract_element(el: Element, indent: int, outfh: TextIO) -> bool:
     ws = " " * indent
     ss = "  "
 
-    text = json.dumps(asobj_structelement(el, recurse=False), indent=2, ensure_ascii=False)
+    text = json.dumps(
+        asobj_structelement(el, recurse=False), indent=2, ensure_ascii=False
+    )
     brace = text.rindex("}")
     print(textwrap.indent(text[:brace].strip(), ws), end="", file=outfh)
     print(f',\n{ws}{ss}"children": [', file=outfh)

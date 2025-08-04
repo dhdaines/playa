@@ -5,6 +5,7 @@ Lazy interface to PDF logical structure (PDF 1.7 sect 14.7).
 import functools
 import logging
 import re
+from collections.abc import Sequence as ABCSequence
 from dataclasses import dataclass
 from typing import (
     TYPE_CHECKING,
@@ -26,6 +27,7 @@ from playa.pdftypes import (
     ObjRef,
     Rect,
     dict_value,
+    list_value,
     literal_name,
     resolve1,
     rect_value,
@@ -228,14 +230,9 @@ class ContentObject:
         return obj.bbox
 
 
-def _find_all(
-    elements: List["Element"],
+def _make_match_func(
     matcher: Union[str, Pattern[str], MatchFunc, None] = None,
-) -> Iterator["Element"]:
-    """
-    Common code for `find_all()` in trees and elements.
-    """
-
+) -> MatchFunc:
     def match_all(x: "Element") -> bool:
         return True
 
@@ -248,13 +245,24 @@ def _find_all(
         return matcher.match(x.role)  # type: ignore
 
     if matcher is None:
-        match_func = match_all
+        return match_all
     elif isinstance(matcher, str):
-        match_func = match_tag
+        return match_tag
     elif isinstance(matcher, re.Pattern):
-        match_func = match_regex
+        return match_regex
     else:
-        match_func = matcher  # type: ignore
+        assert isinstance(matcher, MatchFunc)
+        return matcher
+
+
+def _find_all(
+    elements: List["Element"],
+    matcher: Union[str, Pattern[str], MatchFunc, None] = None,
+) -> Iterator["Element"]:
+    """
+    Common code for `find_all()` in trees and elements.
+    """
+    match_func = _make_match_func(matcher)
     elements.reverse()
     while elements:
         el = elements.pop()
@@ -765,3 +773,92 @@ class Tree(Findable):
     def doc(self) -> "Document":
         """Document with which this structure tree is associated."""
         return _deref_document(self._docref)
+
+
+class PageStructure(ABCSequence):
+    """
+    Sequence of structural content elements for a page or Form XObject.
+    """
+
+    parents: List[PDFObject]
+    elements: Dict[int, Element]
+
+    def __init__(self, pageref: PageRef, parents: PDFObject) -> None:
+        self.docref, _ = pageref
+        self.pageref = pageref
+        self.parents = list_value(parents)
+        self.elements = {}
+
+    @property
+    def doc(self) -> "Document":
+        """Get associated document if it exists."""
+        return _deref_document(self.docref)
+
+    def __len__(self) -> int:
+        return len(self.parents)
+
+    def __getitem__(self, idx: int) -> Union[Element, None]:
+        objref = self.parents[idx]
+        if objref is None:
+            return None
+        elif isinstance(objref, ObjRef):
+            # Elements can contain multiple marked content sections,
+            # so don't create redundant Element objects for these
+            if objref.objid not in self.elements:
+                self.elements[objref.objid] = Element.from_dict(
+                    self.doc, dict_value(objref)
+                )
+            return self.elements[objref.objid]
+        else:
+            LOG.warning(
+                "ParentTree element is not an indirect object reference: %r", objref
+            )
+            return None
+
+    def find_all(
+        self, matcher: Union[str, Pattern[str], MatchFunc, None] = None
+    ) -> Iterator["Element"]:
+        """Search up depth-first for matching elements in the parent tree.
+
+        The `matcher` argument is either a string, a regular
+        expression, or a function taking a `Element` and returning
+        `True` if the element matches, or `None` (default) to return
+        all descendants in depth-first order.
+
+        For compatibility with `pdfplumber` and consistent behaviour
+        across documents, names and regular expressions are matched
+        against the `role` attribute.  If you wish to match the "raw"
+        structure type from the `type` attribute, you can do this with
+        a matching function.
+
+        """
+        match_func = _make_match_func(matcher)
+        seen = set()
+        for element in self:
+            while element is not None:
+                if match_func(element):
+                    if element not in seen:
+                        yield element
+                    seen.add(element)
+                    break
+                # This isn't necessary but it makes mypy happy
+                if isinstance(element.parent, Tree):
+                    break
+                element = element.parent
+
+    def find(
+        self, matcher: Union[str, Pattern[str], MatchFunc, None] = None
+    ) -> Union["Element", None]:
+        """Find the first matching element in the parent tree.
+
+        The `matcher` argument is either a string or a regular
+        expression to be matched against the `role` attribute, or a
+        function taking a `Element` and returning `True` if the
+        element matches, or `None` (default) to just get the first
+        child element.
+
+        """
+        try:
+            return next(self.find_all(matcher))
+        except StopIteration:
+            return None

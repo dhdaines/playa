@@ -6,7 +6,7 @@
 - Support iteration over `playa.structure.ContentItem`
 - Maximize test coverage
 - Optimize marked content section access
-- TODO: Add method to complete parent tree for page
+- Add method to complete parent tree for page
 - TODO: Fail fast for incorrect stream lengths
 - TODO: Parse indirect objects with regex
 

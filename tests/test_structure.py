@@ -205,5 +205,17 @@ def test_element_hash():
                 assert element == element
 
 
+def test_page_structure() -> None:
+    with playa.open(TESTDIR / "pdf_structure.pdf") as pdf:
+        elements = set(pdf.structure.find_all("Table"))
+        assert len(elements) == 1
+        page = pdf.pages[0]
+        count = 0
+        for element in page.structure.find_all("Table"):
+            assert element in elements
+            count += 1
+        assert count == 1
+
+
 if __name__ == "__main__":
     test_specific_structure()

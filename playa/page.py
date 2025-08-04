@@ -41,13 +41,11 @@ from playa.pdftypes import (
     MATRIX_IDENTITY,
     ContentStream,
     Matrix,
-    ObjRef,
     PSLiteral,
     Point,
     Rect,
     dict_value,
     int_value,
-    list_value,
     literal_name,
     rect_value,
     resolve1,
@@ -361,7 +359,7 @@ class Page:
             may return a lazy object.
 
         """
-        from playa.structure import Element
+        from playa.structure import PageStructure
 
         if self._structmap is not None:
             return self._structmap
@@ -372,28 +370,12 @@ class Page:
         if parent_key is None:
             return self._structmap
         try:
-            parents = list_value(self.doc.structure.parent_tree[parent_key])
-        except IndexError:
-            return self._structmap
-        # Elements can contain multiple marked content sections, so
-        # don't create redundant Element objects for these
-        elements: Dict[int, Element] = {}
-        for objref in parents:
-            # It should always be null, or an indirect object reference
-            element: Union[None, Element] = None
-            if objref is None:
-                pass
-            elif isinstance(objref, ObjRef):
-                if objref.objid not in elements:
-                    elements[objref.objid] = Element.from_dict(
-                        self.doc, dict_value(objref)
-                    )
-                element = elements[objref.objid]
-            else:
-                log.warning(
-                    "ParentTree element is not an indirect object reference: %r", objref
-                )
-            self._structmap.append(element)
+            self._structmap = PageStructure(
+                self.pageref, self.doc.structure.parent_tree[parent_key]
+            )
+        except (IndexError, TypeError) as e:
+            log.warning("Invalid StructParents: %r (%s)", parent_key, e)
+            pass
         return self._structmap
 
     @property
