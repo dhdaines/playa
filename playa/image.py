@@ -1,6 +1,7 @@
 import logging
 import functools
 import itertools
+import struct
 from pathlib import Path
 from typing import BinaryIO, Callable, Tuple
 
@@ -142,6 +143,14 @@ def get_image_suffix_and_writer(
             width=width,
             height=height,
         )
+    elif ncomponents == 4:
+        return ".tif", functools.partial(
+            write_cmyk_tiff,
+            data=data,
+            bits=bits,
+            width=width,
+            height=height,
+        )
     else:
         LOG.warning(
             "Unsupported colorspace %s, writing as raw bytes", asobj(colorspace)
@@ -188,3 +197,147 @@ def write_jbig2(outfh: BinaryIO, data: bytes, jbig2globals: bytes) -> None:
         b"\x00"  # page_assoc: 0
         b"\x00\x00\x00\x00"  # data_length: 0
     )
+
+
+def write_cmyk_tiff(
+    outfh: BinaryIO, data: bytes, bits: int, width: int, height: int
+) -> None:
+    """
+    Writes a CMYK image to a TIFF file.
+    """
+    # 1. --- Rescale 1, 2, 4 bits to 8 bits ---
+    # 1, 2, 4 BitsPerSample for CMYK not allowed as of TIFF Revision 6.0
+    # Technically 16 BitsPerSample is also not allowed? but definitely exists
+    # e.g. PIL can open them (albeit as 8 bit images)
+    if bits in (1, 2, 4):
+        scale_factor = 255 // ((1 << bits) - 1)  # 1, 3, 15 divides 255
+        data = bytes(b * scale_factor for b in data)
+        bits = 8
+
+    # 2. --- TIFF Structure Constants & Calculations ---
+    byte_order = b"MM"  # Big-endian
+
+    # --- Tag Codes ---
+    TAG_IMAGE_WIDTH = 256
+    TAG_IMAGE_LENGTH = 257
+    TAG_BITS_PER_SAMPLE = 258
+    TAG_COMPRESSION = 259
+    TAG_PHOTOMETRIC_INTERP = 262
+    TAG_STRIP_OFFSETS = 273
+    TAG_SAMPLES_PER_PIXEL = 277
+    TAG_ROWS_PER_STRIP = 278
+    TAG_STRIP_BYTE_COUNTS = 279
+    TAG_X_RESOLUTION = 282
+    TAG_Y_RESOLUTION = 283
+    TAG_PLANAR_CONFIGURATION = 284
+    TAG_RESOLUTION_UNIT = 296
+
+    # --- Data Type Codes ---
+    TYPE_SHORT = 3
+    TYPE_LONG = 4
+    TYPE_RATIONAL = 5
+
+    num_tags = 13
+
+    # --- Calculate Offsets ---
+    # The file is laid out as: Header -> IFD -> Extra IFD Data -> Image Data
+    header_size = 8
+    # 2 for tag count, 12 per tag, 4 for next IFD offset
+    ifd_size = 2 + (num_tags * 12) + 4
+
+    # Offsets are relative to the start of the file
+    offset_extra_data_start = header_size + ifd_size
+    offset_bits_per_sample = offset_extra_data_start
+    # 4 samples * 2 bytes/SHORT for the BitsPerSample array
+    samples_per_pixel = 4
+    offset_x_resolution = offset_bits_per_sample + (samples_per_pixel * 2)
+    # 1 RATIONAL = 2 * 4 bytes
+    offset_y_resolution = offset_x_resolution + 8
+    offset_image_data = offset_y_resolution + 8
+
+    # 3. --- Write TIFF Header ---
+    # 8-byte header: Byte Order, TIFF Version (42), Offset to first IFD
+    outfh.write(struct.pack(">2sHI", byte_order, 42, header_size))
+
+    # 4. --- Write Image File Directory (IFD) ---
+    # First, the number of tags in the directory
+    outfh.write(struct.pack(">H", num_tags))
+
+    # Write each 12-byte tag entry.
+    # Format: Tag ID (2), Type (2), Count (4), Value/Offset (4)
+
+    # Tag: ImageWidth (TYPE_SHORT)
+    outfh.write(struct.pack(">HHII", TAG_IMAGE_WIDTH, TYPE_SHORT, 1, width << 16))
+
+    # Tag: ImageLength (Height) (TYPE_SHORT)
+    outfh.write(struct.pack(">HHII", TAG_IMAGE_LENGTH, TYPE_SHORT, 1, height << 16))
+
+    # Tag: BitsPerSample (points to data written later)
+    outfh.write(
+        struct.pack(
+            ">HHII",
+            TAG_BITS_PER_SAMPLE,
+            TYPE_SHORT,
+            samples_per_pixel,
+            offset_bits_per_sample,
+        )
+    )
+
+    # Tag: Compression (1 = no compression)
+    outfh.write(struct.pack(">HHII", TAG_COMPRESSION, TYPE_SHORT, 1, 1 << 16))
+
+    # Tag: PhotometricInterpretation (5 = CMYK)
+    outfh.write(struct.pack(">HHII", TAG_PHOTOMETRIC_INTERP, TYPE_SHORT, 1, 5 << 16))
+
+    # Tag: StripOffsets (points to the single strip of image data)
+    outfh.write(
+        struct.pack(">HHII", TAG_STRIP_OFFSETS, TYPE_LONG, 1, offset_image_data)
+    )
+
+    # Tag: SamplesPerPixel
+    outfh.write(
+        struct.pack(
+            ">HHII", TAG_SAMPLES_PER_PIXEL, TYPE_SHORT, 1, samples_per_pixel << 16
+        )
+    )
+
+    # Tag: RowsPerStrip (the whole image is one strip)
+    outfh.write(struct.pack(">HHII", TAG_ROWS_PER_STRIP, TYPE_LONG, 1, height))
+
+    # Tag: StripByteCounts (total size of the image data)
+    outfh.write(struct.pack(">HHII", TAG_STRIP_BYTE_COUNTS, TYPE_LONG, 1, len(data)))
+
+    # Tag: XResolution (points to rational data written later)
+    outfh.write(
+        struct.pack(">HHII", TAG_X_RESOLUTION, TYPE_RATIONAL, 1, offset_x_resolution)
+    )
+
+    # Tag: YResolution (points to rational data written later)
+    outfh.write(
+        struct.pack(">HHII", TAG_Y_RESOLUTION, TYPE_RATIONAL, 1, offset_y_resolution)
+    )
+
+    # Tag: PlanarConfiguration (1 = chunky format CMYKCMYK...)
+    outfh.write(struct.pack(">HHII", TAG_PLANAR_CONFIGURATION, TYPE_SHORT, 1, 1 << 16))
+
+    # Tag: ResolutionUnit (2 = inches)
+    outfh.write(struct.pack(">HHII", TAG_RESOLUTION_UNIT, TYPE_SHORT, 1, 2 << 16))
+
+    # Write the offset to the next IFD (0 means this is the last one)
+    outfh.write(struct.pack(">I", 0))
+
+    # 5. --- Write Data Pointed to by IFD ---
+    # BitsPerSample data: [bits, bits, bits, bits]
+    outfh.write(struct.pack(">HHHH", bits, bits, bits, bits))
+
+    # X and Y Resolution data (e.g., 72 DPI) as a RATIONAL (numerator, denominator)
+    dpi = 72
+    outfh.write(struct.pack(">II", dpi, 1))  # XResolution
+    outfh.write(struct.pack(">II", dpi, 1))  # YResolution
+
+    # 6. --- Write the Actual Pixel Data ---
+    # The current file position should now match `offset_image_data`
+    assert (
+        outfh.tell() == offset_image_data
+    ), f"File position mismatch: at {outfh.tell()}, expected {offset_image_data}"
+    outfh.write(data)
