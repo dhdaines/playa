@@ -7,6 +7,7 @@
 - Greatly increase test coverage
 - Greatly optimize marked content section access
 - Add `find` and `find_all` methods to `page.structure`
+- Extract CMYK images (except JPEG/JPEG2000) as TIFF
 
 ## PLAYA 0.6.6: 2025-08-01
 

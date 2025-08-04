@@ -6,10 +6,11 @@ There are already too many PDF libraries, unfortunately none of which
 does everything that everybody wants it to do, and we probably don't
 need another one. It is not recommended that you use this library for
 anything at all, but if you were going to use it for something, it
-would be specifically one of these things and nothing else:
+might be one of these things, which you may currently be doing with
+pdfminer.six, for instance:
 
 1. Accessing the document catalog, page tree, structure tree, outline,
-   content streams, cross-reference table, XObjects, fonts,
+   content streams, cross-reference table, XObjects, fonts, images,
    annotations, and other low-level PDF metadata.
 2. Obtaining the absolute position and attributes of every character,
    line, path, and image in every page of a PDF.
@@ -25,7 +26,7 @@ API from pdfminer.six but without the
 `NumerousLines.of(FrustratingBoilerplate())` that it takes just get
 the g\*sh-d\*rned layout out of a PDF.  (it does other things, too)
 
-The purpose of PLAYA is to provide an efficent, parallel and
+The purpose of PLAYA is to provide a robust, efficent, parallel and
 parallelizable, pure-Python and Pythonic (for its author's definition
 of the term), lazy interface to the internals of PDF files.
 
@@ -47,7 +48,8 @@ metadata):
     playa --text fascinating-research-paper.pdf
     playa --text-objects colorful-presentation.pdf
 
-Or images, in JPEG and PNM format (may not work for all images):
+Or images, in JPEG and PNM (or sometimes TIFF) format (may not work
+for all images):
 
     playa --images imagedir splashy-resume.pdf
 
