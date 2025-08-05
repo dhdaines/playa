@@ -16,15 +16,15 @@ pdfminer.six, for instance:
    line, path, and image in every page of a PDF.
    
 Note that **P**LAYA Ain't a **LAY**out **A**nalyzer, because [layout
-analysis](https://pdfminersix.readthedocs.io/en/latest/topic/converting_pdf_to_text.html)
+analysis](https://pdfminersix.readthedocs.io/en/latest/topic/converting_pdf_to_text.html#layout-analysis-algorithm)
 as done by [pdfminer.six](https://github.com/pdfminer/pdfminer.six) is
 Heuristic and Not Lazy.  But never fear!  You can now use
 [PAVÉS](https://github.com/dhdaines/paves?tab=readme-ov-file#working-in-the-pdf-mine)
-which implements exactly the
-[`PDFLayoutAnalyzer`](https://github.com/pdfminer/pdfminer.six/blob/master/pdfminer/converter.py#L65)
-API from pdfminer.six but without the
-`NumerousLines.of(FrustratingBoilerplate())` that it takes just get
-the g\*sh-d\*rned layout out of a PDF.  (it does other things, too)
+which implements the layout analysis algorithm and the
+[`pdfminer.layout`](https://github.com/pdfminer/pdfminer.six/blob/master/pdfminer/layout.py)
+API, but without the `NumerousLines.of(FrustratingBoilerplate())` that
+it takes just get the g\*sh-d\*rned layout out of a PDF.  (it does
+other things, too)
 
 The purpose of PLAYA is to provide a robust, efficent, parallel and
 parallelizable, pure-Python and Pythonic (for its author's definition
