@@ -1567,8 +1567,8 @@ class CFFFontProgram:
 
     def getdict(
         self, data: bytes
-    ) -> Dict[Union[tuple[int, int], int], List[Union[float, int]]]:
-        d: Dict[Union[tuple[int, int], int], List[Union[float, int]]] = {}
+    ) -> Dict[Union[Tuple[int, int], int], List[Union[float, int]]]:
+        d: Dict[Union[Tuple[int, int], int], List[Union[float, int]]] = {}
         fp = BytesIO(data)
         stack: List[Union[float, int]] = []
         while 1:
