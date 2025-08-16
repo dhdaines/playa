@@ -47,6 +47,7 @@ from playa.pdftypes import (
     dict_value,
     int_value,
     literal_name,
+    num_value,
     rect_value,
     resolve1,
     stream_value,
@@ -140,7 +141,8 @@ class Page:
                     self.attrs["CropBox"],
                 )
 
-        rotate = int_value(self.attrs.get("Rotate", 0))
+        # This is supposed to be an int, but be robust to bogus PDFs where it isn't
+        rotate = int(num_value(self.attrs.get("Rotate", 0)))
         self.set_initial_ctm(space, rotate)
 
         contents = resolve1(self.attrs.get("Contents"))
