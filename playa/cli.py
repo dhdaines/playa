@@ -221,7 +221,7 @@ def extract_stream(doc: Document, args: argparse.Namespace) -> None:
     args.outfile.buffer.write(stream.buffer)
 
 
-def resolve_many(x: PDFObject, default: PDFObject = None) -> PDFObject:
+def resolve_many(x: PDFObject) -> PDFObject:
     """Resolves many indirect object references inside the given object.
 
     Because there may be circular references (and in the case of a
@@ -235,12 +235,18 @@ def resolve_many(x: PDFObject, default: PDFObject = None) -> PDFObject:
 
     """
     danger = set()
-    to_visit: Deque[Tuple[Any, Any, Any]] = deque([([x], 0, x)])
+    objs = [x]
+    to_visit: Deque[Tuple[Any, Any, Any]] = deque([(objs, 0, x)])
     while to_visit:
         (parent, key, obj) = to_visit.popleft()
-        while isinstance(obj, ObjRef) and obj not in danger:
-            danger.add(obj)
-            obj = obj.resolve(default=default)
+        if key in ("Parent", "P"):  # Special-case these to avoid nonsense
+            continue
+        if isinstance(obj, ObjRef):
+            if obj in danger:
+                continue
+            while isinstance(obj, ObjRef):
+                danger.add(obj)
+                obj = obj.resolve()
         parent[key] = obj
         if isinstance(obj, list):
             to_visit.extend((obj, idx, v) for idx, v in enumerate(obj))
@@ -248,13 +254,25 @@ def resolve_many(x: PDFObject, default: PDFObject = None) -> PDFObject:
             to_visit.extend((obj, k, v) for k, v in obj.items())
         elif isinstance(obj, ContentStream):
             to_visit.extend((obj.attrs, k, v) for k, v in obj.attrs.items())
-    return x
+    return objs[0]
 
 
 def extract_catalog(doc: Document, args: argparse.Namespace) -> None:
     """Extract catalog data."""
+    # We have to use the *reference* to the catalog because some evil
+    # PDFs will make a backreference to it somewhere
+    catalog: Union[None, PDFObject] = None
+    for xref in doc.xrefs:
+        trailer = xref.trailer
+        if not trailer:
+            continue
+        if "Root" in trailer and resolve1(trailer["Root"]) is not None:
+            catalog = trailer["Root"]
+            break
+    if catalog is None:
+        raise RuntimeError("No valid catalog found")
     json.dump(
-        resolve_many(doc.catalog),
+        resolve_many(catalog),
         args.outfile,
         indent=2,
         ensure_ascii=False,
