@@ -22,10 +22,21 @@ def test_cli_metadata(path: Path):
         try:
             # FIXME: Verify that output is valid JSON
             main(["--password", password, "--non-interactive", str(path)])
-            main(["--password", password, "--non-interactive", "--outline", str(path)])
-            main(
-                ["--password", password, "--non-interactive", "--structure", str(path)]
-            )
+        except PDFPasswordIncorrect:
+            pass
+        except PDFEncryptionError:
+            pytest.skip("cryptography package not installed")
+
+
+@pytest.mark.parametrize("path", ALLPDFS, ids=str)
+def test_cli_catalog(path: Path):
+    if path.name in XFAILS:
+        pytest.xfail("Intentionally corrupt file: %s" % path.name)
+    passwords = PASSWORDS.get(path.name, [""])
+    for password in passwords:
+        try:
+            # FIXME: Verify that output is valid JSON
+            main(["--password", password, "--catalog", "--non-interactive", str(path)])
         except PDFPasswordIncorrect:
             pass
         except PDFEncryptionError:
@@ -71,8 +82,29 @@ def test_cli_text(path: Path):
     passwords = PASSWORDS.get(path.name, [""])
     for password in passwords:
         try:
-            # FIXME: Verify that output is valid JSON
             main(["--password", password, "--non-interactive", "--text", str(path)])
+        except PDFPasswordIncorrect:
+            pass
+        except PDFEncryptionError:
+            pytest.skip("cryptography package not installed")
+
+
+@pytest.mark.parametrize("path", ALLPDFS, ids=str)
+def test_cli_content_objects(path: Path):
+    if path.name in XFAILS:
+        pytest.xfail("Intentionally corrupt file: %s" % path.name)
+    passwords = PASSWORDS.get(path.name, [""])
+    for password in passwords:
+        try:
+            main(
+                [
+                    "--password",
+                    password,
+                    "--non-interactive",
+                    "--content-objects",
+                    str(path),
+                ]
+            )
         except PDFPasswordIncorrect:
             pass
         except PDFEncryptionError:
