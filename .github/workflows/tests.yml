@@ -27,8 +27,8 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.9"
+          python-version: "3.8"
       - name: Install Hatch
         uses: pypa/hatch@install
       - name: Run tests
-        run: hatch test --cover -py 3.9 --full-trace
+        run: hatch test --cover -py 3.8 --full-trace

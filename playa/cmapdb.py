@@ -9,7 +9,6 @@ More information is available on:
 
 """
 
-import functools
 import gzip
 import logging
 import os
@@ -39,6 +38,14 @@ from playa.parser import (
     literal_name,
 )
 from playa.utils import choplist
+
+try:
+    from functools import cache
+except ImportError:
+    # Simply do not cache when using Python 3.8
+    def cache(func):  # type: ignore
+        return func
+
 
 log = logging.getLogger(__name__)
 
@@ -254,7 +261,7 @@ KEYWORD_ENDNOTDEFRANGE = KWD(b"endnotdefrange")
 
 # These are generally characters or short strings (glyph clusters) so
 # caching them makes sense (they repeat themselves often)
-@functools.cache
+@cache
 def decode_utf16_char(utf16: bytes) -> str:
     return utf16.decode("UTF-16BE", "ignore")
 

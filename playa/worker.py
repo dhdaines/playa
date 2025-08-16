@@ -16,7 +16,7 @@ PageRef = Tuple[DocumentRef, int]
 # A global PDF object used in worker processes
 __pdf: Union["Document", None] = None
 # Registry of documents which have workers
-__bosses: weakref.WeakValueDictionary[int, "Document"] = weakref.WeakValueDictionary()
+__bosses: weakref.WeakValueDictionary = weakref.WeakValueDictionary()
 # Numeric id of the document in the boss process (will show up instead
 # of weak references when serialized, gets looked up in _bosses)
 GLOBAL_DOC: int = 0

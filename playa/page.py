@@ -56,7 +56,7 @@ from playa.worker import PageRef, _deref_document, _deref_page, _ref_document, _
 
 if TYPE_CHECKING:
     from playa.document import Document
-    from playa.structure import Element, PageStructure
+    from playa.structure import PageStructure
 
 log = logging.getLogger(__name__)
 
