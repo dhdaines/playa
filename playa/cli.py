@@ -413,9 +413,13 @@ def _extract_element(el: Element, indent: int, outfh: TextIO) -> bool:
     ws = " " * indent
     ss = "  "
 
-    text = json.dumps(
-        asobj_structelement(el, recurse=False), indent=2, ensure_ascii=False
-    )
+    try:
+        text = json.dumps(
+            asobj_structelement(el, recurse=False), indent=2, ensure_ascii=False
+        )
+    except KeyError as e:
+        LOG.warning("Ignoring malformed structure element with no %s: %r", e, el.props)
+        return False
     brace = text.rindex("}")
     print(textwrap.indent(text[:brace].strip(), ws), end="", file=outfh)
     print(f',\n{ws}{ss}"children": [', file=outfh)
