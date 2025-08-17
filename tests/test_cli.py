@@ -16,7 +16,7 @@ from tests.data import ALLPDFS, PASSWORDS, XFAILS, TESTDIR
 @pytest.mark.parametrize("path", ALLPDFS, ids=str)
 def test_cli_metadata(path: Path):
     if path.name in XFAILS:
-        pytest.xfail("Intentionally corrupt file: %s" % path.name)
+        pytest.xfail("Expected failure: %s" % path.name)
     passwords = PASSWORDS.get(path.name, [""])
     for password in passwords:
         try:
@@ -31,7 +31,7 @@ def test_cli_metadata(path: Path):
 @pytest.mark.parametrize("path", ALLPDFS, ids=str)
 def test_cli_catalog(path: Path):
     if path.name in XFAILS:
-        pytest.xfail("Intentionally corrupt file: %s" % path.name)
+        pytest.xfail("Expected failure: %s" % path.name)
     passwords = PASSWORDS.get(path.name, [""])
     for password in passwords:
         try:
@@ -46,7 +46,7 @@ def test_cli_catalog(path: Path):
 @pytest.mark.parametrize("path", ALLPDFS, ids=str)
 def test_cli_outline(path: Path):
     if path.name in XFAILS:
-        pytest.xfail("Intentionally corrupt file: %s" % path.name)
+        pytest.xfail("Expected failure: %s" % path.name)
     passwords = PASSWORDS.get(path.name, [""])
     for password in passwords:
         try:
@@ -61,7 +61,7 @@ def test_cli_outline(path: Path):
 @pytest.mark.parametrize("path", ALLPDFS, ids=str)
 def test_cli_structure(path: Path):
     if path.name in XFAILS:
-        pytest.xfail("Intentionally corrupt file: %s" % path.name)
+        pytest.xfail("Expected failure: %s" % path.name)
     passwords = PASSWORDS.get(path.name, [""])
     for password in passwords:
         try:
@@ -78,7 +78,7 @@ def test_cli_structure(path: Path):
 @pytest.mark.parametrize("path", ALLPDFS, ids=str)
 def test_cli_text(path: Path):
     if path.name in XFAILS:
-        pytest.xfail("Intentionally corrupt file: %s" % path.name)
+        pytest.xfail("Expected failure: %s" % path.name)
     passwords = PASSWORDS.get(path.name, [""])
     for password in passwords:
         try:
@@ -92,7 +92,7 @@ def test_cli_text(path: Path):
 @pytest.mark.parametrize("path", ALLPDFS, ids=str)
 def test_cli_content_objects(path: Path):
     if path.name in XFAILS:
-        pytest.xfail("Intentionally corrupt file: %s" % path.name)
+        pytest.xfail("Expected failure: %s" % path.name)
     passwords = PASSWORDS.get(path.name, [""])
     for password in passwords:
         try:
@@ -114,7 +114,7 @@ def test_cli_content_objects(path: Path):
 @pytest.mark.parametrize("path", ALLPDFS, ids=str)
 def test_cli_images(path: Path):
     if path.name in XFAILS:
-        pytest.xfail("Intentionally corrupt file: %s" % path.name)
+        pytest.xfail("Expected failure: %s" % path.name)
     passwords = PASSWORDS.get(path.name, [""])
     for password in passwords:
         try:
@@ -139,7 +139,7 @@ def test_cli_images(path: Path):
 @pytest.mark.parametrize("path", ALLPDFS, ids=str)
 def test_cli_fonts(path: Path):
     if path.name in XFAILS:
-        pytest.xfail("Intentionally corrupt file: %s" % path.name)
+        pytest.xfail("Expected failure: %s" % path.name)
     passwords = PASSWORDS.get(path.name, [""])
     for password in passwords:
         try:

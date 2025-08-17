@@ -65,6 +65,13 @@ XFAILS = {
     "SFAA_Japanese.pdf",
     "issue2829.pdf",
     "issue11526.pdf",
+    # Unsupported predictor value 255 (invalid?)
+    "issue8895.pdf",
+    # 16-bit not supported by TIFF predictor
+    "issue6289.pdf",
+    # 1-bit not supported by TIFF predictor
+    "issue6071.pdf",
+    # 4-bit not supported by PNG predictor
 }
 # We know pdfminer.six gives different output for these and we don't
 # care (generally because of PLAYA's better rectangle detection and
