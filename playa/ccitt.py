@@ -413,6 +413,9 @@ class CCITTG4Parser(BitParser):
             return UNCOMPRESSED
         elif mode == "e":  # EOL, just ignore this
             return MODE
+        elif isinstance(mode, str) and mode[0] == "x":
+            LOG.warning("Skipping unsupported code: %s (%s)", mode, self.code_bits)
+            return MODE
         elif isinstance(mode, int):  # twoDimVert[LR]\d
             self._do_vertical(mode)
             self._flush_line()
@@ -688,6 +691,9 @@ class CCITTFaxDecoderMixed(CCITTFaxDecoder):
         elif mode == "e":
             self._accept = self._parse_next2d
             return NEXT2D
+        elif isinstance(mode, str) and mode[0] == "x":
+            LOG.warning("Skipping unsupported code: %s (%s)", mode, self.code_bits)
+            return MODE
         elif isinstance(mode, int):  # twoDimVert[LR]\d
             self._do_vertical(mode)
             self._flush_line()
