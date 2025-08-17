@@ -514,27 +514,41 @@ def get_images(page: Page, imgdir: Path) -> List[Tuple[Path, Image]]:
     for idx, img in enumerate(page.flatten(ImageObject)):
         if img.xobjid is None:
             text_bbox = ",".join(str(round(x)) for x in img.bbox)
-            imgname = f"page{page.page_idx + 1}-{idx}-inline-{text_bbox}"
+            imgid = f"inline-{text_bbox}"
         else:
             imgid = re.sub(r"\W", "", img.xobjid)
-            imgname = f"page{page.page_idx + 1}-{idx}-{imgid}"
+        imgname = f"page{page.page_idx + 1}-{idx}-{imgid}"
         imgpath = imgdir / imgname
-        images.append((get_one_image(img.stream, imgpath), asobj(img)))
+        try:
+            images.append((get_one_image(img.stream, imgpath), asobj(img)))
+        except Exception as e:
+            LOG.warning("Failed to extract image %s: %s", imgid, e)
         mask = resolve1(img.get("Mask"))
         if isinstance(mask, ContentStream):
             imgpath = imgdir / f"{imgname}-mask"
-            images.append((get_one_image(mask, imgpath), asobj(mask)))
+            try:
+                images.append((get_one_image(mask, imgpath), asobj(mask)))
+            except Exception as e:
+                LOG.warning("Failed to extract mask %s: %s", imgid, e)
         smask = resolve1(img.get("SMask"))
         if isinstance(smask, ContentStream):
             imgpath = imgdir / f"{imgname}-smask"
-            images.append((get_one_image(smask, imgpath), asobj(smask)))
+            try:
+                images.append((get_one_image(smask, imgpath), asobj(smask)))
+            except Exception as e:
+                LOG.warning("Failed to extract smask %s: %s", imgid, e)
         # In theory this exists, in practice, very unsure
         alts = resolve1(img.get("Alternates"))
         if isinstance(alts, list):
             for idx, alt in enumerate(alts):
                 if isinstance(alt, ContentStream):
                     imgpath = imgdir / f"{imgname}-alt{idx}"
-                    images.append((get_one_image(alt, imgpath), asobj(alt)))
+                    try:
+                        images.append((get_one_image(alt, imgpath), asobj(alt)))
+                    except Exception as e:
+                        LOG.warning(
+                            "Failed to extract alternate %d for %s: %s", idx, imgid, e
+                        )
 
     return images
 
