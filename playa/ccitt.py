@@ -346,6 +346,7 @@ class BitParser:
         self._bits.append(bit)
         assert isinstance(self._node, list)
         v = self._node[bit]
+        # LOG.debug("bits: %s v: %r", self.code_bits, v)
         self._pos += 1
         if isinstance(v, list):
             self._node = v
@@ -393,8 +394,7 @@ class CCITTG4Parser(BitParser):
                 self._bits.clear()
             except InvalidData:
                 LOG.warning("Unknown %s code: %r", self.state_name, self.code_bits)
-                self._node = self._state.root
-                self._bits.clear()
+                break
             except EOFB:
                 break
 
@@ -606,14 +606,22 @@ class CCITTFaxDecoder1D(CCITTFaxDecoder):
     def feedbytes(self, data: bytes) -> None:
         for byte in data:
             try:
+                # bits = "".join(
+                # "1" if (byte & m) else "0" for m in (128, 64, 32, 16, 8, 4, 2, 1)
+                # )
+                # LOG.debug("byte: %s", bits)
                 for m in (128, 64, 32, 16, 8, 4, 2, 1):
                     self._parse_bit(byte & m)
             except ByteSkip:
-                self._accept = self._parse_horiz1
+                self._accept = self._parse_horiz
                 self._n1 = 0
                 self._state = WHITE if self._color else BLACK
+                self._node = self._state.root
+                self._bits.clear()
+                # LOG.debug("=> ByteSkip => %s", self.state_name)
             except InvalidData:
                 LOG.warning("Unknown %s code: %r", self.state_name, self.code_bits)
+                break
             except EOFB:
                 break
 
