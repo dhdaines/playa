@@ -1,3 +1,9 @@
+## PLAYA 0.7.1: 2025-08-16
+- Tolerate non-integer values for page rotation
+- Restore Python 3.8 compatibility (oops!)
+- Restore robustness to broken structure elements
+- Correct handling of byte alignment in CCITT decoding fixing an endless loop
+
 ## PLAYA 0.7.0: 2025-08-04
 
 - Remove long-deprecated functions
