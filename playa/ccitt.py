@@ -351,7 +351,9 @@ class BitParser:
             self._node = v
         else:
             assert self._accept is not None
+            # LOG.debug("%s code: %s", self.state_name, self.code_bits)
             self._state = self._accept(v)
+            # LOG.debug("=> %s", self.state_name)
             self._node = self._state.root
             self._bits.clear()
 
@@ -377,13 +379,22 @@ class CCITTG4Parser(BitParser):
     def feedbytes(self, data: bytes) -> None:
         for byte in data:
             try:
+                # bits = "".join(
+                # "1" if (byte & m) else "0" for m in (128, 64, 32, 16, 8, 4, 2, 1)
+                # )
+                # LOG.debug("byte: %s", bits)
                 for m in (128, 64, 32, 16, 8, 4, 2, 1):
                     self._parse_bit(byte & m)
             except ByteSkip:
+                # LOG.debug("=> ByteSkip => MODE")
                 self._accept = self._parse_mode
                 self._state = MODE
+                self._node = self._state.root
+                self._bits.clear()
             except InvalidData:
                 LOG.warning("Unknown %s code: %r", self.state_name, self.code_bits)
+                self._node = self._state.root
+                self._bits.clear()
             except EOFB:
                 break
 
