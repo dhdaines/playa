@@ -3,6 +3,7 @@
 - Restore Python 3.8 compatibility (oops!)
 - Restore robustness to broken structure elements
 - Correct handling of byte alignment in CCITT decoding fixing an endless loop
+- Be more robust when extracting images
 
 ## PLAYA 0.7.0: 2025-08-04
 
