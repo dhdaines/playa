@@ -67,6 +67,8 @@ XFAILS = {
     "issue11526.pdf",
     # Excessively huge indexed image takes forever
     "issue17190_1.pdf",
+    # Totally broken pdf, no catalog to be found
+    "issue-154.pdf",
 }
 # We know pdfminer.six gives different output for these and we don't
 # care (generally because of PLAYA's better rectangle detection and
