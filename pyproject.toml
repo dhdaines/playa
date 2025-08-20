@@ -112,6 +112,17 @@ extra-dependencies = [ "pydantic > 2" ]
 [tool.hatch.envs.notebooks]
 extra-dependencies = [ "paves", "jupyterlab" ]
 
+[tool.hatch.build.hooks.mypyc]
+dependencies = ["hatch-mypyc", "cryptography"]
+enable-by-default = false
+
+[tool.hatch.build.targets.wheel.hooks.mypyc]
+include = [
+    "playa/ccitt.py",
+    "playa/image.py",
+    "playa/utils.py",
+]
+
 [tool.coverage.run]
 omit = [ "tests/*" ]
 
