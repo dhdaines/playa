@@ -267,7 +267,7 @@ class ContentObject:
         return self
 
     @property
-    def object_type(self):
+    def object_type(self) -> str:
         """Type of this object as a string, e.g. "text", "path", "image"."""
         name = self.__class__.__name__
         return name[: -len("Object")].lower()
@@ -1120,7 +1120,7 @@ class TextObject(ContentObject):
         return _font_size(self.matrix, vert)
 
     @property
-    def scaling_matrix(self):
+    def scaling_matrix(self) -> Matrix:
         horizontal_scaling = self.gstate.scaling * 0.01
         fontsize = self.gstate.fontsize
         return (

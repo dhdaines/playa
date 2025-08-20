@@ -333,11 +333,11 @@ class BitParser:
     _state: BitParserTree
     _node: BitParserNode
     _accept: Callable[[BitParserNode], BitParserTree]
-    _bits = bytearray()
 
     def __init__(self) -> None:
         self._pos = 0
         self._node = None
+        self._bits = bytearray()
 
     def _parse_bit(self, x: int) -> None:
         if self._node is None:
