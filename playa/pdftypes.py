@@ -369,7 +369,7 @@ def matrix_value(o: PDFObject) -> Matrix:
         raise TypeError("Matrix contains non-numeric values")
 
 
-def decompress_corrupted(data: bytes) -> bytes:
+def decompress_corrupted(data: bytes, bufsiz: int = 4096) -> bytes:
     """Decompress (possibly with data loss) a corrupted FlateDecode stream."""
     d = zlib.decompressobj()
     size = len(data)
@@ -378,7 +378,7 @@ def decompress_corrupted(data: bytes) -> bytes:
     try:
         while pos < size:
             # Skip the CRC checksum unless it's the only thing left
-            end = min(size - 3, pos + 4096)
+            end = min(size - 3, pos + bufsiz)
             if end == pos:
                 end = size
             result_str += d.decompress(data[pos:end])

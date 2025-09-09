@@ -11,6 +11,7 @@ from playa.pdftypes import (
     ObjRef,
     bool_value,
     decipher_all,
+    decompress_corrupted,
     dict_value,
     float_value,
     keyword_name,
@@ -208,7 +209,8 @@ def test_filters() -> None:
 
 
 def test_decompress_corrupted(caplog) -> None:
-    """Verify that we can recover from missing CRC or truncated flate streams."""
+    """Verify that we can recover from missing CRC, truncated, or
+    corrupted flate streams."""
     rawdata = (
         b'x\x9c\x0b\xf1\x0fq\xf4Qp\xf4sQ\x08\r\tq\rR\xf0\xf3\xf7\x0bv\x05"\x00R'
         b"\xe8\x06\xb5"
@@ -223,6 +225,11 @@ def test_decompress_corrupted(caplog) -> None:
     # Remove the CRC
     stream = ContentStream({"Filter": LIT("FlateDecode")}, rawdata=rawdata[:-3])
     assert stream.buffer == b"TOTAL AND UTTER NONSENSE"
+    # Truncate the stream
+    stream = ContentStream({"Filter": LIT("FlateDecode")}, rawdata=rawdata[:-8])
+    caplog.clear()
+    assert stream.buffer == b"TOTAL AND UTTER NON"
+    assert "incomplete" in caplog.text
     # Remove some random bytes (no error as the data is still a valid
     # flate stream, just the CRC is wrong)
     stream = ContentStream(
@@ -237,3 +244,10 @@ def test_decompress_corrupted(caplog) -> None:
     caplog.clear()
     assert stream.buffer == b""
     assert "Data loss" in caplog.text
+    # Test the adjustible buffer size
+    assert decompress_corrupted(bogusdata) == b""
+    assert decompress_corrupted(bogusdata, 1) == b"TOTAHdd"
+    assert decompress_corrupted(bogusdata, 2) == b"TOTAHdd"
+    assert decompress_corrupted(bogusdata, 4) == b"TOTAHdd"
+    assert decompress_corrupted(bogusdata, 8) == b"TOTAH"
+    assert decompress_corrupted(bogusdata, 16) == b""
