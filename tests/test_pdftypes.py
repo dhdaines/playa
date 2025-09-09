@@ -215,17 +215,21 @@ def test_decompress_corrupted(caplog) -> None:
         b'x\x9c\x0b\xf1\x0fq\xf4Qp\xf4sQ\x08\r\tq\rR\xf0\xf3\xf7\x0bv\x05"\x00R'
         b"\xe8\x06\xb5"
     )
-    # Verify that it will fail if we remove the trailer
+    # Verify that decompress_corrupted works even on uncorrupted streams
+    assert decompress_corrupted(rawdata) == b"TOTAL AND UTTER NONSENSE"
+    # Or if the CRC is partially missing
+    assert decompress_corrupted(rawdata[:-1]) == b"TOTAL AND UTTER NONSENSE"
+    # Verify that decode will fail if we remove the trailer in strict mode
     stream = ContentStream({"Filter": LIT("FlateDecode")}, rawdata=rawdata[:-5])
     with pytest.raises(ValueError):
         stream.decode(strict=True)
-    # Remove the trailer
+    # Remove the trailer in non-strict mode
     stream = ContentStream({"Filter": LIT("FlateDecode")}, rawdata=rawdata[:-5])
     assert stream.buffer == b"TOTAL AND UTTER NONSENSE"
-    # Remove the CRC
+    # Remove the CRC in non-strict mode
     stream = ContentStream({"Filter": LIT("FlateDecode")}, rawdata=rawdata[:-3])
     assert stream.buffer == b"TOTAL AND UTTER NONSENSE"
-    # Truncate the stream
+    # Truncate the stream in non-strict mode
     stream = ContentStream({"Filter": LIT("FlateDecode")}, rawdata=rawdata[:-8])
     caplog.clear()
     assert stream.buffer == b"TOTAL AND UTTER NON"
