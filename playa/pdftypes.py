@@ -487,8 +487,8 @@ class ContentStream:
                 try:
                     data = zlib.decompress(data)
                 except zlib.error as e:
-                    error_msg = f"Invalid zlib bytes: {e!r}, {data!r}"
                     if strict:
+                        error_msg = f"Invalid zlib bytes: {e!r}, {data!r}"
                         raise ValueError(error_msg)
                     else:
                         logger.warning("%s: %r", e, self)
