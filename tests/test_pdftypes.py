@@ -205,3 +205,35 @@ def test_filters() -> None:
     )
     with pytest.raises(NotImplementedError):
         stream.decode()
+
+
+def test_decompress_corrupted(caplog) -> None:
+    """Verify that we can recover from missing CRC or truncated flate streams."""
+    rawdata = (
+        b'x\x9c\x0b\xf1\x0fq\xf4Qp\xf4sQ\x08\r\tq\rR\xf0\xf3\xf7\x0bv\x05"\x00R'
+        b"\xe8\x06\xb5"
+    )
+    # Verify that it will fail if we remove the trailer
+    stream = ContentStream({"Filter": LIT("FlateDecode")}, rawdata=rawdata[:-5])
+    with pytest.raises(ValueError):
+        stream.decode(strict=True)
+    # Remove the trailer
+    stream = ContentStream({"Filter": LIT("FlateDecode")}, rawdata=rawdata[:-5])
+    assert stream.buffer == b"TOTAL AND UTTER NONSENSE"
+    # Remove the CRC
+    stream = ContentStream({"Filter": LIT("FlateDecode")}, rawdata=rawdata[:-3])
+    assert stream.buffer == b"TOTAL AND UTTER NONSENSE"
+    # Remove some random bytes (no error as the data is still a valid
+    # flate stream, just the CRC is wrong)
+    stream = ContentStream(
+        {"Filter": LIT("FlateDecode")},
+        rawdata=(rawdata[:5] + rawdata[7:10] + rawdata[11:]),
+    )
+    assert stream.buffer == b"TOT AL UTTER NONSENSE"
+    # Insert some random bytes, now we will lose data for real
+    bogusdata = bytearray(rawdata)
+    bogusdata[7:10] = b"HI!"
+    stream = ContentStream({"Filter": LIT("FlateDecode")}, rawdata=bogusdata)
+    caplog.clear()
+    assert stream.buffer == b""
+    assert "Data loss" in caplog.text

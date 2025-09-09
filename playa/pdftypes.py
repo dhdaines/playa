@@ -1,4 +1,3 @@
-import io
 import logging
 import zlib
 from typing import (
@@ -371,23 +370,28 @@ def matrix_value(o: PDFObject) -> Matrix:
 
 
 def decompress_corrupted(data: bytes) -> bytes:
-    """Called on some data that can't be properly decoded because of CRC checksum
-    error. Attempt to decode it skipping the CRC.
-    """
+    """Decompress (possibly with data loss) a corrupted FlateDecode stream."""
     d = zlib.decompressobj()
-    f = io.BytesIO(data)
+    size = len(data)
     result_str = b""
-    buffer = f.read(1)
-    i = 0
+    pos = end = 0
     try:
-        while buffer:
-            result_str += d.decompress(buffer)
-            buffer = f.read(1)
-            i += 1
-    except zlib.error:
+        while pos < size:
+            # Skip the CRC checksum unless it's the only thing left
+            end = min(size - 3, pos + 4096)
+            if end == pos:
+                end = size
+            result_str += d.decompress(data[pos:end])
+            pos = end
+            logger.debug(
+                "decompress_corrupted: %d bytes in, %d bytes out", pos, len(result_str)
+            )
+    except zlib.error as e:
         # Let the error propagates if we're not yet in the CRC checksum
-        if i < len(data) - 3:
-            logger.warning("Data-loss while decompressing corrupted data")
+        if pos != size - 3:
+            logger.warning(
+                "Data loss in decompress_corrupted: %s: bytes %d:%d", e, pos, end
+            )
     return result_str
 
 
@@ -482,11 +486,12 @@ class ContentStream:
                 # will get errors if the document is encrypted.
                 try:
                     data = zlib.decompress(data)
-
                 except zlib.error as e:
+                    error_msg = f"Invalid zlib bytes: {e!r}, {data!r}"
                     if strict:
-                        error_msg = f"Invalid zlib bytes: {e!r}, {data!r}"
                         raise ValueError(error_msg)
+                    else:
+                        logger.warning("%s: %r", e, self)
                     data = decompress_corrupted(data)
 
             elif f in LITERALS_LZW_DECODE:
