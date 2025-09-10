@@ -74,19 +74,36 @@ testpaths = [ "tests" ]
 markers = [ "contrib", "thirdparty" ]
 
 [tool.hatch.envs.hatch-test]
-extra-dependencies = [ "cryptography", "pdfminer.six" ]
+extra-dependencies = [ "cryptography" ]
 parallel = true
 
 [tool.hatch.envs.default]
-dependencies = [ "cryptography", "pytest", "pytest-xdist", "pdfminer.six" ]
+dependencies = [ "cryptography", "pytest", "pytest-xdist" ]
 
-[tool.hatch.envs.default.scripts]
+[tool.hatch.envs.benchmark]
+# Do not use editable install because of mypyc's .so droppings
+dev-mode = false
+extra-dependencies = [ "pdfminer.six" ]
+
+[tool.hatch.envs.benchmark.scripts]
 bench = [
     "python benchmarks/parser.py",
     "python benchmarks/converter.py",
     "python benchmarks/text.py",
     "python benchmarks/objects.py",
+    "python benchmarks/ccitt_decode.py",
+    "python benchmarks/marked_content.py",
+    "python benchmarks/parallel.py",
+    "python benchmarks/structure.py",
 ]
+
+[tool.hatch.envs.benchmark-mypyc]
+# Do not use editable install (but we get .so droppings anyway)
+dev-mode = false
+template = "benchmark"
+
+[tool.hatch.envs.benchmark-mypyc.env-vars]
+HATCH_BUILD_HOOK_ENABLE_MYPYC = "1"
 
 [tool.hatch.envs.docs]
 dependencies = [
@@ -112,11 +129,10 @@ extra-dependencies = [ "pydantic > 2" ]
 [tool.hatch.envs.notebooks]
 extra-dependencies = [ "paves", "jupyterlab" ]
 
-[tool.hatch.build.hooks.mypyc]
+# To enable, set HATCH_BUILD_HOOK_ENABLE_MYPYC=1
+[tool.hatch.build.targets.wheel.hooks.mypyc]
 dependencies = ["hatch-mypyc", "cryptography"]
 enable-by-default = false
-
-[tool.hatch.build.targets.wheel.hooks.mypyc]
 include = [
     "playa/ccitt.py",
     "playa/image.py",
