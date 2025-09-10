@@ -1,5 +1,5 @@
 """
-Benchmark PNG predictors
+Benchmark TIFF predictor
 """
 
 import logging
@@ -12,8 +12,7 @@ CONTRIB = Path(__file__).parent.parent / "samples"
 
 LOG = logging.getLogger(Path(__file__).stem)
 PDFS = [
-    "contrib/issue-151.pdf",
-    "contrib/png-predictor-1bit.pdf",
+    "test_pdf_with_tiff_predictor.pdf",
 ]
 
 
@@ -26,7 +25,7 @@ def benchmark_images(path: Path):
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.ERROR)
-    niter = 1
+    niter = 100
     t = 0.0
     for iter in range(niter + 1):
         for name in PDFS:
@@ -35,4 +34,4 @@ if __name__ == "__main__":
             benchmark_images(path)
             if iter != 0:
                 t += time.time() - start
-    print("predictors took %d ms / iter" % (t / niter * 1000,))
+    print("predictors took %.2f ms / iter" % (t / niter * 1000,))
