@@ -13,15 +13,18 @@
 
 import logging
 from typing import (
+    TYPE_CHECKING,
     Any,
     Callable,
     Dict,
     List,
-    Sequence,
     Tuple,
     Union,
 )
 from playa.pdftypes import PDFObject, int_value
+
+if TYPE_CHECKING:
+    from mypy_extensions import u8
 
 LOG = logging.getLogger(__name__)
 BitParserNode = Union[int, str, None, List]
@@ -337,7 +340,7 @@ class BitParser:
     def __init__(self) -> None:
         self._pos = 0
         self._node = None
-        self._bits = bytearray()
+        self._bits: List[int] = []
 
     def _parse_bit(self, x: int) -> None:
         if self._node is None:
@@ -369,6 +372,8 @@ class BitParser:
 
 class CCITTG4Parser(BitParser):
     _color: int
+    _curline: List["u8"]
+    _refline: List["u8"]
 
     def __init__(self, width: int, height: int, bytealign: bool = False) -> None:
         super().__init__()
@@ -478,17 +483,18 @@ class CCITTG4Parser(BitParser):
 
     def reset(self) -> None:
         self._y = 0
-        self._curline = bytearray(b"\x01" * self.width)
+        self._curline = [1] * self.width
         self._reset_line()
         self._accept = self._parse_mode
         self._state = MODE
 
-    def output_line(self, y: int, bits: Sequence[int]) -> None:
+    def output_line(self, y: int, bits: List["u8"]) -> None:
         print(y, "".join(str(b) for b in bits))
 
     def _reset_line(self) -> None:
+        # FIXME: probably, we could just swap them, like in PNG prediction
         self._refline = self._curline
-        self._curline = bytearray(b"\x01" * self.width)
+        self._curline = [1] * self.width
         self._curpos = -1
         self._color = 1
 
@@ -590,19 +596,25 @@ class CCITTFaxDecoder(CCITTG4Parser):
         self.reversed = not not params.get("BlackIs1", False)
         self.eoline = not not params.get("EndOfLine", False)
         self.eoblock = not not params.get("EndOfBlock", True)
-        self._buf: List[bytearray] = []
+        self._buf: List["u8"] = []
 
     def close(self) -> bytes:
-        return b"".join(self._buf)
+        return bytes(self._buf)
 
-    def output_line(self, y: int, bits: Sequence[int]) -> None:
-        arr = bytearray((len(bits) + 7) // 8)
+    def output_line(self, y: int, bits: List["u8"]) -> None:
         if self.reversed:
-            bits = [~b for b in bits]
+            bits = [x ^ 0xFF for x in bits]
+        byte = 0
         for i, b in enumerate(bits):
             if b:
-                arr[i // 8] += (128, 64, 32, 16, 8, 4, 2, 1)[i % 8]
-        self._buf.append(arr)
+                pos = i & 7
+                bit = 0x80 >> pos
+                byte |= bit
+            if i & 7 == 7:
+                self._buf.append(byte)
+                byte = 0
+        if i & 7 != 7:
+            self._buf.append(byte)
 
 
 class CCITTFaxDecoder1D(CCITTFaxDecoder):
@@ -630,7 +642,7 @@ class CCITTFaxDecoder1D(CCITTFaxDecoder):
 
     def reset(self) -> None:
         self._y = 0
-        self._curline = bytearray(b"\x01" * self.width)
+        self._curline = [1] * self.width
         self._reset_line()
         self._accept = self._parse_horiz
         self._n1 = 0
@@ -640,7 +652,7 @@ class CCITTFaxDecoder1D(CCITTFaxDecoder):
     def _reset_line(self) -> None:
         # NOTE: do not reset color to white on new line
         self._refline = self._curline
-        self._curline = bytearray(b"\x01" * self.width)
+        self._curline = [1] * self.width
         self._curpos = -1
 
     def _parse_horiz(self, n: BitParserNode) -> BitParserTree:
