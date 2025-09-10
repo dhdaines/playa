@@ -99,6 +99,7 @@ bench = [
     "python benchmarks/objects.py",
     "python benchmarks/miner.py",
     "python benchmarks/ccitt_decode.py",
+    "python benchmarks/png_predict.py",
     "python benchmarks/marked_content.py",
     "python benchmarks/parallel.py",
     "python benchmarks/structure.py",
