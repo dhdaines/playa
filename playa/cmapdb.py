@@ -39,12 +39,7 @@ from playa.parser import (
 )
 from playa.utils import choplist
 
-try:
-    from functools import cache
-except ImportError:
-    # Simply do not cache when using Python 3.8
-    def cache(func):  # type: ignore
-        return func
+from functools import lru_cache
 
 
 log = logging.getLogger(__name__)
@@ -260,8 +255,8 @@ KEYWORD_ENDNOTDEFRANGE = KWD(b"endnotdefrange")
 
 
 # These are generally characters or short strings (glyph clusters) so
-# caching them makes sense (they repeat themselves often)
-@cache
+# caching them infinitely makes sense (they repeat themselves often)
+@lru_cache(None)
 def decode_utf16_char(utf16: bytes) -> str:
     return utf16.decode("UTF-16BE", "ignore")
 
