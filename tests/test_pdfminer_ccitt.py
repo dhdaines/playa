@@ -140,5 +140,5 @@ class TestCCITTG4Parser:
 class TestCCITTFaxDecoder:
     def test_b1(self):
         decoder = CCITTFaxDecoder({"Columns": 5})
-        decoder.output_line(0, b"0")
-        assert decoder.close() == b"\x80"
+        decoder.output_line(0, [1, 0, 0, 0, 1, 0, 1])
+        assert decoder.close() == b"\x8a"
