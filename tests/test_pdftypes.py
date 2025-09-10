@@ -11,6 +11,7 @@ from playa.pdftypes import (
     ObjRef,
     bool_value,
     decipher_all,
+    decompress_corrupted,
     dict_value,
     float_value,
     keyword_name,
@@ -205,3 +206,52 @@ def test_filters() -> None:
     )
     with pytest.raises(NotImplementedError):
         stream.decode()
+
+
+def test_decompress_corrupted(caplog) -> None:
+    """Verify that we can recover from missing CRC, truncated, or
+    corrupted flate streams."""
+    rawdata = (
+        b'x\x9c\x0b\xf1\x0fq\xf4Qp\xf4sQ\x08\r\tq\rR\xf0\xf3\xf7\x0bv\x05"\x00R'
+        b"\xe8\x06\xb5"
+    )
+    # Verify that decompress_corrupted works even on uncorrupted streams
+    assert decompress_corrupted(rawdata) == b"TOTAL AND UTTER NONSENSE"
+    # Or if the CRC is partially missing
+    assert decompress_corrupted(rawdata[:-1]) == b"TOTAL AND UTTER NONSENSE"
+    # Verify that decode will fail if we remove the trailer in strict mode
+    stream = ContentStream({"Filter": LIT("FlateDecode")}, rawdata=rawdata[:-5])
+    with pytest.raises(ValueError):
+        stream.decode(strict=True)
+    # Remove the trailer in non-strict mode
+    stream = ContentStream({"Filter": LIT("FlateDecode")}, rawdata=rawdata[:-5])
+    assert stream.buffer == b"TOTAL AND UTTER NONSENSE"
+    # Remove the CRC in non-strict mode
+    stream = ContentStream({"Filter": LIT("FlateDecode")}, rawdata=rawdata[:-3])
+    assert stream.buffer == b"TOTAL AND UTTER NONSENSE"
+    # Truncate the stream in non-strict mode
+    stream = ContentStream({"Filter": LIT("FlateDecode")}, rawdata=rawdata[:-8])
+    caplog.clear()
+    assert stream.buffer == b"TOTAL AND UTTER NON"
+    assert "incomplete" in caplog.text
+    # Remove some random bytes (no error as the data is still a valid
+    # flate stream, just the CRC is wrong)
+    stream = ContentStream(
+        {"Filter": LIT("FlateDecode")},
+        rawdata=(rawdata[:5] + rawdata[7:10] + rawdata[11:]),
+    )
+    assert stream.buffer == b"TOT AL UTTER NONSENSE"
+    # Insert some random bytes, now we will lose data for real
+    bogusdata = bytearray(rawdata)
+    bogusdata[7:10] = b"HI!"
+    stream = ContentStream({"Filter": LIT("FlateDecode")}, rawdata=bogusdata)
+    caplog.clear()
+    assert stream.buffer == b""
+    assert "Data loss" in caplog.text
+    # Test the adjustible buffer size
+    assert decompress_corrupted(bogusdata) == b""
+    assert decompress_corrupted(bogusdata, 1) == b"TOTAHdd"
+    assert decompress_corrupted(bogusdata, 2) == b"TOTAHdd"
+    assert decompress_corrupted(bogusdata, 4) == b"TOTAHdd"
+    assert decompress_corrupted(bogusdata, 8) == b"TOTAH"
+    assert decompress_corrupted(bogusdata, 16) == b""
