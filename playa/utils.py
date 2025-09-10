@@ -51,7 +51,7 @@ def apply_tiff_predictor(
     bpp = colors * (bitspercomponent // 8)
     nbytes = columns * bpp
     # Incredibly, this is faster than bytearray (with and without mypyc)
-    buf: list["u8"] = []
+    buf: List["u8"] = []
     for scanline_i in range(0, len(data), nbytes):
         for i in range(nbytes):
             new_value = data[scanline_i + i]
@@ -79,9 +79,9 @@ def apply_png_predictor(
     nbytes = (colors * columns * bitspercomponent + 7) // 8
     bpp = (colors * bitspercomponent + 7) // 8
     # Likewise, this is *twice as fast* as bytearray...
-    buf: list["u8"] = []
-    line_above: list["u8"] = [0] * nbytes
-    raw: list["u8"] = [0] * nbytes
+    buf: List["u8"] = []
+    line_above: List["u8"] = [0] * nbytes
+    raw: List["u8"] = [0] * nbytes
     for scanline_i in range(0, len(data), nbytes + 1):
         filter_type = data[scanline_i]
         line_encoded = data[scanline_i + 1 : scanline_i + 1 + nbytes]
