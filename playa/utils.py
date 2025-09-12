@@ -17,6 +17,8 @@ from playa.pdftypes import PDFObject, Point, Rect, Matrix, dict_value, str_value
 
 if TYPE_CHECKING:
     from mypy_extensions import u8
+    from playa.content import GraphicState
+    from playa.font import Font
 
 
 def paeth_predictor(left: int, above: int, upper_left: int) -> int:
@@ -649,3 +651,73 @@ class IdentityMapping(Mapping[_T, _T]):
 
 
 IDENTITY_MAPPING: IdentityMapping = IdentityMapping()
+
+
+def update_glyph_offset(
+    origin: Point,
+    font: "Font",
+    gstate: "GraphicState",
+    args: List[Union[bytes, int, float]],
+) -> Point:
+    fontsize = gstate.fontsize
+    horizontal_scaling = gstate.scaling * 0.01
+    charspace = gstate.charspace
+    wordspace = gstate.wordspace
+    vert = font.vertical
+    if font.multibyte:
+        wordspace = 0.0
+    (x, y) = origin
+    if vert:
+        return x, update_glyph_offset_vertical(
+            y, font, args, vscale=fontsize, charspace=charspace, wordspace=wordspace
+        )
+    else:
+        return (
+            update_glyph_offset_horizontal(
+                x,
+                font,
+                args,
+                hscale=fontsize * horizontal_scaling,
+                charspace=charspace * horizontal_scaling,
+                wordspace=wordspace * horizontal_scaling,
+            ),
+            y,
+        )
+
+
+def update_glyph_offset_horizontal(
+    x: float,
+    font: "Font",
+    args: List[Union[bytes, int, float]],
+    hscale: float,
+    charspace: float,
+    wordspace: float,
+) -> float:
+    for obj in args:
+        if isinstance(obj, (int, float)):
+            x -= obj * 0.001 * hscale
+        else:
+            for cid, _ in font.decode(obj):
+                x += font.hdisp(cid) * hscale + charspace
+                if cid == 32:
+                    x += wordspace
+    return x
+
+
+def update_glyph_offset_vertical(
+    y: float,
+    font: "Font",
+    args: List[Union[bytes, int, float]],
+    vscale: float,
+    charspace: float,
+    wordspace: float,
+) -> float:
+    for obj in args:
+        if isinstance(obj, (int, float)):
+            y -= obj * 0.001
+        else:
+            for cid, _ in font.decode(obj):
+                y += font.vdisp(cid) * vscale + charspace
+                if cid == 32:
+                    y += wordspace
+    return y
