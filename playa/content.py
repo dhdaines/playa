@@ -1026,7 +1026,10 @@ class TextObject(ContentObject):
         pos = y if vert else x
         for obj in self.args:
             if isinstance(obj, (int, float)):
-                pos -= obj * 0.001 * fontsize * horizontal_scaling
+                if vert:
+                    pos -= obj * 0.001 * fontsize
+                else:
+                    pos -= obj * 0.001 * fontsize * horizontal_scaling
             else:
                 for cid, text in font.decode(obj):
                     glyph_offset = (x, pos) if vert else (pos, y)

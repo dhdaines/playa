@@ -714,7 +714,7 @@ def update_glyph_offset_vertical(
 ) -> float:
     for obj in args:
         if isinstance(obj, (int, float)):
-            y -= obj * 0.001
+            y -= obj * 0.001 * vscale
         else:
             for cid, _ in font.decode(obj):
                 y += font.vdisp(cid) * vscale + charspace
