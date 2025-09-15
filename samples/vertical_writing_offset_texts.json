@@ -1,0 +1,207 @@
+[
+{
+  "chars": "あいうえお",
+  "bbox": [
+    92.3875,
+    12.0,
+    107.8375,
+    70.0
+  ],
+  "matrix": [
+    15.0,
+    0.0,
+    0,
+    10,
+    100,
+    70
+  ],
+  "gstate": {
+    "font": {
+      "name": "KXRNCQ+AokinMincho",
+      "type": "CIDFont",
+      "ascent": 880,
+      "descent": -120,
+      "default_width": 1015,
+      "bbox": [
+        -434,
+        -286,
+        1052,
+        927
+      ],
+      "matrix": [
+        0.001,
+        0,
+        0,
+        0.001,
+        0,
+        0
+      ]
+    },
+    "fontsize": 10
+  }
+},
+{
+  "chars": "日本語",
+  "bbox": [
+    10.0,
+    58.8,
+    32.3,
+    78.8
+  ],
+  "matrix": [
+    10.0,
+    0.0,
+    0,
+    10,
+    20,
+    70
+  ],
+  "gstate": {
+    "font": {
+      "name": "KXRNCQ+AokinMincho",
+      "type": "CIDFont",
+      "ascent": 880,
+      "descent": -120,
+      "default_width": 1015,
+      "bbox": [
+        -434,
+        -286,
+        1052,
+        927
+      ],
+      "matrix": [
+        0.001,
+        0,
+        0,
+        0.001,
+        0,
+        0
+      ]
+    },
+    "fontsize": 10
+  }
+},
+{
+  "chars": "あいうえお",
+  "bbox": [
+    152.3875,
+    4.5,
+    167.8375,
+    70.0
+  ],
+  "matrix": [
+    15.0,
+    0.0,
+    0,
+    10,
+    160,
+    70
+  ],
+  "gstate": {
+    "font": {
+      "name": "KXRNCQ+AokinMincho",
+      "type": "CIDFont",
+      "ascent": 880,
+      "descent": -120,
+      "default_width": 1015,
+      "bbox": [
+        -434,
+        -286,
+        1052,
+        927
+      ],
+      "matrix": [
+        0.001,
+        0,
+        0,
+        0.001,
+        0,
+        0
+      ]
+    },
+    "fontsize": 10
+  }
+},
+{
+  "chars": "あいうえお",
+  "bbox": [
+    100.0,
+    68.8,
+    151.5,
+    78.8
+  ],
+  "matrix": [
+    10.0,
+    0.0,
+    0,
+    10,
+    100,
+    70
+  ],
+  "gstate": {
+    "font": {
+      "name": "FOOBAR+AokinMincho",
+      "type": "CIDFont",
+      "ascent": 880,
+      "descent": -120,
+      "default_width": 1015,
+      "bbox": [
+        -434,
+        -286,
+        1052,
+        927
+      ],
+      "matrix": [
+        0.001,
+        0,
+        0,
+        0.001,
+        0,
+        0
+      ]
+    },
+    "fontsize": 10
+  }
+},
+{
+  "chars": "日本語",
+  "bbox": [
+    20.0,
+    68.8,
+    50.900000000000006,
+    78.8
+  ],
+  "matrix": [
+    10.0,
+    0.0,
+    0,
+    10,
+    20,
+    70
+  ],
+  "gstate": {
+    "font": {
+      "name": "FOOBAR+AokinMincho",
+      "type": "CIDFont",
+      "ascent": 880,
+      "descent": -120,
+      "default_width": 1015,
+      "bbox": [
+        -434,
+        -286,
+        1052,
+        927
+      ],
+      "matrix": [
+        0.001,
+        0,
+        0,
+        0.001,
+        0,
+        0
+      ]
+    },
+    "fontsize": 10
+  }
+}
+]

@@ -143,7 +143,10 @@ def test_exotic_type3_font_boxes() -> None:
         assert (boxes[0][3] - boxes[0][1]) == pytest.approx(boxes[1][3] - boxes[1][1])
 
 
-@pytest.mark.parametrize("name", ["vertical_writing", "simple3", "character_spacing"])
+@pytest.mark.parametrize(
+    "name",
+    ["vertical_writing", "vertical_writing_offset", "simple3", "character_spacing"],
+)
 def test_glyph_positioning(name: str) -> None:
     """Verify that various more or less exotic aspects of glyph
     positioning are handled correctly."""

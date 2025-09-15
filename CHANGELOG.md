@@ -1,4 +1,12 @@
+## PLAYA 0.8.0: 2025-09
+
+- Optionally accelerate image decoding with mypyc
+- Correct explicit string positioning in vertical text
+- Restore caching in text decoding under Python 3.8
+- TODO: refactor and accelerate text extraction with mypyc
+
 ## PLAYA 0.7.1: 2025-08-16
+
 - Tolerate non-integer values for page rotation
 - Restore Python 3.8 compatibility (oops!)
 - Restore robustness to broken structure elements
