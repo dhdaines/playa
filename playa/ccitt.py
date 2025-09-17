@@ -340,9 +340,9 @@ class BitParser:
     def __init__(self) -> None:
         self._pos = 0
         self._node = None
-        self._bits: List[int] = []
+        self._bits: List["u8"] = []
 
-    def _parse_bit(self, x: int) -> None:
+    def _parse_bit(self, x: "u8") -> None:
         if self._node is None:
             self._node = self._state.root
         bit = not not x
@@ -371,7 +371,7 @@ class BitParser:
 
 
 class CCITTG4Parser(BitParser):
-    _color: int
+    _color: "u8"
     _curline: List["u8"]
     _refline: List["u8"]
 
@@ -484,6 +484,7 @@ class CCITTG4Parser(BitParser):
     def reset(self) -> None:
         self._y = 0
         self._curline = [1] * self.width
+        self._refline = [1] * self.width
         self._reset_line()
         self._accept = self._parse_mode
         self._state = MODE
@@ -492,9 +493,7 @@ class CCITTG4Parser(BitParser):
         print(y, "".join(str(b) for b in bits))
 
     def _reset_line(self) -> None:
-        # FIXME: probably, we could just swap them, like in PNG prediction
-        self._refline = self._curline
-        self._curline = [1] * self.width
+        self._refline, self._curline = self._curline, self._refline
         self._curpos = -1
         self._color = 1
 
@@ -643,6 +642,7 @@ class CCITTFaxDecoder1D(CCITTFaxDecoder):
     def reset(self) -> None:
         self._y = 0
         self._curline = [1] * self.width
+        self._refline = [1] * self.width
         self._reset_line()
         self._accept = self._parse_horiz
         self._n1 = 0
@@ -650,10 +650,9 @@ class CCITTFaxDecoder1D(CCITTFaxDecoder):
         self._state = WHITE
 
     def _reset_line(self) -> None:
-        # NOTE: do not reset color to white on new line
-        self._refline = self._curline
-        self._curline = [1] * self.width
+        self._refline, self._curline = self._curline, self._refline
         self._curpos = -1
+        # NOTE: do not reset self._color to white on new line
 
     def _parse_horiz(self, n: BitParserNode) -> BitParserTree:
         if n is None:
