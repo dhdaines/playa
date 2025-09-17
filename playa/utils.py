@@ -3,6 +3,7 @@
 import itertools
 import string
 from typing import (
+    TYPE_CHECKING,
     Iterable,
     Iterator,
     List,
@@ -13,6 +14,11 @@ from typing import (
 )
 
 from playa.pdftypes import PDFObject, Point, Rect, Matrix, dict_value, str_value
+
+if TYPE_CHECKING:
+    from mypy_extensions import u8
+    from playa.content import GraphicState
+    from playa.font import Font
 
 
 def paeth_predictor(left: int, above: int, upper_left: int) -> int:
@@ -46,17 +52,14 @@ def apply_tiff_predictor(
         raise ValueError(error_msg)
     bpp = colors * (bitspercomponent // 8)
     nbytes = columns * bpp
-    buf: list[int] = []
+    # Incredibly, this is faster than bytearray (with and without mypyc)
+    buf: List["u8"] = []
     for scanline_i in range(0, len(data), nbytes):
-        raw: list[int] = []
         for i in range(nbytes):
             new_value = data[scanline_i + i]
             if i >= bpp:
-                new_value += raw[i - bpp]
-                new_value %= 256
-            raw.append(new_value)
-        buf.extend(raw)
-
+                new_value = (new_value + buf[scanline_i + i - bpp]) & 255
+            buf.append(new_value)
     return bytes(buf)
 
 
@@ -77,16 +80,17 @@ def apply_png_predictor(
 
     nbytes = (colors * columns * bitspercomponent + 7) // 8
     bpp = (colors * bitspercomponent + 7) // 8
-    buf = bytearray()
-    line_above = bytearray(nbytes)
+    # Likewise, this is *twice as fast* as bytearray...
+    buf: List["u8"] = []
+    line_above: List["u8"] = [0] * nbytes
+    raw: List["u8"] = [0] * nbytes
     for scanline_i in range(0, len(data), nbytes + 1):
         filter_type = data[scanline_i]
         line_encoded = data[scanline_i + 1 : scanline_i + 1 + nbytes]
-        raw = bytearray()
 
         if filter_type == 0:
             # Filter type 0: None
-            raw = bytearray(line_encoded)
+            raw[:] = line_encoded
 
         elif filter_type == 1:
             # Filter type 1: Sub
@@ -96,12 +100,10 @@ def apply_png_predictor(
             # (computed mod 256), where Raw() refers to the bytes already
             #  decoded.
             for j, sub_x in enumerate(line_encoded):
-                if j - bpp < 0:
-                    raw_x_bpp = 0
+                if j < bpp:
+                    raw[j] = sub_x
                 else:
-                    raw_x_bpp = raw[j - bpp]
-                raw_x = (sub_x + raw_x_bpp) & 255
-                raw.append(raw_x)
+                    raw[j] = (sub_x + raw[j - bpp]) & 255
 
         elif filter_type == 2:
             # Filter type 2: Up
@@ -110,9 +112,9 @@ def apply_png_predictor(
             #   Raw(x) = Up(x) + Prior(x)
             # (computed mod 256), where Prior() refers to the decoded bytes of
             # the prior scanline.
-            for up_x, prior_x in zip(line_encoded, line_above):
-                raw_x = (up_x + prior_x) & 255
-                raw.append(raw_x)
+            for j, up_x in enumerate(line_encoded):
+                prior_x = line_above[j]
+                raw[j] = (up_x + prior_x) & 255
 
         elif filter_type == 3:
             # Filter type 3: Average
@@ -124,13 +126,12 @@ def apply_png_predictor(
             # bytes already decoded, and Prior() refers to the decoded bytes of
             # the prior scanline.
             for j, average_x in enumerate(line_encoded):
-                if j - bpp < 0:
+                prior_x = line_above[j]
+                if j < bpp:
                     raw_x_bpp = 0
                 else:
                     raw_x_bpp = raw[j - bpp]
-                prior_x = line_above[j]
-                raw_x = (average_x + (raw_x_bpp + prior_x) // 2) & 255
-                raw.append(raw_x)
+                raw[j] = (average_x + (raw_x_bpp + prior_x) // 2) & 255
 
         elif filter_type == 4:
             # Filter type 4: Paeth
@@ -150,14 +151,13 @@ def apply_png_predictor(
                     prior_x_bpp = line_above[j - bpp]
                 prior_x = line_above[j]
                 paeth = paeth_predictor(raw_x_bpp, prior_x, prior_x_bpp)
-                raw_x = (paeth_x + paeth) & 255
-                raw.append(raw_x)
+                raw[j] = (paeth_x + paeth) & 255
 
         else:
             raise ValueError("Unsupported predictor value: %d" % filter_type)
 
         buf.extend(raw)
-        line_above = raw
+        raw, line_above = line_above, raw
     return bytes(buf)
 
 
@@ -651,3 +651,73 @@ class IdentityMapping(Mapping[_T, _T]):
 
 
 IDENTITY_MAPPING: IdentityMapping = IdentityMapping()
+
+
+def update_glyph_offset(
+    origin: Point,
+    font: "Font",
+    gstate: "GraphicState",
+    args: List[Union[bytes, int, float]],
+) -> Point:
+    fontsize = gstate.fontsize
+    horizontal_scaling = gstate.scaling * 0.01
+    charspace = gstate.charspace
+    wordspace = gstate.wordspace
+    vert = font.vertical
+    if font.multibyte:
+        wordspace = 0.0
+    (x, y) = origin
+    if vert:
+        return x, update_glyph_offset_vertical(
+            y, font, args, vscale=fontsize, charspace=charspace, wordspace=wordspace
+        )
+    else:
+        return (
+            update_glyph_offset_horizontal(
+                x,
+                font,
+                args,
+                hscale=fontsize * horizontal_scaling,
+                charspace=charspace * horizontal_scaling,
+                wordspace=wordspace * horizontal_scaling,
+            ),
+            y,
+        )
+
+
+def update_glyph_offset_horizontal(
+    x: float,
+    font: "Font",
+    args: List[Union[bytes, int, float]],
+    hscale: float,
+    charspace: float,
+    wordspace: float,
+) -> float:
+    for obj in args:
+        if isinstance(obj, (int, float)):
+            x -= obj * 0.001 * hscale
+        else:
+            for cid, _ in font.decode(obj):
+                x += font.hdisp(cid) * hscale + charspace
+                if cid == 32:
+                    x += wordspace
+    return x
+
+
+def update_glyph_offset_vertical(
+    y: float,
+    font: "Font",
+    args: List[Union[bytes, int, float]],
+    vscale: float,
+    charspace: float,
+    wordspace: float,
+) -> float:
+    for obj in args:
+        if isinstance(obj, (int, float)):
+            y -= obj * 0.001 * vscale
+        else:
+            for cid, _ in font.decode(obj):
+                y += font.vdisp(cid) * vscale + charspace
+                if cid == 32:
+                    y += wordspace
+    return y

@@ -16,7 +16,7 @@ except ImportError:
 
 from playa.color import Color as _Color
 from playa.color import ColorSpace as _ColorSpace
-from playa.data.asobj import asobj
+from playa.data._asobj import asobj
 from playa.data.metadata import Font
 from playa.content import DashPattern as _DashPattern
 from playa.content import GlyphObject as _GlyphObject
