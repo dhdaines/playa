@@ -120,3 +120,10 @@ def test_various_tounicode(name, text):
     with playa.open(TESTDIR / "simple3.pdf") as pdf:
         text = "".join(x.chars for x in pdf.pages[0].texts)
         assert text == "HelloHelloあいうえおあいうえおWorldWorldあいうえおあいうえお"
+
+
+def test_cmap_sanitization(caplog):
+    """Verify that an evil PDF cannot read outside the cmap directory."""
+    with playa.open(TESTDIR / "evil_cmap.pdf") as pdf:
+        pdf.pages[0].extract_text()
+        assert "malicious" in caplog.text
