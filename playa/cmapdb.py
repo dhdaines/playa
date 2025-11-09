@@ -11,7 +11,6 @@ More information is available on:
 
 import gzip
 import logging
-import os
 import pickle as pickle
 import struct
 import sys
@@ -48,6 +47,7 @@ except ImportError:
 
 
 log = logging.getLogger(__name__)
+CMAP_DIR = (Path(__file__).parent / "cmap").resolve()
 
 
 class CMapError(Exception):
@@ -195,26 +195,19 @@ class PyUnicodeMap(UnicodeMap):
 class CMapDB:
     _cmap_cache: Dict[str, PyCMap] = {}
     _umap_cache: Dict[str, List[PyUnicodeMap]] = {}
-    cmap_paths = (
-        Path(os.environ.get("CMAP_PATH", "/usr/share/pdfminer/")).resolve(),
-        (Path(__file__).parent / "cmap").resolve(),
-    )
 
     @classmethod
     def _load_data(cls, name: str) -> Any:
         name = name.replace("\0", "")
         filename = "%s.pickle.gz" % name
-        for cmapdir in cls.cmap_paths:
-            pklpath = (cmapdir / filename).resolve()
-            if not pklpath.is_relative_to(cmapdir):
-                log.warning("Ignoring malicious or malformed cmap: %s", name)
-                continue
-            try:
-                with gzip.open(pklpath) as gzfile:
-                    return pickle.load(gzfile)
-            except FileNotFoundError:
-                pass  # It might be in the nonexistent /usr/share/pdfminer
-        raise KeyError(f"CMap {name} not found in CMapDB")
+        pklpath = (CMAP_DIR / filename).resolve()
+        if not pklpath.is_relative_to(CMAP_DIR):
+            raise KeyError(f"Ignoring malicious or malformed CMap {name}")
+        try:
+            with gzip.open(pklpath) as gzfile:
+                return pickle.load(gzfile)
+        except FileNotFoundError as e:
+            raise KeyError(f"CMap {name} not found in CMapDB") from e
 
     @classmethod
     def get_cmap(cls, name: str) -> CMapBase:
