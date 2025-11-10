@@ -38,6 +38,7 @@ from playa.font import Font
 from playa.interp import LazyInterpreter, _make_fontmap, _make_contentmap
 from playa.parser import ContentParser, PDFObject, Token
 from playa.pdftypes import (
+    LIT,
     MATRIX_IDENTITY,
     ContentStream,
     Matrix,
@@ -64,6 +65,7 @@ log = logging.getLogger(__name__)
 # some predefined literals and keywords.
 DeviceSpace = Literal["page", "screen", "default", "user"]
 CO = TypeVar("CO")
+LIT_POPUP = LIT("Popup")
 
 
 class Page:
@@ -222,10 +224,18 @@ class Page:
             return
         for obj in alist:
             try:
-                yield Annotation.from_dict(obj, self)
-            except (TypeError, ValueError, PDFSyntaxError) as e:
+                objdict = dict_value(obj)
+            except (TypeError) as e:
                 log.warning("Invalid object %r in Annots: %s", obj, e)
                 continue
+            # Popup annotations are actually quite useless outside the
+            # context of their parent, so we will ignore them here.
+            if objdict.get("Subtype") is LIT_POPUP:
+                continue
+            try:
+                yield Annotation.from_dict(objdict, self)
+            except (TypeError, ValueError, PDFSyntaxError) as e:
+                log.warning("Invalid object %r in Annots: %s", obj, e)
 
     @property
     def doc(self) -> "Document":
@@ -641,8 +651,7 @@ class Annotation:
     props: Dict[str, PDFObject]
 
     @classmethod
-    def from_dict(cls, obj: PDFObject, page: Page) -> "Annotation":
-        annot = dict_value(obj)
+    def from_dict(cls, annot: Dict[str, PDFObject], page: Page) -> "Annotation":
         subtype = annot.get("Subtype")
         if subtype is None or not isinstance(subtype, PSLiteral):
             raise PDFSyntaxError("Invalid annotation Subtype %r" % (subtype,))

@@ -178,7 +178,14 @@ class ContentObject:
         if objtype is LITERAL_ANNOT:
             from playa.page import Annotation
 
-            return Annotation.from_dict(self.props, self.page)
+            return Annotation.from_dict(
+                (
+                    self.props.attrs
+                    if isinstance(self.props, ContentStream)
+                    else self.props
+                ),
+                self.page,
+            )
 
         if objtype is LITERAL_XOBJECT:
             assert isinstance(self.props, ContentStream)
