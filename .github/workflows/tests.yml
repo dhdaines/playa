@@ -31,4 +31,4 @@ jobs:
       - name: Install Hatch
         uses: pypa/hatch@install
       - name: Run tests
-        run: hatch test --cover -py 3.8 --full-trace
+        run: hatch test -py 3.8 --full-trace

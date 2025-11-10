@@ -11,12 +11,11 @@ More information is available on:
 
 import gzip
 import logging
-import os
-import os.path
 import pickle as pickle
 import struct
 import sys
 from bisect import bisect_left
+from pathlib import Path
 from typing import (
     Any,
     Dict,
@@ -48,6 +47,7 @@ except ImportError:
 
 
 log = logging.getLogger(__name__)
+CMAP_DIR = (Path(__file__).parent / "cmap").resolve()
 
 
 class CMapError(Exception):
@@ -175,21 +175,21 @@ class UnicodeMap(CMapBase):
 
 
 class PyCMap(CMap):
-    def __init__(self, name: str, module: Any) -> None:
+    def __init__(self, name: str, data: Dict) -> None:
         super().__init__(CMapName=name)
-        self.code2cid = module.CODE2CID
-        if module.IS_VERTICAL:
+        self.code2cid = data["CODE2CID"]
+        if data["IS_VERTICAL"]:
             self.attrs["WMode"] = 1
 
 
 class PyUnicodeMap(UnicodeMap):
-    def __init__(self, name: str, module: Any, vertical: bool) -> None:
+    def __init__(self, name: str, data: Dict, vertical: bool) -> None:
         super().__init__(CMapName=name)
         if vertical:
-            self.cid2unichr = module.CID2UNICHR_V
+            self.cid2unichr = data["CID2UNICHR_V"]
             self.attrs["WMode"] = 1
         else:
-            self.cid2unichr = module.CID2UNICHR_H
+            self.cid2unichr = data["CID2UNICHR_H"]
 
 
 class CMapDB:
@@ -200,19 +200,14 @@ class CMapDB:
     def _load_data(cls, name: str) -> Any:
         name = name.replace("\0", "")
         filename = "%s.pickle.gz" % name
-        cmap_paths = (
-            os.environ.get("CMAP_PATH", "/usr/share/pdfminer/"),
-            os.path.join(os.path.dirname(__file__), "cmap"),
-        )
-        for directory in cmap_paths:
-            path = os.path.join(directory, filename)
-            if os.path.exists(path):
-                gzfile = gzip.open(path)
-                try:
-                    return type(str(name), (), pickle.loads(gzfile.read()))
-                finally:
-                    gzfile.close()
-        raise KeyError(f"CMap {name!r} not found in CMapDB")
+        pklpath = (CMAP_DIR / filename).resolve()
+        if not pklpath.is_relative_to(CMAP_DIR):
+            raise KeyError(f"Ignoring malicious or malformed CMap {name}")
+        try:
+            with gzip.open(pklpath) as gzfile:
+                return pickle.load(gzfile)
+        except FileNotFoundError as e:
+            raise KeyError(f"CMap {name} not found in CMapDB") from e
 
     @classmethod
     def get_cmap(cls, name: str) -> CMapBase:
