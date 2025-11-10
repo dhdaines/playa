@@ -1,3 +1,8 @@
+## PLAYA 0.7.2: 2025-11-09
+- Fix path traversal vulnerability in cmap code
+- Fix insecure deserialization in cmap code
+- Fix wildly inefficient deflate code (possible DoS)
+
 ## PLAYA 0.7.1: 2025-08-16
 - Tolerate non-integer values for page rotation
 - Restore Python 3.8 compatibility (oops!)
