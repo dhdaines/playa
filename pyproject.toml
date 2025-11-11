@@ -53,12 +53,16 @@ version-file = "playa/_version.py"
 [tool.hatch.build.targets.sdist]
 exclude = [
   "/.github",
+  "/playa/cmap/resources",
   "/samples/contrib",
   "/samples/3rdparty",
 ]
 
 [tool.hatch.build.targets.wheel]
 packages = ["playa"]
+exclude = [
+  "/playa/cmap/resources",
+]
 
 [tool.hatch.envs.hatch-static-analysis]
 config-path = "none"  # Disable hatch's unreasonable ruff defaults
