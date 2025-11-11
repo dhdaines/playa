@@ -4,3 +4,6 @@
 [submodule "tests/3rdparty/pdf.js"]
 	path = samples/3rdparty/pdf.js
 	url = https://github.com/mozilla/pdf.js.git
+[submodule "playa/cmap/resources"]
+	path = playa/cmap/resources
+	url = https://github.com/adobe-type-tools/cmap-resources.git
