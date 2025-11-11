@@ -62,6 +62,8 @@ exclude = [
 packages = ["playa"]
 exclude = [
   "/playa/cmap/resources",
+  "/playa/cmap/README.txt",
+  "/playa/cmap/Makefile",
 ]
 
 [tool.hatch.envs.hatch-static-analysis]
