@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 import codecs
-import pickle as pickle
+import pickle
 import sys
 
 
@@ -131,14 +131,14 @@ class CMapConverter:
             IS_VERTICAL=self.is_vertical.get(enc, False),
             CODE2CID=self.code2cid.get(enc),
         )
-        fp.write(pickle.dumps(data, 2))
+        pickle.dump(data, fp)
 
     def dump_unicodemap(self, fp):
         data = dict(
             CID2UNICHR_H=self.cid2unichr_h,
             CID2UNICHR_V=self.cid2unichr_v,
         )
-        fp.write(pickle.dumps(data, 2))
+        pickle.dump(data, fp)
 
 
 def main(argv):
@@ -171,24 +171,21 @@ def main(argv):
     converter = CMapConverter(enc2codec)
     for path in args:
         print("reading: %r..." % path)
-        fp = open(path)
-        converter.load(fp)
-        fp.close()
+        with open(path) as fp:
+            converter.load(fp)
 
     for enc in converter.get_encs():
         fname = "%s.pickle.gz" % enc
         path = os.path.join(outdir, fname)
         print("writing: %r..." % path)
-        fp = gzip.open(path, "wb")
-        converter.dump_cmap(fp, enc)
-        fp.close()
+        with gzip.open(path, "wb") as fp:
+            converter.dump_cmap(fp, enc)
 
     fname = "to-unicode-%s.pickle.gz" % regname
     path = os.path.join(outdir, fname)
     print("writing: %r..." % path)
-    fp = gzip.open(path, "wb")
-    converter.dump_unicodemap(fp)
-    fp.close()
+    with gzip.open(path, "wb") as fp:
+        converter.dump_unicodemap(fp)
 
 
 if __name__ == "__main__":
