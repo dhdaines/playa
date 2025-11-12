@@ -2,6 +2,7 @@
 Test the CLI
 """
 
+from contextlib import redirect_stdout
 from pathlib import Path
 
 import pytest
@@ -96,15 +97,17 @@ def test_cli_content_objects(path: Path):
     passwords = PASSWORDS.get(path.name, [""])
     for password in passwords:
         try:
-            main(
-                [
-                    "--password",
-                    password,
-                    "--non-interactive",
-                    "--content-objects",
-                    str(path),
-                ]
-            )
+            # Avoid OOM errors from capturing too much output
+            with redirect_stdout(None):
+                main(
+                    [
+                        "--password",
+                        password,
+                        "--non-interactive",
+                        "--content-objects",
+                        str(path),
+                    ]
+                )
         except PDFPasswordIncorrect:
             pass
         except PDFEncryptionError:
