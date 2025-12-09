@@ -374,6 +374,7 @@ def extract_content_objects(doc: Document, args: argparse.Namespace) -> None:
 def get_stream_data(page: Page) -> bytes:
     streams = []
     for stream in page.streams:
+        LOG.debug("Page %d content stream %d", page.page_idx, stream.objid)
         streams.append(stream.buffer)
     return b"\n".join(streams)
 

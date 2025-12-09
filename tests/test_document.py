@@ -3,6 +3,7 @@ Test the classes in pdfdocument.py
 """
 
 from io import BytesIO
+from pathlib import Path
 
 import pytest
 
@@ -15,6 +16,8 @@ from playa.parser import LIT
 from playa.utils import decode_text
 
 from .data import CONTRIB, TESTDIR
+
+THISDIR = Path(__file__).parent
 
 
 def test_read_header():
@@ -263,3 +266,10 @@ def test_extgstate() -> None:
         assert gstate.linecap == 1
         assert gstate.linejoin == 2
         assert gstate.dash == DashPattern((20,), 10)
+
+
+def test_missing_pages(caplog) -> None:
+    """Verify that we detect and recover from missing page objects."""
+    with playa.open(THISDIR / "bad_pages.pdf") as pdf:
+        list(pdf.pages)
+    assert "missing page object" in caplog.text
