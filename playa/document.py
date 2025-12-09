@@ -528,9 +528,11 @@ class Document:
                 except PDFSyntaxError as e:
                     log.debug("Syntax error when searching for object %d: %s", objid, e)
                     continue
-            if obj is None:
-                raise IndexError(f"Object with ID {objid} not found")
+            # Store it anyway as None if we can't find it to avoid costly searching
             self._cached_objs[objid] = obj
+        # To get standards compliant behaviour simply remove this
+        if self._cached_objs[objid] is None:
+            raise IndexError(f"Object with ID {objid} not found")
         return self._cached_objs[objid]
 
     def get_font(
