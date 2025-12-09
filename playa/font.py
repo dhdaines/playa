@@ -181,7 +181,10 @@ class Font:
             (".cff", "FontFile3"),
         ):
             if key in self.descriptor:
-                fontfile = stream_value(self.descriptor[key])
+                fontfile = resolve1(self.descriptor[key])
+                if not isinstance(fontfile, ContentStream):
+                    log.warning("%s is not a content stream", key)
+                    continue
                 fontname = re.sub(r"[^\w\+]", "", self.fontname)
                 outpath = outdir / (fontname + suffix)
                 outpath.write_bytes(fontfile.buffer)
