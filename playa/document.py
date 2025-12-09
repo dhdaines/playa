@@ -683,9 +683,16 @@ class Document:
                 # Should not happen in a valid PDF, but probably does?
                 log.warning("Page tree contains bare integer: %r in %r", obj, parent)
                 object_id = obj
+            elif obj is None:
+                log.warning("Skipping null value in page tree")
+                continue
             else:
                 log.warning("Page tree contains unknown object: %r", obj)
-            page_object = dict_value(self[object_id])
+            try:
+                page_object = dict_value(self[object_id])
+            except IndexError as e:
+                log.warning("Skipping missing page object: %s", e)
+                continue
 
             # Avoid recursion errors by keeping track of visited nodes
             # (again, this should never actually happen in a valid PDF)
@@ -838,7 +845,11 @@ class PageList(ABCSequence):
         self._labels = {}
         try:
             page_objects = list(doc._get_page_objects())
-        except (KeyError, IndexError, TypeError):
+        except (KeyError, IndexError, TypeError) as e:
+            log.debug(
+                "Failed to get page objects normally, falling back to xref tables: %s",
+                e,
+            )
             page_objects = list(doc._get_pages_from_xrefs())
         for page_idx, ((objid, properties), label) in enumerate(
             zip(page_objects, page_labels)
