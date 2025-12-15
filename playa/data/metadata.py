@@ -608,7 +608,6 @@ def asobj_structelement(obj: _Element, recurse: bool = True) -> StructElement:
     el = StructElement(type=obj.type)
     page = obj.page
     for attr in (
-        "type",
         "role",
         "title",
         "language",

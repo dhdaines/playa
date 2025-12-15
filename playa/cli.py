@@ -217,7 +217,7 @@ def extract_stream(doc: Document, args: argparse.Namespace) -> None:
     """Extract stream data."""
     stream = doc[args.stream]
     if not isinstance(stream, ContentStream):
-        raise RuntimeError("Indirect object {args.stream} is not a stream")
+        raise ValueError("Indirect object {args.stream} is not a stream")
     args.outfile.buffer.write(stream.buffer)
 
 
@@ -270,7 +270,7 @@ def extract_catalog(doc: Document, args: argparse.Namespace) -> None:
             catalog = trailer["Root"]
             break
     if catalog is None:
-        raise RuntimeError("No valid catalog found")
+        raise ValueError("No valid catalog found")
     json.dump(
         resolve_many(catalog),
         args.outfile,
@@ -618,34 +618,42 @@ def extract_fonts(doc: Document, args: argparse.Namespace) -> None:
     print("}", file=args.outfile)
 
 
-def main(argv: Union[List[str], None] = None) -> None:
+def main(argv: Union[List[str], None] = None) -> int:
     parser = make_argparse()
     args = parser.parse_args(argv)
     if args.version:
         print(playa.__version__)
-        return
+        return 0
     elif not args.pdfs:
         parser.error("At least one PDF is required")
     logging.basicConfig(level=logging.DEBUG if args.debug else logging.WARNING)
-    try:
-        for path in args.pdfs:
-            try:
-                doc = playa.open(
-                    path,
-                    space="default",
-                    max_workers=args.max_workers,
-                    password=args.password,
-                )
-            except PDFPasswordIncorrect:
-                if args.non_interactive:
-                    raise
-                password = getpass.getpass(prompt=f"Password for {path}: ")
-                doc = playa.open(
-                    path,
-                    space="default",
-                    max_workers=args.max_workers,
-                    password=password,
-                )
+    errors = 0
+    for path in args.pdfs:
+        try:
+            doc = playa.open(
+                path,
+                space="default",
+                max_workers=args.max_workers,
+                password=args.password,
+            )
+        except PDFPasswordIncorrect:
+            if args.non_interactive:
+                raise
+            password = getpass.getpass(prompt=f"Password for {path}: ")
+            doc = playa.open(
+                path,
+                space="default",
+                max_workers=args.max_workers,
+                password=password,
+            )
+        except Exception as e:
+            errors += 1
+            if args.debug:
+                LOG.exception(f"Invalid or corrupt PDF {path}")
+            else:
+                LOG.error(f"Invalid or corrupt PDF {path}: {e}")
+            continue
+        try:
             if args.stream is not None:  # it can't be zero either though
                 extract_stream(doc, args)
             elif args.content_streams:
@@ -669,11 +677,15 @@ def main(argv: Union[List[str], None] = None) -> None:
             else:
                 extract_metadata(doc, args)
             doc.close()
-    except ValueError as e:
-        parser.error(f"Invalid argument: {e}")
-    except RuntimeError as e:
-        parser.error(f"Something went wrong:\n{e}")
+        except Exception as e:
+            if args.debug:
+                LOG.exception(f"Invalid or corrupt PDF {path}")
+            else:
+                LOG.error(f"Invalid or corrupt PDF {path}: {e}")
+            errors += 1
+    return errors
 
 
 if __name__ == "__main__":
-    main()
+    import sys
+    sys.exit(main())
