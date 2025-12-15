@@ -818,7 +818,7 @@ class IndirectObjectParser:
         # line anyway to show the user what's wrong
         pos, line = self._parser.nextline()
         if self.strict:
-            raise PDFSyntaxError("Expected newline or 'endstream', got %r", line)
+            raise PDFSyntaxError("Expected newline or 'endstream', got %r" % (line,))
         # Now glom on all the data until we see endstream
         while True:
             if b"endstream" in line:
