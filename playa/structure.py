@@ -482,6 +482,10 @@ class Element(Findable):
                 if not isinstance(attrdict, dict):
                     LOG.warning("A is not dictionary or stream: %r", attrdict)
                     continue
+                revision = resolve1(revision)
+                if not isinstance(revision, int):
+                    LOG.warning("Revision is not an integer: %r", revision)
+                    continue
                 if latest is None or revision > latest_revision:
                     latest = attrdict
                     latest_revision = revision
