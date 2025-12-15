@@ -192,9 +192,8 @@ def test_no_args():
 
 
 def test_bad_page_spec():
-    with pytest.raises(SystemExit):
-        testpdf = str(TESTDIR / "font-size-test.pdf")
-        main(["--pages", "10-4,goodbuddy", "--text", testpdf])
+    testpdf = str(TESTDIR / "font-size-test.pdf")
+    assert main(["--pages", "10-4,goodbuddy", "--text", testpdf]) != 0
 
 
 def test_text_objects():
