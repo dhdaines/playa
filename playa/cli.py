@@ -623,7 +623,7 @@ def main(argv: Union[List[str], None] = None) -> int:
     args = parser.parse_args(argv)
     if args.version:
         print(playa.__version__)
-        return
+        return 0
     elif not args.pdfs:
         parser.error("At least one PDF is required")
     logging.basicConfig(level=logging.DEBUG if args.debug else logging.WARNING)
@@ -684,6 +684,7 @@ def main(argv: Union[List[str], None] = None) -> int:
                 LOG.error(f"Invalid or corrupt PDF {path}: {e}")
             errors += 1
     return errors
+
 
 if __name__ == "__main__":
     import sys
