@@ -618,7 +618,7 @@ def extract_fonts(doc: Document, args: argparse.Namespace) -> None:
     print("}", file=args.outfile)
 
 
-def main(argv: Union[List[str], None] = None) -> None:
+def main(argv: Union[List[str], None] = None) -> int:
     parser = make_argparse()
     args = parser.parse_args(argv)
     if args.version:
@@ -627,6 +627,7 @@ def main(argv: Union[List[str], None] = None) -> None:
     elif not args.pdfs:
         parser.error("At least one PDF is required")
     logging.basicConfig(level=logging.DEBUG if args.debug else logging.WARNING)
+    errors = 0
     for path in args.pdfs:
         try:
             doc = playa.open(
@@ -646,7 +647,11 @@ def main(argv: Union[List[str], None] = None) -> None:
                 password=password,
             )
         except Exception as e:
-            LOG.error(f"Invalid or corrupt PDF {path}: {e}")
+            errors += 1
+            if args.debug:
+                LOG.exception(f"Invalid or corrupt PDF {path}")
+            else:
+                LOG.error(f"Invalid or corrupt PDF {path}: {e}")
             continue
         try:
             if args.stream is not None:  # it can't be zero either though
@@ -672,10 +677,14 @@ def main(argv: Union[List[str], None] = None) -> None:
             else:
                 extract_metadata(doc, args)
             doc.close()
-        except ValueError as e:
-            LOG.error(f"Invalid or corrupt PDF {path}: {e}") 
-        # Any other exception is an internal problem that should be fixed
-
+        except Exception as e:
+            if args.debug:
+                LOG.exception(f"Invalid or corrupt PDF {path}")
+            else:
+                LOG.error(f"Invalid or corrupt PDF {path}: {e}")
+            errors += 1
+    return errors
 
 if __name__ == "__main__":
-    main()
+    import sys
+    sys.exit(main())
