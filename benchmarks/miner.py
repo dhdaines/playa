@@ -1,4 +1,4 @@
-"""Benchmark pdfminer.six against PAVÉS"""
+"""Benchmark pdfminer.six against PLAYA"""
 
 import time
 from typing import Union
