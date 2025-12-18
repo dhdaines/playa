@@ -43,7 +43,8 @@ Or recursively expand the document catalog into a horrible mess of JSON:
 
     playa --catalog foo.pdf
 
-You can look at the content streams for one or more or all pages:
+You can look at the content streams for one or more or all pages
+(numbered from 1):
 
     playa --content-streams foo.pdf
     playa --pages 1 --content-streams foo.pdf
@@ -73,6 +74,7 @@ And finally yes you can also extract images (not necessarily useful
 since they are frequently tiled and/or composited):
 
     playa --images outdir foo.dir
+
 """
 
 import argparse
@@ -130,7 +132,7 @@ def make_argparse() -> argparse.ArgumentParser:
         "-p",
         "--pages",
         type=str,
-        help="Page, or range, or list of pages to process with -s or -x",
+        help="Page, or range, or list of pages (numbered from 1) to process",
         default="all",
     )
     parser.add_argument(
@@ -294,6 +296,9 @@ def decode_page_spec(doc: Document, spec: str) -> Iterator[int]:
             yield from range(npages)
             continue
         start = int(startstr) - 1
+        if start < 0:
+            LOG.warning("Pages are numbered from 1, starting with first page")
+            start = 0
         if start >= npages:
             LOG.warning(
                 "start page %d is after last page %d, skipping", start + 1, npages
