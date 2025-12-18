@@ -74,11 +74,12 @@ def test_serialization():
 def test_make_path_segment() -> None:
     """Verify make_path_segment works"""
     assert make_path_segment("h", []) == ("h",)
-    assert make_path_segment("m", [(1, 2)]) == ("m", 1, 2)
-    assert make_path_segment("l", [(3, 4)]) == ("l", 3, 4)
-    assert make_path_segment("v", [(3, 4), (5, 6)]) == ("v", 3, 4, 5, 6)
-    assert make_path_segment("y", [(3, 4), (5, 6)]) == ("y", 3, 4, 5, 6)
-    assert make_path_segment("c", [(1, 2), (3, 4), (5, 6)]) == ("c", 1, 2, 3, 4, 5, 6)
+    # NOTE: This is the bogus output type for bug compatibility with pdfminer.six
+    assert make_path_segment("m", [(1, 2)]) == ("m", (1, 2))
+    assert make_path_segment("l", [(3, 4)]) == ("l", (3, 4))
+    assert make_path_segment("v", [(3, 4), (5, 6)]) == ("v", (3, 4), (5, 6))
+    assert make_path_segment("y", [(3, 4), (5, 6)]) == ("y", (3, 4), (5, 6))
+    assert make_path_segment("c", [(1, 2), (3, 4), (5, 6)]) == ("c", (1, 2), (3, 4), (5, 6))
     with pytest.raises(ValueError):
         make_path_segment("h", [(1, 2)])
         make_path_segment("m", [(1, 2), (3, 4)])

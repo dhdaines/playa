@@ -93,14 +93,14 @@ _T = TypeVar("_T")
 # This is **not** infinity, just an arbitrary big number we use for
 # initializing bounding boxes.
 INF = (1 << 31) - 1
-# Ugly pdfminer.six type.  NOTE: Unlike pdfminer.six, which doesn't
-# respect its own type annotations and actually returns Tuple[str,
-# Point, ...], we do respect these types.
+# Ugly pdfminer.six type which represents what it *actually* puts in
+# `LTCurve.original_path` (see
+# https://github.com/pdfminer/pdfminer.six/issues/1180)
 PathSegment = Union[
     Tuple[str],  # Literal['h']
-    Tuple[str, float, float],  # Literal['m', 'l']
-    Tuple[str, float, float, float, float],  # Literal['v', 'y']
-    Tuple[str, float, float, float, float, float, float],
+    Tuple[str, Point],  # Literal['m', 'l']
+    Tuple[str, Point, Point],  # Literal['v', 'y']
+    Tuple[str, Point, Point, Point],
 ]  # Literal['c']
 
 
@@ -1250,15 +1250,15 @@ def make_path_segment(op: PathOperator, points: List[Point]) -> PathSegment:
     if len(points) == 1:
         if op not in "ml":
             raise ValueError("Incorrect arguments for {op!r}: {points!r}")
-        return (str(op), *points[0])
+        return (str(op), points[0])
     if len(points) == 2:
         if op not in "vy":
             raise ValueError("Incorrect arguments for {op!r}: {points!r}")
-        return (str(op), *points[0], *points[1])
+        return (str(op), points[0], points[1])
     if len(points) == 3:
         if op != "c":
             raise ValueError("Incorrect arguments for {op!r}: {points!r}")
-        return (str(op), *points[0], *points[1], *points[2])
+        return (str(op), points[0], points[1], points[2])
     raise ValueError(f"Path segment has unknown number of points: {op!r} {points!r}")
 
 
