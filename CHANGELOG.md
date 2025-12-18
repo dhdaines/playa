@@ -4,7 +4,7 @@
 - Correct explicit string positioning in vertical text
 - Restore caching in text decoding under Python 3.8
 - Bring back pdfminer.six layout analysis algorithm
-- TODO: refactor and accelerate text extraction with mypyc
+- Optionally accelerate pdfminer.six compatibility with mypyc
 
 ## PLAYA 0.7.2: 2025-11-09
 
