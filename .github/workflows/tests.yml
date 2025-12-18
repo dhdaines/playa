@@ -32,6 +32,6 @@ jobs:
       - name: Install Hatch
         uses: pypa/hatch@install
       - name: Compile with mypyc
-        run: hatch run types:check
+        run: hatch run types:compile
       - name: Run tests
         run: hatch test --cover
