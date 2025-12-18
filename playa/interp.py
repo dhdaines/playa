@@ -501,7 +501,8 @@ class LazyInterpreter:
             stream=stream,
             xobjid=xobjid,
             srcsize=(stream.width, stream.height),
-            imagemask=stream.get_any(("IM", "ImageMask")),
+            # Ensure it is always a bool (whither mypy here?)
+            imagemask=not not stream.get_any(("IM", "ImageMask")),
             bits=stream.bits,
             colorspace=colorspace,
         )
