@@ -82,14 +82,14 @@ __all__ = [
 
 # Contains much code from layout.py and utils.py in pdfminer.six:
 # Copyright (c) 2004-2016  Yusuke Shinyama <yusuke at shinyama dot jp>
-# MIT License (as with PAVÉS in general)
+# MIT License (as with PLAYA in general)
 
 logger = logging.getLogger(__name__)
 LTComponentT = TypeVar("LTComponentT", bound="LTComponent")
 _T = TypeVar("_T")
-# Proper integer limit constants (PDF ints are 32-bits) unlike pdfminer.six
-INT32_MAX = 0x7FFFFFFF
-INT32_MIN = -0x80000000
+# This is **not** infinity, just an arbitrary big number we use for
+# initializing bounding boxes.
+INF = (1 << 31) - 1
 # Ugly pdfminer.six types
 PathSegment = Union[
     Tuple[str],  # Literal['h']
@@ -294,9 +294,7 @@ class LAParams:
             boxes_flow_err_msg = (
                 "LAParam boxes_flow should be None, or a number between -1 and +1"
             )
-            if not (
-                isinstance(self.boxes_flow, int) or isinstance(self.boxes_flow, float)
-            ):
+            if not isinstance(self.boxes_flow, (int, float)):
                 raise PDFTypeError(boxes_flow_err_msg)
             if not -1 <= self.boxes_flow <= 1:
                 raise PDFValueError(boxes_flow_err_msg)
@@ -607,7 +605,7 @@ class LTContainer(LTComponent, Generic[LTItemT]):
 
 class LTExpandableContainer(LTContainer[LTItemT]):
     def __init__(self) -> None:
-        LTContainer.__init__(self, (INT32_MAX, INT32_MAX, INT32_MIN, INT32_MIN), [])
+        LTContainer.__init__(self, (+INF, +INF, -INF, -INF), [])
 
     # Incompatible override: we take an LTComponent (with bounding box), but
     # super() LTContainer only considers LTItem (no bounding box).
@@ -671,7 +669,7 @@ class LTTextLine(LTTextContainer[TextLineElement]):
 class LTTextLineHorizontal(LTTextLine):
     def __init__(self, word_margin: float) -> None:
         LTTextLine.__init__(self, word_margin)
-        self._x1: float = INT32_MAX  # FIXME: so... why is it a float?
+        self._x1: float = +INF
 
     # Incompatible override: we take an LTComponent (with bounding box), but
     # LTContainer only considers LTItem (no bounding box).
@@ -735,7 +733,7 @@ class LTTextLineHorizontal(LTTextLine):
 class LTTextLineVertical(LTTextLine):
     def __init__(self, word_margin: float) -> None:
         LTTextLine.__init__(self, word_margin)
-        self._y0: float = INT32_MIN
+        self._y0: float = -INF
 
     # Incompatible override: we take an LTComponent (with bounding box), but
     # LTContainer only considers LTItem (no bounding box).
