@@ -153,7 +153,7 @@ def get_image_suffix_and_writer(
         )
     else:
         LOG.warning(
-            "Unsupported colorspace %s, writing as raw bytes", asobj(colorspace)
+            "Unsupported colorspace %r, writing as raw bytes", asobj(colorspace)
         )
         return ".dat", functools.partial(write_raw, data=data)
 

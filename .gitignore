@@ -13,6 +13,7 @@ docs/_build
 /build/
 /dist/
 /pdfminer.six.egg-info/
+/site/
 .idea/
 .tox/
 .nox/
@@ -27,3 +28,4 @@ poetry.lock
 *~
 /playa/_version.py
 .venv
+*.so

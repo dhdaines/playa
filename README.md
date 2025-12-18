@@ -15,7 +15,7 @@ pdfminer.six, for instance:
 2. Obtaining the absolute position and attributes of every character,
    line, path, and image in every page of a PDF.
    
-Note that while **P**LAYA Ain't a **LAY**out **A**nalyzer, it does in
+Note that while **PL**AYA **A**in't a LA**Y**out **A**nalyzer, it does in
 fact implement the [layout
 analysis](https://pdfminersix.readthedocs.io/en/latest/topic/converting_pdf_to_text.html#layout-analysis-algorithm)
 algorithm from

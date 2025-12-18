@@ -1,4 +1,4 @@
-from playa.data.asobj import asobj
+from playa.data._asobj import asobj
 from playa.data.content import (
     Color,
     ColorSpace,

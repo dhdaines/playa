@@ -644,9 +644,9 @@ class Document:
         page_labels = PageLabels(self.catalog["PageLabels"])
         return page_labels.labels
 
-    PageType = Dict[Any, Dict[Any, Any]]
-
-    def _get_pages_from_xrefs(self) -> Iterator[Tuple[int, PageType]]:
+    def _get_pages_from_xrefs(
+        self,
+    ) -> Iterator[Tuple[int, Dict[str, Dict[str, PDFObject]]]]:
         """Find pages from the cross-reference tables if the page tree
         is missing (note that this only happens in invalid PDFs, but
         it happens.)
@@ -663,7 +663,9 @@ class Document:
                 except IndexError:
                     pass
 
-    def _get_page_objects(self) -> Iterator[Tuple[int, PageType]]:
+    def _get_page_objects(
+        self,
+    ) -> Iterator[Tuple[int, Dict[str, Dict[str, PDFObject]]]]:
         """Iterate over the flattened page tree in reading order, propagating
         inheritable attributes.  Returns an iterator over (objid, dict) pairs.
 

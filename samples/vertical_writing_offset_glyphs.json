@@ -1,0 +1,968 @@
+[
+{
+  "cid": 843,
+  "bbox": [
+    92.3875,
+    60.0,
+    107.8375,
+    70.0
+  ],
+  "matrix": [
+    15.0,
+    0.0,
+    0,
+    10,
+    100,
+    70
+  ],
+  "displacement": [
+    -0.0,
+    -12.0
+  ],
+  "gstate": {
+    "font": {
+      "name": "KXRNCQ+AokinMincho",
+      "type": "CIDFont",
+      "ascent": 880,
+      "descent": -120,
+      "default_width": 1015,
+      "bbox": [
+        -434,
+        -286,
+        1052,
+        927
+      ],
+      "matrix": [
+        0.001,
+        0,
+        0,
+        0.001,
+        0,
+        0
+      ]
+    },
+    "fontsize": 10
+  },
+  "text": "あ"
+},
+{
+  "cid": 845,
+  "bbox": [
+    92.3875,
+    48.0,
+    107.8375,
+    58.0
+  ],
+  "matrix": [
+    15.0,
+    0.0,
+    0,
+    10,
+    100.0,
+    58.0
+  ],
+  "displacement": [
+    -0.0,
+    -12.0
+  ],
+  "gstate": {
+    "font": {
+      "name": "KXRNCQ+AokinMincho",
+      "type": "CIDFont",
+      "ascent": 880,
+      "descent": -120,
+      "default_width": 1015,
+      "bbox": [
+        -434,
+        -286,
+        1052,
+        927
+      ],
+      "matrix": [
+        0.001,
+        0,
+        0,
+        0.001,
+        0,
+        0
+      ]
+    },
+    "fontsize": 10
+  },
+  "text": "い"
+},
+{
+  "cid": 847,
+  "bbox": [
+    92.3875,
+    36.0,
+    107.8375,
+    46.0
+  ],
+  "matrix": [
+    15.0,
+    0.0,
+    0,
+    10,
+    100.0,
+    46.0
+  ],
+  "displacement": [
+    -0.0,
+    -12.0
+  ],
+  "gstate": {
+    "font": {
+      "name": "KXRNCQ+AokinMincho",
+      "type": "CIDFont",
+      "ascent": 880,
+      "descent": -120,
+      "default_width": 1015,
+      "bbox": [
+        -434,
+        -286,
+        1052,
+        927
+      ],
+      "matrix": [
+        0.001,
+        0,
+        0,
+        0.001,
+        0,
+        0
+      ]
+    },
+    "fontsize": 10
+  },
+  "text": "う"
+},
+{
+  "cid": 849,
+  "bbox": [
+    92.3875,
+    24.0,
+    107.8375,
+    34.0
+  ],
+  "matrix": [
+    15.0,
+    0.0,
+    0,
+    10,
+    100.0,
+    34.0
+  ],
+  "displacement": [
+    -0.0,
+    -12.0
+  ],
+  "gstate": {
+    "font": {
+      "name": "KXRNCQ+AokinMincho",
+      "type": "CIDFont",
+      "ascent": 880,
+      "descent": -120,
+      "default_width": 1015,
+      "bbox": [
+        -434,
+        -286,
+        1052,
+        927
+      ],
+      "matrix": [
+        0.001,
+        0,
+        0,
+        0.001,
+        0,
+        0
+      ]
+    },
+    "fontsize": 10
+  },
+  "text": "え"
+},
+{
+  "cid": 851,
+  "bbox": [
+    92.3875,
+    12.0,
+    107.8375,
+    22.0
+  ],
+  "matrix": [
+    15.0,
+    0.0,
+    0,
+    10,
+    100.0,
+    22.0
+  ],
+  "displacement": [
+    -0.0,
+    -12.0
+  ],
+  "gstate": {
+    "font": {
+      "name": "KXRNCQ+AokinMincho",
+      "type": "CIDFont",
+      "ascent": 880,
+      "descent": -120,
+      "default_width": 1015,
+      "bbox": [
+        -434,
+        -286,
+        1052,
+        927
+      ],
+      "matrix": [
+        0.001,
+        0,
+        0,
+        0.001,
+        0,
+        0
+      ]
+    },
+    "fontsize": 10
+  },
+  "text": "お"
+},
+{
+  "cid": 3284,
+  "bbox": [
+    20.0,
+    68.8,
+    30.3,
+    78.8
+  ],
+  "matrix": [
+    10.0,
+    0.0,
+    0,
+    10,
+    20,
+    70
+  ],
+  "displacement": [
+    -0.0,
+    -10.0
+  ],
+  "gstate": {
+    "font": {
+      "name": "KXRNCQ+AokinMincho",
+      "type": "CIDFont",
+      "ascent": 880,
+      "descent": -120,
+      "default_width": 1015,
+      "bbox": [
+        -434,
+        -286,
+        1052,
+        927
+      ],
+      "matrix": [
+        0.001,
+        0,
+        0,
+        0.001,
+        0,
+        0
+      ]
+    },
+    "fontsize": 10
+  },
+  "text": "日"
+},
+{
+  "cid": 3722,
+  "bbox": [
+    22.0,
+    58.8,
+    32.3,
+    68.8
+  ],
+  "matrix": [
+    10.0,
+    0.0,
+    0,
+    10,
+    20.0,
+    60.0
+  ],
+  "displacement": [
+    -0.0,
+    -10.0
+  ],
+  "gstate": {
+    "font": {
+      "name": "KXRNCQ+AokinMincho",
+      "type": "CIDFont",
+      "ascent": 880,
+      "descent": -120,
+      "default_width": 1015,
+      "bbox": [
+        -434,
+        -286,
+        1052,
+        927
+      ],
+      "matrix": [
+        0.001,
+        0,
+        0,
+        0.001,
+        0,
+        0
+      ]
+    },
+    "fontsize": 10
+  },
+  "text": "本"
+},
+{
+  "cid": 1952,
+  "bbox": [
+    10.0,
+    58.8,
+    20.3,
+    68.8
+  ],
+  "matrix": [
+    10.0,
+    0.0,
+    0,
+    10,
+    20.0,
+    50.0
+  ],
+  "displacement": [
+    -0.0,
+    -10.0
+  ],
+  "gstate": {
+    "font": {
+      "name": "KXRNCQ+AokinMincho",
+      "type": "CIDFont",
+      "ascent": 880,
+      "descent": -120,
+      "default_width": 1015,
+      "bbox": [
+        -434,
+        -286,
+        1052,
+        927
+      ],
+      "matrix": [
+        0.001,
+        0,
+        0,
+        0.001,
+        0,
+        0
+      ]
+    },
+    "fontsize": 10
+  },
+  "text": "語"
+},
+{
+  "cid": 843,
+  "bbox": [
+    152.3875,
+    60.0,
+    167.8375,
+    70.0
+  ],
+  "matrix": [
+    15.0,
+    0.0,
+    0,
+    10,
+    160,
+    70
+  ],
+  "displacement": [
+    -0.0,
+    -12.0
+  ],
+  "gstate": {
+    "font": {
+      "name": "KXRNCQ+AokinMincho",
+      "type": "CIDFont",
+      "ascent": 880,
+      "descent": -120,
+      "default_width": 1015,
+      "bbox": [
+        -434,
+        -286,
+        1052,
+        927
+      ],
+      "matrix": [
+        0.001,
+        0,
+        0,
+        0.001,
+        0,
+        0
+      ]
+    },
+    "fontsize": 10
+  },
+  "text": "あ"
+},
+{
+  "cid": 845,
+  "bbox": [
+    152.3875,
+    48.0,
+    167.8375,
+    58.0
+  ],
+  "matrix": [
+    15.0,
+    0.0,
+    0,
+    10,
+    160.0,
+    58.0
+  ],
+  "displacement": [
+    -0.0,
+    -12.0
+  ],
+  "gstate": {
+    "font": {
+      "name": "KXRNCQ+AokinMincho",
+      "type": "CIDFont",
+      "ascent": 880,
+      "descent": -120,
+      "default_width": 1015,
+      "bbox": [
+        -434,
+        -286,
+        1052,
+        927
+      ],
+      "matrix": [
+        0.001,
+        0,
+        0,
+        0.001,
+        0,
+        0
+      ]
+    },
+    "fontsize": 10
+  },
+  "text": "い"
+},
+{
+  "cid": 847,
+  "bbox": [
+    152.3875,
+    31.0,
+    167.8375,
+    41.0
+  ],
+  "matrix": [
+    15.0,
+    0.0,
+    0,
+    10,
+    160.0,
+    41.0
+  ],
+  "displacement": [
+    -0.0,
+    -12.0
+  ],
+  "gstate": {
+    "font": {
+      "name": "KXRNCQ+AokinMincho",
+      "type": "CIDFont",
+      "ascent": 880,
+      "descent": -120,
+      "default_width": 1015,
+      "bbox": [
+        -434,
+        -286,
+        1052,
+        927
+      ],
+      "matrix": [
+        0.001,
+        0,
+        0,
+        0.001,
+        0,
+        0
+      ]
+    },
+    "fontsize": 10
+  },
+  "text": "う"
+},
+{
+  "cid": 849,
+  "bbox": [
+    152.3875,
+    19.0,
+    167.8375,
+    29.0
+  ],
+  "matrix": [
+    15.0,
+    0.0,
+    0,
+    10,
+    160.0,
+    29.0
+  ],
+  "displacement": [
+    -0.0,
+    -12.0
+  ],
+  "gstate": {
+    "font": {
+      "name": "KXRNCQ+AokinMincho",
+      "type": "CIDFont",
+      "ascent": 880,
+      "descent": -120,
+      "default_width": 1015,
+      "bbox": [
+        -434,
+        -286,
+        1052,
+        927
+      ],
+      "matrix": [
+        0.001,
+        0,
+        0,
+        0.001,
+        0,
+        0
+      ]
+    },
+    "fontsize": 10
+  },
+  "text": "え"
+},
+{
+  "cid": 851,
+  "bbox": [
+    152.3875,
+    7.0,
+    167.8375,
+    17.0
+  ],
+  "matrix": [
+    15.0,
+    0.0,
+    0,
+    10,
+    160.0,
+    17.0
+  ],
+  "displacement": [
+    -0.0,
+    -12.0
+  ],
+  "gstate": {
+    "font": {
+      "name": "KXRNCQ+AokinMincho",
+      "type": "CIDFont",
+      "ascent": 880,
+      "descent": -120,
+      "default_width": 1015,
+      "bbox": [
+        -434,
+        -286,
+        1052,
+        927
+      ],
+      "matrix": [
+        0.001,
+        0,
+        0,
+        0.001,
+        0,
+        0
+      ]
+    },
+    "fontsize": 10
+  },
+  "text": "お"
+},
+{
+  "cid": 843,
+  "bbox": [
+    100.0,
+    68.8,
+    110.3,
+    78.8
+  ],
+  "matrix": [
+    10.0,
+    0.0,
+    0,
+    10,
+    100,
+    70
+  ],
+  "displacement": [
+    10.3,
+    0.0
+  ],
+  "gstate": {
+    "font": {
+      "name": "FOOBAR+AokinMincho",
+      "type": "CIDFont",
+      "ascent": 880,
+      "descent": -120,
+      "default_width": 1015,
+      "bbox": [
+        -434,
+        -286,
+        1052,
+        927
+      ],
+      "matrix": [
+        0.001,
+        0,
+        0,
+        0.001,
+        0,
+        0
+      ]
+    },
+    "fontsize": 10
+  },
+  "text": "あ"
+},
+{
+  "cid": 845,
+  "bbox": [
+    110.3,
+    68.8,
+    120.6,
+    78.8
+  ],
+  "matrix": [
+    10.0,
+    0.0,
+    0,
+    10,
+    110.3,
+    70.0
+  ],
+  "displacement": [
+    10.3,
+    0.0
+  ],
+  "gstate": {
+    "font": {
+      "name": "FOOBAR+AokinMincho",
+      "type": "CIDFont",
+      "ascent": 880,
+      "descent": -120,
+      "default_width": 1015,
+      "bbox": [
+        -434,
+        -286,
+        1052,
+        927
+      ],
+      "matrix": [
+        0.001,
+        0,
+        0,
+        0.001,
+        0,
+        0
+      ]
+    },
+    "fontsize": 10
+  },
+  "text": "い"
+},
+{
+  "cid": 847,
+  "bbox": [
+    120.6,
+    68.8,
+    130.9,
+    78.8
+  ],
+  "matrix": [
+    10.0,
+    0.0,
+    0,
+    10,
+    120.6,
+    70.0
+  ],
+  "displacement": [
+    10.3,
+    0.0
+  ],
+  "gstate": {
+    "font": {
+      "name": "FOOBAR+AokinMincho",
+      "type": "CIDFont",
+      "ascent": 880,
+      "descent": -120,
+      "default_width": 1015,
+      "bbox": [
+        -434,
+        -286,
+        1052,
+        927
+      ],
+      "matrix": [
+        0.001,
+        0,
+        0,
+        0.001,
+        0,
+        0
+      ]
+    },
+    "fontsize": 10
+  },
+  "text": "う"
+},
+{
+  "cid": 849,
+  "bbox": [
+    130.9,
+    68.8,
+    141.20000000000002,
+    78.8
+  ],
+  "matrix": [
+    10.0,
+    0.0,
+    0,
+    10,
+    130.9,
+    70.0
+  ],
+  "displacement": [
+    10.3,
+    0.0
+  ],
+  "gstate": {
+    "font": {
+      "name": "FOOBAR+AokinMincho",
+      "type": "CIDFont",
+      "ascent": 880,
+      "descent": -120,
+      "default_width": 1015,
+      "bbox": [
+        -434,
+        -286,
+        1052,
+        927
+      ],
+      "matrix": [
+        0.001,
+        0,
+        0,
+        0.001,
+        0,
+        0
+      ]
+    },
+    "fontsize": 10
+  },
+  "text": "え"
+},
+{
+  "cid": 851,
+  "bbox": [
+    141.2,
+    68.8,
+    151.5,
+    78.8
+  ],
+  "matrix": [
+    10.0,
+    0.0,
+    0,
+    10,
+    141.2,
+    70.0
+  ],
+  "displacement": [
+    10.3,
+    0.0
+  ],
+  "gstate": {
+    "font": {
+      "name": "FOOBAR+AokinMincho",
+      "type": "CIDFont",
+      "ascent": 880,
+      "descent": -120,
+      "default_width": 1015,
+      "bbox": [
+        -434,
+        -286,
+        1052,
+        927
+      ],
+      "matrix": [
+        0.001,
+        0,
+        0,
+        0.001,
+        0,
+        0
+      ]
+    },
+    "fontsize": 10
+  },
+  "text": "お"
+},
+{
+  "cid": 3284,
+  "bbox": [
+    20.0,
+    68.8,
+    30.3,
+    78.8
+  ],
+  "matrix": [
+    10.0,
+    0.0,
+    0,
+    10,
+    20,
+    70
+  ],
+  "displacement": [
+    10.3,
+    0.0
+  ],
+  "gstate": {
+    "font": {
+      "name": "FOOBAR+AokinMincho",
+      "type": "CIDFont",
+      "ascent": 880,
+      "descent": -120,
+      "default_width": 1015,
+      "bbox": [
+        -434,
+        -286,
+        1052,
+        927
+      ],
+      "matrix": [
+        0.001,
+        0,
+        0,
+        0.001,
+        0,
+        0
+      ]
+    },
+    "fontsize": 10
+  },
+  "text": "日"
+},
+{
+  "cid": 3722,
+  "bbox": [
+    30.3,
+    68.8,
+    40.6,
+    78.8
+  ],
+  "matrix": [
+    10.0,
+    0.0,
+    0,
+    10,
+    30.3,
+    70.0
+  ],
+  "displacement": [
+    10.3,
+    0.0
+  ],
+  "gstate": {
+    "font": {
+      "name": "FOOBAR+AokinMincho",
+      "type": "CIDFont",
+      "ascent": 880,
+      "descent": -120,
+      "default_width": 1015,
+      "bbox": [
+        -434,
+        -286,
+        1052,
+        927
+      ],
+      "matrix": [
+        0.001,
+        0,
+        0,
+        0.001,
+        0,
+        0
+      ]
+    },
+    "fontsize": 10
+  },
+  "text": "本"
+},
+{
+  "cid": 1952,
+  "bbox": [
+    40.6,
+    68.8,
+    50.900000000000006,
+    78.8
+  ],
+  "matrix": [
+    10.0,
+    0.0,
+    0,
+    10,
+    40.6,
+    70.0
+  ],
+  "displacement": [
+    10.3,
+    0.0
+  ],
+  "gstate": {
+    "font": {
+      "name": "FOOBAR+AokinMincho",
+      "type": "CIDFont",
+      "ascent": 880,
+      "descent": -120,
+      "default_width": 1015,
+      "bbox": [
+        -434,
+        -286,
+        1052,
+        927
+      ],
+      "matrix": [
+        0.001,
+        0,
+        0,
+        0.001,
+        0,
+        0
+      ]
+    },
+    "fontsize": 10
+  },
+  "text": "語"
+}
+]

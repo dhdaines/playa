@@ -7,7 +7,7 @@ name = "playa-pdf"
 dynamic = ["version"]
 description = "Parallel and LazY Analyzer for PDFs"
 readme = "README.md"
-license = "MIT"
+license = {text = "MIT"}
 requires-python = ">=3.8"
 authors = [
     { name = "David Huggins-Daines", email = "dhd@ecolingui.ca" },
@@ -84,16 +84,35 @@ extra-dependencies = [ "cryptography", "pdfminer.six" ]
 parallel = true
 
 [tool.hatch.envs.default]
-dependencies = [ "cryptography", "pytest", "pytest-xdist", "pdfminer.six" ]
+dependencies = [ "cryptography" ]
 
-[tool.hatch.envs.default.scripts]
+[tool.hatch.envs.benchmark]
+# Do not use editable install because of mypyc's .so droppings
+dev-mode = false
+extra-dependencies = [ "pdfminer.six" ]
+
+[tool.hatch.envs.benchmark.scripts]
 bench = [
     "python benchmarks/parser.py",
     "python benchmarks/converter.py",
     "python benchmarks/text.py",
     "python benchmarks/objects.py",
     "python benchmarks/miner.py",
+    "python benchmarks/ccitt_decode.py",
+    "python benchmarks/png_predict.py",
+    "python benchmarks/tiff_predict.py",
+    "python benchmarks/marked_content.py",
+    "python benchmarks/parallel.py",
+    "python benchmarks/structure.py",
 ]
+
+[tool.hatch.envs.benchmark-mypyc]
+# Do not use editable install (but we get .so droppings anyway)
+dev-mode = false
+template = "benchmark"
+
+[tool.hatch.envs.benchmark-mypyc.env-vars]
+HATCH_BUILD_HOOK_ENABLE_MYPYC = "1"
 
 [tool.hatch.envs.docs]
 dependencies = [
@@ -109,6 +128,8 @@ publish = "mike deploy --push --update-aliases $(playa --version) latest"
 [tool.hatch.envs.types]
 extra-dependencies = [
   "mypy>=1.0.0",
+  "pdfminer.six",
+  "pytest",
 ]
 [tool.hatch.envs.types.scripts]
 check = "mypy --install-types --non-interactive {args:playa tests benchmarks}"
@@ -118,6 +139,16 @@ extra-dependencies = [ "pydantic > 2" ]
 
 [tool.hatch.envs.notebooks]
 extra-dependencies = [ "paves", "jupyterlab" ]
+
+# To enable, set HATCH_BUILD_HOOK_ENABLE_MYPYC=1
+[tool.hatch.build.targets.wheel.hooks.mypyc]
+dependencies = ["hatch-mypyc", "cryptography"]
+enable-by-default = false
+include = [
+    "playa/ccitt.py",
+    "playa/image.py",
+    "playa/utils.py",
+]
 
 [tool.coverage.run]
 omit = [ "tests/*" ]
@@ -130,3 +161,6 @@ exclude_also = [
     'if 0:',
     'if TYPE_CHECKING:',
 ]
+
+[tool.setuptools]
+packages = ["playa"]
