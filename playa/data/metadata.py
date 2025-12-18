@@ -14,7 +14,7 @@ try:
 except ImportError:
     from typing import TypedDict
 
-from playa.data.asobj import asobj
+from playa.data._asobj import asobj
 from playa.document import Destinations as _Destinations
 from playa.document import Document as _Document
 from playa.font import Font as _Font
