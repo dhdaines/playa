@@ -129,6 +129,7 @@ publish = "mike deploy --push --update-aliases $(playa --version) latest"
 extra-dependencies = [
   "mypy>=1.0.0",
   "pdfminer.six",
+  "pytest",
 ]
 [tool.hatch.envs.types.scripts]
 check = "mypy --install-types --non-interactive {args:playa tests benchmarks}"
