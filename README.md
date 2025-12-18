@@ -21,7 +21,7 @@ analysis](https://pdfminersix.readthedocs.io/en/latest/topic/converting_pdf_to_t
 algorithm from
 [pdfminer.six](https://github.com/pdfminer/pdfminer.six) anyways.  See
 [the
-documentation](https://dhdaines.github.io/playa/working-in-the-pdf-mine)
+documentation](https://dhdaines.github.io/playa/latest/working-in-the-pdf-mine)
 for more information on how to migrate your code.  You may be
 interested to know that PLAYA's implementation is also 15-50% faster,
 depending on how many CPUs you use.
