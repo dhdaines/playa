@@ -164,3 +164,11 @@ exclude_also = [
 
 [tool.setuptools]
 packages = ["playa"]
+
+[tool.cibuildwheel]
+# Build for CPython only, PyPy will optimize itself
+build = ["cp*"]
+# Sorry, not going to spend time building for 32 bit Intel
+skip = "*i686*"
+# When building wheels, enable binaries!
+environment = { HATCH_BUILD_HOOK_ENABLE_MYPYC=1 }
