@@ -39,6 +39,7 @@ from playa.content import (
     GraphicState,
     ImageObject,
     MarkedContent,
+    PathOperator,
     PathSegment as PLAYAPathSegment,
 )
 from playa.page import Page
@@ -92,7 +93,9 @@ _T = TypeVar("_T")
 # This is **not** infinity, just an arbitrary big number we use for
 # initializing bounding boxes.
 INF = (1 << 31) - 1
-# Ugly pdfminer.six types
+# Ugly pdfminer.six type.  NOTE: Unlike pdfminer.six, which doesn't
+# respect its own type annotations and actually returns Tuple[str,
+# Point, ...], we do respect these types.
 PathSegment = Union[
     Tuple[str],  # Literal['h']
     Tuple[str, float, float],  # Literal['m', 'l']
@@ -1238,8 +1241,29 @@ def subpaths(path: PathObject) -> Iterator[PathObject]:
         )
 
 
+def make_path_segment(op: PathOperator, points: List[Point]) -> PathSegment:
+    """Create a type-safe PathSegment, unlike pdfminer.six."""
+    if len(points) == 0:
+        if op != "h":
+            raise ValueError("Incorrect arguments for {op!r}: {points!r}")
+        return (str(op),)
+    if len(points) == 1:
+        if op not in "ml":
+            raise ValueError("Incorrect arguments for {op!r}: {points!r}")
+        return (str(op), *points[0])
+    if len(points) == 2:
+        if op not in "vy":
+            raise ValueError("Incorrect arguments for {op!r}: {points!r}")
+        return (str(op), *points[0], *points[1])
+    if len(points) == 3:
+        if op != "c":
+            raise ValueError("Incorrect arguments for {op!r}: {points!r}")
+        return (str(op), *points[0], *points[1], *points[2])
+    raise ValueError(f"Path segment has unknown number of points: {op!r} {points!r}")
+
+
 @process_object.register
-def _(obj: PathObject) -> Iterator[LTComponent]:
+def process_path(obj: PathObject) -> Iterator[LTComponent]:
     for path in subpaths(obj):
         ops = []
         pts: List[Point] = []
@@ -1254,17 +1278,18 @@ def _(obj: PathObject) -> Iterator[LTComponent]:
         if len(ops) > 3 and shape[-2:] == "lh" and pts[-2] == pts[0]:
             shape = shape[:-2] + "h"
             pts.pop()
-        transformed_points = [
-            [
-                # FIXME: Redundant computation for final point
-                apply_matrix_pt(obj.ctm, point)
-                for point in seg.points
-            ]
-            for seg in path.raw_segments
-        ]
-        transformed_path = [
-            cast(PathSegment, (o, *p)) for o, p in zip(ops, transformed_points)
-        ]
+        transformed_path: List[PathSegment] = []
+        for op, seg in zip(ops, path.raw_segments):
+            transformed_path.append(
+                make_path_segment(
+                    op,
+                    [
+                        # FIXME: Redundant computation for final point
+                        apply_matrix_pt(obj.ctm, point)
+                        for point in seg.points
+                    ],
+                )
+            )
         if shape in {"mlh", "ml"}:
             # single line segment ("ml" is a frequent anomaly)
             line = LTLine(
@@ -1308,7 +1333,7 @@ def _(obj: PathObject) -> Iterator[LTComponent]:
 
 
 @process_object.register
-def _(obj: XObjectObject) -> Iterator[LTComponent]:
+def process_xobject(obj: XObjectObject) -> Iterator[LTComponent]:
     fig = LTFigure(obj)
     for child in obj:
         for grandchild in process_object(child):
@@ -1317,7 +1342,7 @@ def _(obj: XObjectObject) -> Iterator[LTComponent]:
 
 
 @process_object.register
-def _(obj: ImageObject) -> Iterator[LTComponent]:
+def process_image(obj: ImageObject) -> Iterator[LTComponent]:
     # pdfminer.six creates a redundant "figure" for images, even
     # inline ones, so we will do the same.
     fig = LTFigure(obj)
@@ -1327,7 +1352,7 @@ def _(obj: ImageObject) -> Iterator[LTComponent]:
 
 
 @process_object.register
-def _(obj: TextObject) -> Iterator[LTComponent]:
+def process_text(obj: TextObject) -> Iterator[LTComponent]:
     # We only create LTChar, the rest is some dark magic
     for glyph in obj:
         yield LTChar(glyph)

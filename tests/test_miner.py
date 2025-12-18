@@ -2,50 +2,54 @@
 Test pdfminer.six replacement functionality.
 """
 
-import playa
-from playa.miner import extract_page, extract, LAParams, LTFigure
-from pdfminer.converter import PDFPageAggregator
-from pdfminer.pdfinterp import PDFPageInterpreter, PDFResourceManager
-from pdfminer.pdfpage import PDFPage
+from playa.miner import extract, LAParams, LTFigure, make_path_segment
 from pdfminer.high_level import extract_pages as pdfminer_extract_pages
-from tests.data import CONTRIB
+from tests.data import TESTDIR, CONTRIB, XFAILS, PDFMINER_BUGS
+from pathlib import Path
 import pytest
+import re
+from typing import Any
 
 
-@pytest.mark.skipif(not CONTRIB.exists(), reason="contrib samples not present")
-def test_miner_extract():
-    path = CONTRIB / "Rgl-1314-2021-Z-en-vigueur-20240823.pdf"
-    with playa.open(path, space="page") as pdf:
-        # OMFG as usual
-        resource_manager = PDFResourceManager()
-        device = PDFPageAggregator(resource_manager)
-        interpreter = PDFPageInterpreter(resource_manager, device)
-        for idx, (playa_page, pdfminer_page) in enumerate(
-            zip(pdf.pages, PDFPage.get_pages(pdf._fp))
-        ):
-            # Otherwise pdfminer.six is just too darn slow
-            if idx == 20:
-                break
-            paves_ltpage = extract_page(playa_page)
-            interpreter.process_page(pdfminer_page)
-            pdfminer_ltpage = device.get_result()
-            for pv, pm in zip(paves_ltpage, pdfminer_ltpage):
-                # Because in its infinite wisdom these have no __eq__
-                assert str(pv) == str(pm)
+# For the moment test a restricted set of PDFs as we are not totally
+# bug-compatible with pdfminer.six
+TESTPDFS = [
+    (TESTDIR / name)
+    for name in [
+        "core_font_encodings.pdf",
+        "font-size-test.pdf",
+        "hello_structure.pdf",
+        "simple1.pdf",
+        "simple2.pdf",
+        #    "vertical_writing.pdf",
+        "zen_of_python_corrupted.pdf",
+    ]
+]
 
 
-@pytest.mark.skipif(not CONTRIB.exists(), reason="contrib samples not present")
-def test_extract():
-    path = CONTRIB / "Rgl-1314-2021-Z-en-vigueur-20240823.pdf"
-    for idx, (paves_ltpage, pdfminer_ltpage) in enumerate(
+def compare(playa_item: Any, pdfminer_item: Any) -> None:
+    """Compare PLAYA and pdfminer.six accounting for some differences."""
+    pvstr = str(playa_item)
+    pmstr = str(pdfminer_item)
+    # Remove (cid:N) as PLAYA does not do that
+    pmstr = re.sub(r"\(cid:\d+\)", "", pmstr)
+    assert pvstr == pmstr
+
+
+@pytest.mark.parametrize("path", TESTPDFS, ids=str)
+def test_extract(path: Path):
+    if path.name in XFAILS:
+        pytest.xfail("Expected failure: %s" % path.name)
+    if path.name in PDFMINER_BUGS:
+        pytest.xfail("Skipping pdfminer.six failure: %s" % path.name)
+    for idx, (playa_ltpage, pdfminer_ltpage) in enumerate(
         zip(extract(path, LAParams()), pdfminer_extract_pages(path))
     ):
         # Otherwise pdfminer.six is just too darn slow
         if idx == 20:
             break
-        for pv, pm in zip(paves_ltpage, pdfminer_ltpage):
-            # Because in its infinite wisdom these have no __eq__
-            assert str(pv) == str(pm)
+        for playa_item, pdfminer_item in zip(playa_ltpage, pdfminer_ltpage):
+            compare(playa_item, pdfminer_item)
 
 
 @pytest.mark.skipif(not CONTRIB.exists(), reason="contrib samples not present")
@@ -65,6 +69,23 @@ def test_serialization():
             icc = img.colorspace.spec[1].resolve()
             assert len(icc.buffer) == 3144
         # Probably we could test some other things too?
+
+
+def test_make_path_segment() -> None:
+    """Verify make_path_segment works"""
+    assert make_path_segment("h", []) == ("h",)
+    assert make_path_segment("m", [(1, 2)]) == ("m", 1, 2)
+    assert make_path_segment("l", [(3, 4)]) == ("l", 3, 4)
+    assert make_path_segment("v", [(3, 4), (5, 6)]) == ("v", 3, 4, 5, 6)
+    assert make_path_segment("y", [(3, 4), (5, 6)]) == ("y", 3, 4, 5, 6)
+    assert make_path_segment("c", [(1, 2), (3, 4), (5, 6)]) == ("c", 1, 2, 3, 4, 5, 6)
+    with pytest.raises(ValueError):
+        make_path_segment("h", [(1, 2)])
+        make_path_segment("m", [(1, 2), (3, 4)])
+        make_path_segment("l", [(1, 2), (3, 4)])
+        make_path_segment("v", [(1, 2)])
+        make_path_segment("y", [(1, 2)])
+        make_path_segment("c", [(1, 2)])
 
 
 if __name__ == "__main__":
