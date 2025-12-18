@@ -92,6 +92,7 @@ bench = [
     "python benchmarks/converter.py",
     "python benchmarks/text.py",
     "python benchmarks/objects.py",
+    "python benchmarks/miner.py",
 ]
 
 [tool.hatch.envs.docs]

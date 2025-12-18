@@ -37,6 +37,7 @@ from playa.content import (
     GraphicState,
     ImageObject,
     MarkedContent,
+    PathSegment as PLAYAPathSegment,
 )
 from playa.page import Page
 from playa.page import Page as PDFPage
@@ -1180,7 +1181,7 @@ def subpaths(path: PathObject) -> Iterator[PathObject]:
 
     """
     # FIXME: Is there an itertool or a more_itertool for this?
-    segs: List[PathSegment] = []
+    segs: List[PLAYAPathSegment] = []
     for seg in path.raw_segments:
         if seg.operator == "m" and segs:
             yield PathObject(
