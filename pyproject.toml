@@ -35,6 +35,8 @@ classifiers = [
     "Topic :: Text Processing",
 ]
 
+dependencies = ["mypy-extensions"]
+
 [project.optional-dependencies]
 crypto = ["cryptography >= 36.0.0"]
 
@@ -127,12 +129,13 @@ publish = "mike deploy --push --update-aliases $(playa --version) latest"
 
 [tool.hatch.envs.types]
 extra-dependencies = [
-  "mypy>=1.0.0",
+  "mypy[mypyc]>=1.0.0",
   "pdfminer.six",
   "pytest",
 ]
 [tool.hatch.envs.types.scripts]
 check = "mypy --install-types --non-interactive {args:playa tests benchmarks}"
+compile = "mypyc playa/ccitt.py playa/image.py playa/utils.py playa/miner.py"
 
 [tool.hatch.envs.schema]
 extra-dependencies = [ "pydantic > 2" ]
@@ -148,6 +151,7 @@ include = [
     "playa/ccitt.py",
     "playa/image.py",
     "playa/utils.py",
+    "playa/miner.py",
 ]
 
 [tool.coverage.run]
