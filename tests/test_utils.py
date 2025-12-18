@@ -2,7 +2,7 @@ import itertools
 from typing import cast
 
 import pytest
-from playa.data import asobj
+from playa import asobj
 from playa.document import PageLabels
 from playa.pdftypes import LIT
 from playa.utils import (
