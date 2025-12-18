@@ -39,7 +39,6 @@ jobs:
         env:
           CIBW_PLATFORM: ${{ matrix.platform || 'auto' }}
           CIBW_ARCHS: ${{ matrix.archs || 'auto' }}
-          HATCH_BUILD_HOOK_ENABLE_MYPYC: 1
         # Can also be configured directly, using `with:`
         # with:
         #   package-dir: .

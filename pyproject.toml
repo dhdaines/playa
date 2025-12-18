@@ -169,6 +169,8 @@ packages = ["playa"]
 # Build for CPython only, PyPy will optimize itself
 build = ["cp*"]
 # Sorry, not going to spend time building for 32 bit Intel
-skip = "*i686*"
+# mypyc doesn't work on Python 3.8, and 3.9 is EOL now
+# Skip musl for the moment
+skip = ["cp38*", "cp39*", "*i686*", "*musl*"]
 # When building wheels, enable binaries!
 environment = { HATCH_BUILD_HOOK_ENABLE_MYPYC=1 }
