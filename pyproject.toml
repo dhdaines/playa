@@ -80,11 +80,11 @@ testpaths = [ "tests" ]
 markers = [ "contrib", "thirdparty" ]
 
 [tool.hatch.envs.hatch-test]
-extra-dependencies = [ "cryptography" ]
+extra-dependencies = [ "cryptography", "pdfminer.six" ]
 parallel = true
 
 [tool.hatch.envs.default]
-dependencies = [ "cryptography", "pytest", "pytest-xdist" ]
+dependencies = [ "cryptography" ]
 
 [tool.hatch.envs.benchmark]
 # Do not use editable install because of mypyc's .so droppings
