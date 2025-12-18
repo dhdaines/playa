@@ -17,6 +17,7 @@ jobs:
       - name: Check types with mypy
         run: hatch run types:check
   test:
+    needs: check
     strategy:
       fail-fast: true
       matrix:
