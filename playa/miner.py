@@ -25,6 +25,8 @@ from typing import (
     cast,
 )
 
+from mypy_extensions import trait
+
 import playa
 from playa import pdftypes
 from playa.color import ColorSpace
@@ -99,25 +101,32 @@ PathSegment = Union[
 ]  # Literal['c']
 
 
-class PDFTypeError(PDFException, TypeError):
-    """Rather pointless subclass of TypeError"""
+class PDFTypeError(PDFException):
+    """
+    TypeError, but for PDFs (not a subclass of TypeError, unlike in pdfminer.six)
+    """
 
     pass
 
 
-class PDFValueError(PDFException, ValueError):
-    """Rather pointless subclass of ValueError"""
+class PDFValueError(PDFException):
+    """
+    ValueError, but for PDFs (not a subclass of ValueError, unlike in pdfminer.six)
+    """
 
     pass
 
 
 def uniq(objs: Iterable[_T]) -> Iterator[_T]:
     """Eliminates duplicated elements."""
-    done = set()
+    # Duplicated here means the same object (this horrible code was
+    # horribly written without any notion of hashable or non-hashable
+    # types, SMH)
+    done: Set[int] = set()
     for obj in objs:
-        if obj in done:
+        if id(obj) in done:
             continue
-        done.add(obj)
+        done.add(id(obj))
         yield obj
 
 
@@ -158,7 +167,7 @@ class Plane(Generic[LTComponentT]):
 
     def __init__(self, bbox: Rect, gridsize: int = 50) -> None:
         self._seq: List[LTComponentT] = []  # preserve the object order.
-        self._objs: Set[LTComponentT] = set()
+        self._objs: Dict[int, LTComponentT] = {}  # store unique objects
         self._grid: Dict[Point, List[LTComponentT]] = {}
         self.gridsize = gridsize
         (self.x0, self.y0, self.x1, self.y1) = bbox
@@ -167,13 +176,15 @@ class Plane(Generic[LTComponentT]):
         return "<Plane objs=%r>" % list(self)
 
     def __iter__(self) -> Iterator[LTComponentT]:
-        return (obj for obj in self._seq if obj in self._objs)
+        for obj in self._seq:
+            if id(obj) in self._objs:
+                yield obj
 
     def __len__(self) -> int:
         return len(self._objs)
 
-    def __contains__(self, obj: object) -> bool:
-        return obj in self._objs
+    def __contains__(self, obj: LTComponentT) -> bool:
+        return id(obj) in self._objs
 
     def _getrange(self, bbox: Rect) -> Iterator[Point]:
         (x0, y0, x1, y1) = bbox
@@ -201,7 +212,7 @@ class Plane(Generic[LTComponentT]):
                 r = self._grid[k]
             r.append(obj)
         self._seq.append(obj)
-        self._objs.add(obj)
+        self._objs[id(obj)] = obj
 
     def remove(self, obj: LTComponentT) -> None:
         """Displace an object."""
@@ -210,19 +221,19 @@ class Plane(Generic[LTComponentT]):
                 self._grid[k].remove(obj)
             except (KeyError, ValueError):
                 pass
-        self._objs.remove(obj)
+        del self._objs[id(obj)]
 
     def find(self, bbox: Rect) -> Iterator[LTComponentT]:
         """Finds objects that are in a certain area."""
         (x0, y0, x1, y1) = bbox
-        done = set()
+        done: Set[int] = set()
         for k in self._getrange(bbox):
             if k not in self._grid:
                 continue
             for obj in self._grid[k]:
-                if obj in done:
+                if id(obj) in done:
                     continue
-                done.add(obj)
+                done.add(id(obj))
                 if obj.x1 <= x0 or x1 <= obj.x0 or obj.y1 <= y0 or y1 <= obj.y0:
                     continue
                 yield obj
@@ -307,6 +318,7 @@ class LAParams:
         )
 
 
+@trait
 class LTItem:
     """Interface for things that can be analyzed"""
 
@@ -314,6 +326,7 @@ class LTItem:
         """Perform the layout analysis."""
 
 
+@trait
 class LTText:
     """Interface for things that have text"""
 
@@ -669,7 +682,7 @@ class LTTextLine(LTTextContainer[TextLineElement]):
 class LTTextLineHorizontal(LTTextLine):
     def __init__(self, word_margin: float) -> None:
         LTTextLine.__init__(self, word_margin)
-        self._x1: float = +INF
+        self._x1 = +INF + 0.0
 
     # Incompatible override: we take an LTComponent (with bounding box), but
     # LTContainer only considers LTItem (no bounding box).
@@ -733,7 +746,7 @@ class LTTextLineHorizontal(LTTextLine):
 class LTTextLineVertical(LTTextLine):
     def __init__(self, word_margin: float) -> None:
         LTTextLine.__init__(self, word_margin)
-        self._y0: float = -INF
+        self._y0: float = -INF + 0.0
 
     # Incompatible override: we take an LTComponent (with bounding box), but
     # LTContainer only considers LTItem (no bounding box).
@@ -958,29 +971,30 @@ class LTLayoutContainer(LTContainer[LTComponent]):
         """Group neighboring lines to textboxes"""
         plane: Plane[LTTextLine] = Plane(self.bbox)
         plane.extend(lines)
-        boxes: Dict[LTTextLine, LTTextBox] = {}
+        boxes: Dict[int, LTTextBox] = {}
         for line in lines:
             neighbors = line.find_neighbors(plane, laparams.line_margin)
             members = [line]
             for obj1 in neighbors:
                 members.append(obj1)
-                if obj1 in boxes:
-                    members.extend(boxes.pop(obj1))
+                if id(obj1) in boxes:
+                    members.extend(boxes[id(obj1)])
+                    del boxes[id(obj1)]
             if isinstance(line, LTTextLineHorizontal):
                 box: LTTextBox = LTTextBoxHorizontal()
             else:
                 box = LTTextBoxVertical()
             for obj in uniq(members):
                 box.add(obj)
-                boxes[obj] = box
-        done = set()
+                boxes[id(obj)] = box
+        done: Set[int] = set()
         for line in lines:
-            if line not in boxes:
+            if id(line) not in boxes:
                 continue
-            box = boxes[line]
-            if box in done:
+            box = boxes[id(line)]
+            if id(box) in done:
                 continue
-            done.add(box)
+            done.add(id(box))
             if not box.is_empty():
                 yield box
 
@@ -1031,14 +1045,23 @@ class LTLayoutContainer(LTContainer[LTComponent]):
                 - obj2.width * obj2.height
             )
 
-        def isany(obj1: ElementT, obj2: ElementT) -> Set[ElementT]:
+        def isany(obj1: ElementT, obj2: ElementT) -> bool:
             """Check if there's any other object between obj1 and obj2."""
             x0 = min(obj1.x0, obj2.x0)
             y0 = min(obj1.y0, obj2.y0)
             x1 = max(obj1.x1, obj2.x1)
             y1 = max(obj1.y1, obj2.y1)
-            objs = set(plane.find((x0, y0, x1, y1)))
-            return objs.difference((obj1, obj2))
+            for obj in plane.find((x0, y0, x1, y1)):
+                if obj not in (obj1, obj2):
+                    break
+            else:
+                return False
+            return True
+
+        # If there's only one box, no grouping need be done, but we
+        # should still always return a group!
+        if len(boxes) == 1:
+            return [LTTextGroup(boxes)]
 
         dists: List[Tuple[bool, float, int, int, ElementT, ElementT]] = []
         for i in range(len(boxes)):
@@ -1049,33 +1072,39 @@ class LTLayoutContainer(LTContainer[LTComponent]):
         heapq.heapify(dists)
 
         plane.extend(boxes)
-        done = set()
+        done: Set[int] = set()
         while len(dists) > 0:
             (skip_isany, d, id1, id2, obj1, obj2) = heapq.heappop(dists)
             # Skip objects that are already merged
-            if (id1 not in done) and (id2 not in done):
-                if not skip_isany and isany(obj1, obj2):
-                    heapq.heappush(dists, (True, d, id1, id2, obj1, obj2))
-                    continue
-                if isinstance(obj1, (LTTextBoxVertical, LTTextGroupTBRL)) or isinstance(
-                    obj2,
-                    (LTTextBoxVertical, LTTextGroupTBRL),
-                ):
-                    group: LTTextGroup = LTTextGroupTBRL([obj1, obj2])
-                else:
-                    group = LTTextGroupLRTB([obj1, obj2])
-                plane.remove(obj1)
-                plane.remove(obj2)
-                done.update([id1, id2])
+            if (id1 in done) or (id2 in done):
+                continue
+            if not skip_isany and isany(obj1, obj2):
+                heapq.heappush(dists, (True, d, id1, id2, obj1, obj2))
+                continue
+            if isinstance(obj1, (LTTextBoxVertical, LTTextGroupTBRL)) or isinstance(
+                obj2,
+                (LTTextBoxVertical, LTTextGroupTBRL),
+            ):
+                group: LTTextGroup = LTTextGroupTBRL([obj1, obj2])
+            else:
+                group = LTTextGroupLRTB([obj1, obj2])
+            plane.remove(obj1)
+            done.add(id1)
+            plane.remove(obj2)
+            done.add(id2)
 
-                for other in plane:
-                    heapq.heappush(
-                        dists,
-                        (False, dist(group, other), id(group), id(other), group, other),
-                    )
-                plane.add(group)
-        # By now only groups are in the plane
-        return list(cast(LTTextGroup, g) for g in plane)
+            for other in plane:
+                heapq.heappush(
+                    dists,
+                    (False, dist(group, other), id(group), id(other), group, other),
+                )
+            plane.add(group)
+        # The plane should now only contain groups, otherwise it's a bug
+        groups: List[LTTextGroup] = []
+        for g in plane:
+            assert isinstance(g, LTTextGroup)
+            groups.append(g)
+        return groups
 
     def analyze(self, laparams: LAParams) -> None:
         # textobjs is a list of LTChar objects, i.e.
