@@ -1,0 +1,24 @@
+name: Deploy documentation
+
+on:
+  workflow_dispatch:
+  release:
+    types:
+      - published
+
+jobs:
+  deploy_docs:
+    name: Build and publish latest documentation
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Hatch
+        uses: pypa/hatch@install
+      - name: Configure git
+        run: |
+          git config --global user.name "David Huggins-Daines"
+          git config --global user.email "dhd@ecolingui.ca"
+      - name: Deploy docs
+        run: hatch -e docs run mike deploy --push --update-aliases ${{ github.event.release.tag_name }} latest
