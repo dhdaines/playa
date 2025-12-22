@@ -93,6 +93,8 @@ _T = TypeVar("_T")
 # This is **not** infinity, just an arbitrary big number we use for
 # initializing bounding boxes.
 INF = (1 << 31) - 1
+# This is an "infinite" bounding box used as a default
+BBOX_INF = (+INF, +INF, -INF, -INF)
 # Ugly pdfminer.six type which represents what it *actually* puts in
 # `LTCurve.original_path` (see
 # https://github.com/pdfminer/pdfminer.six/issues/1180)
@@ -344,26 +346,18 @@ class LTText:
 class LTComponent(LTItem):
     """Object with a bounding box"""
 
-    def __init__(self, bbox: Rect, mcstack: Sequence[MarkedContent]) -> None:
-        LTItem.__init__(self)
+    def __init__(
+        self, bbox: Union[Rect, None] = None, mcstack: Tuple[MarkedContent, ...] = ()
+    ) -> None:
+        if bbox is None:
+            # No initialization, for pickling purposes (see
+            # https://mypyc.readthedocs.io/en/latest/differences_from_python.html#pickling-and-copying-objects)
+            return
         self.set_bbox(bbox)
-        self.mcstack = mcstack[:]
+        self.mcstack = mcstack
 
     def __repr__(self) -> str:
         return f"<{self.__class__.__name__} {bbox2str(self.bbox)}>"
-
-    # Disable comparison.
-    def __lt__(self, _: object) -> bool:
-        raise PDFValueError
-
-    def __le__(self, _: object) -> bool:
-        raise PDFValueError
-
-    def __gt__(self, _: object) -> bool:
-        raise PDFValueError
-
-    def __ge__(self, _: object) -> bool:
-        raise PDFValueError
 
     def set_bbox(self, bbox: Rect) -> None:
         (x0, y0, x1, y1) = bbox
@@ -420,11 +414,15 @@ class LTCurve(LTComponent):
 
     def __init__(
         self,
-        path: PathObject,
-        pts: List[Point],
-        transformed_path: List[PathSegment],
+        path: Union[PathObject, None] = None,
+        pts: List[Point] = [],  # These are actually immutable so not a problem
+        transformed_path: List[PathSegment] = [],
     ) -> None:
-        LTComponent.__init__(self, get_bound(pts), path.mcstack)
+        if path is None:
+            # No initialization, for pickling purposes
+            super().__init__()
+            return
+        super().__init__(get_bound(pts), path.mcstack)
         self.pts = pts
         self.linewidth = path.gstate.linewidth
         self.stroke = path.stroke
@@ -451,10 +449,10 @@ class LTLine(LTCurve):
 
     def __init__(
         self,
-        path: PathObject,
-        p0: Point,
-        p1: Point,
-        transformed_path: List[PathSegment],
+        path: Union[PathObject, None] = None,
+        p0: Point = (0, 0),
+        p1: Point = (0, 0),
+        transformed_path: List[PathSegment] = [],
     ) -> None:
         LTCurve.__init__(
             self,
@@ -472,9 +470,9 @@ class LTRect(LTCurve):
 
     def __init__(
         self,
-        path: PathObject,
-        bbox: Rect,
-        transformed_path: List[PathSegment],
+        path: Union[PathObject, None] = None,
+        bbox: Rect = (0, 0, 0, 0),
+        transformed_path: List[PathSegment] = [],
     ) -> None:
         (x0, y0, x1, y1) = bbox
         LTCurve.__init__(
@@ -491,8 +489,12 @@ class LTImage(LTComponent):
     Embedded images can be in JPEG, Bitmap or JBIG2.
     """
 
-    def __init__(self, obj: ImageObject) -> None:
-        LTComponent.__init__(self, obj.bbox, obj.mcstack)
+    def __init__(self, obj: Union[ImageObject, None] = None) -> None:
+        if obj is None:
+            # No initialization, for pickling purposes
+            super().__init__()
+            return
+        super().__init__(obj.bbox, obj.mcstack)
         # Inline images don't actually have an xobjid, so we make shit
         # up like pdfminer.six does.
         if obj.xobjid is None:
@@ -520,7 +522,10 @@ class LTAnno(LTItem, LTText):
     according to the relationship between two characters (e.g. a space).
     """
 
-    def __init__(self, text: str) -> None:
+    def __init__(self, text: Union[str, None] = None) -> None:
+        if text is None:
+            # No initialization, for pickling purposes
+            return
         self._text = text
 
     def get_text(self) -> str:
@@ -532,9 +537,12 @@ class LTChar(LTComponent, LTText):
 
     def __init__(
         self,
-        glyph: GlyphObject,
+        glyph: Union[GlyphObject, None] = None,
     ) -> None:
-        LTText.__init__(self)
+        super().__init__()
+        if glyph is None:
+            # No initialization, for pickling purposes
+            return
         gstate = glyph.gstate
         matrix = glyph.matrix
         font = glyph.font
@@ -573,7 +581,7 @@ class LTChar(LTComponent, LTText):
             descent = font.descent * font.matrix[3]
             textbox = (0, descent, textwidth, descent + 1)
         miner_box = transform_bbox(matrix, textbox)
-        LTComponent.__init__(self, miner_box, glyph.mcstack)
+        super().__init__(miner_box, glyph.mcstack)
         # FIXME: This is quite wrong for rotated glyphs, but so is pdfminer.six
         if font.vertical:
             self.size = self.width
@@ -597,8 +605,13 @@ LTItemT = TypeVar("LTItemT", bound=LTItem)
 class LTContainer(LTComponent, Generic[LTItemT]):
     """Object that can be extended and analyzed"""
 
-    def __init__(self, bbox: Rect, mcstack: Sequence[MarkedContent]) -> None:
-        LTComponent.__init__(self, bbox, mcstack)
+    def __init__(
+        self, bbox: Union[Rect, None] = None, mcstack: Tuple[MarkedContent, ...] = ()
+    ) -> None:
+        if bbox is None:
+            # No initialization, for pickling purposes
+            return
+        super().__init__(bbox, mcstack)
         self._objs: List[LTItemT] = []
 
     def __iter__(self) -> Iterator[LTItemT]:
@@ -621,7 +634,7 @@ class LTContainer(LTComponent, Generic[LTItemT]):
 
 class LTExpandableContainer(LTContainer[LTItemT]):
     def __init__(self) -> None:
-        LTContainer.__init__(self, (+INF, +INF, -INF, -INF), [])
+        super().__init__(BBOX_INF)
 
     # Incompatible override: we take an LTComponent (with bounding box), but
     # super() LTContainer only considers LTItem (no bounding box).
@@ -639,8 +652,7 @@ class LTExpandableContainer(LTContainer[LTItemT]):
 
 class LTTextContainer(LTExpandableContainer[LTItemT], LTText):
     def __init__(self) -> None:
-        LTText.__init__(self)
-        LTExpandableContainer.__init__(self)
+        super().__init__()
 
     def get_text(self) -> str:
         return "".join(
@@ -658,7 +670,7 @@ class LTTextLine(LTTextContainer[TextLineElement]):
     the text's writing mode.
     """
 
-    def __init__(self, word_margin: float) -> None:
+    def __init__(self, word_margin: float = 0.0) -> None:
         super().__init__()
         self.word_margin = word_margin
 
@@ -683,8 +695,8 @@ class LTTextLine(LTTextContainer[TextLineElement]):
 
 
 class LTTextLineHorizontal(LTTextLine):
-    def __init__(self, word_margin: float) -> None:
-        LTTextLine.__init__(self, word_margin)
+    def __init__(self, word_margin: float = 0.0) -> None:
+        super().__init__(word_margin)
         self._x1 = +INF + 0.0
 
     # Incompatible override: we take an LTComponent (with bounding box), but
@@ -726,11 +738,13 @@ class LTTextLineHorizontal(LTTextLine):
             )
         ]
 
-    def _is_left_aligned_with(self, other: LTComponent, tolerance: float = 0) -> bool:
+    def _is_left_aligned_with(self, other: LTComponent, tolerance: float = 0.0) -> bool:
         """Whether the left-hand edge of `other` is within `tolerance`."""
         return abs(other.x0 - self.x0) <= tolerance
 
-    def _is_right_aligned_with(self, other: LTComponent, tolerance: float = 0) -> bool:
+    def _is_right_aligned_with(
+        self, other: LTComponent, tolerance: float = 0.0
+    ) -> bool:
         """Whether the right-hand edge of `other` is within `tolerance`."""
         return abs(other.x1 - self.x1) <= tolerance
 
@@ -747,8 +761,8 @@ class LTTextLineHorizontal(LTTextLine):
 
 
 class LTTextLineVertical(LTTextLine):
-    def __init__(self, word_margin: float) -> None:
-        LTTextLine.__init__(self, word_margin)
+    def __init__(self, word_margin: float = 0.0) -> None:
+        super().__init__(word_margin)
         self._y0: float = -INF + 0.0
 
     # Incompatible override: we take an LTComponent (with bounding box), but
@@ -819,7 +833,7 @@ class LTTextBox(LTTextContainer[LTTextLine]):
     """
 
     def __init__(self) -> None:
-        LTTextContainer.__init__(self)
+        super().__init__()
         self.index: int = -1
 
     def __repr__(self) -> str:
@@ -854,7 +868,7 @@ TextGroupElement = Union[LTTextBox, "LTTextGroup"]
 
 
 class LTTextGroup(LTTextContainer[TextGroupElement]):
-    def __init__(self, objs: Iterable[TextGroupElement]) -> None:
+    def __init__(self, objs: Iterable[TextGroupElement] = ()) -> None:
         super().__init__()
         self.extend(objs)
 
@@ -884,8 +898,13 @@ class LTTextGroupTBRL(LTTextGroup):
 
 
 class LTLayoutContainer(LTContainer[LTComponent]):
-    def __init__(self, bbox: Rect, mcstack: Sequence[MarkedContent]) -> None:
-        LTContainer.__init__(self, bbox, mcstack)
+    def __init__(
+        self, bbox: Union[Rect, None] = None, mcstack: Tuple[MarkedContent, ...] = ()
+    ) -> None:
+        if bbox is None:
+            # No initialization, for pickling purposes
+            return
+        super().__init__(bbox, mcstack)
         self.groups: Optional[List[LTTextGroup]] = None
 
     # group_objects: group text object to textlines.
@@ -1155,13 +1174,17 @@ class LTFigure(LTLayoutContainer):
     recursively.
     """
 
-    def __init__(self, obj: Union[ImageObject, XObjectObject]) -> None:
+    def __init__(self, obj: Union[ImageObject, XObjectObject, None] = None) -> None:
+        if obj is None:
+            # No initialization, for pickling purposes
+            super().__init__()
+            return
         if obj.xobjid is None:
             self.name = str(id(obj))
         else:
             self.name = obj.xobjid
         self.matrix = obj.ctm
-        LTLayoutContainer.__init__(self, obj.bbox, obj.mcstack)
+        super().__init__(obj.bbox, obj.mcstack)
 
     def __repr__(self) -> str:
         return (
@@ -1183,7 +1206,7 @@ class LTPage(LTLayoutContainer):
     """
 
     def __init__(self, pageid: int, bbox: Rect, rotate: float = 0) -> None:
-        LTLayoutContainer.__init__(self, bbox, [])
+        super().__init__(bbox, ())
         self.pageid = pageid
         self.rotate = rotate
 

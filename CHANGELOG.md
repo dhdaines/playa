@@ -1,3 +1,7 @@
+## PLAYA 0.8.1: 2025-12-22
+
+- Correct subtle issues with mypyc-compiled pdfminer.six code
+
 ## PLAYA 0.8.0: 2025-12-17
 
 - Optionally accelerate image decoding with mypyc

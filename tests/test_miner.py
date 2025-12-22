@@ -2,7 +2,14 @@
 Test pdfminer.six replacement functionality.
 """
 
-from playa.miner import extract, LAParams, LTFigure, make_path_segment
+from playa.miner import (
+    extract,
+    LAParams,
+    LTFigure,
+    LTTextLine,
+    LTComponent,
+    make_path_segment,
+)
 from pdfminer.high_level import extract_pages as pdfminer_extract_pages
 from tests.data import TESTDIR, CONTRIB, XFAILS, PDFMINER_BUGS
 from pathlib import Path
@@ -79,7 +86,12 @@ def test_make_path_segment() -> None:
     assert make_path_segment("l", [(3, 4)]) == ("l", (3, 4))
     assert make_path_segment("v", [(3, 4), (5, 6)]) == ("v", (3, 4), (5, 6))
     assert make_path_segment("y", [(3, 4), (5, 6)]) == ("y", (3, 4), (5, 6))
-    assert make_path_segment("c", [(1, 2), (3, 4), (5, 6)]) == ("c", (1, 2), (3, 4), (5, 6))
+    assert make_path_segment("c", [(1, 2), (3, 4), (5, 6)]) == (
+        "c",
+        (1, 2),
+        (3, 4),
+        (5, 6),
+    )
     with pytest.raises(ValueError):
         make_path_segment("h", [(1, 2)])
         make_path_segment("m", [(1, 2), (3, 4)])
@@ -88,6 +100,15 @@ def test_make_path_segment() -> None:
         make_path_segment("y", [(1, 2)])
         make_path_segment("c", [(1, 2)])
 
+
+def test_items_are_hashable_and_serializable() -> None:
+    """Verify that we can hash and serialize LTThingies"""
+    import pickle
+
+    assert hash(LTTextLine(0.3))
+    assert hash(LTComponent((1, 2, 3, 4), ()))
+    data = pickle.dumps(LTComponent((1, 2, 3, 4), ()))
+    assert hash(pickle.loads(data))
 
 if __name__ == "__main__":
     test_extract()
