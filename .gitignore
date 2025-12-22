@@ -29,3 +29,4 @@ poetry.lock
 /playa/_version.py
 .venv
 *.so
+.coverage
