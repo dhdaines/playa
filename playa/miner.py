@@ -420,7 +420,6 @@ class LTCurve(LTComponent):
     ) -> None:
         if path is None:
             # No initialization, for pickling purposes
-            super().__init__()
             return
         super().__init__(get_bound(pts), path.mcstack)
         self.pts = pts
@@ -454,6 +453,9 @@ class LTLine(LTCurve):
         p1: Point = (0, 0),
         transformed_path: List[PathSegment] = [],
     ) -> None:
+        if path is None:
+            # No initialization, for pickling purposes
+            return
         LTCurve.__init__(
             self,
             path,
@@ -474,6 +476,9 @@ class LTRect(LTCurve):
         bbox: Rect = (0, 0, 0, 0),
         transformed_path: List[PathSegment] = [],
     ) -> None:
+        if path is None:
+            # No initialization, for pickling purposes
+            return
         (x0, y0, x1, y1) = bbox
         LTCurve.__init__(
             self,
@@ -492,7 +497,6 @@ class LTImage(LTComponent):
     def __init__(self, obj: Union[ImageObject, None] = None) -> None:
         if obj is None:
             # No initialization, for pickling purposes
-            super().__init__()
             return
         super().__init__(obj.bbox, obj.mcstack)
         # Inline images don't actually have an xobjid, so we make shit
@@ -1177,7 +1181,6 @@ class LTFigure(LTLayoutContainer):
     def __init__(self, obj: Union[ImageObject, XObjectObject, None] = None) -> None:
         if obj is None:
             # No initialization, for pickling purposes
-            super().__init__()
             return
         if obj.xobjid is None:
             self.name = str(id(obj))
