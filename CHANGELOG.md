@@ -1,4 +1,4 @@
-## PLAYA 0.9.0: Unreleased
+## PLAYA 0.9.0: 2026-01-08
 
 - Refactor and add convenience methods to text objects
 - Insert blank pages for missing object references in page tree
