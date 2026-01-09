@@ -903,7 +903,7 @@ class GlyphObject(TextBase):
 
     cid: int
     text: Union[str, None]
-    matrix: Matrix
+    _matrix: Matrix
     _displacement: float
     _corners: bool
 
@@ -945,6 +945,10 @@ class GlyphObject(TextBase):
         # but if we do that, we need to do it everywhere the glyph is
         # used so that the bbox will be consistent
         return itor
+
+    @property
+    def matrix(self) -> Matrix:
+        return self._matrix
 
     @property
     def displacement(self) -> Point:
@@ -1102,7 +1106,7 @@ class TextObject(TextBase):
                         mcstack=self.mcstack,
                         cid=cid,
                         text=text,
-                        matrix=matrix,
+                        _matrix=matrix,
                         _displacement=disp,
                         _corners=corners,
                     )
