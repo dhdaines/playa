@@ -125,8 +125,7 @@ class Page:
             self.mediabox = (0, 0, 612, 792)
         except (ValueError, PDFSyntaxError):
             log.warning(
-                "MediaBox %r invalid in Page id %d,"
-                " defaulting to US Letter (612x792)",
+                "MediaBox %r invalid in Page id %d, defaulting to US Letter (612x792)",
                 self.attrs["MediaBox"],
                 pageid,
             )
