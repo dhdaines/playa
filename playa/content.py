@@ -4,6 +4,7 @@ PDF content objects created by the interpreter.
 
 import itertools
 import logging
+from abc import abstractmethod
 from copy import copy
 from dataclasses import dataclass
 from typing import (
@@ -802,6 +803,10 @@ class PathObject(ContentObject):
 
 class TextBase(ContentObject):
     """Common properties for text and glyph objects."""
+
+    @property
+    @abstractmethod
+    def matrix(self) -> Matrix: ...
 
     @property
     def font(self) -> Font:
