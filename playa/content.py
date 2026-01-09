@@ -951,6 +951,10 @@ class GlyphObject(TextBase):
         return self._matrix
 
     @property
+    def chars(self) -> str:
+        return self.text or ""
+
+    @property
     def displacement(self) -> Point:
         # Equivalent to:
         # apply_matrix_norm(self.matrix,
