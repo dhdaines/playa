@@ -14,6 +14,9 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Necessary to get the gh-pages branch
+          fetch-depth: 0
       - name: Install Hatch
         uses: pypa/hatch@install
       - name: Configure git

@@ -92,9 +92,9 @@ def get_colorspace(
         return PREDEFINED_COLORSPACE.get(name)
     elif isinstance(spec, list):
         csname = resolve1(spec[0])
-        assert isinstance(csname, PSLiteral), (
-            "Expected a name for color space, got %r" % (csname,)
-        )
+        assert isinstance(
+            csname, PSLiteral
+        ), "Expected a name for color space, got %r" % (csname,)
         if csid is None:
             csid = csname.name
         if csname is LITERAL_ICC_BASED and len(spec) >= 2:

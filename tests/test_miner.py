@@ -110,5 +110,6 @@ def test_items_are_hashable_and_serializable() -> None:
     data = pickle.dumps(LTComponent((1, 2, 3, 4), ()))
     assert hash(pickle.loads(data))
 
+
 if __name__ == "__main__":
     test_extract()

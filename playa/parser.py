@@ -731,9 +731,7 @@ class IndirectObjectParser:
                 )
             )
             errmsg = (
-                f"Failed to parse indirect object at {pos}: "
-                f"got: {objs} "
-                f"before 'endobj'"
+                f"Failed to parse indirect object at {pos}: got: {objs} before 'endobj'"
             )
             raise PDFSyntaxError(errmsg) from e
         # ContentStream is *special* and needs these

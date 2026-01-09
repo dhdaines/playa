@@ -447,7 +447,7 @@ class Document:
             if m is None:
                 raise PDFSyntaxError(
                     f"Not an indirect object at position {pos}: "
-                    f"{self.buffer[pos:pos+8]!r}"
+                    f"{self.buffer[pos : pos + 8]!r}"
                 )
             _, obj = next(self.parser)
             if obj.objid != objid:
