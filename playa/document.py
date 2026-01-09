@@ -695,8 +695,9 @@ class Document:
             try:
                 page_object = dict_value(self[object_id])
             except IndexError as e:
-                log.warning("Skipping missing page object: %s", e)
-                continue
+                log.warning("Missing page object: %s", e)
+                # Create an empty page to match what pdfium does
+                page_object = {"Type": LIT("Page")}
 
             # Avoid recursion errors by keeping track of visited nodes
             # (again, this should never actually happen in a valid PDF)
