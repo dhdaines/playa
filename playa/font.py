@@ -88,7 +88,7 @@ class Font:
         fontname = resolve1(descriptor.get("FontName"))
         if isinstance(fontname, PSLiteral):
             self.fontname = literal_name(fontname)
-        elif isinstance(fontname, (bytes, str)):
+        elif isinstance(fontname, bytes):
             self.fontname = decode_text(fontname)
         else:
             self.fontname = "unknown"
@@ -532,16 +532,16 @@ class CIDFont(Font):
         # These are *supposed* to be ASCII (PDF 1.7 section 9.7.3),
         # but for whatever reason they are sometimes UTF-16BE
         cid_registry = resolve1(self.cidsysteminfo.get("Registry"))
-        if isinstance(cid_registry, (str, bytes)):
-            cid_registry = decode_text(cid_registry)
+        if isinstance(cid_registry, bytes):
+            regstr = decode_text(cid_registry).strip()
         else:
-            cid_registry = "unknown"
+            regstr = "unknown"
         cid_ordering = resolve1(self.cidsysteminfo.get("Ordering"))
-        if isinstance(cid_ordering, (str, bytes)):
-            cid_ordering = decode_text(cid_ordering)
+        if isinstance(cid_ordering, bytes):
+            ordstr = decode_text(cid_ordering).strip()
         else:
-            cid_ordering = "unknown"
-        self.cidcoding = f"{cid_registry.strip()}-{cid_ordering.strip()}"
+            ordstr = "unknown"
+        self.cidcoding = f"{regstr}-{ordstr}"
         self.cmap: CMapBase = self.get_cmap_from_spec(spec)
 
         try:

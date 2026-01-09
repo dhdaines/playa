@@ -22,7 +22,6 @@ from typing import (
     Tuple,
     TypeVar,
     Union,
-    cast,
 )
 
 from mypy_extensions import trait
@@ -636,14 +635,12 @@ class LTContainer(LTComponent, Generic[LTItemT]):
             obj.analyze(laparams)
 
 
-class LTExpandableContainer(LTContainer[LTItemT]):
+class LTExpandableContainer(LTContainer):
     def __init__(self) -> None:
         super().__init__(BBOX_INF)
 
-    # Incompatible override: we take an LTComponent (with bounding box), but
-    # super() LTContainer only considers LTItem (no bounding box).
     def add(self, obj: LTComponent) -> None:  # type: ignore[override]
-        LTContainer.add(self, cast(LTItemT, obj))
+        super().add(obj)
         self.set_bbox(
             (
                 min(self.x0, obj.x0),
@@ -654,20 +651,20 @@ class LTExpandableContainer(LTContainer[LTItemT]):
         )
 
 
-class LTTextContainer(LTExpandableContainer[LTItemT], LTText):
+class LTTextContainer(LTExpandableContainer, LTText):
     def __init__(self) -> None:
         super().__init__()
 
     def get_text(self) -> str:
         return "".join(
-            cast(LTText, obj).get_text() for obj in self if isinstance(obj, LTText)
+            obj.get_text() for obj in self if isinstance(obj, LTText)
         )
 
 
 TextLineElement = Union[LTChar, LTAnno]
 
 
-class LTTextLine(LTTextContainer[TextLineElement]):
+class LTTextLine(LTTextContainer):
     """Contains a list of LTChar objects that represent a single text line.
 
     The characters are aligned either horizontally or vertically, depending on
@@ -828,7 +825,7 @@ class LTTextLineVertical(LTTextLine):
         return abs(other.width - self.width) <= tolerance
 
 
-class LTTextBox(LTTextContainer[LTTextLine]):
+class LTTextBox(LTTextContainer):
     """Represents a group of text chunks in a rectangular area.
 
     Note that this box is created by geometric analysis and does not
@@ -871,7 +868,7 @@ class LTTextBoxVertical(LTTextBox):
 TextGroupElement = Union[LTTextBox, "LTTextGroup"]
 
 
-class LTTextGroup(LTTextContainer[TextGroupElement]):
+class LTTextGroup(LTTextContainer):
     def __init__(self, objs: Iterable[TextGroupElement] = ()) -> None:
         super().__init__()
         self.extend(objs)
@@ -1163,11 +1160,7 @@ class LTLayoutContainer(LTContainer[LTComponent]):
                 group.analyze(laparams)
                 assigner.run(group)
             textboxes.sort(key=lambda box: box.index)
-        self._objs = (
-            cast(List[LTComponent], textboxes)
-            + otherobjs
-            + cast(List[LTComponent], empties)
-        )
+        self._objs = [*textboxes, *otherobjs, *empties]
 
 
 class LTFigure(LTLayoutContainer):

@@ -13,7 +13,6 @@ from typing import (
     Type,
     TypeVar,
     Union,
-    cast,
 )
 
 from playa.worker import DocumentRef, _deref_document
@@ -24,7 +23,6 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 PDFObject = Union[
     int,
-    str,
     float,
     bool,
     "PSLiteral",
@@ -309,7 +307,7 @@ def uint_value(x: PDFObject, n_bits: int) -> int:
     if xi > 0:
         return xi
     else:
-        return xi + cast(int, 2**n_bits)
+        return xi + (1 << n_bits)
 
 
 def str_value(x: PDFObject) -> bytes:

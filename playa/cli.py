@@ -105,7 +105,6 @@ from playa.pdftypes import (
 from playa.structure import ContentItem
 from playa.structure import ContentObject as StructContentObject
 from playa.structure import Element
-from playa.utils import decode_text
 
 LOG = logging.getLogger(__name__)
 
@@ -486,7 +485,7 @@ def _extract_outline_item(item: Outline, indent: int, outfh: TextIO) -> bool:
 
     print(f"{ws}{{", file=outfh)
     if item.title is not None:
-        format_attr("title", decode_text(item.title))
+        format_attr("title", item.title)
     if item.destination is not None:
         format_attr("destination", asobj(item.destination))
     if s:

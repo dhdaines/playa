@@ -1028,6 +1028,7 @@ class TextObject(TextBase):
     _chars: Union[List[str], None] = None
     _bbox: Union[Rect, None] = None
     _next_glyph_offset: Union[Point, None] = None
+    _displacement: Union[Point, None] = None
 
     def __iter__(self) -> Iterator[GlyphObject]:
         """Generate glyphs for this text object"""
@@ -1172,8 +1173,9 @@ class TextObject(TextBase):
 
     @property
     def displacement(self) -> Point:
+        if self._displacement is not None:
+            return self._displacement
         matrix = self.matrix
-        # FIXME: This should be either cached or optimized
         next_matrix = mult_matrix(
             self.scaling_matrix,
             mult_matrix(
@@ -1181,7 +1183,8 @@ class TextObject(TextBase):
                 self.ctm,
             ),
         )
-        return next_matrix[-2] - matrix[-2], next_matrix[-1] - matrix[-1]
+        self._displacement = next_matrix[-2] - matrix[-2], next_matrix[-1] - matrix[-1]
+        return self._displacement
 
     @property
     def bbox(self) -> Rect:
