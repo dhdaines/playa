@@ -39,7 +39,7 @@ from playa.structure import ContentItem as _StructContentItem
 from playa.structure import ContentObject as _StructContentObject
 from playa.structure import Element as _Element
 from playa.structure import Tree as _Tree
-from playa.utils import Matrix, Rect, decode_text
+from playa.utils import Matrix, Rect
 
 log = logging.getLogger(__name__)
 
@@ -556,7 +556,7 @@ def asobj_stream(obj: _ContentStream) -> Dict:
 def asobj_outline(obj: _Outline, recurse: bool = True) -> Outline:
     out = Outline()
     if obj.title is not None:
-        out["title"] = decode_text(obj.title)
+        out["title"] = obj.title
     if obj.destination is not None:
         out["destination"] = asobj(obj.destination)
     if recurse:

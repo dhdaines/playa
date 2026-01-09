@@ -58,7 +58,7 @@ from playa.pdftypes import (
     resolve1,
     stream_value,
 )
-from playa.utils import decode_text, mult_matrix
+from playa.utils import mult_matrix
 from playa.worker import _deref_document
 
 if TYPE_CHECKING:
@@ -440,7 +440,7 @@ class LazyInterpreter:
             # Inline images are not XObjects, have no xobjid
             return self.render_image(None, obj)
         else:
-            # FIXME: Do... something?
+            log.warning("EI has unknown argument type: %r", obj)
             return None
 
     def do_Do(self, xobjid_arg: PDFObject) -> Union[ContentObject, None]:
@@ -557,8 +557,11 @@ class LazyInterpreter:
         """Set color rendering intent"""
         if self.ignore_colours:
             return
-        # FIXME: Should actually be a (runtime checked) enum
-        self.graphicstate.intent = cast(PSLiteral, intent)
+        if isinstance(intent, PSLiteral):
+            # Should possibly check that it is a valid intent
+            self.graphicstate.intent = intent
+        else:
+            log.warning("ri got invalid argument %r", intent)
 
     def do_i(self, flatness: PDFObject) -> None:
         """Set flatness tolerance"""
@@ -969,12 +972,14 @@ class LazyInterpreter:
     def begin_tag(self, tag: PDFObject, props: Dict[str, PDFObject]) -> None:
         """Handle beginning of tag, setting current MCID if any."""
         assert isinstance(tag, PSLiteral)
-        tag = decode_text(tag.name)
         if "MCID" in props:
             mcid = int_value(props["MCID"])
         else:
             mcid = None
-        self.mcstack = (*self.mcstack, MarkedContent(mcid=mcid, tag=tag, props=props))
+        self.mcstack = (
+            *self.mcstack,
+            MarkedContent(mcid=mcid, tag=tag.name, props=props),
+        )
 
     def do_BMC(self, tag: PDFObject) -> None:
         """Begin marked-content sequence"""

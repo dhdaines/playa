@@ -24,7 +24,6 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 PDFObject = Union[
     int,
-    str,
     float,
     bool,
     "PSLiteral",

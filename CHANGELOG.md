@@ -1,7 +1,9 @@
-## PLAYA 0.8.2: Unreleased
+## PLAYA 0.9.0: Unreleased
 
 - Refactor and add convenience methods to text objects
 - Insert blank pages for missing object references in page tree
+- Clean up type annotations (breaking change: PDFObject can no longer
+  be `str`, as the parser will never create this)
 
 ## PLAYA 0.8.1: 2025-12-22
 

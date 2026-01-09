@@ -151,14 +151,14 @@ def test_errors() -> None:
     assert ObjRef(None, 1).resolve(123) == 123
     assert decipher_all(lambda *args: b"SOMETHING", 1, 0, b"") == b""
     with pytest.raises(TypeError):
-        bool_value("Norwegian Blue")
+        bool_value(b"Norwegian Blue")
     with pytest.raises(TypeError):
-        float_value("Romanus eunt domus")
+        float_value(b"Romanus eunt domus")
     float_value(123.456)  # just for the coverage
     with pytest.raises(TypeError):
-        num_value("NaN")
+        num_value(b"NaN")
     with pytest.raises(TypeError):
-        str_value("not bytes")
+        str_value(42)
     with pytest.raises(TypeError):
         list_value({"not": "a list"})
     with pytest.raises(TypeError):

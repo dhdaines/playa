@@ -549,7 +549,7 @@ PDFDocEncoding = "".join(
 )
 
 
-def decode_text(s: Union[str, bytes]) -> str:
+def decode_text(s: bytes) -> str:
     """Decodes a text string (see PDF 1.7 section 7.9.2.2 - it could
     be PDFDocEncoding or UTF-16BE) to a `str`.
     """
@@ -563,14 +563,10 @@ def decode_text(s: Union[str, bytes]) -> str:
             # Sure, it could have a BOM and not actually be UTF-16, \/\/TF...
             s = s[2:]
     try:
-        # FIXME: This seems bad. If it's already a `str` then what are
-        # those PDFDocEncoding characters doing in it?!?
-        if isinstance(s, str):
-            return "".join(PDFDocEncoding[ord(c)] for c in s)
-        else:
-            return "".join(PDFDocEncoding[c] for c in s)
+        return "".join(PDFDocEncoding[c] for c in s)
     except IndexError:
-        return str(s)
+        # This is obviously wrong, but a reasonable fallback
+        return s.decode("iso-8859-1")
 
 
 def string_property(obj: PDFObject, key: str) -> Union[str, None]:
