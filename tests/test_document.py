@@ -271,5 +271,7 @@ def test_extgstate() -> None:
 def test_missing_pages(caplog) -> None:
     """Verify that we detect and recover from missing page objects."""
     with playa.open(THISDIR / "bad_pages.pdf") as pdf:
-        list(pdf.pages)
-    assert "missing page object" in caplog.text
+        pages = list(pdf.pages)
+    assert "Missing page object" in caplog.text
+    # Make sure we create an empty page anyway
+    assert len(pages) == 2
