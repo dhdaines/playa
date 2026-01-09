@@ -492,7 +492,8 @@ class CCITTG4Parser(BitParser):
         print(y, "".join(str(b) for b in bits))
 
     def _reset_line(self) -> None:
-        # FIXME: probably, we could just swap them, like in PNG prediction
+        # We could just swap them, like in PNG prediction, though it's
+        # not clear that would be much faster.
         self._refline = self._curline
         self._curline = [1] * self.width
         self._curpos = -1
