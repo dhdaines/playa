@@ -800,30 +800,91 @@ class PathObject(ContentObject):
         return transform_bbox(self.ctm, bbox)
 
 
-def _font_size(matrix: Matrix, vert: bool = False) -> float:
-    if vert:
-        # dx, dy = apply_matrix_norm(self.matrix, (1, 0))
-        dx, dy, _, _, _, _ = matrix
-    else:
-        # dx, dy = apply_matrix_norm(self.matrix, (0, 1))
-        _, _, dx, dy, _, _ = matrix
-    if dx == 0:  # Nearly always true
-        return abs(dy)
-    elif dy == 0:
-        return abs(dx)
-    else:
-        import math
+class TextBase(ContentObject):
+    """Common properties for text and glyph objects."""
 
-        return math.sqrt(dx * dx + dy * dy)
+    @property
+    def font(self) -> Font:
+        """Font for this text object."""
+        font = self.gstate.font
+        assert font is not None
+        return font
+
+    @property
+    def size(self) -> float:
+        """Font size for this text object.
+
+        This is the actual font size in device space, which is **not**
+        the same as `GraphicState.fontsize`.  That's the font size in
+        text space which is not a very useful number (it's usually 1).
+        """
+        vert = False if self.gstate.font is None else self.gstate.font.vertical
+        if vert:
+            # dx, dy = apply_matrix_norm(self.matrix, (1, 0))
+            dx, dy, _, _, _, _ = self.matrix
+        else:
+            # dx, dy = apply_matrix_norm(self.matrix, (0, 1))
+            _, _, dx, dy, _, _ = self.matrix
+        if dx == 0:  # Nearly always true
+            return abs(dy)
+        elif dy == 0:
+            return abs(dx)
+        else:
+            import math
+
+            return math.sqrt(dx * dx + dy * dy)
+
+    @property
+    def fontname(self) -> str:
+        """Font name for this text object"""
+        return self.font.fontname
+
+    @property
+    def fontbase(self) -> str:
+        """Original font name for this text object.
+
+        Fonts in PDF files are usually "subsetted", meaning only the
+        glyphs actually used in the document are included.  In this
+        case the font's `fontname` property usually consists of an
+        arbitrary "tag", plus (literally, a `+`) and the original
+        name.  This is a convenience property to get that original
+        name.
+
+        This is not the same as `GraphicState.font.basefont` which
+        usually also includes the subset tag.
+
+        """
+        fontname = self.fontname
+        subset, _, base = fontname.partition("+")
+        if base:
+            return base
+        return fontname
+
+    @property
+    def textfont(self) -> str:
+        """Convenient short form of the font name and size.
+
+        For example, "Helvetica 12".
+        """
+        return f"{self.fontbase} {round(self.size)}"
+
+    @property
+    def origin(self) -> Point:
+        """Origin of this text object in device space."""
+        _, _, _, _, dx, dy = self.matrix
+        return dx, dy
 
 
 @dataclass
-class GlyphObject(ContentObject):
+class GlyphObject(TextBase):
     """Individual glyph on the page.
 
     Attributes:
       font: Font for this glyph.
       size: Effective font size for this glyph.
+      fontname: Font name.
+      fontbase: Short (non-subset) font name.
+      textfont: Combined short name and size for the font.
       cid: Character ID for this glyph.
       text: Unicode mapping of this glyph, if any.
       matrix: Rendering matrix `T_rm` for this glyph, which transforms
@@ -881,22 +942,6 @@ class GlyphObject(ContentObject):
         return itor
 
     @property
-    def font(self) -> Font:
-        font = self.gstate.font
-        assert font is not None
-        return font
-
-    @property
-    def size(self) -> float:
-        vert = False if self.gstate.font is None else self.gstate.font.vertical
-        return _font_size(self.matrix, vert)
-
-    @property
-    def origin(self) -> Point:
-        _, _, _, _, dx, dy = self.matrix
-        return dx, dy
-
-    @property
     def displacement(self) -> Point:
         # Equivalent to:
         # apply_matrix_norm(self.matrix,
@@ -932,7 +977,7 @@ class GlyphObject(ContentObject):
 
 
 @dataclass
-class TextObject(ContentObject):
+class TextObject(TextBase):
     """Text object (contains one or more glyphs).
 
     Attributes:
@@ -943,7 +988,11 @@ class TextObject(ContentObject):
       origin: Origin of this text object in device space.
       displacement: Vector to the origin of the next text object in
                     device space.
+      font: Font for this text object.
       size: Effective font size for this text object.
+      fontname: Font name.
+      fontbase: Short (non-subset) font name.
+      textfont: Combined short name and size for the font.
       text_matrix: Text matrix `T_m` for this text object, which
                    transforms text space coordinates to user space.
       line_matrix: Text line matrix `T_lm` for this text object, which
@@ -1092,11 +1141,6 @@ class TextObject(ContentObject):
         return self._matrix
 
     @property
-    def size(self) -> float:
-        vert = False if self.gstate.font is None else self.gstate.font.vertical
-        return _font_size(self.matrix, vert)
-
-    @property
     def scaling_matrix(self) -> Matrix:
         horizontal_scaling = self.gstate.scaling * 0.01
         fontsize = self.gstate.fontsize
@@ -1112,11 +1156,6 @@ class TextObject(ContentObject):
     @property
     def text_matrix(self) -> Matrix:
         return translate_matrix(self.line_matrix, self._glyph_offset)
-
-    @property
-    def origin(self) -> Point:
-        _, _, _, _, dx, dy = self.matrix
-        return dx, dy
 
     @property
     def displacement(self) -> Point:

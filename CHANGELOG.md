@@ -1,3 +1,7 @@
+## PLAYA 0.8.2: Unreleased
+
+- Refactor and add convenience methods to text objects
+
 ## PLAYA 0.8.1: 2025-12-22
 
 - Correct subtle issues with mypyc-compiled pdfminer.six code
