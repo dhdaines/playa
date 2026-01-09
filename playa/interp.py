@@ -19,7 +19,6 @@ from typing import (
     Tuple,
     Union,
     Sequence,
-    cast,
 )
 
 from playa.color import PREDEFINED_COLORSPACE, ColorSpace, get_colorspace
@@ -452,8 +451,7 @@ class LazyInterpreter:
             log.debug("Undefined xobject id: %r", xobjid)
             return None
         except TypeError as e:
-            log.debug("Empty or invalid xobject with id %r: %s", xobjid, e)
-            return None
+            raise TypeError(f"Empty or invalid xobject with id {xobjid!r}") from e
         subtype = xobj.get("Subtype")
         if subtype is LITERAL_FORM:
             # PDF Ref 1.7, # 4.9
@@ -530,7 +528,15 @@ class LazyInterpreter:
         f1: PDFObject,
     ) -> None:
         """Concatenate matrix to current transformation matrix"""
-        self.ctm = mult_matrix(cast(Matrix, (a1, b1, c1, d1, e1, f1)), self.ctm)
+        cm = (
+            num_value(a1),
+            num_value(b1),
+            num_value(c1),
+            num_value(d1),
+            num_value(e1),
+            num_value(f1),
+        )
+        self.ctm = mult_matrix(cm, self.ctm)
 
     def do_w(self, linewidth: PDFObject) -> None:
         """Set line width"""
@@ -561,7 +567,7 @@ class LazyInterpreter:
             # Should possibly check that it is a valid intent
             self.graphicstate.intent = intent
         else:
-            log.warning("ri got invalid argument %r", intent)
+            raise TypeError(f"Not a name: {intent!r}")
 
     def do_i(self, flatness: PDFObject) -> None:
         """Set flatness tolerance"""
@@ -603,7 +609,12 @@ class LazyInterpreter:
             if isinstance(bm, PSLiteral):
                 self.graphicstate.blend_mode = bm
             else:
-                self.graphicstate.blend_mode = cast(List[PSLiteral], list_value(bm))
+                bml: List[PSLiteral] = []
+                for x in list_value(bm):
+                    if isinstance(PSLiteral, x):
+                        raise TypeError(f"Not a name: {x!r}")
+                    bml.append(x)
+                self.graphicstate.blend_mode = bml
         if "SMask" in extgstate:
             smask = extgstate["SMask"]
             if isinstance(smask, PSLiteral):
@@ -886,8 +897,8 @@ class LazyInterpreter:
             e_new = tx * a + ty * c + e
             f_new = tx * b + ty * d + f
             self.textstate.line_matrix = (a, b, c, d, e_new, f_new)
-        except TypeError:
-            log.warning("Invalid offset (%r, %r) for Td", tx, ty)
+        except TypeError as e:
+            raise TypeError(f"Invalid offset ({tx!r}, {ty!r})") from e
         self.textstate.glyph_offset = (0, 0)
 
     def do_TD(self, tx: PDFObject, ty: PDFObject) -> None:
