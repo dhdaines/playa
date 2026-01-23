@@ -337,7 +337,7 @@ def write_cmyk_tiff(
 
     # 6. --- Write the Actual Pixel Data ---
     # The current file position should now match `offset_image_data`
-    assert outfh.tell() == offset_image_data, (
-        f"File position mismatch: at {outfh.tell()}, expected {offset_image_data}"
-    )
+    assert (
+        outfh.tell() == offset_image_data
+    ), f"File position mismatch: at {outfh.tell()}, expected {offset_image_data}"
     outfh.write(data)
