@@ -37,7 +37,6 @@ from playa.page import (
     Page,
 )
 from playa.parser import (
-    KEYWORD_XREF,
     NOTKEYWORD,
     LIT,
     IndirectObject,
@@ -249,6 +248,7 @@ class Document:
         # actually be anywhere in the file, and in particular, in the
         # case of linearized PDFs, is actually at the *beginning*.
         end = len(self.buffer)
+        indobj = -1
         for pos in range(len(self.buffer) - 1, -1, -1):
             if self.buffer[pos] in NOTKEYWORD:
                 token = self.buffer[pos + 1 : end]
@@ -264,7 +264,9 @@ class Document:
                     # trailer after it, which will be the correct one
                     # to use.
                     if m := XREFR.match(self.buffer, self._startxref_pos):
-                        self._trailer_pos = self.buffer.find(b"trailer", self._startxref_pos)
+                        self._trailer_pos = self.buffer.find(
+                            b"trailer", self._startxref_pos
+                        )
                         if self._trailer_pos != -1:
                             self._trailer_pos += 7
                             break
@@ -273,14 +275,22 @@ class Document:
                 if token == b"obj":
                     if self._trailer_pos == -1:
                         self._trailer_pos = end
-                    break
+                    indobj = 0
                 if token == b"xref":
                     self._startxref_pos = pos + 1
                     break
+                if indobj != -1 and ord("0") <= token[0] <= ord("9"):
+                    indobj += 1
+                    if indobj == 2:
+                        self._startxref_pos = pos + 1
+                        break
                 end = pos
         self._trailer_pos, trailer = next(
             ObjectParser(self.buffer, pos=self._trailer_pos, doc=self)
         )
+        if indobj == 2 and trailer.get("Type") != LITERAL_XREF:
+            # Nope, it's not an xref stream!
+            self._startxref_pos = -1
         if not isinstance(trailer, dict):
             raise PDFSyntaxError(f"Trailer is not a dict: {trailer!r}")
         return trailer
