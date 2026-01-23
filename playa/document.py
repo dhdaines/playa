@@ -38,6 +38,7 @@ from playa.page import (
 )
 from playa.parser import (
     KEYWORD_XREF,
+    NOTKEYWORD,
     LIT,
     IndirectObject,
     IndirectObjectParser,
@@ -161,13 +162,26 @@ class Document:
       PDFPasswordIncorrect: if the password is incorrect
     """
 
+    trailer: Dict[str, PDFObject]
+    info: Dict[str, PDFObject]
+    buffer: Union[bytes, mmap.mmap]  # FIXME: abstract type for this?
+    space: DeviceSpace
+    encryption: Optional[Tuple[PDFObject, PDFObject]] = None
+    decipher: Optional[DecipherCallable] = None
+
     _fp: Union[BinaryIO, None] = None
     _pages: Union["PageList", None] = None
     _pool: Union[Executor, None] = None
+    _catalog: Union[Dict[str, PDFObject], None] = None
     _outline: Union["Outline", None] = None
     _destinations: Union["Destinations", None] = None
     _structure: Union["Tree", None]
     _fontmap: Union[Dict[str, Font], None] = None
+    _parser: Union[IndirectObjectParser, None] = None
+    _xrefs: List[XRef] | None = None
+    _trailer_pos: Union[int, None] = None
+    _startxref_pos: Union[int, None] = None
+    _trailer_token: Union[bytes, None] = None
 
     def __enter__(self) -> "Document":
         return self
@@ -192,108 +206,183 @@ class Document:
         space: DeviceSpace = "screen",
         _boss_id: int = 0,
     ) -> None:
+        # Get this out of the way, eh
+        if isinstance(fp, io.TextIOBase):
+            raise TypeError("fp is not a binary file")
+
         if _boss_id:
             # Set this **right away** because it is needed to get
             # indirect object references right.
             _set_document(self, _boss_id)
             assert in_worker()
-        self.xrefs: List[XRef] = []
+
+        # Initialize mutable properties
         self.space = space
-        self.info = []
-        self.catalog: Dict[str, Any] = {}
-        self.encryption: Optional[Tuple[Any, Any]] = None
-        self.decipher: Optional[DecipherCallable] = None
+        self.info = {}
         self._cached_objs: Dict[int, PDFObject] = {}
         self._parsed_objs: Dict[int, Tuple[List[PDFObject], int]] = {}
         self._cached_fonts: Dict[int, Font] = {}
         self._cached_inline_images: Dict[
             Tuple[int, int], Tuple[int, Optional[InlineImage]]
         ] = {}
-        if isinstance(fp, io.TextIOBase):
-            raise TypeError("fp is not a binary file")
-        self.pdf_version, self.offset, self.buffer = _open_input(fp)
-        self.is_printable = self.is_modifiable = self.is_extractable = True
-        # Getting the XRef table and trailer is done non-lazily
-        # because they contain encryption information among other
-        # things.  As noted above we don't try to look for the first
-        # page cross-reference table (for linearized PDFs) after the
-        # header, it will instead be loaded with all the rest.
-        self.parser = IndirectObjectParser(self.buffer, self)
-        self.parser.seek(self.offset)
-        self._xrefpos: Set[int] = set()
-        try:
-            self._read_xrefs()
-        except Exception as e:
-            log.debug(
-                "Failed to parse xref table, falling back to object parser: %s",
-                e,
-            )
-            newxref = XRefFallback(self.parser)
-            self.xrefs.append(newxref)
-        # Now find the trailer
-        for xref in self.xrefs:
-            trailer = xref.trailer
-            if not trailer:
-                continue
-            # If there's an encryption info, remember it.
-            if "Encrypt" in trailer:
-                if "ID" in trailer:
-                    id_value = list_value(trailer["ID"])
-                else:
-                    # Some documents may not have a /ID, use two empty
-                    # byte strings instead. Solves
-                    # https://github.com/pdfminer/pdfminer.six/issues/594
-                    id_value = (b"", b"")
-                self.encryption = (id_value, dict_value(trailer["Encrypt"]))
-                self._initialize_password(password)
-            if "Info" in trailer:
-                try:
-                    self.info.append(dict_value(trailer["Info"]))
-                except TypeError:
-                    log.warning("Info is a broken reference (incorrect xref table?)")
-            if "Root" in trailer:
-                # Every PDF file must have exactly one /Root dictionary.
-                try:
-                    self.catalog = dict_value(trailer["Root"])
-                except TypeError:
-                    log.warning("Root is a broken reference (incorrect xref table?)")
-                    self.catalog = {}
-                break
-        else:
-            log.warning("No /Root object! - Is this really a PDF?")
-        if self.catalog.get("Type") is not LITERAL_CATALOG:
-            log.warning("Catalog not found!")
-        if "Version" in self.catalog:
-            log.debug(
-                "Using PDF version %r from catalog instead of %r from header",
-                self.catalog["Version"],
-                self.pdf_version,
-            )
-            self.pdf_version = literal_name(self.catalog["Version"])
-        self.is_tagged = False
-        markinfo = resolve1(self.catalog.get("MarkInfo"))
-        if isinstance(markinfo, dict):
-            self.is_tagged = not not markinfo.get("Marked")
+        self._pdf_version, self._offset, self.buffer = _open_input(fp)
+        # We are Lazy, only find and read the trailer.
+        self.trailer = self._read_trailer()
+        # If there is encryption, then we need to read xref tables.
+        # Otherwise we will defer this to the first object lookup.
+        if "Encrypt" in self.trailer:
+            self._xrefs = self._read_xrefs()
+            if "ID" in self.trailer:
+                id_value = list_value(self.trailer["ID"])
+            else:
+                # Some documents may not have a /ID, use two empty
+                # byte strings instead. Solves
+                # https://github.com/pdfminer/pdfminer.six/issues/594
+                id_value = (b"", b"")
+            encrypt = dict_value(self.trailer["Encrypt"])
+            self.encryption = (id_value, encrypt)
+            self._initialize_password(password)
 
-    def _read_xrefs(self):
+    def _read_trailer(self) -> Dict[str, Any]:
+        # To read the trailer, we must first find the trailer. It is,
+        # unsurprisingly, at the end of the file.  However it could
+        # either be a dictionary preceded by the token "trailer", or
+        # it could be a cross-reference stream.  To figure this out,
+        # we'll tokenize the file in reverse until we find b"trailer"
+        # or b"obj"
+        end = len(self.buffer)
+        for pos in range(len(self.buffer) - 1, -1, -1):
+            if self.buffer[pos] in NOTKEYWORD:
+                token = self.buffer[pos + 1 : end]
+                if token == b"startxref":
+                    _, self._startxref_pos = next(ObjectParser(self.buffer, pos=end))
+                    self._startxref_pos += self._offset
+                elif token == b"trailer":
+                    self._trailer_pos = end
+                    self._trailer_token = token
+                    break
+                elif token == b"obj":
+                    self._trailer_pos = end
+                    self._trailer_token = token
+                    # FIXME: We could set _startxref_pos based on this
+                    # object, that would be more reliable than
+                    # trusting startxref which is often quite wrong
+                    break
+                end = pos
+        self._trailer_pos, trailer = next(
+            ObjectParser(self.buffer, pos=self._trailer_pos, doc=self)
+        )
+        if not isinstance(trailer, dict):
+            raise PDFSyntaxError(f"Trailer is not a dict: {trailer!r}")
+        return trailer
+
+    def _initialize_password(self, password: str = "") -> None:
+        """Initialize the decryption handler with a given password, if any.
+
+        Internal function, requires the Encrypt dictionary to have
+        been read from the trailer into self.encryption.
+        """
+        assert self.encryption is not None
+        (docid, param) = self.encryption
+        if literal_name(param.get("Filter")) != "Standard":
+            raise PDFEncryptionError("Unknown filter: param=%r" % param)
+        v = int_value(param.get("V", 0))
+        # 3 (PDF 1.4) An unpublished algorithm that permits encryption
+        # key lengths ranging from 40 to 128 bits. This value shall
+        # not appear in a conforming PDF file.
+        if v == 3:
+            raise PDFEncryptionError("Unpublished algorithm 3 not supported")
+        factory = SECURITY_HANDLERS.get(v)
+        # 0 An algorithm that is undocumented. This value shall not be used.
+        if factory is None:
+            raise PDFEncryptionError("Unknown algorithm: param=%r" % param)
+        handler = factory(docid, param, password)
+        self.decipher = handler.decrypt
+        self.is_printable = handler.is_printable
+        self.is_modifiable = handler.is_modifiable
+        self.is_extractable = handler.is_extractable
+        # Ensure that no extra data leaks into encrypted streams
+        self.parser.strict = True
+        self.parser.decipher = self.decipher
+
+    @property
+    def parser(self) -> IndirectObjectParser:
+        if self._parser is not None:
+            return self._parser
+        self._parser = IndirectObjectParser(self.buffer, doc=self)
+        self._parser.seek(self._offset)
+        return self._parser
+
+    @property
+    def xrefs(self) -> List[XRef]:
+        if self._xrefs is not None:
+            return self._xrefs
+        self._xrefs = self._read_xrefs()
+        return self._xrefs
+
+    def _read_xrefs(self) -> List[XRef]:
+        if self._startxref_pos == -1:
+            log.warning("startxref was not found, falling back to object parser")
+            return [XRefFallback(self.parser)]
+        self._xrefpos: Set[int] = set()
+        xrefs: List[XRef] = []
         try:
-            xrefpos = self._find_xref()
-        except Exception as e:
-            raise PDFSyntaxError("No xref table found at end of file") from e
-        try:
-            self._read_xref_from(xrefpos, self.xrefs)
-            return
+            self._read_xrefs_into(self._startxref_pos, xrefs)
+            return xrefs
         except (ValueError, IndexError, StopIteration, PDFSyntaxError) as e:
             log.warning("Checking for two PDFs in a trenchcoat: %s", e)
-            xrefpos = self._detect_concatenation(xrefpos)
-            if xrefpos == -1:
-                raise PDFSyntaxError("Failed to read xref table at end of file") from e
+            self._startxref_pos = self._detect_concatenation(self._startxref_pos)
+        if self._startxref_pos == -1:
+            log.warning("startxref was not found, falling back to object parser")
+            return [XRefFallback(self.parser)]
         try:
-            self._read_xref_from(xrefpos, self.xrefs)
+            self._read_xrefs_into(self._startxref_pos, xrefs)
+            return xrefs
         except (ValueError, IndexError, StopIteration, PDFSyntaxError) as e:
-            raise PDFSyntaxError(
-                "Failed to read xref table with adjusted offset"
-            ) from e
+            log.warning("xref parsing failed, falling back to object parser: %s", e)
+            return [XRefFallback(self.parser)]
+
+    def _read_xrefs_into(
+        self,
+        start: int,
+        xrefs: List[XRef],
+    ) -> None:
+        """Reads XRefs from the given location."""
+        if start in self._xrefpos:
+            log.warning("Detected circular xref chain at %d", start)
+            return
+        # Look for an XRefStream first, then an XRefTable
+        if INDOBJR.match(self.buffer, start):
+            log.debug("Reading xref stream at %d", start)
+            # XRefStream: PDF-1.5
+            self.parser.seek(start)
+            self.parser.reset()
+            xref: XRef = XRefStream(self.parser, self._offset)
+        elif m := XREFR.match(self.buffer, start):
+            log.debug("Reading xref table at %d", m.start(1))
+            parser = ObjectParser(self.buffer, self, pos=m.start(1))
+            xref = XRefTable(
+                parser,
+                self._offset,
+            )
+        else:
+            # Well, maybe it's an XRef table without "xref" (but
+            # probably not)
+            parser = ObjectParser(self.buffer, self, pos=start)
+            xref = XRefTable(parser, self._offset)
+        self._xrefpos.add(start)
+        xrefs.append(xref)
+        trailer = xref.trailer
+        # For hybrid-reference files, an additional set of xrefs as a
+        # stream.
+        if "XRefStm" in trailer:
+            pos = int_value(trailer["XRefStm"])
+            self._read_xrefs_into(pos + self._offset, xrefs)
+        # Recurse into any previous xref tables or streams
+        if "Prev" in trailer:
+            # find previous xref
+            pos = int_value(trailer["Prev"])
+            self._read_xrefs_into(pos + self._offset, xrefs)
 
     def _detect_concatenation(self, xrefpos: int) -> int:
         # Detect the case where two (or more) PDFs have been
@@ -321,46 +410,51 @@ class Document:
                     pos,
                     xrefpos,
                 )
-                self.offset = filestart
+                self._offset = filestart
                 return pos
         return -1
 
-    def _initialize_password(self, password: str = "") -> None:
-        """Initialize the decryption handler with a given password, if any.
+    @property
+    def catalog(self) -> Dict[str, Any]:
+        if self._catalog is not None:
+            return self._catalog
+        self._catalog = {}
+        if "Root" in self.trailer:
+            # Every PDF file must have exactly one /Root dictionary.
+            try:
+                self._catalog = dict_value(self.trailer["Root"])
+            except TypeError:
+                log.warning("Root is a broken reference (incorrect xref table?)")
+        else:
+            log.warning("No /Root object! - Is this really a PDF?")
+        if "Type" in self._catalog and self._catalog["Type"] is not LITERAL_CATALOG:
+            log.warning("Catalog doesn't seem to be a catalog: {self._catalog!r}")
+        return self._catalog
 
-        Internal function, requires the Encrypt dictionary to have
-        been read from the trailer into self.encryption.
-        """
-        assert self.encryption is not None
-        (docid, param) = self.encryption
-        if literal_name(param.get("Filter")) != "Standard":
-            raise PDFEncryptionError("Unknown filter: param=%r" % param)
-        v = int_value(param.get("V", 0))
-        # 3 (PDF 1.4) An unpublished algorithm that permits encryption
-        # key lengths ranging from 40 to 128 bits. This value shall
-        # not appear in a conforming PDF file.
-        if v == 3:
-            raise PDFEncryptionError("Unpublished algorithm 3 not supported")
-        factory = SECURITY_HANDLERS.get(v)
-        # 0 An algorithm that is undocumented. This value shall not be used.
-        if factory is None:
-            raise PDFEncryptionError("Unknown algorithm: param=%r" % param)
-        handler = factory(docid, param, password)
-        self.decipher = handler.decrypt
-        self.is_printable = handler.is_printable
-        self.is_modifiable = handler.is_modifiable
-        self.is_extractable = handler.is_extractable
-        assert self.parser is not None
-        # Ensure that no extra data leaks into encrypted streams
-        self.parser.strict = True
-        self.parser.decipher = self.decipher
+    @property
+    def is_tagged(self) -> bool:
+        markinfo = resolve1(self.catalog.get("MarkInfo"))
+        if isinstance(markinfo, dict):
+            return not not markinfo.get("Marked")
+        return False
+
+    @property
+    def pdf_version(self) -> str:
+        if "Version" in self.catalog:
+            log.debug(
+                "Using PDF version %r from catalog instead of %r from header",
+                self.catalog["Version"],
+                self._pdf_version,
+            )
+            return literal_name(self.catalog["Version"])
+        return self._pdf_version
 
     def __iter__(self) -> Iterator[IndirectObject]:
         """Iterate over top-level `IndirectObject` (does not expand object streams)"""
         return (
             obj
             for pos, obj in IndirectObjectParser(
-                self.buffer, self, pos=self.offset, strict=self.parser.strict
+                self.buffer, self, pos=self._offset, strict=self.parser.strict
             )
         )
 
@@ -369,7 +463,7 @@ class Document:
         """Iterate over all indirect objects (including, then expanding object
         streams)"""
         for _, obj in IndirectObjectParser(
-            self.buffer, self, pos=self.offset, strict=self.parser.strict
+            self.buffer, self, pos=self._offset, strict=self.parser.strict
         ):
             yield obj
             if (
@@ -440,7 +534,6 @@ class Document:
         return (objs, n)
 
     def _getobj_parse(self, pos: int, objid: int) -> PDFObject:
-        assert self.parser is not None
         self.parser.seek(pos)
         try:
             m = INDOBJR.match(self.buffer, pos)
@@ -505,8 +598,6 @@ class Document:
           IndexError: if objid does not exist in PDF
 
         """
-        if not self.xrefs:
-            raise ValueError("Document is not initialized")
         if objid not in self._cached_objs:
             obj = None
             for xref in self.xrefs:
@@ -530,7 +621,7 @@ class Document:
                     continue
             # Store it anyway as None if we can't find it to avoid costly searching
             self._cached_objs[objid] = obj
-        # To get standards compliant behaviour simply remove this
+        # To get standards compliant behaviour remove this
         if self._cached_objs[objid] is None:
             raise IndexError(f"Object with ID {objid} not found")
         return self._cached_objs[objid]
@@ -745,70 +836,6 @@ class Document:
         if self._destinations is None:
             self._destinations = Destinations(self)
         return self._destinations
-
-    def _find_xref(self) -> int:
-        """Internal function used to locate the first XRef."""
-        # Look for startxref and try to get a position from the
-        # following token (there is supposed to be a newline, but...)
-        pos = self.buffer.rfind(b"startxref")
-        if pos != -1:
-            m = STARTXREFR.match(self.buffer, pos)
-            if m is not None:
-                start = int(m[1])
-                if start > pos:
-                    raise ValueError(
-                        "Invalid startxref position (> %d): %d" % (pos, start)
-                    )
-                return start + self.offset
-
-        # Otherwise, just look for an xref, raising ValueError
-        pos = self.buffer.rfind(b"xref")
-        if pos == -1:
-            raise ValueError("xref not found in document")
-        return pos
-
-    # read xref table
-    def _read_xref_from(
-        self,
-        start: int,
-        xrefs: List[XRef],
-    ) -> None:
-        """Reads XRefs from the given location."""
-        if start in self._xrefpos:
-            log.warning("Detected circular xref chain at %d", start)
-            return
-        # Look for an XRefStream first, then an XRefTable
-        if INDOBJR.match(self.buffer, start):
-            log.debug("Reading xref stream at %d", start)
-            # XRefStream: PDF-1.5
-            self.parser.seek(start)
-            self.parser.reset()
-            xref: XRef = XRefStream(self.parser, self.offset)
-        elif m := XREFR.match(self.buffer, start):
-            log.debug("Reading xref table at %d", m.start(1))
-            parser = ObjectParser(self.buffer, self, pos=m.start(1))
-            xref = XRefTable(
-                parser,
-                self.offset,
-            )
-        else:
-            # Well, maybe it's an XRef table without "xref" (but
-            # probably not)
-            parser = ObjectParser(self.buffer, self, pos=start)
-            xref = XRefTable(parser, self.offset)
-        self._xrefpos.add(start)
-        xrefs.append(xref)
-        trailer = xref.trailer
-        # For hybrid-reference files, an additional set of xrefs as a
-        # stream.
-        if "XRefStm" in trailer:
-            pos = int_value(trailer["XRefStm"])
-            self._read_xref_from(pos + self.offset, xrefs)
-        # Recurse into any previous xref tables or streams
-        if "Prev" in trailer:
-            # find previous xref
-            pos = int_value(trailer["Prev"])
-            self._read_xref_from(pos + self.offset, xrefs)
 
 
 def call_page(func: Callable[[Page], Any], pageref: PageRef) -> Any:
