@@ -142,7 +142,7 @@ def test_inline_images():
 
 
 def test_cached_inline_images():
-    doc = Document(b"")
+    doc = Document(b"trailer << >>")
     first = list(ObjectParser(INLINEDATA1, doc, streamid=0))
     second = list(ObjectParser(INLINEDATA1, doc, streamid=0))
     assert first == second

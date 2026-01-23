@@ -48,6 +48,11 @@ def test_bytes():
         assert LIT("Helvetica") in tokens
 
 
+def test_smallest_pdf():
+    """Test the smallest possible thing we will accept as a PDF."""
+    _ = Document(b"trailer << >>")
+
+
 def test_tokens():
     with playa.open(TESTDIR / "simple1.pdf") as doc:
         tokens = list(doc.tokens)

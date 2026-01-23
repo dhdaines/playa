@@ -249,8 +249,8 @@ class Document:
         # case of linearized PDFs, is actually at the *beginning*.
         end = len(self.buffer)
         indobj = -1
-        for pos in range(len(self.buffer) - 1, -1, -1):
-            if self.buffer[pos] in NOTKEYWORD:
+        for pos in range(len(self.buffer) - 1, -2, -1):
+            if pos == -1 or self.buffer[pos] in NOTKEYWORD:
                 token = self.buffer[pos + 1 : end]
                 if token == b"startxref":
                     _, self._startxref_pos = next(ObjectParser(self.buffer, pos=end))
