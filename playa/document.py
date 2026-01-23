@@ -179,9 +179,8 @@ class Document:
     _fontmap: Union[Dict[str, Font], None] = None
     _parser: Union[IndirectObjectParser, None] = None
     _xrefs: List[XRef] | None = None
-    _trailer_pos: Union[int, None] = None
-    _startxref_pos: Union[int, None] = None
-    _trailer_token: Union[bytes, None] = None
+    _trailer_pos = -1
+    _startxref_pos = -1
 
     def __enter__(self) -> "Document":
         return self
@@ -244,12 +243,11 @@ class Document:
             self._initialize_password(password)
 
     def _read_trailer(self) -> Dict[str, Any]:
-        # To read the trailer, we must first find the trailer. It is,
-        # unsurprisingly, at the end of the file.  However it could
-        # either be a dictionary preceded by the token "trailer", or
-        # it could be a cross-reference stream.  To figure this out,
-        # we'll tokenize the file in reverse until we find b"trailer"
-        # or b"obj"
+        # To read the trailer, we must first find the trailer, which
+        # is supposed to be at the end of the file.  This is not
+        # exactly true, because it could be an xref stream, which can
+        # actually be anywhere in the file, and in particular, in the
+        # case of linearized PDFs, is actually at the *beginning*.
         end = len(self.buffer)
         for pos in range(len(self.buffer) - 1, -1, -1):
             if self.buffer[pos] in NOTKEYWORD:
@@ -257,16 +255,27 @@ class Document:
                 if token == b"startxref":
                     _, self._startxref_pos = next(ObjectParser(self.buffer, pos=end))
                     self._startxref_pos += self._offset
-                elif token == b"trailer":
+                    # If this is an xref stream, then its dictionary
+                    # is the trailer.
+                    if m := INDOBJR.match(self.buffer, self._startxref_pos):
+                        self._trailer_pos = m.end(0)
+                        break
+                    # If this is a normal xref table, then look for a
+                    # trailer after it, which will be the correct one
+                    # to use.
+                    if m := XREFR.match(self.buffer, self._startxref_pos):
+                        self._trailer_pos = self.buffer.find(b"trailer", self._startxref_pos)
+                        if self._trailer_pos != -1:
+                            self._trailer_pos += 7
+                            break
+                if token == b"trailer":
                     self._trailer_pos = end
-                    self._trailer_token = token
+                if token == b"obj":
+                    if self._trailer_pos == -1:
+                        self._trailer_pos = end
                     break
-                elif token == b"obj":
-                    self._trailer_pos = end
-                    self._trailer_token = token
-                    # FIXME: We could set _startxref_pos based on this
-                    # object, that would be more reliable than
-                    # trusting startxref which is often quite wrong
+                if token == b"xref":
+                    self._startxref_pos = pos + 1
                     break
                 end = pos
         self._trailer_pos, trailer = next(
@@ -330,15 +339,6 @@ class Document:
             self._read_xrefs_into(self._startxref_pos, xrefs)
             return xrefs
         except (ValueError, IndexError, StopIteration, PDFSyntaxError) as e:
-            log.warning("Checking for two PDFs in a trenchcoat: %s", e)
-            self._startxref_pos = self._detect_concatenation(self._startxref_pos)
-        if self._startxref_pos == -1:
-            log.warning("startxref was not found, falling back to object parser")
-            return [XRefFallback(self.parser)]
-        try:
-            self._read_xrefs_into(self._startxref_pos, xrefs)
-            return xrefs
-        except (ValueError, IndexError, StopIteration, PDFSyntaxError) as e:
             log.warning("xref parsing failed, falling back to object parser: %s", e)
             return [XRefFallback(self.parser)]
 
@@ -383,36 +383,6 @@ class Document:
             # find previous xref
             pos = int_value(trailer["Prev"])
             self._read_xrefs_into(pos + self._offset, xrefs)
-
-    def _detect_concatenation(self, xrefpos: int) -> int:
-        # Detect the case where two (or more) PDFs have been
-        # concatenated, or where somebody tried an "incremental
-        # update" without updating the xref table
-        filestart = self.buffer.rfind(b"%%EOF")
-        log.debug("Found ultimate %%EOF at %d", filestart)
-        if filestart != -1:
-            filestart = self.buffer.rfind(b"%%EOF", 0, filestart)
-            log.debug("Found penultimate %%EOF at %d", filestart)
-        if filestart != -1:
-            filestart += 5
-            while self.buffer[filestart] in (10, 13):
-                filestart += 1
-            parser = ObjectParser(self.buffer, self, filestart + xrefpos)
-            try:
-                (pos, token) = parser.nexttoken()
-            except StopIteration:
-                raise ValueError(f"Unexpected EOF at {filestart}")
-            if token is KEYWORD_XREF:
-                log.debug(
-                    "Found two PDFs in a trenchcoat at %d "
-                    "(second xref is at %d not %d)",
-                    filestart,
-                    pos,
-                    xrefpos,
-                )
-                self._offset = filestart
-                return pos
-        return -1
 
     @property
     def catalog(self) -> Dict[str, Any]:
