@@ -18,7 +18,7 @@ plugins:
           paths: [playa]
           options:
             show_root_heading: true
-            docstring_style: auto
+            docstring_style: google
 nav:
   - Home: index.md
   - CLI: cli.md

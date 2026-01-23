@@ -259,28 +259,29 @@ class IndexAssigner:
 class LAParams:
     """Parameters for layout analysis
 
-    :param line_overlap: If two characters have more overlap than this they
+    Args:
+      line_overlap: If two characters have more overlap than this they
         are considered to be on the same line. The overlap is specified
         relative to the minimum height of both characters.
-    :param char_margin: If two characters are closer together than this
+      char_margin: If two characters are closer together than this
         margin they are considered part of the same line. The margin is
         specified relative to the width of the character.
-    :param word_margin: If two characters on the same line are further apart
+      word_margin: If two characters on the same line are further apart
         than this margin then they are considered to be two separate words, and
         an intermediate space will be added for readability. The margin is
         specified relative to the width of the character.
-    :param line_margin: If two lines are are close together they are
+      line_margin: If two lines are are close together they are
         considered to be part of the same paragraph. The margin is
         specified relative to the height of a line.
-    :param boxes_flow: Specifies how much a horizontal and vertical position
+      boxes_flow: Specifies how much a horizontal and vertical position
         of a text matters when determining the order of text boxes. The value
         should be within the range of -1.0 (only horizontal position
         matters) to +1.0 (only vertical position matters). You can also pass
         `None` to disable advanced layout analysis, and instead return text
         based on the position of the bottom left corner of the text box.
-    :param detect_vertical: If vertical text should be considered during
+      detect_vertical: If vertical text should be considered during
         layout analysis
-    :param all_texts: If layout analysis should be performed on text in
+      all_texts: If layout analysis should be performed on text in
         figures.
     """
 
@@ -1039,9 +1040,11 @@ class LTLayoutContainer(LTContainer[LTComponent]):
         since comparison operators, e.g., __lt__, are disabled for
         LTComponent, id(obj) has to appear before obj in element tuples.
 
-        :param laparams: LAParams object.
-        :param boxes: All textbox objects to be grouped.
-        :return: a list that has only one element, the final top level group.
+        Args:
+          laparams: LAParams object.
+          boxes: All textbox objects to be grouped.
+        Returns:
+          a list that has only one element, the final top level group.
         """
         ElementT = Union[LTTextBox, LTTextGroup]
         plane: Plane[ElementT] = Plane(self.bbox)
