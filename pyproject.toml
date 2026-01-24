@@ -106,6 +106,7 @@ bench = [
     "python benchmarks/marked_content.py",
     "python benchmarks/parallel.py",
     "python benchmarks/structure.py",
+    "python benchmarks/latency.py",
 ]
 
 [tool.hatch.envs.benchmark-mypyc]
