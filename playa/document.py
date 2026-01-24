@@ -307,11 +307,9 @@ class Document:
         if not isinstance(trailer, dict):
             raise PDFSyntaxError(f"Trailer is not a dict: {trailer!r}")
         if indobj == 2 and trailer.get("Type") != LITERAL_XREF:
-            # We didn't find a trailer, and the indirect object turned
-            # out to not be a cross-reference stream... We are
-            # probably screwed, but perhaps fallback parsing can help.
+            # Either it's just the trailer (no problem) and there's no
+            # xref table, or it's some other random indirect object.
             self._startxref_pos = -1
-            trailer = {}
         return trailer
 
     def _initialize_password(self, password: str = "") -> None:
