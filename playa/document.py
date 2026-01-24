@@ -162,8 +162,8 @@ class Document:
     info: Dict[str, PDFObject]
     buffer: Union[bytes, mmap.mmap]  # FIXME: abstract type for this?
     space: DeviceSpace
-    encryption: Optional[Tuple[PDFObject, PDFObject]] = None
-    decipher: Optional[DecipherCallable] = None
+    encryption: Union[Tuple[Tuple[bytes, bytes], Dict], None] = None
+    decipher: Union[DecipherCallable, None] = None
 
     _fp: Union[BinaryIO, None] = None
     _pages: Union["PageList", None] = None
@@ -227,9 +227,10 @@ class Document:
         # Otherwise we will defer this to the first object lookup.
         if "Encrypt" in self.trailer:
             self._xrefs = self._read_xrefs()
-            if "ID" in self.trailer:
-                id_value = list_value(self.trailer["ID"])
-            else:
+            try:
+                ids = list_value(self.trailer["ID"])
+                id_value = (bytes(ids[0]), bytes(ids[1]))
+            except (KeyError, TypeError):
                 # Some documents may not have a /ID, use two empty
                 # byte strings instead. Solves
                 # https://github.com/pdfminer/pdfminer.six/issues/594
@@ -261,7 +262,8 @@ class Document:
             if pos == -1 or self.buffer[pos] in NOTKEYWORD:
                 token = self.buffer[pos + 1 : end]
                 if token == b"startxref":
-                    _, self._startxref_pos = next(ObjectParser(self.buffer, pos=end))
+                    _, val = next(ObjectParser(self.buffer, pos=end))
+                    self._startxref_pos = int_value(val)
                     self._startxref_pos += self._offset
                     # If this is an xref stream, then its dictionary
                     # is the trailer.
@@ -302,14 +304,14 @@ class Document:
         self._trailer_pos, trailer = next(
             ObjectParser(self.buffer, pos=self._trailer_pos, doc=self)
         )
+        if not isinstance(trailer, dict):
+            raise PDFSyntaxError(f"Trailer is not a dict: {trailer!r}")
         if indobj == 2 and trailer.get("Type") != LITERAL_XREF:
             # We didn't find a trailer, and the indirect object turned
             # out to not be a cross-reference stream... We are
             # probably screwed, but perhaps fallback parsing can help.
             self._startxref_pos = -1
             trailer = {}
-        if not isinstance(trailer, dict):
-            raise PDFSyntaxError(f"Trailer is not a dict: {trailer!r}")
         return trailer
 
     def _initialize_password(self, password: str = "") -> None:
