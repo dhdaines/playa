@@ -76,7 +76,7 @@ from playa.worker import (
     _set_document,
     in_worker,
 )
-from playa.xref import XRef, XRefFallback, XRefStream, XRefTable
+from playa.xref import XRef, XRefFallback, XRefStream, XRefTable, INDOBJR, XREFR
 
 log = logging.getLogger(__name__)
 
@@ -97,9 +97,6 @@ LITERAL_CATALOG = LIT("Catalog")
 LITERAL_PAGE = LIT("Page")
 LITERAL_PAGES = LIT("Pages")
 INHERITABLE_PAGE_ATTRS = {"Resources", "MediaBox", "CropBox", "Rotate"}
-INDOBJR = re.compile(rb"\s*\d+\s+\d+\s+obj")
-XREFR = re.compile(rb"\s*xref\s*(\d+)\s+(\d+)\s*")
-STARTXREFR = re.compile(rb"startxref\s+(\d+)")
 
 
 def _find_header(buffer: Union[bytes, mmap.mmap]) -> Tuple[bytes, int]:
@@ -546,41 +543,16 @@ class Document:
             if obj.objid != objid:
                 raise PDFSyntaxError(f"objid mismatch: {obj.objid!r}={objid!r}")
         except (ValueError, IndexError, PDFSyntaxError) as e:
-            if self.parser.strict:
-                raise PDFSyntaxError(
-                    "Indirect object %d not found at position %d"
-                    % (
-                        objid,
-                        pos,
-                    )
+            raise PDFSyntaxError(
+                "Indirect object %d not found at position %d"
+                % (
+                    objid,
+                    pos,
                 )
-            else:
-                log.warning(
-                    "Indirect object %d not found at position %d: %r", objid, pos, e
-                )
-            obj = self._getobj_parse_approx(pos, objid)
+            ) from e
         if obj.objid != objid:
             raise PDFSyntaxError(f"objid mismatch: {obj.objid!r}={objid!r}")
         return obj.obj
-
-    def _getobj_parse_approx(self, pos: int, objid: int) -> IndirectObject:
-        # In case of malformed pdf files where the offset in the
-        # xref table doesn't point exactly at the object
-        # definition (probably more frequent than you think), just
-        # use a regular expression to find the object because we
-        # can do that.
-        realpos = -1
-        lastgen = -1
-        for m in re.finditer(rb"\b%d\s+(\d+)\s+obj" % objid, self.buffer):
-            genno = int(m.group(1))
-            if genno > lastgen:
-                lastgen = genno
-                realpos = m.start(0)
-        if realpos == -1:
-            raise PDFSyntaxError(f"Indirect object {objid} not found in document")
-        self.parser.seek(realpos)
-        (_, obj) = next(self.parser)
-        return obj
 
     def __getitem__(self, objid: int) -> PDFObject:
         """Get an indirect object from the PDF.
@@ -610,7 +582,29 @@ class Document:
                         stream = stream_value(self[strmid])
                         obj = self._getobj_objstm(stream, index, objid)
                     else:
-                        obj = self._getobj_parse(index, objid)
+                        try:
+                            obj = self._getobj_parse(index, objid)
+                        except PDFSyntaxError as e:
+                            log.warning(
+                                "Indirect object %d not found at position %d: %r",
+                                objid,
+                                index,
+                                e,
+                            )
+                            # xref tables are clearly borked, so
+                            # rebuild them and try again
+                            log.warning("Rebuilding xref table from object parser")
+                            self._xrefs = [XRefFallback(self.parser)]
+                            try:
+                                (strmid, index, genno) = self._xrefs[0].get_pos(objid)
+                                obj = self._getobj_parse(index, objid)
+                            except (KeyError, PDFSyntaxError) as e:
+                                log.warning(
+                                    "Indirect object %d STILL not found at position %d: %r",
+                                    objid,
+                                    index,
+                                    e,
+                                )
                     break
                 # FIXME: We might not actually want to catch these...
                 except StopIteration:
