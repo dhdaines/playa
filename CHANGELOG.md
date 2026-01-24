@@ -1,3 +1,8 @@
+## PLAYA 0.9.1: Unreleased
+
+- Load xref tables lazily
+- TODO: load page tree lazily too
+
 ## PLAYA 0.9.0: 2026-01-08
 
 - Refactor and add convenience methods to text objects
