@@ -4,13 +4,13 @@ This code is in the public domain.
 
 """
 
-from typing import Sequence
+from typing import List, Sequence
 
 
 class Arcfour:
     def __init__(self, key: Sequence[int]) -> None:
         # because Py3 range is not indexable
-        s = [i for i in range(256)]
+        s: List[int] = [i for i in range(256)]
         j = 0
         klen = len(key)
         for i in range(256):
@@ -23,7 +23,7 @@ class Arcfour:
         (i, j) = (self.i, self.j)
         s = self.s
         r = b""
-        for c in iter(data):
+        for c in data:
             i = (i + 1) % 256
             j = (j + s[i]) % 256
             (s[i], s[j]) = (s[j], s[i])
@@ -31,5 +31,3 @@ class Arcfour:
             r += bytes((c ^ k,))
         (self.i, self.j) = (i, j)
         return r
-
-    encrypt = decrypt = process

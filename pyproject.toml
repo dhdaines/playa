@@ -152,10 +152,12 @@ extra-dependencies = [ "paves", "jupyterlab" ]
 dependencies = ["hatch-mypyc", "cryptography"]
 enable-by-default = false
 include = [
+    "playa/arcfour.py",
     "playa/ccitt.py",
     "playa/image.py",
     "playa/utils.py",
     "playa/miner.py",
+    "playa/xref.py",
 ]
 
 [tool.coverage.run]
