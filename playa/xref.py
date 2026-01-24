@@ -1,6 +1,7 @@
 """PDF cross-reference tables / streams."""
 
 import logging
+import re
 from typing import (
     Any,
     Dict,
@@ -37,6 +38,8 @@ from playa.utils import (
 log = logging.getLogger(__name__)
 LITERAL_OBJSTM = LIT("ObjStm")
 LITERAL_XREF = LIT("XRef")
+INDOBJR = re.compile(rb"\s*\d+\s+\d+\s+obj")
+XREFR = re.compile(rb"\s*xref\s*(\d+)\s+(\d+)\s*")
 
 
 class XRefPos(NamedTuple):
@@ -162,15 +165,14 @@ class XRefFallback:
         return "<XRefFallback: offsets=%r>" % (self.offsets.keys())
 
     def _load(self, parser: IndirectObjectParser) -> None:
-        parser.seek(0)
-        parser.reset()
         doc = parser.doc
         assert doc is not None
         # Get all the objects
-        for pos, obj in parser:
-            log.debug(
-                "Indirect object %d %d at %d: %r", obj.objid, obj.genno, pos, obj.obj
-            )
+        for m in INDOBJR.finditer(parser.buffer):
+            pos = m.start(0)
+            log.debug("Indirect object at %d: %r", pos, m.group(0))
+            parser.seek(pos)
+            _, obj = next(parser)
             prev_genno = -1
             if obj.objid in self.offsets:
                 prev_genno = self.offsets[obj.objid].genno
@@ -194,10 +196,10 @@ class XRefFallback:
             if obj.genno >= prev_genno:
                 self.offsets[obj.objid] = XRefPos(None, pos, obj.genno)
             # Expand any object streams right away
-            if (
-                isinstance(obj.obj, ContentStream)
-                and obj.obj.get("Type") is LITERAL_OBJSTM
-            ):
+            if not isinstance(obj.obj, ContentStream):
+                continue
+            stream_type = obj.obj.get("Type")
+            if stream_type is LITERAL_OBJSTM:
                 stream = stream_value(obj.obj)
                 try:
                     n = stream["N"]
@@ -211,6 +213,12 @@ class XRefFallback:
                 for index in range(n):
                     objid1 = objs[index * 2]
                     self.offsets[objid1] = XRefPos(obj.objid, index, 0)
+                # If we find a cross-reference stream, use it as the trailer
+            elif stream_type is LITERAL_XREF:
+                # See below re: salvage operation
+                self.trailer.update(obj.obj.attrs)
+        if self.trailer:
+            return
         # Now get the trailer.  Maybe there are multiple trailers.
         # Because this is a salvage operation, we will simply
         # agglomerate them - due to incremental updates the last one
