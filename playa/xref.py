@@ -172,7 +172,7 @@ class XRefFallback:
             pos = m.start(0)
             log.debug("Indirect object at %d: %r", pos, m.group(0))
             parser.seek(pos)
-            _, obj = next(parser)
+            pos, obj = next(parser)
             prev_genno = -1
             if obj.objid in self.offsets:
                 prev_genno = self.offsets[obj.objid].genno
