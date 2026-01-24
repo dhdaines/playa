@@ -156,8 +156,11 @@ include = [
     "playa/ccitt.py",
     "playa/image.py",
     "playa/utils.py",
+    "playa/lzw.py",
     "playa/miner.py",
+    "playa/runlength.py",
     "playa/xref.py",
+    "playa/_saslprep.py",
 ]
 
 [tool.coverage.run]
