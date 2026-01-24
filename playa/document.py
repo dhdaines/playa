@@ -243,10 +243,21 @@ class Document:
 
     def _read_trailer(self) -> Dict[str, Any]:
         # To read the trailer, we must first find the trailer, which
-        # is supposed to be at the end of the file.  This is not
-        # exactly true, because it could be an xref stream, which can
-        # actually be anywhere in the file, and in particular, in the
-        # case of linearized PDFs, is actually at the *beginning*.
+        # is supposed to be at the end of the file, immediately before
+        # the "startxref" keyword and after a "trailer" keyword.  This,
+        # like so many other things in the PDF standard, is a cruel
+        # lie, because:
+        #
+        # 1. If the file only contains cross-reference streams, there
+        #    is no "trailer" keyword, and the trailer is the stream
+        #    dictionary (which could be anywhere in the file)
+        # 2. If the file is a linearized PDF, there *is* a trailer at
+        #    the end of the file, but it's a bogus one that only
+        #    contains /Size. The real trailer is after the main xref
+        #    table (or stream) pointed to by the "startxref" value.
+        # 3. Of course nobody understood these rules and so you might
+        #    find the trailer in various other places.  Also, the
+        #    "startxref" value is probably wrong.
         end = len(self.buffer)
         indobj = -1
         for pos in range(len(self.buffer) - 1, -2, -1):
@@ -262,7 +273,7 @@ class Document:
                         break
                     # If this is a normal xref table, then look for a
                     # trailer after it, which will be the correct one
-                    # to use.
+                    # to use (because linearization)
                     if m := XREFR.match(self.buffer, self._startxref_pos):
                         self._trailer_pos = self.buffer.find(
                             b"trailer", self._startxref_pos
@@ -271,15 +282,21 @@ class Document:
                             self._trailer_pos += 7
                             break
                 if token == b"trailer":
+                    # We continued to scan backwards and found a trailer
                     self._trailer_pos = end
                 if token == b"obj":
+                    # We continued to scan backwards and found an
+                    # indirect object, which may or may not be the
+                    # cross-reference stream.
                     if self._trailer_pos == -1:
                         self._trailer_pos = end
                     indobj = 0
                 if token == b"xref":
+                    # We continued to scan backwards and found an xref table
                     self._startxref_pos = pos + 1
                     break
                 if indobj != -1 and ord("0") <= token[0] <= ord("9"):
+                    # We are in the abovementioned indirect object
                     indobj += 1
                     if indobj == 2:
                         self._startxref_pos = pos + 1
@@ -289,8 +306,11 @@ class Document:
             ObjectParser(self.buffer, pos=self._trailer_pos, doc=self)
         )
         if indobj == 2 and trailer.get("Type") != LITERAL_XREF:
-            # Nope, it's not an xref stream!
+            # We didn't find a trailer, and the indirect object turned
+            # out to not be a cross-reference stream... We are
+            # probably screwed, but perhaps fallback parsing can help.
             self._startxref_pos = -1
+            trailer = {}
         if not isinstance(trailer, dict):
             raise PDFSyntaxError(f"Trailer is not a dict: {trailer!r}")
         return trailer
