@@ -698,7 +698,29 @@ class IndirectObjectParser:
                 else:
                     self.objstack.append((pos, obj))
             except StopIteration:
-                raise
+                # No exceptions in strict mode!
+                if self.strict:
+                    raise
+                # There may just have been a missing "endobj"
+                if len(self.objstack) < 4:
+                    raise
+                # Take the object after "obj"
+                for idx, (_, obj) in enumerate(self.objstack):
+                    if obj is KEYWORD_OBJ:
+                        break
+                else:
+                    # No "obj" found!
+                    raise
+                # No object found!
+                if idx + 1 == len(self.objstack):
+                    raise
+                # Seek to next possible object if possible
+                if idx + 2 < len(self.objstack):
+                    pos, _ = self.objstack[idx + 2]
+                    self._parser.seek(pos)
+                del self.objstack[idx + 2 :]
+                # Create an indirect object from what's left
+                return self._endobj(-1, None)
             except Exception as e:
                 errmsg = "Syntax error near position %d: %s" % (pos, e)
                 if self.strict:
@@ -709,7 +731,7 @@ class IndirectObjectParser:
 
     def _endobj(self, pos: int, obj: PDFObject) -> Tuple[int, IndirectObject]:
         # Some broken PDFs omit the space after `endobj`...
-        if obj is not KEYWORD_ENDOBJ:
+        if obj is not None and obj is not KEYWORD_ENDOBJ:
             self._parser.seek(pos + len(b"endobj"))
         # objid genno "obj" (skipped) ... and the object
         (_, obj) = self.objstack.pop()

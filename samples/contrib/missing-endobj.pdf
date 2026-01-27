@@ -1,0 +1,67 @@
+%PDF-1.6
+
+1 0 obj
+<<
+  /Type			/Catalog
+  /Pages		2 0 R
+  /OCProperties	<<
+                   /OCGs		[5 0 R]
+                   /D				<<
+                              /Order	[5 0 R]
+                              /ON		[5 0 R]
+                            >>
+                >>
+>>
+endobj
+
+
+2 0 obj
+<<
+  /Type			/Pages
+  /Kids			[3 0 R]
+  /Count		1
+>>
+endobj
+
+
+3 0 obj
+<<
+	/Type			/Page
+	/Parent		2 0 R
+	/MediaBox	[0 0 640 480]
+	/Contents null
+	/Annots		[4 0 R]
+>>
+endobj
+
+
+4 0 obj
+<<
+	/Subtype	/Square
+	/Rect			[100 300 200 400]
+	/C				[1 0 0]
+	/IC				[1 1 0]
+	/T				(Foxit)
+	/Contents	(This is an Example)
+	/OC				5 0 R
+>>
+endobj
+
+5 0 obj
+<<
+	/Type			/OCG
+	/Name			(OCG Caption 1)
+>>
+
+
+
+xref
+
+trailer
+<<
+  /Size 0
+  /Root 1 0 R
+>>
+startxref
+0
+%%EOF

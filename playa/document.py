@@ -119,6 +119,7 @@ def _open_input(fp: Union[BinaryIO, bytes]) -> Tuple[str, int, Union[bytes, mmap
         except ValueError:
             raise
     hdr, offset = _find_header(buffer)
+    log.debug("Found header at %d: %r", offset, hdr)
     try:
         version = hdr[5:].decode("ascii")
     except UnicodeDecodeError:
@@ -264,7 +265,10 @@ class Document:
             if pos == -1 or self.buffer[pos] in NOTKEYWORD:
                 token = self.buffer[pos + 1 : end]
                 if token == b"startxref":
-                    _, val = next(ObjectParser(self.buffer, pos=end))
+                    try:
+                        _, val = next(ObjectParser(self.buffer, pos=end))
+                    except StopIteration:
+                        continue
                     self._startxref_pos = int_value(val)
                     self._startxref_pos += self._offset
                     # If this is an xref stream, then its dictionary
