@@ -856,6 +856,7 @@ class PageList(ABCSequence):
 
     def _init_pages(self, doc: Document) -> None:
         try:
+            # FIXME: Make this lazy (implies lazy _len__ and __getitem__)
             page_labels: Iterable[Union[str, None]] = doc.page_labels
             self.have_labels = True
         except (KeyError, ValueError):
@@ -865,6 +866,8 @@ class PageList(ABCSequence):
         self._objids = {}
         self._labels = {}
         try:
+            # FIXME: Make this lazy (implies lazy _len__ and __getitem__)
+
             page_objects = list(doc._get_page_objects())
         except (KeyError, IndexError, TypeError) as e:
             log.debug(

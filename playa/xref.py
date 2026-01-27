@@ -68,10 +68,6 @@ class XRef(ABC):
 
     trailer: dict[str, PDFObject]
 
-    @abstractmethod
-    def __init__(self, doc: "Document", pos: int = 0, offset: int = 0) -> None:
-        pass
-
     @property
     @abstractmethod
     def objids(self) -> Iterable[int]:
