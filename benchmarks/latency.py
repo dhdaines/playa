@@ -21,7 +21,7 @@ PDFS = [
     "issue-1008-inline-ascii85.pdf",
 ]
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     logging.basicConfig(level=logging.ERROR)
     cat_time = open_time = page0_time = 0.0
     nfiles = 0
@@ -44,7 +44,7 @@ if __name__ == '__main__':
                 pass
             if iter != 0:
                 page0_time += time.time() - start
-            
+
     print("Open took %.3f ms / file" % (open_time / nfiles * 1000,))
     print("Catalog took %.3f ms / file" % (cat_time / nfiles * 1000,))
     print("Page 0 took %.3f ms / file" % (page0_time / nfiles * 1000,))

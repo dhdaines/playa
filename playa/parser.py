@@ -513,9 +513,9 @@ class ObjectParser:
             literally anything else.
 
         """
-        assert (
-            isinstance(token, PSKeyword) and token is KEYWORD_ID
-        ), f"Not ID: {token!r}"
+        assert isinstance(token, PSKeyword) and token is KEYWORD_ID, (
+            f"Not ID: {token!r}"
+        )
         idpos = pos
         (pos, objs) = self.pop_to(KEYWORD_BI)
         if len(objs) % 2 != 0:
