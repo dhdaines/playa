@@ -44,4 +44,4 @@ if __name__ == "__main__":
             benchmark_cli(path)
             if iter != 0:
                 cli_time += time.time() - start
-    print("CLI took %d ms / iter" % (cli_time / niter * 1000,))
+    print("Structure CLI took %d ms / iter" % (cli_time / niter * 1000,))
