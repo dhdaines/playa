@@ -359,7 +359,7 @@ class Document:
     def _read_xrefs(self) -> List[XRef]:
         if self._startxref_pos == -1:
             log.warning("startxref was not found, falling back to object parser")
-            return [XRefFallback(self.parser)]
+            return [XRefFallback(self)]
         self._xrefpos: Set[int] = set()
         xrefs: List[XRef] = []
         try:
@@ -367,7 +367,7 @@ class Document:
             return xrefs
         except (ValueError, IndexError, StopIteration, PDFSyntaxError) as e:
             log.warning("xref parsing failed, falling back to object parser: %s", e)
-            return [XRefFallback(self.parser)]
+            return [XRefFallback(self)]
 
     def _read_xrefs_into(
         self,
@@ -382,21 +382,14 @@ class Document:
         if INDOBJR.match(self.buffer, start):
             log.debug("Reading xref stream at %d", start)
             # XRefStream: PDF-1.5
-            self.parser.seek(start)
-            self.parser.reset()
-            xref: XRef = XRefStream(self.parser, self._offset)
+            xref: XRef = XRefStream(self, pos=start, offset=self._offset)
         elif m := XREFR.match(self.buffer, start):
             log.debug("Reading xref table at %d", m.start(1))
-            parser = ObjectParser(self.buffer, self, pos=m.start(1))
-            xref = XRefTable(
-                parser,
-                self._offset,
-            )
+            xref = XRefTable(self, pos=m.start(1), offset=self._offset)
         else:
             # Well, maybe it's an XRef table without "xref" (but
             # probably not)
-            parser = ObjectParser(self.buffer, self, pos=start)
-            xref = XRefTable(parser, self._offset)
+            xref = XRefTable(self, pos=start, offset=self._offset)
         self._xrefpos.add(start)
         xrefs.append(xref)
         trailer = xref.trailer
@@ -594,7 +587,7 @@ class Document:
                             # xref tables are clearly borked, so
                             # rebuild them and try again
                             log.warning("Rebuilding xref table from object parser")
-                            self._xrefs = [XRefFallback(self.parser)]
+                            self._xrefs = [XRefFallback(self)]
                             try:
                                 (strmid, index, genno) = self._xrefs[0].get_pos(objid)
                                 obj = self._getobj_parse(index, objid)

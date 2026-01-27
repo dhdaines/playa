@@ -771,11 +771,8 @@ class IndirectObjectParser:
             log.warning("/Length is undefined in stream dictionary %r", dic)
             objlen = 0
         except ValueError:
-            # FIXME: This warning should be suppressed in fallback
-            # xref parsing, since we obviously can't resolve any
-            # references yet.  Either that or fallback xref parsing
-            # should just run a regex over the PDF and not try to
-            # actually parse the objects (probably a better solution)
+            # FIXME: This warning should be suppressed in xref
+            # parsing, since we can't resolve any references yet.
             log.warning("/Length reference cannot be resolved in %r", dic)
             objlen = 0
         except TypeError:

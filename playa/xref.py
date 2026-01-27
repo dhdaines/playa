@@ -12,6 +12,7 @@ from typing import (
     Optional,
     Protocol,
     Tuple,
+    TYPE_CHECKING,
 )
 
 from playa.exceptions import (
@@ -25,6 +26,8 @@ from playa.parser import (
 )
 from playa.pdftypes import (
     ContentStream,
+    ObjRef,
+    PDFObject,
     dict_value,
     int_value,
     list_value,
@@ -35,11 +38,20 @@ from playa.utils import (
     nunpack,
 )
 
+if TYPE_CHECKING:
+    from playa.document import Document
+
 log = logging.getLogger(__name__)
 LITERAL_OBJSTM = LIT("ObjStm")
 LITERAL_XREF = LIT("XRef")
 INDOBJR = re.compile(rb"\s*\d{1,10}\s+\d{1,10}\s+obj")
 XREFR = re.compile(rb"\s*xref\s*(\d{1,10})\s*(\d{1,10})\s*")
+
+
+def _update_refs(trailer: dict[str, PDFObject], doc: "Document") -> None:
+    for val in trailer.values():
+        if isinstance(val, ObjRef):
+            val.doc = doc
 
 
 class XRefPos(NamedTuple):
@@ -67,14 +79,10 @@ class XRefTable:
     plain text at the end of the file.
     """
 
-    def __init__(
-        self,
-        parser: ObjectParser,
-        offset: int = 0,
-    ) -> None:
+    def __init__(self, doc: "Document", pos: int, offset: int) -> None:
         self.offsets: Dict[int, XRefPos] = {}
         self.trailer: Dict[str, Any] = {}
-        self._load(parser, offset)
+        self._load(ObjectParser(doc.buffer, doc, pos), offset)
 
     def _load(self, parser: ObjectParser, offset: int) -> None:
         while True:
@@ -156,17 +164,17 @@ class XRefFallback:
     cross-reference table by simply scanning the entire file to find
     all indirect objects."""
 
-    def __init__(self, parser: IndirectObjectParser) -> None:
+    def __init__(self, doc: "Document", pos: int = 0, offset: int = 0) -> None:
         self.offsets: Dict[int, XRefPos] = {}
         self.trailer: Dict[str, Any] = {}
-        self._load(parser)
+        # Create a new IndirectObjectParser without a parent document
+        # to avoid endless looping
+        self._load(IndirectObjectParser(doc.buffer, doc=None, pos=pos), doc)
 
     def __repr__(self) -> str:
         return "<XRefFallback: offsets=%r>" % (self.offsets.keys())
 
-    def _load(self, parser: IndirectObjectParser) -> None:
-        doc = parser.doc
-        assert doc is not None
+    def _load(self, parser: IndirectObjectParser, doc: "Document") -> None:
         # Get all the objects
         for m in INDOBJR.finditer(parser.buffer):
             pos = m.start(0)
@@ -218,12 +226,13 @@ class XRefFallback:
                 # See below re: salvage operation
                 self.trailer.update(obj.obj.attrs)
         if self.trailer:
+            _update_refs(self.trailer, doc)
             return
-        # Now get the trailer.  Maybe there are multiple trailers.
-        # Because this is a salvage operation, we will simply
-        # agglomerate them - due to incremental updates the last one
-        # should be the most recent, but we can't count on it being
-        # complete or correct.
+        # Get the trailer if we didn't find one.  Maybe there are
+        # multiple trailers.  Because this is a salvage operation, we
+        # will simply agglomerate them - due to incremental updates
+        # the last one should be the most recent, but we can't count
+        # on it being complete or correct.
         pos = 0
         while True:
             pos = parser.buffer.find(b"trailer", pos)
@@ -256,7 +265,7 @@ class XRefFallback:
 class XRefStream:
     """Cross-reference stream (as of PDF 1.5)"""
 
-    def __init__(self, parser: IndirectObjectParser, offset: int = 0) -> None:
+    def __init__(self, doc: "Document", pos: int, offset: int) -> None:
         self.offset = offset
         self.data: Optional[bytes] = None
         self.entlen: Optional[int] = None
@@ -264,12 +273,16 @@ class XRefStream:
         self.fl2: Optional[int] = None
         self.fl3: Optional[int] = None
         self.ranges: List[Tuple[int, int]] = []
-        self._load(parser)
+        # Because an XRefStream's dictionary may contain indirect
+        # object references, we create a new IndirectObjectParser
+        # here with no document to avoid trying to follow them
+        # (and thus creating an infinite loop)
+        self._load(IndirectObjectParser(doc.buffer, doc=None, pos=pos), doc)
 
     def __repr__(self) -> str:
         return "<XRefStream: ranges=%r>" % (self.ranges)
 
-    def _load(self, parser: IndirectObjectParser) -> None:
+    def _load(self, parser: IndirectObjectParser, doc: "Document") -> None:
         (_, obj) = next(parser)
         stream = obj.obj
         if (
@@ -288,6 +301,8 @@ class XRefStream:
         self.data = stream.buffer
         self.entlen = self.fl1 + self.fl2 + self.fl3
         self.trailer = stream.attrs
+        # Update any references in trailer to point to the document
+        _update_refs(self.trailer, doc)
 
     @property
     def objids(self) -> Iterator[int]:
