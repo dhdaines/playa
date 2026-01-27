@@ -221,6 +221,8 @@ class Document:
             Tuple[int, int], Tuple[int, Optional[InlineImage]]
         ] = {}
         self._pdf_version, self._offset, self.buffer = _open_input(fp)
+        # These are always True unless "encryption" (lol) is present
+        self.is_printable = self.is_modifiable = self.is_extractable = True
         # We are Lazy, only find and read the trailer.
         self.trailer = self._read_trailer()
         # If there is encryption, then we need to read xref tables.
