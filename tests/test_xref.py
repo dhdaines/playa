@@ -2,12 +2,15 @@
 Test the varieties of cross-reference table as implemented in playa.xref
 """
 
+from dataclasses import dataclass
 from pathlib import Path
+from typing import cast
 
 import playa
 import pytest
+from playa.document import Document
 from playa.exceptions import PDFSyntaxError
-from playa.parser import IndirectObjectParser, ObjectParser
+from playa.parser import ObjectParser
 from playa.xref import XRefFallback, XRefStream, XRefTable
 
 from .data import CONTRIB, TESTDIR
@@ -52,14 +55,26 @@ GOOD_XREF1 = (
 )
 
 
+@dataclass
+class MockDoc:
+    buffer: bytes
+
+    def decipher(self, _objid, _genno, data, *args, **kwargs):
+        return data
+
+
+def mock_doc(buffer: bytes) -> Document:
+    return cast(Document, MockDoc(buffer=buffer))
+
+
 def test_xref_tables() -> None:
     """Verify that we can read valid xref tables."""
-    x = XRefTable(ObjectParser(GOOD_XREF1))
+    x = XRefTable(mock_doc(GOOD_XREF1))
     assert repr(x)
     crlf = GOOD_XREF1.replace(b" \n", b"\r\n")
-    XRefTable(ObjectParser(crlf))
+    XRefTable(mock_doc(crlf))
     cr = GOOD_XREF1.replace(b" \n", b" \r")
-    XRefTable(ObjectParser(cr))
+    XRefTable(mock_doc(cr))
 
 
 # EOF before trailer (no trailer = fallback)
@@ -104,15 +119,15 @@ BAD_XREF4 = (
 def test_bad_xref_tables() -> None:
     """Verify that we fail on fatally flawed xref tables."""
     with pytest.raises(StopIteration):
-        XRefTable(ObjectParser(BAD_XREF1))
+        XRefTable(mock_doc(BAD_XREF1))
     with pytest.raises(StopIteration):
-        XRefTable(ObjectParser(BAD_XREF2))
+        XRefTable(mock_doc(BAD_XREF2))
     with pytest.raises(PDFSyntaxError):
-        XRefTable(ObjectParser(BAD_XREF3))
+        XRefTable(mock_doc(BAD_XREF3))
     with pytest.raises(PDFSyntaxError):
-        XRefTable(ObjectParser(BAD_XREF4))
+        XRefTable(mock_doc(BAD_XREF4))
     with pytest.raises(PDFSyntaxError):
-        x = XRefTable(ObjectParser(GOOD_XREF1))
+        x = XRefTable(mock_doc(GOOD_XREF1))
         x._load_trailer(ObjectParser(b"not_a_trailer"))
 
 
@@ -152,11 +167,11 @@ UGLY_XREF2 = (
 def test_robust_xref_tables() -> None:
     """Verify that we can read slightly invalid xref tables."""
     nospace = GOOD_XREF1.replace(b" \n", b"\n")
-    x = XRefTable(ObjectParser(nospace))
+    x = XRefTable(mock_doc(nospace))
     assert list(x.objids) == [1, 2, 5, 6]
-    x = XRefTable(ObjectParser(UGLY_XREF1))
+    x = XRefTable(mock_doc(UGLY_XREF1))
     assert list(x.objids) == [1, 2, 5, 6]
-    x = XRefTable(ObjectParser(UGLY_XREF2))
+    x = XRefTable(mock_doc(UGLY_XREF2))
     assert list(x.objids) == [1, 2]
     assert x.get_pos(2).pos == 20
 
@@ -176,7 +191,7 @@ endobj
 
 def test_xref_streams() -> None:
     """Verify that we can read xref streams."""
-    s = XRefStream(IndirectObjectParser(XREF_STREAM1))
+    s = XRefStream(mock_doc(XREF_STREAM1))
     assert repr(s)
     assert list(s.objids) == [1, 2, 3, 4]
     assert s.get_pos(2).pos == 32
@@ -213,20 +228,16 @@ endobj
 def test_bad_xref_streams() -> None:
     """Verify that we reject bad xref streams."""
     with pytest.raises(ValueError):
-        XRefStream(IndirectObjectParser(BAD_XREF_STREAM1))
+        XRefStream(mock_doc(BAD_XREF_STREAM1))
     with pytest.raises(PDFSyntaxError):
-        XRefStream(IndirectObjectParser(BAD_XREF_STREAM2))
+        XRefStream(mock_doc(BAD_XREF_STREAM2))
 
 
 def test_xref_fallback() -> None:
     """Reconstruct xref table from a test document."""
 
-    class FakeDoc:
-        def decipher(self, _objid, _genno, data, *args, **kwargs):
-            return data
-
     data = (THISDIR / "fallback-xref.pdf").read_bytes()
-    f = XRefFallback(IndirectObjectParser(data, FakeDoc()))  # type: ignore[arg-type]
+    f = XRefFallback(mock_doc(data))
     assert repr(f)
     pos2 = f.get_pos(2)
     assert pos2.genno == 1
@@ -235,6 +246,4 @@ def test_xref_fallback() -> None:
     pos7 = f.get_pos(7)
     assert pos7.streamid == 3
     assert f.trailer == {"Root": 1, "Size": 7}
-    f = XRefFallback(
-        IndirectObjectParser(data, FakeDoc(), strict=True)  # type: ignore[arg-type]
-    )
+    f = XRefFallback(mock_doc(data))

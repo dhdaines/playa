@@ -2,15 +2,14 @@
 
 import logging
 import re
+from abc import ABC, abstractmethod
 from typing import (
-    Any,
     Dict,
     Iterable,
     Iterator,
     List,
     NamedTuple,
     Optional,
-    Protocol,
     Tuple,
     TYPE_CHECKING,
 )
@@ -37,6 +36,7 @@ from playa.utils import (
     choplist,
     nunpack,
 )
+from playa.worker import _ref_document
 
 if TYPE_CHECKING:
     from playa.document import Document
@@ -49,9 +49,10 @@ XREFR = re.compile(rb"\s*xref\s*(\d{1,10})\s*(\d{1,10})\s*")
 
 
 def _update_refs(trailer: dict[str, PDFObject], doc: "Document") -> None:
+    docref = _ref_document(doc)
     for val in trailer.values():
         if isinstance(val, ObjRef):
-            val.doc = doc
+            val.doc = docref
 
 
 class XRefPos(NamedTuple):
@@ -60,28 +61,35 @@ class XRefPos(NamedTuple):
     genno: int
 
 
-class XRef(Protocol):
+class XRef(ABC):
     """
-    Duck-typing for XRef table implementations, which are expected to be read-only.
+    XRef table interface (expected to be read-only)
     """
+
+    trailer: dict[str, PDFObject]
+
+    @abstractmethod
+    def __init__(self, doc: "Document", pos: int = 0, offset: int = 0) -> None:
+        pass
 
     @property
-    def trailer(self) -> Dict[str, Any]: ...
+    @abstractmethod
+    def objids(self) -> Iterable[int]:
+        pass
 
-    @property
-    def objids(self) -> Iterable[int]: ...
+    @abstractmethod
+    def get_pos(self, objid: int) -> XRefPos:
+        pass
 
-    def get_pos(self, objid: int) -> XRefPos: ...
 
-
-class XRefTable:
+class XRefTable(XRef):
     """Simplest (PDF 1.0) implementation of cross-reference table, in
     plain text at the end of the file.
     """
 
-    def __init__(self, doc: "Document", pos: int, offset: int) -> None:
+    def __init__(self, doc: "Document", pos: int = 0, offset: int = 0) -> None:
         self.offsets: Dict[int, XRefPos] = {}
-        self.trailer: Dict[str, Any] = {}
+        self.trailer: Dict[str, PDFObject] = {}
         self._load(ObjectParser(doc.buffer, doc, pos), offset)
 
     def _load(self, parser: ObjectParser, offset: int) -> None:
@@ -158,7 +166,7 @@ class XRefTable:
         return self.offsets[objid]
 
 
-class XRefFallback:
+class XRefFallback(XRef):
     """In the case where a file is non-conforming and has no
     `startxref` marker at its end, we will reconstruct a
     cross-reference table by simply scanning the entire file to find
@@ -166,7 +174,7 @@ class XRefFallback:
 
     def __init__(self, doc: "Document", pos: int = 0, offset: int = 0) -> None:
         self.offsets: Dict[int, XRefPos] = {}
-        self.trailer: Dict[str, Any] = {}
+        self.trailer: Dict[str, PDFObject] = {}
         # Create a new IndirectObjectParser without a parent document
         # to avoid endless looping
         self._load(IndirectObjectParser(doc.buffer, doc=None, pos=pos), doc)
@@ -262,10 +270,10 @@ class XRefFallback:
         return self.offsets[objid]
 
 
-class XRefStream:
+class XRefStream(XRef):
     """Cross-reference stream (as of PDF 1.5)"""
 
-    def __init__(self, doc: "Document", pos: int, offset: int) -> None:
+    def __init__(self, doc: "Document", pos: int = 0, offset: int = 0) -> None:
         self.offset = offset
         self.data: Optional[bytes] = None
         self.entlen: Optional[int] = None
