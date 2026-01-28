@@ -168,12 +168,12 @@ def test_robust_xref_tables() -> None:
     """Verify that we can read slightly invalid xref tables."""
     nospace = GOOD_XREF1.replace(b" \n", b"\n")
     x = XRefTable(mock_doc(nospace))
-    assert list(x.objids) == [1, 2, 5, 6]
+    assert list(x) == [1, 2, 5, 6]
     x = XRefTable(mock_doc(UGLY_XREF1))
-    assert list(x.objids) == [1, 2, 5, 6]
+    assert list(x) == [1, 2, 5, 6]
     x = XRefTable(mock_doc(UGLY_XREF2))
-    assert list(x.objids) == [1, 2]
-    assert x.get_pos(2).pos == 20
+    assert list(x) == [1, 2]
+    assert x[2].pos == 20
 
 
 XREF_STREAM1 = b"""1 0 obj
@@ -193,10 +193,10 @@ def test_xref_streams() -> None:
     """Verify that we can read xref streams."""
     s = XRefStream(mock_doc(XREF_STREAM1))
     assert repr(s)
-    assert list(s.objids) == [1, 2, 3, 4]
-    assert s.get_pos(2).pos == 32
+    assert list(s) == [1, 2, 3, 4]
+    assert s[2].pos == 32
     with pytest.raises(KeyError):
-        s.get_pos(0)
+        s[0]
 
 
 BAD_XREF_STREAM1 = b"""1 0 obj
@@ -239,11 +239,11 @@ def test_xref_fallback() -> None:
     data = (THISDIR / "fallback-xref.pdf").read_bytes()
     f = XRefFallback(mock_doc(data))
     assert repr(f)
-    pos2 = f.get_pos(2)
+    pos2 = f[2]
     assert pos2.genno == 1
     assert data[pos2.pos :].startswith(b"2 1 obj")
-    assert list(f.objids) == [1, 2, 3, 4, 7, 6, 5]
-    pos7 = f.get_pos(7)
+    assert list(f) == [1, 2, 3, 4, 7, 6, 5]
+    pos7 = f[7]
     assert pos7.streamid == 3
     assert f.trailer == {"Root": 1, "Size": 7}
     f = XRefFallback(mock_doc(data))

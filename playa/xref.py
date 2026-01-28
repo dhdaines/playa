@@ -2,10 +2,10 @@
 
 import logging
 import re
-from abc import ABC, abstractmethod
+from abc import abstractmethod
+from collections.abc import Mapping
 from typing import (
     Dict,
-    Iterable,
     Iterator,
     List,
     NamedTuple,
@@ -61,21 +61,12 @@ class XRefPos(NamedTuple):
     genno: int
 
 
-class XRef(ABC):
+class XRef(Mapping):
     """
     XRef table interface (expected to be read-only)
     """
 
     trailer: dict[str, PDFObject]
-
-    @property
-    @abstractmethod
-    def objids(self) -> Iterable[int]:
-        pass
-
-    @abstractmethod
-    def get_pos(self, objid: int) -> XRefPos:
-        pass
 
 
 class XRefTable(XRef):
@@ -154,11 +145,13 @@ class XRefTable(XRef):
     def __repr__(self) -> str:
         return "<XRefTable: offsets=%r>" % (self.offsets.keys())
 
-    @property
-    def objids(self) -> Iterable[int]:
-        return self.offsets.keys()
+    def __len__(self) -> int:
+        return len(self.offsets)
 
-    def get_pos(self, objid: int) -> XRefPos:
+    def __iter__(self) -> Iterator[int]:
+        return iter(self.offsets)
+
+    def __getitem__(self, objid: int) -> XRefPos:
         return self.offsets[objid]
 
 
@@ -258,11 +251,13 @@ class XRefFallback(XRef):
         if not self.trailer:
             log.warning("b'trailer' not found in document or invalid")
 
-    @property
-    def objids(self) -> Iterable[int]:
-        return self.offsets.keys()
+    def __len__(self) -> int:
+        return len(self.offsets)
 
-    def get_pos(self, objid: int) -> XRefPos:
+    def __iter__(self) -> Iterator[int]:
+        return iter(self.offsets)
+
+    def __getitem__(self, objid: int) -> XRefPos:
         return self.offsets[objid]
 
 
@@ -307,9 +302,20 @@ class XRefStream(XRef):
         self.trailer = stream.attrs
         # Update any references in trailer to point to the document
         _update_refs(self.trailer, doc)
+        # Dump out objects for debugging
+        for start, nobjs in self.ranges:
+            if log.level > logging.DEBUG:
+                break
+            log.debug("objects %d - %d:", start, start + nobjs)
+            for index in range(nobjs):
+                offset = self.entlen * index
+                ent = self.data[offset : offset + self.entlen]
+                f1 = nunpack(ent[: self.fl1], 1)
+                f2 = nunpack(ent[self.fl1 : self.fl1 + self.fl2])
+                f3 = nunpack(ent[self.fl1 + self.fl2 :])
+                log.debug("obj %d => %d %d %d", start + index, f1, f2, f3)
 
-    @property
-    def objids(self) -> Iterator[int]:
+    def __iter__(self) -> Iterator[int]:
         for start, nobjs in self.ranges:
             for i in range(nobjs):
                 assert self.entlen is not None
@@ -320,7 +326,10 @@ class XRefStream(XRef):
                 if f1 == 1 or f1 == 2:
                     yield start + i
 
-    def get_pos(self, objid: int) -> XRefPos:
+    def __len__(self) -> int:
+        return sum(nobjs for _, nobjs in self.ranges)
+
+    def __getitem__(self, objid: int) -> XRefPos:
         index = 0
         for start, nobjs in self.ranges:
             if start <= objid and objid < start + nobjs:

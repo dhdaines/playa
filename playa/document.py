@@ -424,7 +424,7 @@ class Document:
         else:
             log.warning("No /Root object! - Is this really a PDF?")
         if "Type" in self._catalog and self._catalog["Type"] is not LITERAL_CATALOG:
-            log.warning("Catalog doesn't seem to be a catalog: {self._catalog!r}")
+            log.warning(f"Catalog doesn't seem to be a catalog: {self._catalog!r}")
         return self._catalog
 
     @property
@@ -508,11 +508,7 @@ class Document:
             assert stream.objid is not None
             self._parsed_objs[stream.objid] = (objs, n)
         i = n * 2 + index
-        try:
-            obj = objs[i]
-        except IndexError:
-            raise PDFSyntaxError("index too big: %r" % index)
-        return obj
+        return objs[i]
 
     def _get_objects(self, stream: ContentStream) -> Tuple[List[PDFObject], int]:
         if stream.get("Type") is not LITERAL_OBJSTM:
@@ -569,53 +565,57 @@ class Document:
           IndexError: if objid does not exist in PDF
 
         """
-        if objid not in self._cached_objs:
-            obj = None
-            for xref in self.xrefs:
-                try:
-                    (strmid, index, genno) = xref.get_pos(objid)
-                except KeyError:
-                    continue
-                try:
-                    if strmid is not None:
-                        stream = stream_value(self[strmid])
-                        obj = self._getobj_objstm(stream, index, objid)
-                    else:
+        if objid in self._cached_objs:
+            if self._cached_objs[objid] is None:
+                raise IndexError(f"Object with ID {objid} not found")
+            return self._cached_objs[objid]
+        obj = None
+
+        for xref in self.xrefs:
+            try:
+                (strmid, index, genno) = xref[objid]
+            except KeyError:
+                continue
+            try:
+                if strmid is not None:
+                    stream = stream_value(self[strmid])
+                    obj = self._getobj_objstm(stream, index, objid)
+                else:
+                    try:
+                        obj = self._getobj_parse(index, objid)
+                    except PDFSyntaxError as e:
+                        log.warning(
+                            "Indirect object %d not found at position %d: %r",
+                            objid,
+                            index,
+                            e,
+                        )
+                        # xref tables are clearly borked, so
+                        # rebuild them and try again
+                        log.warning("Rebuilding xref table from object parser")
+                        self._xrefs = [XRefFallback(self)]
                         try:
+                            (strmid, index, genno) = self._xrefs[0][objid]
                             obj = self._getobj_parse(index, objid)
-                        except PDFSyntaxError as e:
+                        except (KeyError, PDFSyntaxError) as e:
                             log.warning(
-                                "Indirect object %d not found at position %d: %r",
+                                "Indirect object %d STILL not found at position %d: %r",
                                 objid,
                                 index,
                                 e,
                             )
-                            # xref tables are clearly borked, so
-                            # rebuild them and try again
-                            log.warning("Rebuilding xref table from object parser")
-                            self._xrefs = [XRefFallback(self)]
-                            try:
-                                (strmid, index, genno) = self._xrefs[0].get_pos(objid)
-                                obj = self._getobj_parse(index, objid)
-                            except (KeyError, PDFSyntaxError) as e:
-                                log.warning(
-                                    "Indirect object %d STILL not found at position %d: %r",
-                                    objid,
-                                    index,
-                                    e,
-                                )
-                    break
-                # FIXME: We might not actually want to catch these...
-                except StopIteration:
-                    log.debug("EOF when searching for object %d", objid)
-                    continue
-                except PDFSyntaxError as e:
-                    log.debug("Syntax error when searching for object %d: %s", objid, e)
-                    continue
-            # Store it anyway as None if we can't find it to avoid costly searching
-            self._cached_objs[objid] = obj
-        # To get standards compliant behaviour remove this
-        if self._cached_objs[objid] is None:
+                break
+            # FIXME: We might not actually want to catch these...
+            except StopIteration:
+                log.debug("EOF when searching for object %d", objid)
+                continue
+            except PDFSyntaxError as e:
+                log.debug("Syntax error when searching for object %d: %s", objid, e)
+                continue
+
+        # Store it anyway as None if we can't find it to avoid costly searching
+        self._cached_objs[objid] = obj
+        if obj is None:
             raise IndexError(f"Object with ID {objid} not found")
         return self._cached_objs[objid]
 
@@ -739,7 +739,7 @@ class Document:
           an iterator over (objid, dict) pairs.
         """
         for xref in self.xrefs:
-            for object_id in xref.objids:
+            for object_id in xref:
                 try:
                     obj = self[object_id]
                     if isinstance(obj, dict) and obj.get("Type") is LITERAL_PAGE:
