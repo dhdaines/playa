@@ -9,6 +9,7 @@ from pathlib import Path
 
 import playa
 from .data import ALLPDFS, XFAILS, PASSWORDS
+
 HERE = Path.cwd()
 
 
@@ -47,5 +48,5 @@ def report(name: str, stats: list[tuple[float, Path]]) -> None:
         print("    %.2fms %s" % (t * 1000, p))
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

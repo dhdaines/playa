@@ -2,7 +2,6 @@
 
 import logging
 import re
-from abc import abstractmethod
 from collections.abc import Mapping
 from typing import (
     Dict,
