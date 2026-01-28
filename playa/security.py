@@ -88,15 +88,15 @@ class PDFStandardSecurityHandler:
     def compute_u(self, key: bytes) -> bytes:
         if self.r == 2:
             # Algorithm 3.4
-            return Arcfour(key).encrypt(PASSWORD_PADDING)  # 2
+            return Arcfour(key).process(PASSWORD_PADDING)  # 2
         else:
             # Algorithm 3.5
             hash = md5(PASSWORD_PADDING)  # 2
             hash.update(self.docid[0])  # 3
-            result = Arcfour(key).encrypt(hash.digest())  # 4
+            result = Arcfour(key).process(hash.digest())  # 4
             for i in range(1, 20):  # 5
                 k = b"".join(bytes((c ^ i,)) for c in iter(key))
-                result = Arcfour(k).encrypt(result)
+                result = Arcfour(k).process(result)
             result += result  # 6
             return result
 
@@ -153,12 +153,12 @@ class PDFStandardSecurityHandler:
             n = self.length // 8
         key = hash.digest()[:n]
         if self.r == 2:
-            user_password = Arcfour(key).decrypt(self.o)
+            user_password = Arcfour(key).process(self.o)
         else:
             user_password = self.o
             for i in range(19, -1, -1):
                 k = b"".join(bytes((c ^ i,)) for c in iter(key))
-                user_password = Arcfour(k).decrypt(user_password)
+                user_password = Arcfour(k).process(user_password)
         return self.authenticate_user_password(user_password)
 
     def decrypt(
@@ -175,7 +175,7 @@ class PDFStandardSecurityHandler:
         key = self.key + struct.pack("<L", objid)[:3] + struct.pack("<L", genno)[:2]
         hash = md5(key)
         key = hash.digest()[: min(len(key), 16)]
-        return Arcfour(key).decrypt(data)
+        return Arcfour(key).process(data)
 
 
 def unpad_aes(padded: bytes) -> bytes:

@@ -657,9 +657,7 @@ class LTTextContainer(LTExpandableContainer, LTText):
         super().__init__()
 
     def get_text(self) -> str:
-        return "".join(
-            obj.get_text() for obj in self if isinstance(obj, LTText)
-        )
+        return "".join(obj.get_text() for obj in self if isinstance(obj, LTText))
 
 
 TextLineElement = Union[LTChar, LTAnno]

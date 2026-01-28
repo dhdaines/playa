@@ -7,19 +7,22 @@ set -e
 VERSION=$1
 if [ ! "$VERSION" ]; then
     >&2 echo "Usage: $0 VERSION"
+    exit 1
 fi
 
 VENV="$(dirname $0)/.venv"
-if [ ! -e "$VENV" ]; then
+if [ ! -e "$VENV/bin/activate" ]; then
     python -m venv "$VENV"
 fi
 echo Current:
-hatch run python text.py
-hatch run python objects.py
+hatch -e benchmark-mypyc run python text.py
+hatch -e benchmark-mypyc run python objects.py
+hatch -e benchmark-mypyc run python structure.py
+. "$VENV/bin/activate"
 for VERSION in "$@"; do
     echo Version $VERSION:
-    (. "$VENV/bin/activate"
-     pip -q install playa-pdf==$VERSION
-     python text.py
-     python objects.py)
+    pip -q install playa-pdf==$VERSION
+    python text.py
+    python objects.py
+    python structure.py
 done
