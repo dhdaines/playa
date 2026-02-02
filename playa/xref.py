@@ -43,8 +43,8 @@ if TYPE_CHECKING:
 log = logging.getLogger(__name__)
 LITERAL_OBJSTM = LIT("ObjStm")
 LITERAL_XREF = LIT("XRef")
-INDOBJR = re.compile(rb"\s*\d{1,10}\s+\d{1,10}\s+obj")
-XREFR = re.compile(rb"\s*xref\s*(\d{1,10})\s*(\d{1,10})\s*")
+INDOBJR = re.compile(rb"(?<!\d)\d{1,10}\s+\d{1,10}\s+obj")
+XREFR = re.compile(rb"\s*xref\s*(\d+)\s*(\d+)\s*")
 
 
 def _update_refs(trailer: dict[str, PDFObject], doc: "Document") -> None:

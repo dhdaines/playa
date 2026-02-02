@@ -19,6 +19,7 @@ PDFS = [
     "issue-886-xref-stream-widths.pdf",
     "issue-146-broken-xref-and-streams.pdf",
     "issue-1008-inline-ascii85.pdf",
+    "evil-pi-to-100000-digits.pdf",
 ]
 
 if __name__ == "__main__":
@@ -30,7 +31,6 @@ if __name__ == "__main__":
         for name in PDFS:
             path = CONTRIB / name
             start = time.time()
-            logging.info("Reading %s", path)
             pdf = playa.open(path)
             if iter != 0:
                 open_time += time.time() - start
