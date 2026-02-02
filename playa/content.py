@@ -687,19 +687,14 @@ class XObjectObject(ContentObject):
             generally considered to be globally unique, it may be
             possible to access fonts by them in the future.
 
-        Danger: Do not rely on this being a `dict`.
-            Currently this is implemented eagerly, but in the future it
-            may return a lazy object which only loads fonts on demand.
-
         """
-        from playa.interp import _make_fontmap
+        from playa.interp import FontMapping
 
         if hasattr(self, "_fontmap"):
             return self._fontmap
-        if self.resources is None or "Font" not in self.resources:
-            self._fontmap: Dict[str, Font] = {}
-        else:
-            self._fontmap = _make_fontmap(self.resources["Font"], self.doc)
+        self._fontmap: Mapping[str, Font] = FontMapping(
+            self.resources.get("Font") if self.resources else None, self.doc
+        )
         return self._fontmap
 
     @classmethod

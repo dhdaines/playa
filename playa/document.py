@@ -633,7 +633,9 @@ class Document(ABCMapping):
                         log.warning("Rebuilding xref table from object parser")
                         fallback = XRefFallback(self)
                         self.trailer["Size"] = len(fallback)
-                        log.debug("Updated /Size in trailer to %d", self.trailer["Size"])
+                        log.debug(
+                            "Updated /Size in trailer to %d", self.trailer["Size"]
+                        )
                         self._xrefs = [fallback]
                         try:
                             (strmid, index, genno) = self._xrefs[0][objid]
@@ -719,7 +721,7 @@ class Document(ABCMapping):
             <del>in the neighbourhood</del> in the document, but there's no
             guarantee that this is the case.  In keeping with the
             "incremental update" philosophy dear to PDF, you get the
-            last font with a given name.
+            last font defined with a given name.
 
         Danger: Do not rely on this being a `dict`.
             Currently this is implemented eagerly, but in the future it
@@ -728,10 +730,7 @@ class Document(ABCMapping):
         """
         if self._fontmap is not None:
             return self._fontmap
-        self._fontmap: Dict[str, Font] = {}
-        for idx, page in enumerate(self.pages):
-            for font in page.fonts.values():
-                self._fontmap[font.fontname] = font
+        self._fontmap: Mapping[str, Font] = FontMapping(self)
         return self._fontmap
 
     @property
@@ -865,6 +864,46 @@ class Document(ABCMapping):
         if self._destinations is None:
             self._destinations = Destinations(self)
         return self._destinations
+
+
+class FontMapping(ABCMapping):
+    """Lazy mapping of font names to fonts in a Document."""
+    def __init__(self, doc: Document) -> None:
+        self._doc = doc
+        self._fontmap: Mapping[str, Union[Font, None]] = {}
+
+    def __len__(self) -> int:
+        return sum(1 for _ in self)
+
+    def __iter__(self) -> Iterator[str]:
+        for name, _ in self.items():
+            yield name
+
+    def items(self) -> Iterator[Tuple[str, Font]]:
+        unique_fontnames: Set[str] = set()
+        for page in reversed(self._doc.pages):
+            # Cache a whole page of fonts at a time
+            page_fonts = list(page.fonts.values())
+            for font in reversed(page_fonts):
+                if font.fontname not in self._fontmap:
+                    self._fontmap[font.fontname] = font
+            # Now iterate over the name and (uniquified) font
+            for font in reversed(page_fonts):
+                if font.fontname not in unique_fontnames:
+                    yield font.fontname, self._fontmap[font.fontname]
+                    unique_fontnames.add(font.fontname)
+
+    def __getitem__(self, fontname: str) -> Font:
+        if fontname not in self._fontmap:
+            # Yes, this is (worst-case) quadratic, but it's also Lazy.
+            for name, font in self.items():
+                if name == fontname:
+                    return font
+            # We did not find it, so store None to avoid future finding
+            self._fontmap[fontname] = None
+        if self._fontmap[fontname] is None:
+            raise KeyError(f"Font {fontname} not found in document!")
+        return self._fontmap[fontname]
 
 
 def call_page(func: Callable[[Page], Any], pageref: PageRef) -> Any:

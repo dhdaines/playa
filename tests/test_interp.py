@@ -7,7 +7,7 @@ from pathlib import Path
 
 import playa
 from playa.document import LITERAL_TYPE1
-from playa.interp import _make_fontmap, Type3Interpreter
+from playa.interp import FontMapping, Type3Interpreter
 from playa.parser import IndirectObjectParser
 
 from .data import TESTDIR
@@ -18,14 +18,14 @@ THISDIR = Path(__file__).parent
 def test_make_fontmap(caplog) -> None:
     """Test fontmap creation"""
     with playa.open(TESTDIR / "pdf_structure.pdf") as pdf:
-        assert _make_fontmap([1, 2, 3], pdf) == {}
+        assert len(FontMapping([1, 2, 3], pdf)) == 0
+        assert "not a dict" in caplog.text
         fonts = playa.resolve(pdf.pages[0].resources["Font"])
-        fontmap = _make_fontmap(fonts, pdf)
+        fontmap = FontMapping(fonts, pdf)
         assert fontmap.keys() == {"F1", "F2"}
-        fontmap = _make_fontmap(
+        fontmap = FontMapping(
             {"F1": {"Subtype": LITERAL_TYPE1, "FontDescriptor": 42}}, pdf
         )
-        assert "Invalid font dictionary" in caplog.text
 
 
 def test_init_resources(caplog) -> None:

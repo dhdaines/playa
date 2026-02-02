@@ -6,6 +6,7 @@ import itertools
 import logging
 import operator
 import re
+from collections.abc import Mapping as ABCMapping
 from copy import copy
 from dataclasses import dataclass
 from typing import (
@@ -16,6 +17,7 @@ from typing import (
     Iterable,
     Iterator,
     List,
+    Mapping,
     Tuple,
     Union,
     Sequence,
@@ -106,18 +108,32 @@ class TextState:
         self.glyph_offset = (0, 0)
 
 
-def _make_fontmap(mapping: PDFObject, doc: "Document") -> Dict[str, Font]:
-    fontmap: Dict[str, Font] = {}
-    mapping = resolve1(mapping)
-    if not isinstance(mapping, dict):
-        log.warning("Font mapping not a dict: %r", mapping)
-        return fontmap
-    for fontid, spec in mapping.items():
+class FontMapping(ABCMapping):
+    """Lazy mapping of font names to fonts in a resource dictionary."""
+    def __init__(self, mapping: PDFObject, doc: "Document") -> None:
+        self._fontmap: Dict[str, Font] = {}
+        self._doc = doc
+        try:
+            self._mapping: Dict[str, PDFObject] = dict_value(mapping)
+        except TypeError:
+            log.warning("Font mapping not a dict: %r", mapping)
+            self._mapping = {}
+
+    def __len__(self) -> int:
+        return len(self._mapping)
+
+    def __iter__(self) -> Iterator[str]:
+        return iter(self._mapping)
+
+    def __getitem__(self, fontid: str) -> Font:
+        if fontid in self._fontmap:
+            return self._fontmap[fontid]
+        spec = self._mapping[fontid]
         objid = 0  # Not a valid object ID (will not cache)
         if isinstance(spec, ObjRef):
             objid = spec.objid
         try:
-            fontmap[fontid] = doc.get_font(objid, dict_value(spec))
+            self._fontmap[fontid] = self._doc.get_font(objid, dict_value(spec))
         except Exception:
             log.warning(
                 "Invalid font dictionary for Font %r: %r",
@@ -125,8 +141,8 @@ def _make_fontmap(mapping: PDFObject, doc: "Document") -> Dict[str, Font]:
                 spec,
                 exc_info=True,
             )
-            fontmap[fontid] = doc.get_font(objid, None)
-    return fontmap
+            self._fontmap[fontid] = self._doc.get_font(objid, None)
+        return self._fontmap[fontid]
 
 
 def _make_contentmap(
@@ -181,7 +197,7 @@ class LazyInterpreter:
     def init_resources(self, page: "Page", resources: Dict) -> None:
         """Prepare the fonts and XObjects listed in the Resource attribute."""
         self.resources = resources
-        self.fontmap: Dict[str, Font] = {}
+        self.fontmap: Mapping[str, Font] = {}
         self.xobjmap = {}
         self.csmap: Dict[str, ColorSpace] = copy(PREDEFINED_COLORSPACE)
         self.extgstatemap = {}
@@ -200,7 +216,7 @@ class LazyInterpreter:
                 log.warning("%s mapping not a dict: %r", k, mapping)
                 continue
             if k == "Font":
-                self.fontmap = _make_fontmap(mapping, _deref_document(page.docref))
+                self.fontmap = FontMapping(mapping, _deref_document(page.docref))
             elif k == "ColorSpace":
                 for csid, spec in mapping.items():
                     colorspace = get_colorspace(resolve1(spec), csid)

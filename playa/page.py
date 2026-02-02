@@ -34,8 +34,7 @@ from playa.content import (
     _extract_mcid_texts,
 )
 from playa.exceptions import PDFSyntaxError
-from playa.font import Font
-from playa.interp import LazyInterpreter, _make_fontmap, _make_contentmap
+from playa.interp import LazyInterpreter, FontMapping, _make_contentmap
 from playa.parser import ContentParser, PDFObject, Token
 from playa.pdftypes import (
     MATRIX_IDENTITY,
@@ -57,6 +56,7 @@ from playa.worker import PageRef, _deref_document, _deref_page, _ref_document, _
 
 if TYPE_CHECKING:
     from playa.document import Document
+    from playa.font import Font
     from playa.structure import PageStructure
 
 log = logging.getLogger(__name__)
@@ -407,7 +407,7 @@ class Page:
         return self._marked_contents
 
     @property
-    def fonts(self) -> Mapping[str, Font]:
+    def fonts(self) -> Mapping[str, "Font"]:
         """Mapping of resource names to fonts for this page.
 
         Note: This is not the same as `playa.Document.fonts`.
@@ -425,14 +425,10 @@ class Page:
             Form XObjects invoked on it.  You may use
             `XObjectObject.fonts` to access these.
 
-        Danger: Do not rely on this being a `dict`.
-            Currently this is implemented eagerly, but in the future it
-            may return a lazy object which only loads fonts on demand.
-
         """
         if hasattr(self, "_fontmap"):
             return self._fontmap
-        self._fontmap: Dict[str, Font] = _make_fontmap(
+        self._fontmap: Mapping[str, "Font"] = FontMapping(
             self.resources.get("Font"), self.doc
         )
         return self._fontmap
