@@ -31,7 +31,7 @@ from playa.content import (
     PathObject,
     TextObject,
     XObjectObject,
-    _extract_mcid_texts,
+    TextMapping,
 )
 from playa.exceptions import PDFSyntaxError
 from playa.interp import LazyInterpreter, FontMapping, _make_contentmap
@@ -474,15 +474,10 @@ class Page:
         For use in text extraction from tagged PDFs.  This is a
         special case of `marked_content` which only cares about
         extracting text (and thus is quite a bit more efficient).
-
-        Danger: Do not rely on this being a `dict`.
-            Currently this is implemented eagerly, but in the future it
-            may return a lazy object.
-
         """
         if hasattr(self, "_textmap"):
             return self._textmap
-        self._textmap: Mapping[int, List[str]] = _extract_mcid_texts(self)
+        self._textmap: Mapping[int, List[str]] = TextMapping(self)
         return self._textmap
 
     def extract_text(self) -> str:

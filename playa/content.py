@@ -5,6 +5,7 @@ PDF content objects created by the interpreter.
 import itertools
 import logging
 from abc import abstractmethod
+from collections.abc import Mapping as ABCMapping
 from copy import copy
 from dataclasses import dataclass
 from typing import (
@@ -474,26 +475,6 @@ class ImageObject(ContentObject):
 LITERAL_TRANSPARENCY = LIT("Transparency")
 
 
-def _extract_mcid_texts(itor: Iterable[ContentObject]) -> Dict[int, List[str]]:
-    """Get text for all MCIDs on a page or in a Form XObject"""
-    mctext: Dict[int, List[str]] = {}
-    for obj in itor:
-        if not isinstance(obj, TextObject):
-            continue
-        mcs = obj.mcs
-        if mcs is None or mcs.mcid is None:
-            continue
-        if "ActualText" in mcs.props:
-            assert isinstance(mcs.props["ActualText"], bytes)
-            chars = decode_text(mcs.props["ActualText"])
-        else:
-            chars = obj.chars
-        # Remove soft hyphens
-        chars = chars.replace("\xad", "")
-        mctext.setdefault(mcs.mcid, []).append(chars)
-    return mctext
-
-
 @dataclass
 class XObjectObject(ContentObject):
     """An eXternal Object, in the context of a page.
@@ -664,14 +645,10 @@ class XObjectObject(ContentObject):
         """Mapping of marked content IDs to Unicode text strings.
 
         For use in text extraction from tagged PDFs.
-
-        Danger: Do not rely on this being a `dict`.
-            Currently this is implemented eagerly, but in the future it
-            may return a lazy object.
         """
         if hasattr(self, "_textmap"):
             return self._textmap
-        self._textmap: Mapping[int, List[str]] = _extract_mcid_texts(self)
+        self._textmap: Mapping[int, List[str]] = TextMapping(self)
         return self._textmap
 
     @property
@@ -1293,3 +1270,34 @@ class TextObject(TextBase):
                 continue
             nglyphs += sum(1 for _ in font.decode(obj))
         return nglyphs
+
+
+class TextMapping(ABCMapping):
+    """Mapping of MCIDs to extracted text from a page or Form XObject"""
+
+    def __init__(self, itor: Iterable[ContentObject]) -> None:
+        """Get text for all MCIDs on a page or in a Form XObject"""
+        self._mctext: Dict[int, List[str]] = {}
+        for obj in itor:
+            if not isinstance(obj, TextObject):
+                continue
+            mcs = obj.mcs
+            if mcs is None or mcs.mcid is None:
+                continue
+            if "ActualText" in mcs.props:
+                assert isinstance(mcs.props["ActualText"], bytes)
+                chars = decode_text(mcs.props["ActualText"])
+            else:
+                chars = obj.chars
+            # Remove soft hyphens
+            chars = chars.replace("\xad", "")
+            self._mctext.setdefault(mcs.mcid, []).append(chars)
+
+    def __len__(self) -> int:
+        return len(self._mctext)
+
+    def __iter__(self) -> Iterator[int]:
+        return iter(self._mctext)
+
+    def __getitem__(self, mcid: int) -> List[str]:
+        return self._mctext[mcid]

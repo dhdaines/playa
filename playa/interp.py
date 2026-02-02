@@ -110,6 +110,7 @@ class TextState:
 
 class FontMapping(ABCMapping):
     """Lazy mapping of font names to fonts in a resource dictionary."""
+
     def __init__(self, mapping: PDFObject, doc: "Document") -> None:
         self._fontmap: Dict[str, Font] = {}
         self._doc = doc

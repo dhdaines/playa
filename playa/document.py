@@ -14,7 +14,6 @@ from typing import (
     BinaryIO,
     Callable,
     Dict,
-    ItemsView,
     Iterable,
     Iterator,
     List,
@@ -869,6 +868,7 @@ class Document(ABCMapping):
 
 class FontMapping(ABCMapping):
     """Lazy mapping of font names to fonts in a Document."""
+
     def __init__(self, doc: Document) -> None:
         self._doc = doc
         self._fontmap: Dict[str, Union[Font, None]] = {}
