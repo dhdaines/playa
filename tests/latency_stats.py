@@ -16,6 +16,7 @@ HERE = Path.cwd()
 def main() -> None:
     open_time = []
     cat_time = []
+    page_time = []
     logging.basicConfig(level=logging.ERROR)
     print("recalculating", end="", file=sys.stderr, flush=True)
     for path in ALLPDFS:
@@ -30,12 +31,20 @@ def main() -> None:
                 open_time.append((time.time() - start, p.relative_to(HERE)))
                 _ = pdf.catalog
                 cat_time.append((time.time() - start, p.relative_to(HERE)))
+                try:
+                    _ = next(iter(pdf.pages))
+                    page_time.append((time.time() - start, p.relative_to(HERE)))
+                except StopIteration:
+                    pass
                 print(".", end="", file=sys.stderr, flush=True)
             except playa.PDFEncryptionError:
                 pass
     print(file=sys.stderr)
     report("open", open_time)
+    print()
     report("catalog", cat_time)
+    print()
+    report("page 1", page_time)
 
 
 def report(name: str, stats: list[tuple[float, Path]]) -> None:

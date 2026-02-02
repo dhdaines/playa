@@ -2,6 +2,8 @@
 
 - Load xref tables lazily
 - TODO: load page tree lazily too
+- TODO: load other things lazily too
+
 
 ## PLAYA 0.9.0: 2026-01-08
 
