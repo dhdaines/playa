@@ -76,6 +76,7 @@ class Font:
     vertical: bool = False
     multibyte: bool = False
     encoding: Dict[int, str]
+    fontname: str
 
     def __init__(
         self,

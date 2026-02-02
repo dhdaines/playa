@@ -14,6 +14,7 @@ from typing import (
     BinaryIO,
     Callable,
     Dict,
+    ItemsView,
     Iterable,
     Iterator,
     List,
@@ -190,7 +191,7 @@ class Document(ABCMapping):
     _outline: Union["Outline", None] = None
     _destinations: Union["Destinations", None] = None
     _structure: Union["Tree", None]
-    _fontmap: Union[Dict[str, Font], None] = None
+    _fontmap: Union[Mapping[str, Font], None] = None
     _parser: Union[IndirectObjectParser, None] = None
     _xrefs: List[XRef] | None = None
     _trailer_pos = -1
@@ -870,40 +871,46 @@ class FontMapping(ABCMapping):
     """Lazy mapping of font names to fonts in a Document."""
     def __init__(self, doc: Document) -> None:
         self._doc = doc
-        self._fontmap: Mapping[str, Union[Font, None]] = {}
+        self._fontmap: Dict[str, Union[Font, None]] = {}
 
     def __len__(self) -> int:
         return sum(1 for _ in self)
 
     def __iter__(self) -> Iterator[str]:
-        for name, _ in self.items():
+        for name, _ in self._iteritems():
             yield name
 
-    def items(self) -> Iterator[Tuple[str, Font]]:
+    def _iteritems(self) -> Iterator[Tuple[str, Font]]:
         unique_fontnames: Set[str] = set()
         for page in reversed(self._doc.pages):
             # Cache a whole page of fonts at a time
-            page_fonts = list(page.fonts.values())
+            page_fonts: List[Font] = list(page.fonts.values())
+            fontnames: List[str] = []
             for font in reversed(page_fonts):
                 if font.fontname not in self._fontmap:
                     self._fontmap[font.fontname] = font
-            # Now iterate over the name and (uniquified) font
-            for font in reversed(page_fonts):
                 if font.fontname not in unique_fontnames:
-                    yield font.fontname, self._fontmap[font.fontname]
+                    fontnames.append(font.fontname)
                     unique_fontnames.add(font.fontname)
+            # Now iterate over the name and (uniquified) font
+            for name in fontnames:
+                # STFU, mypy
+                font_and_not_none = self._fontmap[name]
+                assert font_and_not_none is not None
+                yield name, font_and_not_none
 
     def __getitem__(self, fontname: str) -> Font:
         if fontname not in self._fontmap:
             # Yes, this is (worst-case) quadratic, but it's also Lazy.
-            for name, font in self.items():
+            for name, font in self._iteritems():
                 if name == fontname:
                     return font
             # We did not find it, so store None to avoid future finding
             self._fontmap[fontname] = None
-        if self._fontmap[fontname] is None:
+        font_or_none = self._fontmap[fontname]
+        if font_or_none is None:
             raise KeyError(f"Font {fontname} not found in document!")
-        return self._fontmap[fontname]
+        return font_or_none  # It cannot be None!!!
 
 
 def call_page(func: Callable[[Page], Any], pageref: PageRef) -> Any:
