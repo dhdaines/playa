@@ -3,6 +3,7 @@ Get statistics on latency for all the PDFs
 """
 
 import logging
+import math
 import sys
 import time
 from pathlib import Path
@@ -49,8 +50,14 @@ def main() -> None:
 
 def report(name: str, stats: list[tuple[float, Path]]) -> None:
     stats.sort(reverse=True)
+    nstats = len(stats)
     print(f"{name}:")
-    med_time, med_path = stats[len(stats) // 2]
+    # We actualy do care a bit more about the mean than the median...
+    mean_time = sum(t for t, p in stats) / nstats
+    var_time = sum((t - mean_time) ** 2 for t, p in stats) / (nstats - 1)
+    std_time = math.sqrt(var_time)
+    print("    mean: %.2fms std: %.2fms" % (mean_time * 1000, std_time * 1000))
+    med_time, med_path = stats[nstats // 2]
     print("    median: %.2fms %s" % (med_time * 1000, med_path))
     print("  sorted:")
     for t, p in stats:
