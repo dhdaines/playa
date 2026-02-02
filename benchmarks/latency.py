@@ -24,7 +24,7 @@ PDFS = [
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.ERROR)
-    cat_time = open_time = page0_time = 0.0
+    cat_time = fonts_time = open_time = page0_time = 0.0
     nfiles = 0
     niter = 5
     for iter in range(niter + 1):
@@ -41,10 +41,14 @@ if __name__ == "__main__":
             try:
                 page = pdf.pages[0]
             except IndexError:
-                pass
+                continue
             if iter != 0:
                 page0_time += time.time() - start
+            fonts = page.fonts
+            if iter != 0:
+                fonts_time += time.time() - start
 
     print("Open took %.3f ms / file" % (open_time / nfiles * 1000,))
     print("Catalog took %.3f ms / file" % (cat_time / nfiles * 1000,))
     print("Page 0 took %.3f ms / file" % (page0_time / nfiles * 1000,))
+    print("Page 0 Fonts took %.3f ms / file" % (fonts_time / nfiles * 1000,))
