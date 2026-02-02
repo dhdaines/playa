@@ -7,7 +7,7 @@ import itertools
 import logging
 import mmap
 import re
-from collections.abc import Sequence as ABCSequence
+from collections.abc import Sequence as ABCSequence, Mapping as ABCMapping
 from concurrent.futures import Executor
 from typing import (
     Any,
@@ -138,8 +138,17 @@ def _open_input(fp: Union[BinaryIO, bytes]) -> Tuple[str, int, Union[bytes, mmap
     return version, offset, buffer
 
 
-class Document:
+class Document(ABCMapping):
     """Representation of a PDF document.
+
+    PDF documents, at a basic level, are collections of indirect
+    objects with numeric IDs.  Since these IDs are sparse, and do not
+    need to be ordered, this is best represented as a mapping of `int`
+    to `PDFObject`.  The specification also provides for "generation
+    numbers" which can be used to track successive revisions of the
+    same object.  In practice very few PDFs actually do this, so the
+    most recent generation of an object is accessible simply by its
+    object ID.  To find other objects, use the `objects` property.
 
     Since PDF documents can be very large and complex, merely creating
     a `Document` does very little aside from verifying that the
@@ -164,6 +173,7 @@ class Document:
       TypeError: if `fp` is a file opened in text mode (don't do that!)
       PDFEncryptionError: if the PDF has an unsupported encryption scheme
       PDFPasswordIncorrect: if the password is incorrect
+
     """
 
     trailer: Dict[str, PDFObject]
@@ -367,6 +377,9 @@ class Document:
         if self._xrefs is not None:
             return self._xrefs
         self._xrefs = self._read_xrefs()
+        size = sum(len(x) for x in self._xrefs)
+        self.trailer["Size"] = size
+        log.debug("Updated /Size in trailer to %d", size)
         return self._xrefs
 
     def _read_xrefs(self) -> List[XRef]:
@@ -452,14 +465,32 @@ class Document:
             return literal_name(self.catalog["Version"])
         return self._pdf_version
 
-    def __iter__(self) -> Iterator[IndirectObject]:
-        """Iterate over top-level `IndirectObject` (does not expand object streams)"""
-        return (
-            obj
-            for pos, obj in IndirectObjectParser(
-                self.buffer, self, pos=self._offset, strict=self.parser.strict
-            )
-        )
+    def __len__(self) -> int:
+        """Return the number of indirect objects in this PDF.
+
+        Danger: This number is unreliable and ephemeral.
+            In a conforming PDF, the number of objects is declared by
+            the `/Size` key in the document trailer, but conforming
+            PDFs do not exist in the real world.  Upon opening a PDF,
+            the trailer value will be returned here, but once the
+            cross-reference tables have been loaded, a *different*
+            number will be returned, and in the case where the
+            cross-reference tables are invalid and must be
+            regenerated, this value will be updated yet again.  This
+            is the price of laziness (not to be confused with the
+            wages of sin).
+        """
+        size = self.trailer.get("Size", None)
+        if isinstance(size, int):
+            return size
+        size = sum(len(x) for x in self.xrefs)
+        self.trailer["Size"] = size
+        log.debug("Updated /Size in trailer to %d", size)
+        return size
+
+    def __iter__(self) -> Iterator[int]:
+        """Iterate over object IDs"""
+        return itertools.chain.from_iterable(self.xrefs)
 
     @property
     def objects(self) -> Iterator[IndirectObject]:
@@ -560,7 +591,7 @@ class Document:
         """Get an indirect object from the PDF.
 
         Note that the behaviour in the case of a non-existent object
-        (raising `IndexError`), while Pythonic, is not PDFic, as PDF
+        (raising `KeyError`), while Pythonic, is not PDFic, as PDF
         1.7 sec 7.3.10 states:
 
         > An indirect reference to an undefined object shall not be
@@ -568,13 +599,13 @@ class Document:
         treated as a reference to the null object.
 
         Raises:
-          ValueError: if Document is not initialized
-          IndexError: if objid does not exist in PDF
+          ValueError: if Document cannot be initialized
+          KeyError: if objid does not exist in PDF
 
         """
         if objid in self._cached_objs:
             if self._cached_objs[objid] is None:
-                raise IndexError(f"Object with ID {objid} not found")
+                raise KeyError(f"Object with ID {objid} not found")
             return self._cached_objs[objid]
         obj = None
 
@@ -600,7 +631,10 @@ class Document:
                         # xref tables are clearly borked, so
                         # rebuild them and try again
                         log.warning("Rebuilding xref table from object parser")
-                        self._xrefs = [XRefFallback(self)]
+                        fallback = XRefFallback(self)
+                        self.trailer["Size"] = len(fallback)
+                        log.debug("Updated /Size in trailer to %d", self.trailer["Size"])
+                        self._xrefs = [fallback]
                         try:
                             (strmid, index, genno) = self._xrefs[0][objid]
                             obj = self._getobj_parse(index, objid)
@@ -623,7 +657,7 @@ class Document:
         # Store it anyway as None if we can't find it to avoid costly searching
         self._cached_objs[objid] = obj
         if obj is None:
-            raise IndexError(f"Object with ID {objid} not found")
+            raise KeyError(f"Object with ID {objid} not found")
         return self._cached_objs[objid]
 
     def get_font(
@@ -745,14 +779,9 @@ class Document:
         Returns:
           an iterator over (objid, dict) pairs.
         """
-        for xref in self.xrefs:
-            for object_id in xref:
-                try:
-                    obj = self[object_id]
-                    if isinstance(obj, dict) and obj.get("Type") is LITERAL_PAGE:
-                        yield object_id, obj
-                except IndexError:
-                    pass
+        for object_id, obj in self.items():
+            if isinstance(obj, dict) and obj.get("Type") is LITERAL_PAGE:
+                yield object_id, obj
 
     def _get_page_objects(
         self,
@@ -785,7 +814,7 @@ class Document:
                 log.warning("Page tree contains unknown object: %r", obj)
             try:
                 page_object = dict_value(self[object_id])
-            except IndexError as e:
+            except KeyError as e:
                 log.warning("Missing page object: %s", e)
                 # Create an empty page to match what pdfium does
                 page_object = {"Type": LIT("Page")}

@@ -109,30 +109,18 @@ you, but you might find them interesting.  Note that these are
 number and generation number:
 
 ```python
-for objid, genno, obj in pdf:
-    ...
-# or also
-for obj in pdf:
-    obj.objid, obj.genno, obj.obj
+for indobj in pdf.objects:
+    objid, genno, obj = indobj
 ```
 
-Also, these will only be the top-level objects and not those found
-inside object streams (the streams are themselves indirect objects).
-You can iterate over all indirect objects including object streams
-using the `objects` property:
-
-```python
-for obj in pdf.objects:
-    obj.objid, obj.genno, obj.obj
-```
-
-In this case it is possible you will encounter multiple objects with
+It is possible you will encounter multiple objects with
 the same `objid` due to the "incremental updates" feature of PDF.
 Currently, iterating over the objects in a particular stream is
 possible, but complicated.
 
 You can also access indirect objects by number (this will return the
-object with most recent generation number):
+object with most recent generation number) as `playa.Document`
+is a `collections.abc.Mapping`:
 
 ```python
 a_particular_object = pdf[42]

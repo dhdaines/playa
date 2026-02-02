@@ -216,7 +216,7 @@ class ObjRef:
         doc = _deref_document(self.doc)
         try:
             return doc[self.objid]
-        except IndexError:
+        except KeyError:
             return default
 
 

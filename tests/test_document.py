@@ -66,17 +66,19 @@ def test_objects():
         # compliant but since returning None would inevitably lead to
         # a TypeError down the line we signal it right away for the
         # moment.
-        with pytest.raises(IndexError):
+        with pytest.raises(KeyError):
             _ = doc[12345]
         doc7 = doc[7]
         assert doc7["Type"] == LIT("Font")
         doc1 = doc[1]
         assert doc1["Type"] == LIT("Catalog")
-        objects = list(doc)
-        assert len(objects) == 7
+        assert len(doc) == 7
+        objids = list(doc)
+        assert len(objids) == 7
+        objects = list(doc.values())
         # Note that they don't have to be in order
-        assert objects[0].obj == doc[1]
-        assert objects[2].obj == doc[3]
+        assert objects[0] == doc[1]
+        assert objects[2] == doc[3]
         # FIXME: this should also be the case but is not as it gets reparsed:
         # assert objects[0].obj is doc[1]
 
