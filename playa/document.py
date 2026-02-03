@@ -76,7 +76,14 @@ from playa.worker import (
     _set_document,
     in_worker,
 )
-from playa.xref import XRef, XRefFallback, XRefStream, XRefTable, INDOBJR, XREFR
+from playa.xref import (
+    XRef,
+    XRefFallback,
+    XRefStream,
+    XRefTable,
+    INDOBJR,
+    XREFR,
+)
 
 log = logging.getLogger(__name__)
 
