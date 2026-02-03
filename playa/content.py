@@ -6,7 +6,6 @@ import itertools
 import logging
 import operator
 from abc import abstractmethod
-from collections.abc import Sequence as ABCSequence
 from copy import copy
 from dataclasses import dataclass
 from typing import (
@@ -1265,14 +1264,11 @@ class TextObject(TextBase):
         return nglyphs
 
 
-class ContentSection:
+class ContentSection(Iterable[ContentObject]):
     """Sequence of content objects in a marked content section."""
 
     def __init__(self, objs: Iterable[ContentObject]) -> None:
         self._objs = [obj.finalize() for obj in objs]
-
-    def __len__(self) -> int:
-        return len(self._objs)
 
     def __iter__(self) -> Iterator[ContentObject]:
         return iter(self._objs)
@@ -1297,7 +1293,7 @@ class ContentSection:
             yield chars
 
 
-class ContentSequence(ABCSequence):
+class ContentSequence(Sequence[ContentSection]):
     """Collect content object in marked content sections.
 
     These are organized in a sequence and ordered by marked content
@@ -1311,7 +1307,7 @@ class ContentSequence(ABCSequence):
     """
 
     def __init__(self, streamer: Iterable[ContentObject]) -> None:
-        self._contents: Dict[int, Iterable[ContentObject]] = {}
+        self._contents: Dict[int, ContentSection] = {}
         self._maxid: int = 0
         for mcid, objs in itertools.groupby(streamer, operator.attrgetter("mcid")):
             if mcid is None:
@@ -1326,19 +1322,19 @@ class ContentSequence(ABCSequence):
         return self._maxid + 1
 
     @property
-    def page_order(self) -> Iterator[Iterable[ContentObject]]:
+    def page_order(self) -> Iterator[ContentSection]:
         """Marked content sections in page content order."""
         yield from self._contents.values()
 
     @overload
-    def __getitem__(self, mcid: int) -> Iterable[ContentObject]: ...
+    def __getitem__(self, mcid: int) -> ContentSection: ...
 
     @overload
-    def __getitem__(self, mcid: slice) -> Sequence[Iterable[ContentObject]]: ...
+    def __getitem__(self, mcid: slice) -> Sequence[ContentSection]: ...
 
     def __getitem__(
         self, mcid: Union[int, slice]
-    ) -> Union[Iterable[ContentObject], Sequence[Iterable[ContentObject]]]:
+    ) -> Union[ContentSection, Sequence[ContentSection]]:
         if isinstance(mcid, slice):
             return [self[idx] for idx in range(mcid.start, mcid.stop, mcid.step)]
         else:
