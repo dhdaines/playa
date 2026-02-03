@@ -221,9 +221,8 @@ def test_page_structure() -> None:
 
 
 def test_marked_content() -> None:
-    with playa.open(TESTDIR / "pdf_structure.pdf") as pdf:
-        page = pdf.pages[0]
-        # FIXME: In this case they are the same... need to find a sample where they aren't
+    with playa.open(TESTDIR / "hello_structure.pdf") as pdf:
+        page = pdf.pages[1]
         logical_mcids = []
         page_mcids = []
         for mcs in page.marked_content:
@@ -232,7 +231,7 @@ def test_marked_content() -> None:
         for mcs in page.marked_content.page_order:
             if mcs:
                 page_mcids.append(next(iter(mcs)).mcid)
-        assert logical_mcids == page_mcids
+        assert logical_mcids != page_mcids
 
 
 if __name__ == "__main__":
