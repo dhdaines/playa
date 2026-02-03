@@ -7,7 +7,6 @@ import itertools
 import logging
 import mmap
 import re
-from collections.abc import Sequence as ABCSequence, Mapping as ABCMapping
 from concurrent.futures import Executor
 from typing import (
     Any,
@@ -19,6 +18,7 @@ from typing import (
     List,
     Mapping,
     Optional,
+    Sequence,
     Set,
     Tuple,
     Union,
@@ -138,7 +138,7 @@ def _open_input(fp: Union[BinaryIO, bytes]) -> Tuple[str, int, Union[bytes, mmap
     return version, offset, buffer
 
 
-class Document(ABCMapping):
+class Document(Mapping[int, PDFObject]):
     """Representation of a PDF document.
 
     PDF documents, at a basic level, are collections of indirect
@@ -866,7 +866,7 @@ class Document(ABCMapping):
         return self._destinations
 
 
-class FontMapping(ABCMapping):
+class FontMapping(Mapping[str, Font]):
     """Lazy mapping of font names to fonts in a Document."""
 
     def __init__(self, doc: Document) -> None:
@@ -918,7 +918,7 @@ def call_page(func: Callable[[Page], Any], pageref: PageRef) -> Any:
     return func(_deref_page(pageref))
 
 
-class PageList(ABCSequence):
+class PageList(Sequence[Page]):
     """List of pages indexable by 0-based index or string label.
 
     Attributes:
