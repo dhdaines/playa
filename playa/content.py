@@ -1298,7 +1298,17 @@ class ContentSection:
 
 
 class ContentSequence(ABCSequence):
-    """Collect marked content sections and order them by logical content order."""
+    """Collect content object in marked content sections.
+
+    These are organized in a sequence and ordered by marked content
+    ID, because this is the definition of "logical content order" and
+    also defines the reading order of text.
+
+    You can also get them as an iterator in "page content order",
+    i.e. the order in which they appeared in the actual content
+    stream, using the `page_order` property.
+
+    """
 
     def __init__(self, streamer: Iterable[ContentObject]) -> None:
         self._contents: Dict[int, Iterable[ContentObject]] = {}
