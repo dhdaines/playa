@@ -707,8 +707,8 @@ class Tree(Findable):
 
     _docref: DocumentRef
     props: Dict[str, PDFObject]
-    _role_map: Dict[str, str]
-    _parent_tree: NumberTree
+    _role_map: Union[Dict[str, str], None] = None
+    _parent_tree: Union[NumberTree, None] = None
     page = None
     parent = None
     bbox = BBOX_NONE
@@ -727,7 +727,7 @@ class Tree(Findable):
     def role_map(self) -> Dict[str, str]:
         """Dictionary mapping some (not necessarily all) element types
         to their standard equivalents."""
-        if hasattr(self, "_role_map"):
+        if self._role_map is not None:
             return self._role_map
         self._role_map = {}
         rm = resolve1(self.props.get("RoleMap"))  # It is optional
@@ -756,7 +756,7 @@ class Tree(Findable):
         nearly all the time.
 
         """
-        if hasattr(self, "_parent_tree"):
+        if self._parent_tree is not None:
             return self._parent_tree
         if "ParentTree" not in self.props:
             self._parent_tree = NumberTree({})

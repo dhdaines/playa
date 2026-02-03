@@ -51,13 +51,13 @@ from playa.pdftypes import (
     resolve1,
     stream_value,
 )
+from playa.structure import PageStructure
 from playa.utils import decode_text, mult_matrix, normalize_rect, transform_bbox
 from playa.worker import PageRef, _deref_document, _deref_page, _ref_document, _ref_page
 
 if TYPE_CHECKING:
     from playa.document import Document
     from playa.font import Font
-    from playa.structure import PageStructure
 
 log = logging.getLogger(__name__)
 
@@ -89,6 +89,11 @@ class Page:
       ctm: coordinate transformation matrix from default user space to
            page's device space
     """
+
+    _structmap: Union[PageStructure, None] = None
+    _marked_contents: Union[ContentSequence, None] = None
+    _fontmap: Union[Mapping[str, "Font"], None] = None
+    _textmap: Union[List[List[str]], None] = None
 
     def __init__(
         self,
@@ -335,7 +340,7 @@ class Page:
         return None
 
     @property
-    def structure(self) -> "PageStructure":
+    def structure(self) -> PageStructure:
         """Mapping of marked content IDs to logical structure elements.
 
         This is a sequence of logical structure elements, or `None`
@@ -355,11 +360,9 @@ class Page:
             items in the logical structure tree.
 
         """
-        from playa.structure import PageStructure
-
-        if hasattr(self, "_structmap"):
+        if self._structmap is not None:
             return self._structmap
-        self._structmap: PageStructure = PageStructure(self.pageref, [])
+        self._structmap = PageStructure(self.pageref, [])
         if self.doc.structure is None:
             return self._structmap
         parent_key = self.parent_key
@@ -392,9 +395,9 @@ class Page:
             for obj in page.marked_content[mcid]:
                 ... # do something with it
         """
-        if hasattr(self, "_marked_contents"):
+        if self._marked_contents is not None:
             return self._marked_contents
-        self._marked_contents: ContentSequence = ContentSequence(self)
+        self._marked_contents = ContentSequence(self)
         return self._marked_contents
 
     @property
@@ -417,11 +420,9 @@ class Page:
             `XObjectObject.fonts` to access these.
 
         """
-        if hasattr(self, "_fontmap"):
+        if self._fontmap is not None:
             return self._fontmap
-        self._fontmap: Mapping[str, "Font"] = FontMapping(
-            self.resources.get("Font"), self.doc
-        )
+        self._fontmap = FontMapping(self.resources.get("Font"), self.doc)
         return self._fontmap
 
     def __repr__(self) -> str:
@@ -466,11 +467,9 @@ class Page:
         special case of `marked_content` which only cares about
         extracting text (and thus is quite a bit more efficient).
         """
-        if hasattr(self, "_textmap"):
+        if self._textmap is not None:
             return self._textmap
-        self._textmap: List[List[str]] = [
-            list(mcs.texts) for mcs in ContentSequence(self)
-        ]
+        self._textmap = [list(mcs.texts) for mcs in ContentSequence(self)]
         return self._textmap
 
     def extract_text(self) -> str:

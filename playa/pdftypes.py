@@ -395,19 +395,21 @@ def decompress_corrupted(data: bytes, bufsiz: int = 4096) -> bytes:
 
 
 class ContentStream:
+    _data: Union[bytes, None] = None
+    _colorspace: Union["ColorSpace", None] = None
+    objid: Union[int, None] = None
+    genno: Union[int, None] = None
+
     def __init__(
         self,
         attrs: Dict[str, Any],
         rawdata: bytes,
-        decipher: Optional[DecipherCallable] = None,
+        decipher: Union[DecipherCallable, None] = None,
     ) -> None:
         assert isinstance(attrs, dict), str(type(attrs))
         self.attrs = attrs
-        self.rawdata: Optional[bytes] = rawdata
+        self.rawdata: Union[bytes, None] = rawdata
         self.decipher = decipher
-        self._data: Optional[bytes] = None
-        self.objid: Optional[int] = None
-        self.genno: Optional[int] = None
 
     def __repr__(self) -> str:
         if self._data is None:
@@ -605,7 +607,7 @@ class ContentStream:
         """
         from playa.color import get_colorspace, LITERAL_DEVICE_GRAY
 
-        if hasattr(self, "_colorspace"):
+        if self._colorspace is not None:
             return self._colorspace
         spec = resolve1(self.get_any(("CS", "ColorSpace"), LITERAL_DEVICE_GRAY))
         cs = get_colorspace(spec)

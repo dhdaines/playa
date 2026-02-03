@@ -189,7 +189,7 @@ class Document(ABCMapping):
     _catalog: Union[Dict[str, PDFObject], None] = None
     _outline: Union["Outline", None] = None
     _destinations: Union["Destinations", None] = None
-    _structure: Union["Tree", None]
+    _structure: Union["Tree", None] = None
     _fontmap: Union[Mapping[str, Font], None] = None
     _parser: Union[IndirectObjectParser, None] = None
     _xrefs: List[XRef] | None = None
@@ -528,7 +528,7 @@ class Document(ABCMapping):
         over it.
 
         """
-        if hasattr(self, "_structure"):
+        if self._structure is not None:
             return self._structure
         try:
             self._structure = Tree(self)
