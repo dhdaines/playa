@@ -6,7 +6,7 @@ import itertools
 import logging
 import operator
 from abc import abstractmethod
-from collections.abc import Mapping as ABCMapping, Sequence as ABCSequence
+from collections.abc import Sequence as ABCSequence
 from copy import copy
 from dataclasses import dataclass
 from typing import (
@@ -608,7 +608,7 @@ class XObjectObject(ContentObject):
         return self._structmap
 
     @property
-    def marked_content(self) -> Sequence[Iterable[ContentObject]]:
+    def marked_content(self) -> "ContentSequence":
         """Mapping of marked content IDs iterators over content objects.
 
         These are the content objects associated with the structural
@@ -628,18 +628,20 @@ class XObjectObject(ContentObject):
         """
         if hasattr(self, "_marked_contents"):
             return self._marked_contents
-        self._marked_contents: Sequence[Iterable[ContentObject]] = ContentSequence(self)
+        self._marked_contents: ContentSequence = ContentSequence(self)
         return self._marked_contents
 
     @property
-    def mcid_texts(self) -> Mapping[int, List[str]]:
+    def mcid_texts(self) -> Sequence[List[str]]:
         """Mapping of marked content IDs to Unicode text strings.
 
         For use in text extraction from tagged PDFs.
         """
         if hasattr(self, "_textmap"):
             return self._textmap
-        self._textmap: Mapping[int, List[str]] = TextMapping(self)
+        self._textmap: List[List[str]] = [
+            list(mcs.texts) for mcs in ContentSequence(self)
+        ]
         return self._textmap
 
     @property
@@ -1263,13 +1265,23 @@ class TextObject(TextBase):
         return nglyphs
 
 
-class TextMapping(ABCMapping):
-    """Mapping of MCIDs to extracted text from a page or Form XObject"""
+class ContentSection:
+    """Sequence of content objects in a marked content section."""
 
-    def __init__(self, itor: Iterable[ContentObject]) -> None:
-        """Get text for all MCIDs on a page or in a Form XObject"""
+    def __init__(self, objs: Iterable[ContentObject]) -> None:
+        self._objs = [obj.finalize() for obj in objs]
+
+    def __len__(self) -> int:
+        return len(self._objs)
+
+    def __iter__(self) -> Iterator[ContentObject]:
+        return iter(self._objs)
+
+    @property
+    def texts(self) -> Iterator[str]:
+        """Get text for a marked content section."""
         self._mctext: Dict[int, List[str]] = {}
-        for obj in itor:
+        for obj in self._objs:
             if not isinstance(obj, TextObject):
                 continue
             mcs = obj.mcs
@@ -1282,16 +1294,7 @@ class TextMapping(ABCMapping):
                 chars = obj.chars
             # Remove soft hyphens
             chars = chars.replace("\xad", "")
-            self._mctext.setdefault(mcs.mcid, []).append(chars)
-
-    def __len__(self) -> int:
-        return len(self._mctext)
-
-    def __iter__(self) -> Iterator[int]:
-        return iter(self._mctext)
-
-    def __getitem__(self, mcid: int) -> List[str]:
-        return self._mctext[mcid]
+            yield chars
 
 
 class ContentSequence(ABCSequence):
@@ -1306,7 +1309,7 @@ class ContentSequence(ABCSequence):
             # Python dicts preserve insertion order, but if there are
             # duplicate marked content sections (this is forbidden by
             # the spec, but.....) we can't do page content order
-            self._contents[mcid] = [obj.finalize() for obj in objs]
+            self._contents[mcid] = ContentSection(objs)
             self._maxid = max(self._maxid, mcid)
 
     def __len__(self) -> int:
@@ -1331,4 +1334,4 @@ class ContentSequence(ABCSequence):
         else:
             if mcid > self._maxid:
                 raise IndexError(f"Marked content ID {mcid} out of range")
-            return self._contents.get(mcid, [])
+            return self._contents.get(mcid, ContentSection([]))

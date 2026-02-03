@@ -117,10 +117,10 @@ class ContentItem:
         page_or_xobject = self._page_or_xobject()
         if page_or_xobject is None:
             return None
-        texts = page_or_xobject.mcid_texts.get(self.mcid)
-        if texts is None:
-            return None
-        return "".join(texts)
+        texts = page_or_xobject.mcid_texts[self.mcid]
+        if texts:
+            return "".join(texts)
+        return None
 
     def _page_or_xobject(self) -> Union["Page", "XObjectObject", None]:
         if self.page is None:

@@ -31,7 +31,6 @@ from playa.content import (
     PathObject,
     TextObject,
     XObjectObject,
-    TextMapping,
     ContentSequence,
 )
 from playa.exceptions import PDFSyntaxError
@@ -375,7 +374,7 @@ class Page:
         return self._structmap
 
     @property
-    def marked_content(self) -> Sequence[Iterable["ContentObject"]]:
+    def marked_content(self) -> ContentSequence:
         """Mapping of marked content IDs to iterators over content objects.
 
         These are the content objects associated with the structural
@@ -395,9 +394,7 @@ class Page:
         """
         if hasattr(self, "_marked_contents"):
             return self._marked_contents
-        self._marked_contents: Sequence[Iterable["ContentObject"]] = ContentSequence(
-            self
-        )
+        self._marked_contents: ContentSequence = ContentSequence(self)
         return self._marked_contents
 
     @property
@@ -462,7 +459,7 @@ class Page:
                     yield obj
 
     @property
-    def mcid_texts(self) -> Mapping[int, List[str]]:
+    def mcid_texts(self) -> Sequence[List[str]]:
         """Mapping of marked content IDs to Unicode text strings.
 
         For use in text extraction from tagged PDFs.  This is a
@@ -471,7 +468,9 @@ class Page:
         """
         if hasattr(self, "_textmap"):
             return self._textmap
-        self._textmap: Mapping[int, List[str]] = TextMapping(self)
+        self._textmap: List[List[str]] = [
+            list(mcs.texts) for mcs in ContentSequence(self)
+        ]
         return self._textmap
 
     def extract_text(self) -> str:

@@ -152,9 +152,9 @@ def test_mcid_texts() -> None:
     """Verify that we can get text from marked content sections."""
     with playa.open(TESTDIR / "structure_xobjects.pdf") as pdf:
         page = pdf.pages[0]
-        assert page.mcid_texts == {0: ["Hello again"]}
+        assert page.mcid_texts == [["Hello again"]]
         xobj = next(page.xobjects)
-        assert xobj.mcid_texts == {0: ["Hello world"], 1: ["Goodbye now"]}
+        assert xobj.mcid_texts == [["Hello world"], ["Goodbye now"]]
 
 
 def test_structure_bbox() -> None:
