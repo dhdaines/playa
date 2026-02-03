@@ -2,11 +2,11 @@
 
 import logging
 import re
-from collections.abc import Mapping
 from typing import (
     Dict,
     Iterator,
     List,
+    Mapping,
     NamedTuple,
     Optional,
     Tuple,
@@ -62,7 +62,7 @@ class XRefPos(NamedTuple):
     genno: int
 
 
-class XRef(Mapping):
+class XRef(Mapping[int, XRefPos]):
     """
     XRef table interface (expected to be read-only)
     """

@@ -5,7 +5,6 @@ Lazy interface to PDF logical structure (PDF 1.7 sect 14.7).
 import functools
 import logging
 import re
-from collections.abc import Sequence as ABCSequence
 from dataclasses import dataclass
 from typing import (
     TYPE_CHECKING,
@@ -780,7 +779,7 @@ class Tree(Findable):
         return _deref_document(self._docref)
 
 
-class PageStructure(ABCSequence):
+class PageStructure(Sequence[Union[Element, None]]):
     """
     Sequence of structural content elements for a page or Form XObject.
     """

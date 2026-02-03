@@ -18,6 +18,7 @@ from typing import (
     Mapping,
     NamedTuple,
     Sequence,
+    Sized,
     Tuple,
     Union,
     overload,
@@ -1264,11 +1265,19 @@ class TextObject(TextBase):
         return nglyphs
 
 
-class ContentSection(Iterable[ContentObject]):
-    """Sequence of content objects in a marked content section."""
+class ContentSection(Iterable[ContentObject], Sized):
+    """Sequence of content objects in a marked content section.
+
+    This is a `Sized` collection so that you can quickly check if it
+    is non-empty by its truth value.  The actual length may or may not
+    be relevant.
+    """
 
     def __init__(self, objs: Iterable[ContentObject]) -> None:
         self._objs = [obj.finalize() for obj in objs]
+
+    def __len__(self) -> int:
+        return len(self._objs)
 
     def __iter__(self) -> Iterator[ContentObject]:
         return iter(self._objs)

@@ -4,7 +4,6 @@ Interpreter for PDF content streams.
 
 import logging
 import re
-from collections.abc import Mapping as ABCMapping
 from copy import copy
 from dataclasses import dataclass
 from typing import (
@@ -105,7 +104,7 @@ class TextState:
         self.glyph_offset = (0, 0)
 
 
-class FontMapping(ABCMapping):
+class FontMapping(Mapping[str, Font]):
     """Lazy mapping of font names to fonts in a resource dictionary."""
 
     def __init__(self, mapping: PDFObject, doc: "Document") -> None:
