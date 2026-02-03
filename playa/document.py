@@ -744,98 +744,24 @@ class Document(Mapping[int, PDFObject]):
         return self._outline
 
     @property
-    def page_labels(self) -> Iterator[str]:
-        """Generate page label strings for the PDF document.
+    def page_labels(self) -> Union[Iterator[str], None]:
+        """Iterate over page label strings for the PDF document.
 
-        If the document includes page labels, generates strings, one per page.
-        If not, raise KeyError.
+        If the document includes page labels, this generates strings,
+        one per page, otherwise it is None.
 
-        The resulting iterator is unbounded (because the page label
-        tree does not actually include all the pages), so it is
-        recommended to use `pages` instead.
-
-        Raises:
-          KeyError: No page labels are present in the catalog
-
+        Warning: Unbounded iterator
+            This iterator is unbounded, because the page label tree
+            has no relation to the actual page tree, so it is
+            recommended to use `pages` instead.
         """
-        assert self.catalog is not None  # really it cannot be None
-
-        page_labels = PageLabels(self.catalog["PageLabels"])
-        return page_labels.labels
-
-    def _get_pages_from_xrefs(
-        self,
-    ) -> Iterator[Tuple[int, Dict[str, Dict[str, PDFObject]]]]:
-        """Find pages from the cross-reference tables if the page tree
-        is missing (note that this only happens in invalid PDFs, but
-        it happens.)
-
-        Returns:
-          an iterator over (objid, dict) pairs.
-        """
-        for object_id, obj in self.items():
-            if isinstance(obj, dict) and obj.get("Type") is LITERAL_PAGE:
-                yield object_id, obj
-
-    def _get_page_objects(
-        self,
-    ) -> Iterator[Tuple[int, Dict[str, Dict[str, PDFObject]]]]:
-        """Iterate over the flattened page tree in reading order, propagating
-        inheritable attributes.  Returns an iterator over (objid, dict) pairs.
-
-        Raises:
-          KeyError: if there is no page tree.
-        """
-        if "Pages" not in self.catalog:
-            raise KeyError("No 'Pages' entry in catalog")
-        stack = [(self.catalog["Pages"], self.catalog)]
-        visited = set()
-        while stack:
-            (obj, parent) = stack.pop()
-            if isinstance(obj, ObjRef):
-                # The PDF specification *requires* both the Pages
-                # element of the catalog and the entries in Kids in
-                # the page tree to be indirect references.
-                object_id = int(obj.objid)
-            elif isinstance(obj, int):
-                # Should not happen in a valid PDF, but probably does?
-                log.warning("Page tree contains bare integer: %r in %r", obj, parent)
-                object_id = obj
-            elif obj is None:
-                log.warning("Skipping null value in page tree")
-                continue
-            else:
-                log.warning("Page tree contains unknown object: %r", obj)
-            try:
-                page_object = dict_value(self[object_id])
-            except KeyError as e:
-                log.warning("Missing page object: %s", e)
-                # Create an empty page to match what pdfium does
-                page_object = {"Type": LIT("Page")}
-
-            # Avoid recursion errors by keeping track of visited nodes
-            # (again, this should never actually happen in a valid PDF)
-            if object_id in visited:
-                log.warning("Circular reference %r in page tree", obj)
-                continue
-            visited.add(object_id)
-
-            # Propagate inheritable attributes
-            object_properties = page_object.copy()
-            for k, v in parent.items():
-                if k in INHERITABLE_PAGE_ATTRS and k not in object_properties:
-                    object_properties[k] = v
-
-            # Recurse, depth-first
-            object_type = object_properties.get("Type")
-            if object_type is None:
-                log.warning("Page has no Type, trying type: %r", object_properties)
-                object_type = object_properties.get("type")
-            if object_type is LITERAL_PAGES and "Kids" in object_properties:
-                for child in reversed(list_value(object_properties["Kids"])):
-                    stack.append((child, object_properties))
-            elif object_type is LITERAL_PAGE:
-                yield object_id, object_properties
+        if self.catalog is None:
+            return None
+        label_tree_obj = self.catalog.get("PageLabels")
+        if label_tree_obj is None:
+            return None
+        label_tree = NumberTree(label_tree_obj)
+        return _iter_labels(label_tree)
 
     @property
     def pages(self) -> "PageList":
@@ -916,57 +842,111 @@ def call_page(func: Callable[[Page], Any], pageref: PageRef) -> Any:
 class PageList(Sequence[Page]):
     """List of pages indexable by 0-based index or string label.
 
+    Note that iteration over this object is lazy, but indexing is not.
+
     Attributes:
         have_labels: If pages have explicit labels in the PDF.
     """
 
     have_labels: bool
+    _pages: Union[list[Page], None] = None
+    _by_label: Union[Dict[str, Page], None] = None
+    _by_objid: Union[Dict[int, Page], None] = None
 
     def __init__(
         self, doc: Document, pages: Union[Iterable[Page], None] = None
     ) -> None:
         self.docref = _ref_document(doc)
+        self.have_labels = doc.page_labels is not None
         if pages is not None:
             self._pages = list(pages)
-            self._labels: Dict[str, Page] = {
+            self._by_label = {
                 page.label: page for page in pages if page.label is not None
             }
-            self.have_labels = not not self._labels
-        else:
-            self._init_pages(doc)
+            self._by_objid = {page.pageid: page for page in pages}
 
-    def _init_pages(self, doc: Document) -> None:
-        try:
-            # FIXME: Make this lazy (implies lazy _len__ and __getitem__)
-            page_labels: Iterable[Union[str, None]] = doc.page_labels
-            self.have_labels = True
-        except (KeyError, ValueError):
-            page_labels = (str(idx) for idx in itertools.count(1))
-            self.have_labels = False
-        self._pages = []
-        self._objids = {}
-        self._labels = {}
-        try:
-            # FIXME: Make this lazy (implies lazy _len__ and __getitem__)
-
-            page_objects = list(doc._get_page_objects())
-        except (KeyError, IndexError, TypeError) as e:
-            log.debug(
-                "Failed to get page objects normally, falling back to xref tables: %s",
-                e,
-            )
-            page_objects = list(doc._get_pages_from_xrefs())
+    def _init_pages(self) -> Tuple[List[Page], Dict[str, Page], Dict[int, Page]]:
+        pages: List[Page] = []
+        by_label: Dict[str, Page] = {}
+        by_objid: Dict[int, Page] = {}
+        doc = self.doc
         for page_idx, ((objid, properties), label) in enumerate(
-            zip(page_objects, page_labels)
+            zip(self.page_objects, self.page_labels)
         ):
             page = Page(doc, objid, properties, label, page_idx, doc.space)
-            self._pages.append(page)
-            self._objids[objid] = page
+            pages.append(page)
+            by_objid[objid] = page
             if label is not None:
-                if label in self._labels:
+                if label in by_label:
                     log.info("Duplicate page label %s at index %d", label, page_idx)
                 else:
-                    self._labels[label] = page
+                    by_label[label] = page
+        return pages, by_label, by_objid
+
+    @property
+    def page_labels(self) -> Iterator[str]:
+        """Generate page labels from document catalog or make them up."""
+        doc = self.doc
+        if doc.page_labels is not None:
+            yield from doc.page_labels
+        else:
+            yield from (str(idx) for idx in itertools.count(1))
+
+    @property
+    def page_objects(self) -> Iterator[Tuple[int, Dict[str, PDFObject]]]:
+        """Iterate over the page tree yielding (objid, dictionary) tuples."""
+        doc = self.doc
+        # In the case of no page tree then make shit up based on the objects
+        if "Pages" not in doc.catalog:
+            for object_id, obj in self.doc.items():
+                if isinstance(obj, dict) and obj.get("Type") is LITERAL_PAGE:
+                    yield object_id, obj
+            return
+        stack = [(doc.catalog["Pages"], doc.catalog)]
+        visited = set()
+        while stack:
+            (obj, parent) = stack.pop()
+            if isinstance(obj, ObjRef):
+                # The PDF specification *requires* both the Pages
+                # element of the catalog and the entries in Kids in
+                # the page tree to be indirect references.
+                object_id = int(obj.objid)
+            elif isinstance(obj, int):
+                # Should not happen in a valid PDF, but probably does?
+                log.warning("Page tree contains bare integer: %r in %r", obj, parent)
+                object_id = obj
+            else:
+                log.warning("Page tree contains unknown object: %r", obj)
+            try:
+                page_object = dict_value(doc[object_id])
+            except (KeyError, TypeError) as e:
+                log.warning("Missing or invalid page object: %s", e)
+                # Create an empty page to match what pdfium does
+                page_object = {"Type": LIT("Page")}
+
+            # Avoid recursion errors by keeping track of visited nodes
+            # (again, this should never actually happen in a valid PDF)
+            if object_id in visited:
+                log.warning("Circular reference %r in page tree", obj)
+                continue
+            visited.add(object_id)
+
+            # Propagate inheritable attributes
+            object_properties = page_object.copy()
+            for k, v in parent.items():
+                if k in INHERITABLE_PAGE_ATTRS and k not in object_properties:
+                    object_properties[k] = v
+
+            # Recurse, depth-first
+            object_type = object_properties.get("Type")
+            if object_type is None:
+                log.warning("Page has no Type, trying type: %r", object_properties)
+                object_type = object_properties.get("type")
+            if object_type is LITERAL_PAGES and "Kids" in object_properties:
+                for child in reversed(list_value(object_properties["Kids"])):
+                    stack.append((child, object_properties))
+            elif object_type is LITERAL_PAGE:
+                yield object_id, object_properties
 
     @property
     def doc(self) -> "Document":
@@ -974,10 +954,19 @@ class PageList(Sequence[Page]):
         return _deref_document(self.docref)
 
     def __len__(self) -> int:
-        return len(self._pages)
+        if self._pages is not None:
+            return len(self._pages)
+        return sum(1 for _ in self.page_objects)
 
     def __iter__(self) -> Iterator[Page]:
-        return iter(self._pages)
+        if self._pages is not None:
+            yield from self._pages
+            return
+        doc = self.doc
+        for page_idx, ((objid, properties), label) in enumerate(
+            zip(self.page_objects, self.page_labels)
+        ):
+            yield Page(doc, objid, properties, label, page_idx, doc.space)
 
     @overload
     def __getitem__(self, key: int) -> Page: ...
@@ -998,10 +987,16 @@ class PageList(Sequence[Page]):
         self, key: Union[int, str, slice, Iterable[int], Iterator[Union[int, str]]]
     ) -> Union[Page, "PageList"]:
         if isinstance(key, int):
+            if self._pages is None:
+                self._pages, self._by_label, self._by_objid = self._init_pages()
             return self._pages[key]
         elif isinstance(key, str):
-            return self._labels[key]
+            if self._by_label is None:
+                self._pages, self._by_label, self._by_objid = self._init_pages()
+            return self._by_label[key]
         elif isinstance(key, slice):
+            if self._pages is None:
+                self._pages, self._by_label, self._by_objid = self._init_pages()
             return PageList(_deref_document(self.docref), self._pages[key])
         else:
             return PageList(_deref_document(self.docref), (self[k] for k in key))
@@ -1015,7 +1010,9 @@ class PageList(Sequence[Page]):
         Returns:
             the page in question.
         """
-        return self._objids[objid]
+        if self._by_objid is None:
+            self._pages, self._by_label, self._by_objid = self._init_pages()
+        return self._by_objid[objid]
 
     def map(self, func: Callable[[Page], Any]) -> Iterator:
         """Apply a function over each page, iterating over its results.
@@ -1039,67 +1036,64 @@ class PageList(Sequence[Page]):
             return (func(page) for page in self)
 
 
-class PageLabels(NumberTree):
-    """PageLabels from the document catalog.
+def _iter_labels(tree: NumberTree) -> Iterator[str]:
+    """Iterate over page label tree.
 
     See Section 12.4.2 in the PDF 1.7 Reference.
     """
-
-    @property
-    def labels(self) -> Iterator[str]:
-        itor = iter(self.items())
-        try:
-            start, label_dict_unchecked = next(itor)
-            # The tree must begin with page index 0
-            if start != 0:
-                log.warning("PageLabels tree is missing page index 0")
-                # Try to cope, by assuming empty labels for the initial pages
-                start = 0
-        except StopIteration:
-            log.warning("PageLabels tree is empty")
+    itor = iter(tree.items())
+    try:
+        start, label_dict_unchecked = next(itor)
+        # The tree must begin with page index 0
+        if start != 0:
+            log.warning("Page label tree is missing index 0")
+            # Try to cope, by assuming empty labels for the initial pages
             start = 0
-            label_dict_unchecked = {}
+    except StopIteration:
+        log.warning("Page label tree is empty")
+        start = 0
+        label_dict_unchecked = {}
 
-        while True:  # forever!
-            label_dict = dict_value(label_dict_unchecked)
-            style = label_dict.get("S")
-            prefix = decode_text(str_value(label_dict.get("P", b"")))
-            first_value = int_value(label_dict.get("St", 1))
+    while True:  # forever!
+        label_dict = dict_value(label_dict_unchecked)
+        style = label_dict.get("S")
+        prefix = decode_text(str_value(label_dict.get("P", b"")))
+        first_value = int_value(label_dict.get("St", 1))
 
-            try:
-                next_start, label_dict_unchecked = next(itor)
-            except StopIteration:
-                # This is the last specified range. It continues until the end
-                # of the document.
-                values: Iterable[int] = itertools.count(first_value)
-            else:
-                range_length = next_start - start
-                values = range(first_value, first_value + range_length)
-                start = next_start
-
-            for value in values:
-                label = self._format_page_label(value, style)
-                yield prefix + label
-
-    @staticmethod
-    def _format_page_label(value: int, style: Any) -> str:
-        """Format page label value in a specific style"""
-        if style is None:
-            label = ""
-        elif style is LIT("D"):  # Decimal arabic numerals
-            label = str(value)
-        elif style is LIT("R"):  # Uppercase roman numerals
-            label = format_int_roman(value).upper()
-        elif style is LIT("r"):  # Lowercase roman numerals
-            label = format_int_roman(value)
-        elif style is LIT("A"):  # Uppercase letters A-Z, AA-ZZ...
-            label = format_int_alpha(value).upper()
-        elif style is LIT("a"):  # Lowercase letters a-z, aa-zz...
-            label = format_int_alpha(value)
+        try:
+            next_start, label_dict_unchecked = next(itor)
+        except StopIteration:
+            # This is the last specified range. It continues until the end
+            # of the document.
+            values: Iterable[int] = itertools.count(first_value)
         else:
-            log.warning("Unknown page label style: %r", style)
-            label = ""
-        return label
+            range_length = next_start - start
+            values = range(first_value, first_value + range_length)
+            start = next_start
+
+        for value in values:
+            label = _format_page_label(value, style)
+            yield prefix + label
+
+
+def _format_page_label(value: int, style: Any) -> str:
+    """Format page label value in a specific style"""
+    if style is None:
+        label = ""
+    elif style is LIT("D"):  # Decimal arabic numerals
+        label = str(value)
+    elif style is LIT("R"):  # Uppercase roman numerals
+        label = format_int_roman(value).upper()
+    elif style is LIT("r"):  # Lowercase roman numerals
+        label = format_int_roman(value)
+    elif style is LIT("A"):  # Uppercase letters A-Z, AA-ZZ...
+        label = format_int_alpha(value).upper()
+    elif style is LIT("a"):  # Lowercase letters a-z, aa-zz...
+        label = format_int_alpha(value)
+    else:
+        log.warning("Unknown page label style: %r", style)
+        label = ""
+    return label
 
 
 class Destinations:

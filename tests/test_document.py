@@ -279,6 +279,6 @@ def test_missing_pages(caplog) -> None:
     """Verify that we detect and recover from missing page objects."""
     with playa.open(THISDIR / "bad_pages.pdf") as pdf:
         pages = list(pdf.pages)
-    assert "Missing page object" in caplog.text
+    assert "Missing or invalid page object" in caplog.text
     # Make sure we create an empty page anyway
     assert len(pages) == 2
