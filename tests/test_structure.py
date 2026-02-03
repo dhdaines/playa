@@ -220,5 +220,20 @@ def test_page_structure() -> None:
         assert len(list(page.structure[-5:].find_all("Table"))) == 1
 
 
+def test_marked_content() -> None:
+    with playa.open(TESTDIR / "pdf_structure.pdf") as pdf:
+        page = pdf.pages[0]
+        # FIXME: In this case they are the same... need to find a sample where they aren't
+        logical_mcids = []
+        page_mcids = []
+        for mcs in page.marked_content:
+            if mcs:
+                logical_mcids.append(next(iter(mcs)).mcid)
+        for mcs in page.marked_content.page_order:
+            if mcs:
+                page_mcids.append(next(iter(mcs)).mcid)
+        assert logical_mcids == page_mcids
+
+
 if __name__ == "__main__":
     test_specific_structure()

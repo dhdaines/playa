@@ -2,9 +2,7 @@
 Interpreter for PDF content streams.
 """
 
-import itertools
 import logging
-import operator
 import re
 from collections.abc import Mapping as ABCMapping
 from copy import copy
@@ -20,7 +18,6 @@ from typing import (
     Mapping,
     Tuple,
     Union,
-    Sequence,
 )
 
 from playa.color import PREDEFINED_COLORSPACE, ColorSpace, get_colorspace
@@ -144,19 +141,6 @@ class FontMapping(ABCMapping):
             )
             self._fontmap[fontid] = self._doc.get_font(objid, None)
         return self._fontmap[fontid]
-
-
-def _make_contentmap(
-    streamer: Iterable["ContentObject"],
-) -> Sequence[Union[None, Iterable["ContentObject"]]]:
-    contents: List[Union[None, Iterable["ContentObject"]]] = []
-    for mcid, objs in itertools.groupby(streamer, operator.attrgetter("mcid")):
-        if mcid is None:
-            continue
-        while len(contents) <= mcid:
-            contents.append(None)
-        contents[mcid] = [obj.finalize() for obj in objs]
-    return contents
 
 
 class LazyInterpreter:

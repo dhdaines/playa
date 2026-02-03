@@ -4,8 +4,9 @@ PDF content objects created by the interpreter.
 
 import itertools
 import logging
+import operator
 from abc import abstractmethod
-from collections.abc import Mapping as ABCMapping
+from collections.abc import Mapping as ABCMapping, Sequence as ABCSequence
 from copy import copy
 from dataclasses import dataclass
 from typing import (
@@ -20,6 +21,7 @@ from typing import (
     Sequence,
     Tuple,
     Union,
+    overload,
 )
 
 from playa.color import (
@@ -536,7 +538,7 @@ class XObjectObject(ContentObject):
         for pos, obj in ContentParser([self.stream], self.doc):
             yield obj
 
-    def __iter__(self) -> Iterator["ContentObject"]:
+    def __iter__(self) -> Iterator[ContentObject]:
         from playa.interp import LazyInterpreter
 
         interp = LazyInterpreter(
@@ -606,38 +608,27 @@ class XObjectObject(ContentObject):
         return self._structmap
 
     @property
-    def marked_content(self) -> Sequence[Union[None, Iterable["ContentObject"]]]:
-        """Mapping of marked content IDs to iterators over content objects.
+    def marked_content(self) -> Sequence[Iterable[ContentObject]]:
+        """Mapping of marked content IDs iterators over content objects.
 
         These are the content objects associated with the structural
-        elements in `XObjectObject.structure`.  So, for instance, you can do:
+        elements in `XObjectObject.structure`.  They consist of a
+        sequence with the same indices (these are the marked content
+        IDs) as the structure so can be zipped:
 
             for element, contents in zip(xobj.structure,
                                          xobj.marked_content):
-                if element is not None:
-                    if contents is not None:
-                        for obj in contents:
-                            ...  # do something with it
+                for obj in contents:
+                    ...  # do something with it
 
         Or you can also access the contents of a single element:
 
-            if xobj.marked_content[mcid] is not None:
-                for obj in xobj.marked_content[mcid]:
-                    ... # do something with it
-
-        Why do you have to check if it's `None`?  Because the values
-        are not necessarily sequences (they may just be positions in
-        the content stream), it isn't possible to know if they are
-        empty without iterating over them, which you may or may not
-        want to do, because you are Lazy.
+            for obj in xobj.marked_content[mcid]:
+                ... # do something with it
         """
-        from playa.interp import _make_contentmap
-
         if hasattr(self, "_marked_contents"):
             return self._marked_contents
-        self._marked_contents: Sequence[Union[None, Iterable["ContentObject"]]] = (
-            _make_contentmap(self)
-        )
+        self._marked_contents: Sequence[Iterable[ContentObject]] = ContentSequence(self)
         return self._marked_contents
 
     @property
@@ -1301,3 +1292,43 @@ class TextMapping(ABCMapping):
 
     def __getitem__(self, mcid: int) -> List[str]:
         return self._mctext[mcid]
+
+
+class ContentSequence(ABCSequence):
+    """Collect marked content sections and order them by logical content order."""
+
+    def __init__(self, streamer: Iterable[ContentObject]) -> None:
+        self._contents: Dict[int, Iterable[ContentObject]] = {}
+        self._maxid: int = 0
+        for mcid, objs in itertools.groupby(streamer, operator.attrgetter("mcid")):
+            if mcid is None:
+                continue
+            # Python dicts preserve insertion order, but if there are
+            # duplicate marked content sections (this is forbidden by
+            # the spec, but.....) we can't do page content order
+            self._contents[mcid] = [obj.finalize() for obj in objs]
+            self._maxid = max(self._maxid, mcid)
+
+    def __len__(self) -> int:
+        return self._maxid + 1
+
+    @property
+    def page_order(self) -> Iterator[Iterable[ContentObject]]:
+        """Marked content sections in page content order."""
+        yield from self._contents.values()
+
+    @overload
+    def __getitem__(self, mcid: int) -> Iterable[ContentObject]: ...
+
+    @overload
+    def __getitem__(self, mcid: slice) -> Sequence[Iterable[ContentObject]]: ...
+
+    def __getitem__(
+        self, mcid: Union[int, slice]
+    ) -> Union[Iterable[ContentObject], Sequence[Iterable[ContentObject]]]:
+        if isinstance(mcid, slice):
+            return [self[idx] for idx in range(mcid.start, mcid.stop, mcid.step)]
+        else:
+            if mcid > self._maxid:
+                raise IndexError(f"Marked content ID {mcid} out of range")
+            return self._contents.get(mcid, [])
