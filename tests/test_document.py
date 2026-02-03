@@ -167,7 +167,7 @@ def test_names():
         # about this but it appears some authoring tools assume that
         # the names here are equivalent to the `UF` entries in a file
         # specification dictionary)
-        names = [decode_text(name) for name, _ in ef]
+        names = [decode_text(name) for name in ef]
         # FIXME: perhaps we want to have an iterator over NameTrees
         # that decodes text strings for you
         assert names == ["382901691/01_UBL.xml", "382901691/02_EAN_UCC.xml"]

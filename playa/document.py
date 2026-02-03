@@ -1052,7 +1052,7 @@ class PageLabels(NumberTree):
 
     @property
     def labels(self) -> Iterator[str]:
-        itor = iter(self)
+        itor = iter(self.items())
         try:
             start, label_dict_unchecked = next(itor)
             # The tree must begin with page index 0
@@ -1155,7 +1155,7 @@ class Destinations:
         if self.dests_dict is not None:
             yield from self.dests_dict
         elif self.dests_tree is not None:
-            for kb, _ in self.dests_tree:
+            for kb in self.dests_tree:
                 ks = decode_text(kb)
                 yield ks
 
@@ -1168,7 +1168,7 @@ class Destinations:
                     self.dests[name] = self._create_dest(dest, name)
                 yield name, self.dests[name]
         elif self.dests_tree is not None:
-            for k, v in self.dests_tree:
+            for k, v in self.dests_tree.items():
                 name = decode_text(k)
                 if name not in self.dests:
                     dest = resolve1(v)
@@ -1200,7 +1200,7 @@ class Destinations:
         elif self.dests_tree is not None:
             # This is not at all efficient, but we need to decode
             # the keys (and we cache the result...)
-            for k, v in self.dests_tree:
+            for k, v in self.dests_tree.items():
                 if decode_text(k) == name:
                     dest = resolve1(v)
                     self.dests[name] = self._create_dest(dest, name)
