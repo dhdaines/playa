@@ -26,6 +26,8 @@ def walk_number_tree(
 
 
 class NumberTreeItemsView(ItemsView[int, PDFObject]):
+    _mapping: "NumberTree"
+
     def __iter__(self) -> Iterator[Tuple[int, PDFObject]]:
         yield from walk_number_tree(self._mapping._obj)
 
@@ -77,6 +79,8 @@ def walk_name_tree(
 
 
 class NameTreeItemsView(ItemsView[bytes, PDFObject]):
+    _mapping: "NameTree"
+
     def __iter__(self) -> Iterator[Tuple[bytes, PDFObject]]:
         yield from walk_name_tree(self._mapping._obj)
 
