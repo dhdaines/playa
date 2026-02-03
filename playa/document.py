@@ -722,11 +722,6 @@ class Document(Mapping[int, PDFObject]):
             guarantee that this is the case.  In keeping with the
             "incremental update" philosophy dear to PDF, you get the
             last font defined with a given name.
-
-        Danger: Do not rely on this being a `dict`.
-            Currently this is implemented eagerly, but in the future it
-            may return a lazy object which only loads fonts on demand.
-
         """
         if self._fontmap is not None:
             return self._fontmap
