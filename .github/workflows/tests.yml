@@ -35,7 +35,7 @@ jobs:
         run: hatch run types:compile
       - name: Run tests
         run: hatch test --cover
-  test-3.8:
+  test38:
     needs: check
     runs-on: ubuntu-latest
     steps:
