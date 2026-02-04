@@ -34,7 +34,13 @@ from playa.pdftypes import (
     rect_value,
     stream_value,
 )
-from playa.utils import transform_bbox, get_bound_rects, string_property, choplist
+from playa.utils import (
+    transform_bbox,
+    get_bound_rects,
+    string_property,
+    choplist,
+    decode_text,
+)
 from playa.worker import (
     DocumentRef,
     PageRef,
@@ -76,6 +82,7 @@ class ContentItem:
     mcid: int
     stream: Union[ContentStream, None]
     _bbox: Union[Rect, None] = None
+    _text: Union[str, None] = None
 
     @property
     def page(self) -> Union["Page", None]:
@@ -111,15 +118,33 @@ class ContentItem:
         return self._bbox
 
     @property
-    def text(self) -> Union[str, None]:
+    def text(self) -> str:
         """Unicode text contained in this structure element."""
+        from playa.content import TextObject
+
+        if self._text is not None:
+            return self._text
         page_or_xobject = self._page_or_xobject()
         if page_or_xobject is None:
-            return None
-        texts = page_or_xobject.marked_content[self.mcid].texts
-        if texts:
-            return "".join(texts)
-        return None
+            self._text = ""
+            return self._text
+        texts = []
+        for obj in page_or_xobject.marked_content[self.mcid]:
+            if not isinstance(obj, TextObject):
+                continue
+            mcs = obj.mcs
+            if mcs is None or mcs.mcid is None:
+                continue
+            if "ActualText" in mcs.props:
+                assert isinstance(mcs.props["ActualText"], bytes)
+                chars = decode_text(mcs.props["ActualText"])
+            else:
+                chars = obj.chars
+            # Remove soft hyphens
+            chars = chars.replace("\xad", "")
+            texts.append(chars)
+        self._text = "".join(texts)
+        return self._text
 
     def _page_or_xobject(self) -> Union["Page", "XObjectObject", None]:
         if self.page is None:

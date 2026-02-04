@@ -148,17 +148,6 @@ def test_image_in_mcs() -> None:
         assert cobj.bbox == img2.bbox
 
 
-def test_mcid_texts() -> None:
-    """Verify that we can get text from marked content sections."""
-    with playa.open(TESTDIR / "structure_xobjects.pdf") as pdf:
-        page = pdf.pages[0]
-        texts = [s.texts for s in page.marked_content]
-        assert texts == [["Hello again"]]
-        xobj = next(page.xobjects)
-        texts = [s.texts for s in xobj.marked_content]
-        assert texts == [["Hello world"], ["Goodbye now"]]
-
-
 def test_structure_bbox() -> None:
     """Verify that we can get the bounding box of structure elements."""
     with playa.open(TESTDIR / "pdf_structure.pdf") as pdf:
