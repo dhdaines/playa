@@ -1,9 +1,17 @@
-## PLAYA 0.9.1: Unreleased
+## PLAYA 0.10.0: 2026-02-04
 
 - Load xref tables lazily
-- TODO: load page tree lazily too
-- TODO: load other things lazily too
-
+- Iterate lazily over page lists
+- Support iterating over marked content sections in logical or page
+  order
+- BREAKING CHANGE: `Document`, `NameTree` and `NumberTree` are now
+  proper `collections.abc` Mappings, so you need `items()` to get
+  `(key, value)` pairs
+- BREAKING CHANGE: Undefined object IDs now raise `KeyError` and not
+  `IndexError`
+- BREAKING CHANGE: `marked_contents` now contain empty iterables
+  instead of `None` for empty marked content sections
+- BREAKING CHANGE: `mcid_texts` no longer exists
 
 ## PLAYA 0.9.0: 2026-01-08
 

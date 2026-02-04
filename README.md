@@ -100,63 +100,56 @@ place!  Let's open up a PDF and see what's in it:
 pdf = playa.open("my_awesome_document.pdf")
 raw_byte_stream = pdf.buffer
 a_bunch_of_tokens = list(pdf.tokens)
-a_bunch_of_indirect_objects = list(pdf)
+a_bunch_of_indirect_object_ids = list(pdf.keys())
+a_bunch_of_indirect_objects = list(pdf.values())
+a_bunch_of_pages = list(pdf.pages)
 ```
 
-The raw PDF tokens and objects are probably not terribly useful to
-you, but you might find them interesting.  Note that these are
-"indirect objects" where the actual object is accompanied by an object
-number and generation number:
+Yes, a [`Document`](https://dhdaines.github.io/playa/latest/reference#playa.document.Document) is fundamentally a
+[`Mapping`](https://docs.python.org/3/library/collections.abc.html#collections.abc.Mapping) of object IDs to objects, which
+are represented to the extent possible by native Python objects.
+These may not be terribly useful to you, but you might find them
+interesting.  Note that these are "indirect objects" where the actual
+object is accompanied by an object number and "generation number".  If
+you wish to find **all** the objects in a PDF file, then you will need
+to iterate over the [`objects`](https://dhdaines.github.io/playa/latest/reference#playa.document.Document.objects) property:
 
 ```python
-for objid, genno, obj in pdf:
-    ...
-# or also
-for obj in pdf:
-    obj.objid, obj.genno, obj.obj
+for indobj in pdf.objects:
+    objid, genno, obj = indobj
 ```
 
-Also, these will only be the top-level objects and not those found
-inside object streams (the streams are themselves indirect objects).
-You can iterate over all indirect objects including object streams
-using the `objects` property:
-
-```python
-for obj in pdf.objects:
-    obj.objid, obj.genno, obj.obj
-```
-
-In this case it is possible you will encounter multiple objects with
-the same `objid` due to the "incremental updates" feature of PDF.
-Currently, iterating over the objects in a particular stream is
-possible, but complicated.
-
-You can also access indirect objects by number (this will return the
-object with most recent generation number):
+It is possible you will encounter multiple objects with the same
+`objid` due to the "incremental updates" feature of PDF.  As expected,
+you can subscript the document to access indirect objects by number
+(this will return the object with most recent generation number):
 
 ```python
 a_particular_object = pdf[42]
 ```
 
-Your PDF document probably has some pages.  How many?  What are their
-numbers/labels?  They could be things like "xvi" (pronounced
-"gzvee"), 'a", or "42", for instance!
+Your PDF document probably has some [pages](https://dhdaines.github.io/playa/latest/reference#playa.document.PageList).
+How many?  What are their numbers/labels?  They could be things like
+"xvi" (pronounced "gzvee"), 'a", or "42", for instance!
 
 ```python
 npages = len(pdf.pages)
 page_numbers = [page.label for page in pdf.pages]
 ```
 
-You can also subscript `pdf.pages` in various other ways, using a
-slice or an iterable of `int`, which will give you a page list object
-that behaves similarly to `pdf.pages`.  Pages and page lists can refer
-back to their document (using weak reference magic to avoid memory
-leaks) with the `doc` property.
+You can also subscript [`pages`](https://dhdaines.github.io/playa/latest/reference#playa.document.Document.pages) in
+various other ways, using a slice or an iterable of `int`, which
+will give you a new page list object that behaves similarly.  Pages
+and page lists can refer back to their document (using weak reference
+magic to avoid memory leaks) with their
+[`doc`](https://dhdaines.github.io/playa/latest/reference#playa.document.PageList.doc) property.
 
 ## Some (by no means all) helpful metadata
 
-A PDF often contains a "document outline" which is a sequence of trees
-representing the coarse-grained logical structure of the document.
+A PDF often contains a ["document outline"](https://dhdaines.github.io/playa/latest/reference#playa.outline.Outline)
+which is a sequence of trees representing the coarse-grained logical
+structure of the document, accessible via the
+[`outline`](https://dhdaines.github.io/playa/latest/reference#playa.document.Document.outline) property:
 
 ```python
 for entry in pdf.outline:
@@ -166,9 +159,10 @@ for entry in pdf.outline:
         ...
 ```
 
-If you are lucky it has a "logical structure tree".  The elements here
-might even be referenced from the `outline` above!  (or, they might
-not... with PDF you never know).
+If you are lucky it has a ["logical structure
+tree"](https://dhdaines.github.io/playa/latest/reference#playa.structure.Tree).  The elements here might even be
+referenced from the [`outline`](https://dhdaines.github.io/playa/latest/reference#playa.document.Document.outline)
+above!  (or, they might not... with PDF you never know).
 
 ```python
 for element in pdf.structure:
@@ -182,16 +176,18 @@ Now perhaps we want to look at a specific page.  Okay!  You can also
 look at its contents, more on that in a bit:
 
 ```python
-page = pdf.pages[0]        # they are numbered from 0
-page = pdf.pages["xviii"]  # but you can get them by label (a string)
-page = pdf.pages["42"]     # or "logical" page number (also a string)
+page = next(iter(pdf.pages)) # Fast and lazy way to get the first page
+page = pdf.pages[0]          # they are numbered from 0
+page = pdf.pages["xviii"]    # but you can get them by label (a string)
+page = pdf.pages["42"]       # or "logical" page number (also a string)
 print(f"Page {page.label} is {page.width} x {page.height}")
 ```
 
 Since PDF is at heart a page-oriented, presentation format, many types
 of metadata are mostly accessible via the page objects.  For instance
-you can access the fonts used in page with, obviously, the `fonts`
-property, or the annotations via the `annotations` property.
+you can access the fonts used in page with, obviously, the
+[`fonts`](https://dhdaines.github.io/playa/latest/reference#playa.page.Page.fonts) property, or the annotations via the
+[`annotations`](https://dhdaines.github.io/playa/latest/reference#playa.page.Page.annotations) property.
 
 For example, annotations (internal or external links) are defined on
 pages (since their position would not make any sense otherwise).
@@ -204,17 +200,19 @@ for annot in page.annotations:
 ```
 
 The set of possible entries in annotation dictionaries (PDF 1.7 sect
-12.5.2) is vast and confusing and inconsistently implemented, but you
-can always access them by their names (as defined in the PDF standard)
-via `annot.props`.
+12.5.2) is vast and confusing and inconsistently implemented.  You can
+access the raw annotation dictionary via `props` in the
+[`Annotation`](https://dhdaines.github.io/playa/latest/reference#playa.page.Annotation) object.
 
 If the document has logical structure, then the pages will also have a
-slightly different form of logical structure.  You can use the same
-`find` and `find_all` methods to get all of the enclosing structure
-elements of a given type (actually a role) for a page.  So for
-instance if you wanted to get the text contents for all the cells in
-all the tables on a page, assuming the creator of said page was kind
-enough to check the "PDF/UA" box, you can do:
+slightly different form of logical structure.  You can use the
+[`find`](https://dhdaines.github.io/playa/latest/reference#playa.structure.PageStructure.find) and
+[`find_all`](https://dhdaines.github.io/playa/latest/reference#playa.structure.PageStructure.find_all) methods to get
+all of the enclosing structure elements of a given type (actually a
+role) for a page.  So for instance if you wanted to get the text
+contents for all the cells in all the tables on a page, assuming the
+creator of said page was kind enough to check the "PDF/UA" box, you
+can do:
 
 ```python
 for table in page.structure.find_all("Table"):
@@ -255,8 +253,9 @@ PLAYA allows you to take advantage of multiple CPUs, which can greatly
 speed up some operations on large documents.  This parallelism
 currently operates at the page level since this is the most logical
 way to split up a PDF.  To enable it, pass the `max_workers` argument
-to `playa.open` with the number of cores you wish to use (you can also
-explicitly pass `None` to use the maximum):
+to [`playa.open`](https://dhdaines.github.io/playa/latest/reference/#playa.open)
+with the number of cores you wish to use (you can also explicitly pass
+`None` to use the maximum):
 
 ```python
 with playa.open(path, max_workers=4) as pdf:
@@ -264,7 +263,8 @@ with playa.open(path, max_workers=4) as pdf:
 ```
 
 Now, you can apply a function across the pages of the PDF in parallel
-using the `map` method of `pdf.pages`, for example:
+using the [`map`](https://dhdaines.github.io/playa/latest/reference#playa.document.PageList.map) method of
+[`pdf.pages`](https://dhdaines.github.io/playa/latest/reference#playa.document.Document.pages), for example:
 
 ```python
 def get_page_size(page: Page) -> Tuple[int, int]:
@@ -274,20 +274,20 @@ page_sizes = pdf.pages.map(get_page_size)
 ```
 
 You could also just do this for certain pages by subscripting
-`pdf.pages` (this can be a slice, an iterable of `int`, or a
-generator expression over `int` and/or `str`):
+[`pdf.pages`](https://dhdaines.github.io/playa/latest/reference#playa.document.Document.pages) (this can be a slice, an
+iterable of `int`, or a generator expression over `int` and/or `str`):
 
 ```python
 some_page_sizes = pdf.pages[2:5].map(get_page_size)
 ```
 
 There are some limitations to this, because it uses `multiprocessing`.
-The function you pass to `map` must be serializable by `pickle`, which
-in practice means that an inner function or lambda generally doesn't
-work.  You can get around this in a very Java-like way by passing a
-callable object that encapsulates the necessary state.  If you wish to
-avoid traumatising readers of your code, then use `functools.partial`
-instead:
+The function you pass to `map` must be serializable by `pickle`,
+which in practice means that an inner function or lambda generally
+doesn't work.  You can get around this in a very Java-like way by
+passing a callable object that encapsulates the necessary state.  If
+you wish to avoid traumatising readers of your code, then use
+`functools.partial` instead:
 
 ```python
 pdf.pages.map(partial(myfunc, arg1=value1, arg2=value2))
@@ -296,9 +296,9 @@ pdf.pages.map(partial(myfunc, arg1=value1, arg2=value2))
 Also, any value returned by your function must also be serializable.
 There is a bit of magic that enables this to work for PDF objects
 containing indirect object references, so you should be able to, for
-instance, get the `dests` or `annots` from every page without any
-trouble.  But if you have your own complex objects that you return you
-may encounter problems (or slowness).
+instance, get the [`annotations`](https://dhdaines.github.io/playa/latest/reference#playa.page.Page.annotations) from
+every page without any trouble.  But if you have your own complex
+objects that you return you may encounter problems (or slowness).
 
 ## An important note about coordinate spaces
 
@@ -326,7 +326,7 @@ device space, specifically:
   the bottom-right corner.
 
 However, for compatibility with `pdfminer.six`, you can also pass
-`space="page"` to `playa.open`.  In this case, `(0, 0)` is the
+`space="page"` to [`playa.open`](https://dhdaines.github.io/playa/latest/reference/#playa.open).  In this case, `(0, 0)` is the
 bottom-left corner of the page as defined by the `MediaBox`, after
 rotation, and coordinates increase from the bottom-left corner of the
 page towards the top-right, as they do in PDF user space.
@@ -399,20 +399,28 @@ Note that though it's called a "stack", it's actually a tuple.  This
 means that it is immutable, and you can check if it has changed from
 one object to the next using the `is` operator.
 
-All content objects can also refer back to their containing `Page`
-from the `page` property.  This uses weak reference magic in order to
-avoid causing memory leaks.
+All content objects can also refer back to their containing
+[`Page`](https://dhdaines.github.io/playa/latest/reference#playa.page.Page) from the `page` property.  This uses weak
+reference magic in order to avoid causing memory leaks.
 
 ### Form XObjects
 
 A PDF page may also contain "Form XObjects" which are like tiny
 embedded PDF documents (they have nothing to do with fillable forms).
-Simply iterating over a `Page` **will not expand these for you** which
-may be a source of surprise, but you can recurse into them with the
-`flatten` method, or with the convenience properties `paths`,
-`images`, `texts` and `glyphs`.  You can also identify them in
-iteration because they have `object_type == "xobject"`.  The layout
-objects inside are accessible by iteration, as with pages:
+Simply iterating over a
+[`Page`](https://dhdaines.github.io/playa/latest/reference#playa.page.Page)
+**will not expand these for you** which may be a source of surprise,
+but you can recurse into them with the
+[`flatten`](https://dhdaines.github.io/playa/latest/reference#playa.page.Page.flatten)
+method, or with the convenience properties
+[`paths`](https://dhdaines.github.io/playa/latest/reference#playa.page.Page.paths),
+[`images`](https://dhdaines.github.io/playa/latest/reference#playa.page.Page.images),
+[`texts`](https://dhdaines.github.io/playa/latest/reference#playa.page.Page.texts)
+and
+[`glyphs`](https://dhdaines.github.io/playa/latest/reference#playa.page.Page.glyphs).
+You can also identify them in iteration because they have `object_type
+== "xobject"`.  The layout objects inside are accessible by iteration,
+as with pages:
 
 ```python
 for obj in page:
@@ -422,8 +430,9 @@ for obj in page:
 ```
 
 You can also iterate over them in the page context with
-`page.xobjects` (this will also find Form XObjects contained inside
-other Form XObjects, which is unfortunately a thing):
+[`page.xobjects`](https://dhdaines.github.io/playa/latest/reference#playa.page.Page.xobjects) (this will also find Form
+XObjects contained inside other Form XObjects, which is unfortunately
+a thing):
 
 ```python
 for xobj in page.xobjects:
@@ -432,9 +441,9 @@ for xobj in page.xobjects:
 ```
 
 Exceptionally, these have a few more features than the ordinary
-`ContentObject` - you can look at their raw stream contents as well as
-the tokens, and you can also see raw, mysterious PDF objects with
-`contents`.
+[`ContentObject`](https://dhdaines.github.io/playa/latest/reference#playa.content.ContentObject) - you can look at their
+raw stream contents as well as the tokens, and you can also see raw,
+mysterious PDF objects with `contents`.
 
 ### Graphics state
 
@@ -443,9 +452,10 @@ of what PDF refers to as the *graphics state*, which is accessible
 through `obj.gstate`.  This is a mutable object, and since there are
 quite a few parameters in the graphics state, PLAYA does not create a
 copy of it for every object in the layout.  If you wish to reuse these
-objects, you should call `finalize` on them, which will freeze the
-graphics state and any other necessary context, allowing the object to
-be stored and reused *as long as the document exists*:
+objects, you should call
+[`finalize`](https://dhdaines.github.io/playa/latest/reference#playa.content.ContentObject.finalize) on them, which will
+freeze the graphics state and any other necessary context, allowing
+the object to be stored and reused *as long as the document exists*:
 
 ```python
 for obj in page:
@@ -506,15 +516,18 @@ individual glyphs (which might or might not correspond to characters),
 this is not always what you want, and moreover it is computationally
 quite expensive.  So PLAYA, by default, does not do this.  If you
 don't need to know the actual bounding box of a text object, then
-don't access `obj.bbox` and it won't be computed.  If you don't need
-to know the position of each glyph but simply want the Unicode
-characters, then just look at `obj.chars`.
+don't access [`obj.bbox`](https://dhdaines.github.io/playa/latest/reference#playa.content.ContentObject.bbox) and it
+won't be computed.  If you don't need to know the position of each
+glyph but simply want the Unicode characters, then just look at
+[`obj.chars`](https://dhdaines.github.io/playa/latest/reference#playa.content.TextObject.chars).
 
-It is also important to understand that `obj.chars` may or may not
+It is also important to understand that
+[`obj.chars`](https://dhdaines.github.io/playa/latest/reference#playa.content.TextObject.chars) may or may not
 correspond to the actual text that a human will read on the page.  To
 actually extract *text* from a PDF necessarily involves Heuristics or
-Machine Learning (yes, capitalized, like that) and PLAYA does not do
-either of those things.
+Machine Learning.  PLAYA has [some simple
+heuristics](https://dhdaines.github.io/playa/latest/reference#playa.page.Page.extract_text) to do this, which will work
+better with tagged and accessible PDFs, but don't expect miracles.
 
 This is because PDFs, especially ones produced by OCR, don't organize
 text objects in any meaningful fashion, so you will want to actually
@@ -535,8 +548,9 @@ to ignore glyphs with `glyph.gstate.render_mode == 3` (which means
 For text extraction you really don't care about the `bbox`, but you
 probably *do* care about the origin of each glyph relative to its
 neighbours.  For this reason PLAYA provides you with two convenience
-properties, `origin` and `displacement`, which are considerably faster
-to compute than the `bbox`.
+properties, [`origin`](https://dhdaines.github.io/playa/latest/reference#playa.content.TextBase.origin). and
+[`displacement`](https://dhdaines.github.io/playa/latest/reference#playa.content.TextBase.displacement), which are
+considerably faster to compute than the `bbox`.
 
 PLAYA doesn't guarantee that text objects come at you in anything
 other than the order they occur in the file (but it does guarantee
@@ -575,12 +589,13 @@ to eradicate the [numerous inconsistencies, contradictions, and
 ambiguities](https://github.com/pdf-association/pdf-issues) of the
 previous standard)
 
-In particular, we care **a lot** about marked content operators, because
-of the abovementioned `ActualText` property.  For this reason a
-`TextObject` in PLAYA **does not** and **will never** correspond to a
-PDF text object as defined by the `BT` and `ET` operators.  For the
-moment, every text-showing operator triggers a new `TextObject`.  It
-is possible (though unlikely) that in the future, only changes in marked
+In particular, we care **a lot** about marked content operators,
+because of the abovementioned `ActualText` property.  For this reason
+a [`TextObject`](https://dhdaines.github.io/playa/latest/reference#playa.content.TextObject) in PLAYA **does not** and
+**will never** correspond to a PDF text object as defined by the `BT`
+and `ET` operators.  For the moment, every text-showing operator
+triggers a new [`TextObject`](https://dhdaines.github.io/playa/latest/reference#playa.content.TextObject).  It is
+possible (though unlikely) that in the future, only changes in marked
 content or graphics state will do this.
 
 ## Conclusion

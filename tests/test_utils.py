@@ -3,7 +3,7 @@ from typing import cast
 
 import pytest
 from playa import asobj
-from playa.document import PageLabels
+from playa.document import _format_page_label
 from playa.pdftypes import LIT
 from playa.utils import (
     IDENTITY_MAPPING,
@@ -76,11 +76,11 @@ def test_format_romans() -> None:
 
     romans2 = [
         "",
-        *(PageLabels._format_page_label(x, LIT("r")) for x in range(1, 4000)),
+        *(_format_page_label(x, LIT("r")) for x in range(1, 4000)),
     ]
     assert romans2 == romans
 
-    ROMANS = ["", *(PageLabels._format_page_label(x, LIT("R")) for x in range(1, 4000))]
+    ROMANS = ["", *(_format_page_label(x, LIT("R")) for x in range(1, 4000))]
     assert ROMANS == [x.upper() for x in romans]
 
 
@@ -97,19 +97,13 @@ def test_format_alphas() -> None:
 
     alphas2 = [
         "",
-        *(
-            PageLabels._format_page_label(x, LIT("a"))
-            for x in range(1, two_letters + 1)
-        ),
+        *(_format_page_label(x, LIT("a")) for x in range(1, two_letters + 1)),
     ]
     assert alphas2 == alphas
 
     ALPHAS = [
         "",
-        *(
-            PageLabels._format_page_label(x, LIT("A"))
-            for x in range(1, two_letters + 1)
-        ),
+        *(_format_page_label(x, LIT("A")) for x in range(1, two_letters + 1)),
     ]
     assert ALPHAS == [x.upper() for x in alphas]
 

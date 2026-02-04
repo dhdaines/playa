@@ -4,6 +4,7 @@ PDF content objects created by the interpreter.
 
 import itertools
 import logging
+import operator
 from abc import abstractmethod
 from copy import copy
 from dataclasses import dataclass
@@ -17,8 +18,10 @@ from typing import (
     Mapping,
     NamedTuple,
     Sequence,
+    Sized,
     Tuple,
     Union,
+    overload,
 )
 
 from playa.color import (
@@ -474,26 +477,6 @@ class ImageObject(ContentObject):
 LITERAL_TRANSPARENCY = LIT("Transparency")
 
 
-def _extract_mcid_texts(itor: Iterable[ContentObject]) -> Dict[int, List[str]]:
-    """Get text for all MCIDs on a page or in a Form XObject"""
-    mctext: Dict[int, List[str]] = {}
-    for obj in itor:
-        if not isinstance(obj, TextObject):
-            continue
-        mcs = obj.mcs
-        if mcs is None or mcs.mcid is None:
-            continue
-        if "ActualText" in mcs.props:
-            assert isinstance(mcs.props["ActualText"], bytes)
-            chars = decode_text(mcs.props["ActualText"])
-        else:
-            chars = obj.chars
-        # Remove soft hyphens
-        chars = chars.replace("\xad", "")
-        mctext.setdefault(mcs.mcid, []).append(chars)
-    return mctext
-
-
 @dataclass
 class XObjectObject(ContentObject):
     """An eXternal Object, in the context of a page.
@@ -555,7 +538,7 @@ class XObjectObject(ContentObject):
         for pos, obj in ContentParser([self.stream], self.doc):
             yield obj
 
-    def __iter__(self) -> Iterator["ContentObject"]:
+    def __iter__(self) -> Iterator[ContentObject]:
         from playa.interp import LazyInterpreter
 
         interp = LazyInterpreter(
@@ -625,54 +608,28 @@ class XObjectObject(ContentObject):
         return self._structmap
 
     @property
-    def marked_content(self) -> Sequence[Union[None, Iterable["ContentObject"]]]:
-        """Mapping of marked content IDs to iterators over content objects.
-
-        These are the content objects associated with the structural
-        elements in `XObjectObject.structure`.  So, for instance, you can do:
+    def marked_content(self) -> "ContentSequence":
+        """A [`ContentSequence`][playa.content.ContentSequence] containing
+        content objects associated with the structural elements in
+        [`structure`][playa.content.XObjectObject.structure].  They
+        consist of a sequence with the same indices (these are the
+        marked content IDs) as the structure so can be zipped:
 
             for element, contents in zip(xobj.structure,
                                          xobj.marked_content):
-                if element is not None:
-                    if contents is not None:
-                        for obj in contents:
-                            ...  # do something with it
+                for obj in contents:
+                    ...  # do something with it
 
         Or you can also access the contents of a single element:
 
-            if xobj.marked_content[mcid] is not None:
-                for obj in xobj.marked_content[mcid]:
-                    ... # do something with it
+            for obj in xobj.marked_content[mcid]:
+                ... # do something with it
 
-        Why do you have to check if it's `None`?  Because the values
-        are not necessarily sequences (they may just be positions in
-        the content stream), it isn't possible to know if they are
-        empty without iterating over them, which you may or may not
-        want to do, because you are Lazy.
         """
-        from playa.interp import _make_contentmap
-
         if hasattr(self, "_marked_contents"):
             return self._marked_contents
-        self._marked_contents: Sequence[Union[None, Iterable["ContentObject"]]] = (
-            _make_contentmap(self)
-        )
+        self._marked_contents: ContentSequence = ContentSequence(self)
         return self._marked_contents
-
-    @property
-    def mcid_texts(self) -> Mapping[int, List[str]]:
-        """Mapping of marked content IDs to Unicode text strings.
-
-        For use in text extraction from tagged PDFs.
-
-        Danger: Do not rely on this being a `dict`.
-            Currently this is implemented eagerly, but in the future it
-            may return a lazy object.
-        """
-        if hasattr(self, "_textmap"):
-            return self._textmap
-        self._textmap: Mapping[int, List[str]] = _extract_mcid_texts(self)
-        return self._textmap
 
     @property
     def fonts(self) -> Mapping[str, Font]:
@@ -687,19 +644,14 @@ class XObjectObject(ContentObject):
             generally considered to be globally unique, it may be
             possible to access fonts by them in the future.
 
-        Danger: Do not rely on this being a `dict`.
-            Currently this is implemented eagerly, but in the future it
-            may return a lazy object which only loads fonts on demand.
-
         """
-        from playa.interp import _make_fontmap
+        from playa.interp import FontMapping
 
         if hasattr(self, "_fontmap"):
             return self._fontmap
-        if self.resources is None or "Font" not in self.resources:
-            self._fontmap: Dict[str, Font] = {}
-        else:
-            self._fontmap = _make_fontmap(self.resources["Font"], self.doc)
+        self._fontmap: Mapping[str, Font] = FontMapping(
+            self.resources.get("Font") if self.resources else None, self.doc
+        )
         return self._fontmap
 
     @classmethod
@@ -806,7 +758,14 @@ class TextBase(ContentObject):
 
     @property
     @abstractmethod
-    def matrix(self) -> Matrix: ...
+    def matrix(self) -> Matrix:
+        """Rendering matrix `T_rm`, which transforms text space coordinates to
+        device space (PDF 2.0 section 9.4.4)."""
+
+    @property
+    @abstractmethod
+    def displacement(self) -> Point:
+        """Vector to the origin of the next glyph in device space."""
 
     @property
     def font(self) -> Font:
@@ -1298,3 +1257,94 @@ class TextObject(TextBase):
                 continue
             nglyphs += sum(1 for _ in font.decode(obj))
         return nglyphs
+
+
+class ContentSection(Iterable[ContentObject], Sized):
+    """Sequence of content objects in a marked content section.
+
+    This is a `Sized` collection so that you can quickly check if it
+    is non-empty by its truth value.  The actual length may or may not
+    be relevant.
+    """
+
+    def __init__(self, objs: Iterable[ContentObject]) -> None:
+        self._objs = [obj.finalize() for obj in objs]
+        self._texts: Union[List[str], None] = None
+
+    def __len__(self) -> int:
+        return len(self._objs)
+
+    def __iter__(self) -> Iterator[ContentObject]:
+        return iter(self._objs)
+
+    @property
+    def texts(self) -> Sequence[str]:
+        """Sequence of text strings for a marked content section."""
+        if self._texts is not None:
+            return self._texts
+        self._texts = []
+        for obj in self._objs:
+            if not isinstance(obj, TextObject):
+                continue
+            mcs = obj.mcs
+            if mcs is None or mcs.mcid is None:
+                continue
+            if "ActualText" in mcs.props:
+                assert isinstance(mcs.props["ActualText"], bytes)
+                chars = decode_text(mcs.props["ActualText"])
+            else:
+                chars = obj.chars
+            # Remove soft hyphens
+            chars = chars.replace("\xad", "")
+            self._texts.append(chars)
+        return self._texts
+
+
+class ContentSequence(Sequence[ContentSection]):
+    """Collect content object in marked content sections.
+
+    These are organized in a sequence and ordered by marked content
+    ID, because this is the definition of "logical content order" and
+    also defines the reading order of text.
+
+    You can also get them as an iterator in "page content order",
+    i.e. the order in which they appeared in the actual content
+    stream, using the `page_order` property.
+
+    """
+
+    def __init__(self, streamer: Iterable[ContentObject]) -> None:
+        self._contents: Dict[int, ContentSection] = {}
+        self._maxid: int = 0
+        for mcid, objs in itertools.groupby(streamer, operator.attrgetter("mcid")):
+            if mcid is None:
+                continue
+            # Python dicts preserve insertion order, but if there are
+            # duplicate marked content sections (this is forbidden by
+            # the spec, but.....) we can't do page content order
+            self._contents[mcid] = ContentSection(objs)
+            self._maxid = max(self._maxid, mcid)
+
+    def __len__(self) -> int:
+        return self._maxid + 1
+
+    @property
+    def page_order(self) -> Iterator[ContentSection]:
+        """Marked content sections in page content order."""
+        yield from self._contents.values()
+
+    @overload
+    def __getitem__(self, mcid: int) -> ContentSection: ...
+
+    @overload
+    def __getitem__(self, mcid: slice) -> Sequence[ContentSection]: ...
+
+    def __getitem__(
+        self, mcid: Union[int, slice]
+    ) -> Union[ContentSection, Sequence[ContentSection]]:
+        if isinstance(mcid, slice):
+            return [self[idx] for idx in range(mcid.start, mcid.stop, mcid.step)]
+        else:
+            if mcid > self._maxid:
+                raise IndexError(f"Marked content ID {mcid} out of range")
+            return self._contents.get(mcid, ContentSection([]))

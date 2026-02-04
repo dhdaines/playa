@@ -122,7 +122,8 @@ dependencies = [
     "mike",
     "mkdocs-material",
     "mkdocstrings[python]",
-    "mkdocs-include-markdown-plugin"
+    "mkdocs-include-markdown-plugin",
+    "click<8.3.0",  # Breaks mkdocs serve (see https://github.com/mkdocs/mkdocs/issues/4032)
 ]
 [tool.hatch.envs.docs.env-vars]
 # ABSOLUTELY DO NOT use mypyc as it will mess up the docs real good

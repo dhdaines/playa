@@ -1,12 +1,16 @@
-from typing import Any, Dict, Iterator, Tuple, Union
+from typing import Dict, Iterator, Mapping, Tuple, Union, ItemsView
 
-from playa.pdftypes import dict_value, int_value, list_value, str_value
+from playa.pdftypes import PDFObject, dict_value, int_value, list_value, str_value
 from playa.utils import choplist
 
 
+# TODO: NameTree and NumberTree are nearly identical and should be
+# refactored to a single base class.
+
+
 def walk_number_tree(
-    tree: Dict[str, Any], key: Union[int, None] = None
-) -> Iterator[Tuple[int, Any]]:
+    tree: Dict[str, PDFObject], key: Union[int, None] = None
+) -> Iterator[Tuple[int, PDFObject]]:
     stack = [tree]
     while stack:
         item = dict_value(stack.pop())
@@ -21,34 +25,45 @@ def walk_number_tree(
             stack.extend(reversed(list_value(item["Kids"])))
 
 
-class NumberTree:
+class NumberTreeItemsView(ItemsView[int, PDFObject]):
+    _mapping: "NumberTree"
+
+    def __iter__(self) -> Iterator[Tuple[int, PDFObject]]:
+        yield from walk_number_tree(self._mapping._obj)
+
+
+class NumberTree(Mapping[int, PDFObject]):
     """A PDF number tree.
 
     See Section 7.9.7 of the PDF 1.7 Reference.
+
+    Raises:
+        TypeError: If initialized with a non-dictionary.
     """
 
-    def __init__(self, obj: Any):
+    def __init__(self, obj: PDFObject):
         self._obj = dict_value(obj)
 
-    def __iter__(self) -> Iterator[Tuple[int, Any]]:
-        return walk_number_tree(self._obj)
+    def __len__(self) -> int:
+        return sum(1 for _ in self)
 
-    def __contains__(self, num: int) -> bool:
-        for idx, _ in walk_number_tree(self._obj, num):
-            if idx == num:
-                return True
-        return False
+    def __iter__(self) -> Iterator[int]:
+        for idx, _ in walk_number_tree(self._obj):
+            yield idx
 
-    def __getitem__(self, num: int) -> Any:
+    def __getitem__(self, num: int) -> PDFObject:
         for idx, val in walk_number_tree(self._obj, num):
             if idx == num:
                 return val
-        raise IndexError(f"Number {num} not in tree")
+        raise KeyError(f"Number {num} not in tree")
+
+    def items(self) -> NumberTreeItemsView:
+        return NumberTreeItemsView(self)
 
 
 def walk_name_tree(
-    tree: Dict[str, Any], key: Union[bytes, None] = None
-) -> Iterator[Tuple[bytes, Any]]:
+    tree: Dict[str, PDFObject], key: Union[bytes, None] = None
+) -> Iterator[Tuple[bytes, PDFObject]]:
     stack = [tree]
     while stack:
         item = dict_value(stack.pop())
@@ -63,26 +78,37 @@ def walk_name_tree(
             stack.extend(reversed(list_value(item["Kids"])))
 
 
-class NameTree:
+class NameTreeItemsView(ItemsView[bytes, PDFObject]):
+    _mapping: "NameTree"
+
+    def __iter__(self) -> Iterator[Tuple[bytes, PDFObject]]:
+        yield from walk_name_tree(self._mapping._obj)
+
+
+class NameTree(Mapping[bytes, PDFObject]):
     """A PDF name tree.
 
     See Section 7.9.6 of the PDF 1.7 Reference.
+
+    Raises:
+        TypeError: If initialized with a non-dictionary.
     """
 
-    def __init__(self, obj: Any):
+    def __init__(self, obj: PDFObject):
         self._obj = dict_value(obj)
 
-    def __iter__(self) -> Iterator[Tuple[bytes, Any]]:
-        return walk_name_tree(self._obj, None)
+    def __len__(self) -> int:
+        return sum(1 for _ in self)
 
-    def __contains__(self, name: bytes) -> bool:
-        for idx, val in self:
-            if idx == name:
-                return True
-        return False
+    def __iter__(self) -> Iterator[bytes]:
+        for name, _ in walk_name_tree(self._obj):
+            yield name
 
-    def __getitem__(self, name: bytes) -> Any:
-        for idx, val in self:
-            if idx == name:
+    def __getitem__(self, key: bytes) -> PDFObject:
+        for name, val in walk_name_tree(self._obj, key):
+            if name == key:
                 return val
-        raise IndexError("Name %r not in tree" % name)
+        raise KeyError("Name %r not in tree" % key)
+
+    def items(self) -> NameTreeItemsView:
+        return NameTreeItemsView(self)

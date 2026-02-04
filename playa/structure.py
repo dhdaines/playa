@@ -5,7 +5,6 @@ Lazy interface to PDF logical structure (PDF 1.7 sect 14.7).
 import functools
 import logging
 import re
-from collections.abc import Sequence as ABCSequence
 from dataclasses import dataclass
 from typing import (
     TYPE_CHECKING,
@@ -35,7 +34,13 @@ from playa.pdftypes import (
     rect_value,
     stream_value,
 )
-from playa.utils import transform_bbox, get_bound_rects, string_property, choplist
+from playa.utils import (
+    transform_bbox,
+    get_bound_rects,
+    string_property,
+    choplist,
+    decode_text,
+)
 from playa.worker import (
     DocumentRef,
     PageRef,
@@ -77,6 +82,7 @@ class ContentItem:
     mcid: int
     stream: Union[ContentStream, None]
     _bbox: Union[Rect, None] = None
+    _text: Union[str, None] = None
 
     @property
     def page(self) -> Union["Page", None]:
@@ -112,15 +118,33 @@ class ContentItem:
         return self._bbox
 
     @property
-    def text(self) -> Union[str, None]:
+    def text(self) -> str:
         """Unicode text contained in this structure element."""
+        from playa.content import TextObject
+
+        if self._text is not None:
+            return self._text
         page_or_xobject = self._page_or_xobject()
         if page_or_xobject is None:
-            return None
-        texts = page_or_xobject.mcid_texts.get(self.mcid)
-        if texts is None:
-            return None
-        return "".join(texts)
+            self._text = ""
+            return self._text
+        texts = []
+        for obj in page_or_xobject.marked_content[self.mcid]:
+            if not isinstance(obj, TextObject):
+                continue
+            mcs = obj.mcs
+            if mcs is None or mcs.mcid is None:
+                continue
+            if "ActualText" in mcs.props:
+                assert isinstance(mcs.props["ActualText"], bytes)
+                chars = decode_text(mcs.props["ActualText"])
+            else:
+                chars = obj.chars
+            # Remove soft hyphens
+            chars = chars.replace("\xad", "")
+            texts.append(chars)
+        self._text = "".join(texts)
+        return self._text
 
     def _page_or_xobject(self) -> Union["Page", "XObjectObject", None]:
         if self.page is None:
@@ -707,8 +731,8 @@ class Tree(Findable):
 
     _docref: DocumentRef
     props: Dict[str, PDFObject]
-    _role_map: Dict[str, str]
-    _parent_tree: NumberTree
+    _role_map: Union[Dict[str, str], None] = None
+    _parent_tree: Union[NumberTree, None] = None
     page = None
     parent = None
     bbox = BBOX_NONE
@@ -727,7 +751,7 @@ class Tree(Findable):
     def role_map(self) -> Dict[str, str]:
         """Dictionary mapping some (not necessarily all) element types
         to their standard equivalents."""
-        if hasattr(self, "_role_map"):
+        if self._role_map is not None:
             return self._role_map
         self._role_map = {}
         rm = resolve1(self.props.get("RoleMap"))  # It is optional
@@ -756,7 +780,7 @@ class Tree(Findable):
         nearly all the time.
 
         """
-        if hasattr(self, "_parent_tree"):
+        if self._parent_tree is not None:
             return self._parent_tree
         if "ParentTree" not in self.props:
             self._parent_tree = NumberTree({})
@@ -780,7 +804,7 @@ class Tree(Findable):
         return _deref_document(self._docref)
 
 
-class PageStructure(ABCSequence):
+class PageStructure(Sequence[Union[Element, None]]):
     """
     Sequence of structural content elements for a page or Form XObject.
     """

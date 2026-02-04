@@ -16,6 +16,8 @@ plugins:
       handlers:
         python:
           paths: [playa]
+          inventories:
+            - https://docs.python.org/3/objects.inv
           options:
             show_root_heading: true
             docstring_style: google

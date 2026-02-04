@@ -16,7 +16,6 @@ from typing import (
     Literal,
     Mapping,
     Optional,
-    Sequence,
     Tuple,
     Type,
     TypeVar,
@@ -31,11 +30,10 @@ from playa.content import (
     PathObject,
     TextObject,
     XObjectObject,
-    _extract_mcid_texts,
+    ContentSequence,
 )
 from playa.exceptions import PDFSyntaxError
-from playa.font import Font
-from playa.interp import LazyInterpreter, _make_fontmap, _make_contentmap
+from playa.interp import LazyInterpreter, FontMapping
 from playa.parser import ContentParser, PDFObject, Token
 from playa.pdftypes import (
     MATRIX_IDENTITY,
@@ -52,12 +50,13 @@ from playa.pdftypes import (
     resolve1,
     stream_value,
 )
+from playa.structure import PageStructure
 from playa.utils import decode_text, mult_matrix, normalize_rect, transform_bbox
 from playa.worker import PageRef, _deref_document, _deref_page, _ref_document, _ref_page
 
 if TYPE_CHECKING:
     from playa.document import Document
-    from playa.structure import PageStructure
+    from playa.font import Font
 
 log = logging.getLogger(__name__)
 
@@ -89,6 +88,11 @@ class Page:
       ctm: coordinate transformation matrix from default user space to
            page's device space
     """
+
+    _structmap: Union[PageStructure, None] = None
+    _marked_contents: Union[ContentSequence, None] = None
+    _fontmap: Union[Mapping[str, "Font"], None] = None
+    _textmap: Union[List[List[str]], None] = None
 
     def __init__(
         self,
@@ -335,7 +339,7 @@ class Page:
         return None
 
     @property
-    def structure(self) -> "PageStructure":
+    def structure(self) -> PageStructure:
         """Mapping of marked content IDs to logical structure elements.
 
         This is a sequence of logical structure elements, or `None`
@@ -355,11 +359,9 @@ class Page:
             items in the logical structure tree.
 
         """
-        from playa.structure import PageStructure
-
-        if hasattr(self, "_structmap"):
+        if self._structmap is not None:
             return self._structmap
-        self._structmap: PageStructure = PageStructure(self.pageref, [])
+        self._structmap = PageStructure(self.pageref, [])
         if self.doc.structure is None:
             return self._structmap
         parent_key = self.parent_key
@@ -374,40 +376,31 @@ class Page:
         return self._structmap
 
     @property
-    def marked_content(self) -> Sequence[Union[None, Iterable["ContentObject"]]]:
-        """Mapping of marked content IDs to iterators over content objects.
-
-        These are the content objects associated with the structural
-        elements in `Page.structure`.  So, for instance, you can do:
+    def marked_content(self) -> ContentSequence:
+        """A [`ContentSequence`][playa.content.ContentSequence] containing
+        content objects associated with the structural elements in
+        [`structure`][playa.page.Page.structure].  They consist of a
+        sequence with the same indices (these are the marked content
+        IDs) as the structure so can be zipped:
 
             for element, contents in zip(page.structure,
                                          page.marked_content):
-                if element is not None:
-                    if contents is not None:
-                        for obj in contents:
-                            ...  # do something with it
+                for obj in contents:
+                    ...  # do something with it
 
         Or you can also access the contents of a single element:
 
-            if page.marked_content[mcid] is not None:
-                for obj in page.marked_content[mcid]:
-                    ... # do something with it
+            for obj in page.marked_content[mcid]:
+                ... # do something with it
 
-        Why do you have to check if it's `None`?  Because the values
-        are not necessarily sequences (they may just be positions in
-        the content stream), it isn't possible to know if they are
-        empty without iterating over them, which you may or may not
-        want to do, because you are Lazy.
         """
-        if hasattr(self, "_marked_contents"):
+        if self._marked_contents is not None:
             return self._marked_contents
-        self._marked_contents: Sequence[Union[None, Iterable["ContentObject"]]] = (
-            _make_contentmap(self)
-        )
+        self._marked_contents = ContentSequence(self)
         return self._marked_contents
 
     @property
-    def fonts(self) -> Mapping[str, Font]:
+    def fonts(self) -> Mapping[str, "Font"]:
         """Mapping of resource names to fonts for this page.
 
         Note: This is not the same as `playa.Document.fonts`.
@@ -425,16 +418,10 @@ class Page:
             Form XObjects invoked on it.  You may use
             `XObjectObject.fonts` to access these.
 
-        Danger: Do not rely on this being a `dict`.
-            Currently this is implemented eagerly, but in the future it
-            may return a lazy object which only loads fonts on demand.
-
         """
-        if hasattr(self, "_fontmap"):
+        if self._fontmap is not None:
             return self._fontmap
-        self._fontmap: Dict[str, Font] = _make_fontmap(
-            self.resources.get("Font"), self.doc
-        )
+        self._fontmap = FontMapping(self.resources.get("Font"), self.doc)
         return self._fontmap
 
     def __repr__(self) -> str:
@@ -470,24 +457,6 @@ class Page:
             for obj in flatten_one(self, set()):
                 if isinstance(obj, filter_class):
                     yield obj
-
-    @property
-    def mcid_texts(self) -> Mapping[int, List[str]]:
-        """Mapping of marked content IDs to Unicode text strings.
-
-        For use in text extraction from tagged PDFs.  This is a
-        special case of `marked_content` which only cares about
-        extracting text (and thus is quite a bit more efficient).
-
-        Danger: Do not rely on this being a `dict`.
-            Currently this is implemented eagerly, but in the future it
-            may return a lazy object.
-
-        """
-        if hasattr(self, "_textmap"):
-            return self._textmap
-        self._textmap: Mapping[int, List[str]] = _extract_mcid_texts(self)
-        return self._textmap
 
     def extract_text(self) -> str:
         """Do some best-effort text extraction.
