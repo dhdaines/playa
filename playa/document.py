@@ -915,21 +915,31 @@ class PageList(Sequence[Page]):
                 # Should not happen in a valid PDF, but probably does?
                 log.warning("Page tree contains bare integer: %r in %r", obj, parent)
                 object_id = obj
+            elif obj is None:
+                log.warning("Page tree contains null")
+                object_id = -1
             else:
                 log.warning("Page tree contains unknown object: %r", obj)
+                object_id = -1
             try:
                 page_object = dict_value(doc[object_id])
             except (KeyError, TypeError) as e:
-                log.warning("Missing or invalid page object: %s", e)
+                if object_id != -1:
+                    log.warning("Missing or invalid page object %r: %s", object_id, e)
                 # Create an empty page to match what pdfium does
-                page_object = {"Type": LIT("Page")}
+                page_object = {
+                    "Type": LIT("Page"),
+                    "Resources": {},
+                    "MediaBox": (0, 0, 612, 792),
+                }
 
             # Avoid recursion errors by keeping track of visited nodes
             # (again, this should never actually happen in a valid PDF)
             if object_id in visited:
-                log.warning("Circular reference %r in page tree", obj)
+                log.warning("Circular reference %r in page tree", object_id)
                 continue
-            visited.add(object_id)
+            if object_id != -1:
+                visited.add(object_id)
 
             # Propagate inheritable attributes
             object_properties = page_object.copy()
