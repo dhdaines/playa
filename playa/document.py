@@ -546,7 +546,14 @@ class Document(Mapping[int, PDFObject]):
             assert stream.objid is not None
             self._parsed_objs[stream.objid] = (objs, n)
         i = n * 2 + index
-        return objs[i]
+        try:
+            obj = objs[i]
+        except IndexError as e:
+            raise PDFSyntaxError(
+                "index %d + %d too big for stream of %d objects"
+                % (n * 2, index, len(objs))
+            ) from e
+        return obj
 
     def _get_objects(self, stream: ContentStream) -> Tuple[List[PDFObject], int]:
         if stream.get("Type") is not LITERAL_OBJSTM:
