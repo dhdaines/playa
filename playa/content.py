@@ -771,7 +771,14 @@ class TextBase(ContentObject):
 
     @property
     @abstractmethod
-    def matrix(self) -> Matrix: ...
+    def matrix(self) -> Matrix:
+        """Rendering matrix `T_rm`, which transforms text space coordinates to
+        device space (PDF 2.0 section 9.4.4)."""
+
+    @property
+    @abstractmethod
+    def displacement(self) -> Point:
+        """Vector to the origin of the next glyph in device space."""
 
     @property
     def font(self) -> Font:

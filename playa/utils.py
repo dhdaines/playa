@@ -224,7 +224,7 @@ def get_bound(pts: Iterable[Point]) -> Rect:
     """Compute a minimal rectangle that covers all the points.
 
     Raises:
-      ValueError on empty input (as there is no bounding box).
+      ValueError: on empty input (as there is no bounding box).
     """
     xs, ys = zip(*pts)
     x0 = min(xs)
@@ -238,7 +238,7 @@ def get_bound_rects(boxes: Iterable[Rect]) -> Rect:
     """Compute the union of bounding boxes (which need not be normalized)
 
     Raises:
-      ValueError on empty input (as there is no bounding box).
+      ValueError: on empty input (as there is no bounding box).
     """
     return get_bound(
         itertools.chain.from_iterable(((x0, y0), (x1, y1)) for x0, y0, x1, y1 in boxes)
