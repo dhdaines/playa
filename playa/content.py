@@ -609,12 +609,11 @@ class XObjectObject(ContentObject):
 
     @property
     def marked_content(self) -> "ContentSequence":
-        """Mapping of marked content IDs iterators over content objects.
-
-        These are the content objects associated with the structural
-        elements in `XObjectObject.structure`.  They consist of a
-        sequence with the same indices (these are the marked content
-        IDs) as the structure so can be zipped:
+        """A [`ContentSequence`][playa.content.ContentSequence] containing
+        content objects associated with the structural elements in
+        [`structure`][playa.content.XObjectObject.structure].  They
+        consist of a sequence with the same indices (these are the
+        marked content IDs) as the structure so can be zipped:
 
             for element, contents in zip(xobj.structure,
                                          xobj.marked_content):
@@ -625,24 +624,12 @@ class XObjectObject(ContentObject):
 
             for obj in xobj.marked_content[mcid]:
                 ... # do something with it
+
         """
         if hasattr(self, "_marked_contents"):
             return self._marked_contents
         self._marked_contents: ContentSequence = ContentSequence(self)
         return self._marked_contents
-
-    @property
-    def mcid_texts(self) -> Sequence[List[str]]:
-        """Mapping of marked content IDs to Unicode text strings.
-
-        For use in text extraction from tagged PDFs.
-        """
-        if hasattr(self, "_textmap"):
-            return self._textmap
-        self._textmap: List[List[str]] = [
-            list(mcs.texts) for mcs in ContentSequence(self)
-        ]
-        return self._textmap
 
     @property
     def fonts(self) -> Mapping[str, Font]:
@@ -1282,6 +1269,7 @@ class ContentSection(Iterable[ContentObject], Sized):
 
     def __init__(self, objs: Iterable[ContentObject]) -> None:
         self._objs = [obj.finalize() for obj in objs]
+        self._texts: Union[List[str], None] = None
 
     def __len__(self) -> int:
         return len(self._objs)
@@ -1290,9 +1278,11 @@ class ContentSection(Iterable[ContentObject], Sized):
         return iter(self._objs)
 
     @property
-    def texts(self) -> Iterator[str]:
-        """Get text for a marked content section."""
-        self._mctext: Dict[int, List[str]] = {}
+    def texts(self) -> Sequence[str]:
+        """Sequence of text strings for a marked content section."""
+        if self._texts is not None:
+            return self._texts
+        self._texts = []
         for obj in self._objs:
             if not isinstance(obj, TextObject):
                 continue
@@ -1306,7 +1296,8 @@ class ContentSection(Iterable[ContentObject], Sized):
                 chars = obj.chars
             # Remove soft hyphens
             chars = chars.replace("\xad", "")
-            yield chars
+            self._texts.append(chars)
+        return self._texts
 
 
 class ContentSequence(Sequence[ContentSection]):

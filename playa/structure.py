@@ -116,7 +116,7 @@ class ContentItem:
         page_or_xobject = self._page_or_xobject()
         if page_or_xobject is None:
             return None
-        texts = page_or_xobject.mcid_texts[self.mcid]
+        texts = page_or_xobject.marked_content[self.mcid].texts
         if texts:
             return "".join(texts)
         return None

@@ -11,8 +11,8 @@
   `IndexError`
 - BREAKING CHANGE: `marked_contents` now contain empty iterables
   instead of `None` for empty marked content sections
-- BREAKING CHANGE: `mcid_texts` is now a sequence rather than a
-  mapping (to match `marked_contents` and `Page.structure`)
+- BREAKING CHANGE: `mcid_texts` no longer exists, use `texts` on
+  elements of `marked_contents`
 
 ## PLAYA 0.9.0: 2026-01-08
 

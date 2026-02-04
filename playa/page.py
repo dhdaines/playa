@@ -16,7 +16,6 @@ from typing import (
     Literal,
     Mapping,
     Optional,
-    Sequence,
     Tuple,
     Type,
     TypeVar,
@@ -378,10 +377,9 @@ class Page:
 
     @property
     def marked_content(self) -> ContentSequence:
-        """Mapping of marked content IDs to iterators over content objects.
-
-        These are the content objects associated with the structural
-        elements in `Page.structure`.  They consist of a
+        """A [`ContentSequence`][playa.content.ContentSequence] containing
+        content objects associated with the structural elements in
+        [`structure`][playa.page.Page.structure].  They consist of a
         sequence with the same indices (these are the marked content
         IDs) as the structure so can be zipped:
 
@@ -394,6 +392,7 @@ class Page:
 
             for obj in page.marked_content[mcid]:
                 ... # do something with it
+
         """
         if self._marked_contents is not None:
             return self._marked_contents
@@ -458,19 +457,6 @@ class Page:
             for obj in flatten_one(self, set()):
                 if isinstance(obj, filter_class):
                     yield obj
-
-    @property
-    def mcid_texts(self) -> Sequence[List[str]]:
-        """Mapping of marked content IDs to Unicode text strings.
-
-        For use in text extraction from tagged PDFs.  This is a
-        special case of `marked_content` which only cares about
-        extracting text (and thus is quite a bit more efficient).
-        """
-        if self._textmap is not None:
-            return self._textmap
-        self._textmap = [list(mcs.texts) for mcs in ContentSequence(self)]
-        return self._textmap
 
     def extract_text(self) -> str:
         """Do some best-effort text extraction.
