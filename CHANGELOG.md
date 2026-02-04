@@ -4,6 +4,8 @@
 - Iterate lazily over page lists
 - Support iterating over marked content sections in logical or page
   order
+- Insert blank pages for all invalid entries in page tree
+- Restore Python 3.8 compatibility
 - BREAKING CHANGE: `Document`, `NameTree` and `NumberTree` are now
   proper `collections.abc` Mappings, so you need `items()` to get
   `(key, value)` pairs

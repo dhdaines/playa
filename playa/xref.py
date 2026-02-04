@@ -49,7 +49,7 @@ INDOBJR = re.compile(rb"\s*\d{1,10}\s+\d{1,10}\s+obj")
 XREFR = re.compile(rb"\s*xref\s*(\d+)\s*(\d+)\s*")
 
 
-def _update_refs(trailer: dict[str, PDFObject], doc: "Document") -> None:
+def _update_refs(trailer: Dict[str, PDFObject], doc: "Document") -> None:
     docref = _ref_document(doc)
     for val in trailer.values():
         if isinstance(val, ObjRef):
@@ -67,7 +67,7 @@ class XRef(Mapping[int, XRefPos]):
     XRef table interface (expected to be read-only)
     """
 
-    trailer: dict[str, PDFObject]
+    trailer: Dict[str, PDFObject]
 
 
 class XRefTable(XRef):

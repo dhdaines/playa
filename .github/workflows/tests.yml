@@ -35,3 +35,17 @@ jobs:
         run: hatch run types:compile
       - name: Run tests
         run: hatch test --cover
+  test-3.8:
+    needs: check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.8"
+      - name: Run tests
+        run: |
+          pip install -e .
+          pip install pytest pytest-xdist
+          pytest -n auto

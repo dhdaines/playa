@@ -196,11 +196,12 @@ class CMapDB:
         name = name.replace("\0", "")
         filename = "%s.pickle.gz" % name
         pklpath = (CMAP_DIR / filename).resolve()
-        if not pklpath.is_relative_to(CMAP_DIR):
-            raise KeyError(f"Ignoring malicious or malformed CMap {name}")
         try:
+            _ = pklpath.relative_to(CMAP_DIR)
             with gzip.open(pklpath) as gzfile:
                 return pickle.load(gzfile)
+        except ValueError as e:
+            raise KeyError(f"Ignoring malicious or malformed CMap {name}") from e
         except FileNotFoundError as e:
             raise KeyError(f"CMap {name} not found in CMapDB") from e
 

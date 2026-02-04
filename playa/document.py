@@ -192,7 +192,7 @@ class Document(Mapping[int, PDFObject]):
     _structure: Union["Tree", None] = None
     _fontmap: Union[Mapping[str, Font], None] = None
     _parser: Union[IndirectObjectParser, None] = None
-    _xrefs: List[XRef] | None = None
+    _xrefs: Union[List[XRef], None] = None
     _trailer_pos = -1
     _startxref_pos = -1
 
@@ -849,7 +849,7 @@ class PageList(Sequence[Page]):
     """
 
     have_labels: bool
-    _pages: Union[list[Page], None] = None
+    _pages: Union[List[Page], None] = None
     _by_label: Union[Dict[str, Page], None] = None
     _by_objid: Union[Dict[int, Page], None] = None
 
