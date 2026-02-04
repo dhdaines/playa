@@ -47,5 +47,5 @@ jobs:
       - name: Run tests
         run: |
           pip install -e .
-          pip install pytest pytest-xdist
+          pip install pytest pytest-xdist cryptography pdfminer.six
           pytest -n auto
