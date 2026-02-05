@@ -79,14 +79,11 @@ NOTKEYWORD: Final = b"#/%[]()<>{}" + WHITESPACE
 NOTSTRING: Final = b"()\\"
 OCTAL: Final = b"01234567"
 ESC_STRING: Final = {
-    b"b": 8,
-    b"t": 9,
-    b"n": 10,
-    b"f": 12,
-    b"r": 13,
-    b"(": 40,
-    b")": 41,
-    b"\\": 92,
+    ord(b"b"): b"\b",
+    ord(b"t"): b"\t",
+    ord(b"n"): b"\n",
+    ord(b"f"): b"\f",
+    ord(b"r"): b"\r",
 }
 
 
@@ -133,6 +130,8 @@ class Lexer(Iterator[Tuple[int, Token]]):
         self.pos = pos
         self.end = len(data)
         self._tokens: Deque[Tuple[int, Token]] = deque()
+        self._curtoken: bytes = b""
+        self._curtokenpos: int = 0
 
     def seek(self, pos: int) -> None:
         """Seek to a position and reinitialize parser state."""
@@ -184,7 +183,8 @@ class Lexer(Iterator[Tuple[int, Token]]):
             tok = LIT(name_str(self._curtoken))
             return (self._curtokenpos, tok)
         if m.lastgroup == "number":  # type: ignore
-            if b"." in self._curtoken:
+            DOT: Final[int] = ord(b".")
+            if DOT in self._curtoken:
                 return (self._curtokenpos, float(self._curtoken))
             else:
                 return (self._curtokenpos, int(self._curtoken))
@@ -226,14 +226,14 @@ class Lexer(Iterator[Tuple[int, Token]]):
                 parts.append(m[0])
                 paren += 1
             elif m.lastgroup == "escape":  # type: ignore
-                chr = m[0][1:2]
-                if chr not in ESC_STRING:
+                c = m[0][1]
+                if c not in ESC_STRING:
                     # PDF 1.7 sec 7.3.4.2: If the character following
                     # the REVERSE SOLIDUS is not one of those shown in
                     # Table 3, the REVERSE SOLIDUS shall be ignored.
-                    parts.append(chr)
+                    parts.append(bytes((c,)))
                 else:
-                    parts.append(bytes((ESC_STRING[chr],)))
+                    parts.append(ESC_STRING[c])
             elif m.lastgroup == "octal":  # type: ignore
                 chrcode = int(m[0][1:], 8)
                 if chrcode >= 256:
