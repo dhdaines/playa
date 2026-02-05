@@ -1029,11 +1029,12 @@ class Type3Interpreter(LazyInterpreter):
     """Interpret Type3 font programs."""
 
     width: float = 1000
-    bbox: Rect = BBOX_NONE
+    bbox: Rect
 
     def do_d0(self, wx: float, wy: float) -> None:
         """Simple Type3 font metrics operator."""
         self.width = wx
+        self.bbox = BBOX_NONE
 
     def do_d1(
         self, wx: float, wy: float, llx: float, lly: float, urx: float, ury: float

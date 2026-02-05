@@ -4,7 +4,6 @@ Danger: API subject to change.
     These APIs are unstable and subject to revision before PLAYA 1.0.
 """
 
-import itertools
 import logging
 import mmap
 import re
@@ -735,10 +734,10 @@ class IndirectObjectParser(Iterator[Tuple[int, IndirectObject]]):
             genno = int_value(genno)
         except TypeError as e:
             objs = " ".join(
-                repr(obj)
-                for obj in itertools.chain(
-                    (x[1] for x in self.objstack), (objid, genno, obj)
-                )
+                [
+                    repr(obj)
+                    for obj in [x[1] for x in self.objstack] + [objid, genno, obj]
+                ]
             )
             errmsg = (
                 f"Failed to parse indirect object at {pos}: got: {objs} before 'endobj'"

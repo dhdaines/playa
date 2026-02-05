@@ -1,3 +1,7 @@
+## PLAYA 0.10.1: 2026-02-05
+
+- Compile the parser with mypyc for a massive speedup everywhere
+
 ## PLAYA 0.10.0: 2026-02-04
 
 - Load xref tables lazily
