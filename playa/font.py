@@ -29,8 +29,8 @@ from playa.cmapdb import (
     parse_tounicode,
 )
 from playa.encodingdb import (
-    EncodingDB,
     cid2unicode_from_encoding,
+    get_encoding,
 )
 from playa.encodings import (
     SYMBOL_BUILTIN_ENCODING,
@@ -216,7 +216,7 @@ class SimpleFont(Font):
                 log.warning("Encoding is neither a dictionary nor a name: %r", encoding)
         if base is None:
             base = self.get_implicit_encoding(descriptor)
-        self.encoding = EncodingDB.get_encoding(base, diff)
+        self.encoding = get_encoding(base, diff)
         self._cid2unicode = cid2unicode_from_encoding(self.encoding)
         self.tounicode: Optional[ToUnicodeMap] = None
         if "ToUnicode" in spec:

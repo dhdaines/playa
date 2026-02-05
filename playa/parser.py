@@ -916,8 +916,8 @@ class ContentParser(ObjectParser):
             super().__init__(stream.buffer, doc, streamid=stream.objid)
         except StopIteration:
             super().__init__(b"")
-        except TypeError:
-            log.warning("Found non-stream in contents: %r", streams)
+        except TypeError as e:
+            log.warning("Found non-stream in contents %r: %s", streams, e)
             super().__init__(b"")
 
     def nexttoken(self) -> Tuple[int, Token]:

@@ -39,28 +39,28 @@ def test_resolve_all():
     class MockDoc(dict):
         pass
 
-    mockdoc = MockDoc({42: "hello"})
+    mockdoc = MockDoc({42: b"hello"})
     mockdoc[41] = ObjRef(_ref_document(mockdoc), 42)
     mockdoc[40] = ObjRef(_ref_document(mockdoc), 41)
-    assert mockdoc[41].resolve() == "hello"
-    assert resolve1(mockdoc[41]) == "hello"
+    assert mockdoc[41].resolve() == b"hello"
+    assert resolve1(mockdoc[41]) == b"hello"
     assert mockdoc[40].resolve() == mockdoc[41]
-    assert resolve_all(mockdoc[40]) == "hello"
+    assert resolve_all(mockdoc[40]) == b"hello"
     mockdoc[39] = [mockdoc[40], mockdoc[41]]
-    assert resolve_all(mockdoc[39]) == ["hello", "hello"]
-    mockdoc[38] = ["hello", ObjRef(_ref_document(mockdoc), 38)]
+    assert resolve_all(mockdoc[39]) == [b"hello", b"hello"]
+    mockdoc[38] = [b"hello", ObjRef(_ref_document(mockdoc), 38)]
     # This resolves the *list*, not the indirect object, so its second
     # element will get expanded once into a new list.
     ouf = resolve_all(mockdoc[38])
-    assert ouf[0] == "hello"
+    assert ouf[0] == b"hello"
     assert ouf[1][1] is mockdoc[38]
     # Whereas in this case we are expanding the reference itself.
     fou = resolve_all(mockdoc[38][1])
     assert fou[1] is mockdoc[38]
     # Likewise here, we have to dig a bit to see the circular
     # reference.  Your best option is not to use resolve_all ;-)
-    mockdoc[30] = ["hello", ObjRef(_ref_document(mockdoc), 31)]
-    mockdoc[31] = ["hello", ObjRef(_ref_document(mockdoc), 30)]
+    mockdoc[30] = [b"hello", ObjRef(_ref_document(mockdoc), 31)]
+    mockdoc[31] = [b"hello", ObjRef(_ref_document(mockdoc), 30)]
     bof = resolve_all(mockdoc[30])
     assert bof[1][1][1] is mockdoc[31]
     fob = resolve_all(mockdoc[30][1])
@@ -91,17 +91,17 @@ def test_errors() -> None:
     with pytest.raises(TypeError):
         dict_value(["not", "a dict"])
     with pytest.raises(ValueError):
-        point_value((1, 2, 3))  # type: ignore[arg-type]
+        point_value([1, 2, 3])
     with pytest.raises(TypeError):
-        point_value((32, "skidoo"))  # type: ignore[arg-type]
+        point_value([32, "skidoo"])
     with pytest.raises(ValueError):
-        rect_value((1, 2, 3))  # type: ignore[arg-type]
+        rect_value([1, 2, 3])
     with pytest.raises(TypeError):
-        rect_value((32, "skidoo", 4, 5))  # type: ignore[arg-type]
+        rect_value([32, "skidoo", 4, 5])
     with pytest.raises(ValueError):
-        matrix_value((1, 2, 3))  # type: ignore[arg-type]
+        matrix_value([1, 2, 3])
     with pytest.raises(TypeError):
-        matrix_value((32, "skidoo", 4, 5, 6, 7))  # type: ignore[arg-type]
+        matrix_value([32, "skidoo", 4, 5, 6, 7])  # type: ignore[arg-type]
     broken_image = ContentStream(
         {"ColorSpace": LIT("NotAColorSpace")},
         rawdata=b"IRRELEVANT!",

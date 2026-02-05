@@ -610,6 +610,9 @@ class Document(Mapping[int, PDFObject]):
           KeyError: if objid does not exist in PDF
 
         """
+        if objid == 0:
+            raise KeyError("PDF object id cannot be 0.")
+
         if objid in self._cached_objs:
             if self._cached_objs[objid] is None:
                 raise KeyError(f"Object with ID {objid} not found")
@@ -937,7 +940,7 @@ class PageList(Sequence[Page]):
                 page_object = {
                     "Type": LIT("Page"),
                     "Resources": {},
-                    "MediaBox": (0, 0, 612, 792),
+                    "MediaBox": [0, 0, 612, 792],
                 }
 
             # Avoid recursion errors by keeping track of visited nodes

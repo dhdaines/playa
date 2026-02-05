@@ -140,7 +140,6 @@ extra-dependencies = [
 ]
 [tool.hatch.envs.types.scripts]
 check = "mypy --install-types --non-interactive {args:playa tests benchmarks}"
-compile = "mypyc playa/ccitt.py playa/image.py playa/utils.py playa/miner.py"
 
 [tool.hatch.envs.schema]
 extra-dependencies = [ "pydantic > 2" ]
@@ -155,14 +154,29 @@ enable-by-default = false
 include = [
     "playa/arcfour.py",
     "playa/ccitt.py",
+    "playa/color.py",
+    "playa/data_structures.py",
+    "playa/encodingdb.py",
+    "playa/glyphlist.py",
     "playa/image.py",
-    "playa/utils.py",
     "playa/lzw.py",
     "playa/miner.py",
     "playa/parser.py",
+    "playa/pdftypes.py",
     "playa/runlength.py",
+    "playa/security.py",
+    "playa/utils.py",
     "playa/xref.py",
     "playa/_saslprep.py",
+    # These need some corrections to compile
+    # "playa/cmapdb.py",
+    # "playa/fontprogram.py",
+    # "playa/font.py",
+    # "playa/interp.py",
+    # These two can't compile as they are too big
+    # "playa/encodings.py",
+    # "playa/fontmetrics.py",
+    # Others have too many generator functions
 ]
 
 [tool.coverage.run]
