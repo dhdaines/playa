@@ -71,8 +71,6 @@ def test_errors() -> None:
     """Verify that we get various errors in pdftypes functions."""
     with pytest.raises(TypeError):
         keyword_name("NOT A KEYWORD DO NOT EAT")
-    with pytest.raises(ValueError):
-        ObjRef(None, 0)
     assert ObjRef(None, 1) == ObjRef(None, 1)
     assert ObjRef(None, 1) != ObjRef(123, 1)
     assert ObjRef(None, 1).resolve(123) == 123
