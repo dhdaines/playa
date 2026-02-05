@@ -163,7 +163,7 @@ class Lexer(Iterator[Tuple[int, Token]]):
             self.pos = m.end()
         return (linepos, self.data[linepos : self.pos])
 
-    def __next__(self) -> Tuple[int, Token]:
+    def __next__(self) -> Any:  # should be Tuple[int, Token] but mypyc
         """Get the next token in iteration, raising StopIteration when
         done."""
         while True:
@@ -304,7 +304,7 @@ class ObjectParser(Iterator[Tuple[int, PDFObject]]):
         """Clear internal parser state."""
         del self.stack[:]
 
-    def __next__(self) -> Tuple[int, PDFObject]:
+    def __next__(self) -> Any:  # should be Tuple[int, PDFObject] but mypyc
         """Get next PDF object from stream (raises StopIteration at EOF)."""
         top: Union[int, None] = None
         obj: Union[Dict[Any, Any], List[PDFObject], PDFObject] = None
@@ -659,7 +659,7 @@ class IndirectObjectParser(Iterator[Tuple[int, IndirectObject]]):
             return None
         return _deref_document(self.docref)
 
-    def __next__(self) -> Tuple[int, IndirectObject]:
+    def __next__(self) -> Any:  # should be Tuple[int, IndirectObject] but mypyc
         obj: Union[PDFObject, ContentStream]
         while True:
             try:
