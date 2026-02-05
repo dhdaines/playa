@@ -125,7 +125,7 @@ SPC = re.compile(rb"\s")
 WSR = re.compile(rb"\s+")
 
 
-class Lexer:
+class Lexer(Iterator[Tuple[int, Token]]):
     """Lexer for PDF data."""
 
     def __init__(self, data: Union[bytes, mmap.mmap], pos: int = 0) -> None:
@@ -162,10 +162,6 @@ class Lexer:
         else:
             self.pos = m.end()
         return (linepos, self.data[linepos : self.pos])
-
-    def __iter__(self) -> Iterator[Tuple[int, Token]]:
-        """Iterate over tokens."""
-        return self
 
     def __next__(self) -> Tuple[int, Token]:
         """Get the next token in iteration, raising StopIteration when
@@ -257,14 +253,13 @@ class Lexer:
         return (self._curtokenpos, b"".join(parts))
 
 
-StackEntry = Tuple[int, PDFObject]
 EIR = re.compile(rb"\sEI\b")
 EIEIR = re.compile(rb"EI")
 A85R = re.compile(rb"\s*~\s*>\s*EI\b")
 FURTHESTEIR = re.compile(rb".*EI")
 
 
-class ObjectParser:
+class ObjectParser(Iterator[Tuple[int, PDFObject]]):
     """ObjectParser is used to parse PDF object streams (and
     content streams, which have the same syntax).  Notably these
     consist of, well, a stream of objects without the surrounding
@@ -286,7 +281,7 @@ class ObjectParser:
         streamid: Union[int, None] = None,
     ) -> None:
         self._lexer = Lexer(data, pos)
-        self.stack: List[StackEntry] = []
+        self.stack: List[Tuple[int, PDFObject]] = []
         self.docref = None if doc is None else _ref_document(doc)
         self.strict = strict
         self.streamid = streamid
@@ -309,11 +304,7 @@ class ObjectParser:
         """Clear internal parser state."""
         del self.stack[:]
 
-    def __iter__(self) -> Iterator[StackEntry]:
-        """Iterate over (position, object) tuples."""
-        return self
-
-    def __next__(self) -> StackEntry:
+    def __next__(self) -> Tuple[int, PDFObject]:
         """Get next PDF object from stream (raises StopIteration at EOF)."""
         top: Union[int, None] = None
         obj: Union[Dict[Any, Any], List[PDFObject], PDFObject] = None
@@ -625,7 +616,7 @@ class IndirectObject(NamedTuple):
 ENDSTREAMR = re.compile(rb"(?:\r\n|\r|\n|)endstream")
 
 
-class IndirectObjectParser:
+class IndirectObjectParser(Iterator[Tuple[int, IndirectObject]]):
     """IndirectObjectParser fetches indirect objects from a data
     stream.  It holds a weak reference to the document in order to
     resolve indirect references.  If the document is deleted then this
@@ -667,9 +658,6 @@ class IndirectObjectParser:
         if self.docref is None:
             return None
         return _deref_document(self.docref)
-
-    def __iter__(self) -> Iterator[Tuple[int, IndirectObject]]:
-        return self
 
     def __next__(self) -> Tuple[int, IndirectObject]:
         obj: Union[PDFObject, ContentStream]
