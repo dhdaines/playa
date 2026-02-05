@@ -37,11 +37,11 @@ def test_number_trees() -> None:
 
 NUMTREE1 = {
     "Kids": [
-        {"Nums": [1, "a", 3, "b", 7, "c"], "Limits": [1, 7]},
+        {"Nums": [1, b"a", 3, b"b", 7, b"c"], "Limits": [1, 7]},
         {
             "Kids": [
-                {"Nums": [8, 123, 9, {"x": "y"}, 10, "forty-two"], "Limits": [8, 10]},
-                {"Nums": [11, "zzz", 12, "xxx", 15, "yyy"], "Limits": [11, 15]},
+                {"Nums": [8, 123, 9, {"x": b"y"}, 10, b"forty-two"], "Limits": [8, 10]},
+                {"Nums": [11, b"zzz", 12, b"xxx", 15, b"yyy"], "Limits": [11, 15]},
             ],
             "Limits": [8, 15],
         },
@@ -56,17 +56,17 @@ def test_number_tree():
     assert 15 in nt
     assert 20 in nt
     assert nt[20] == 456
-    assert nt[9] == {"x": "y"}
+    assert nt[9] == {"x": b"y"}
     assert list(nt.items()) == [
-        (1, "a"),
-        (3, "b"),
-        (7, "c"),
+        (1, b"a"),
+        (3, b"b"),
+        (7, b"c"),
         (8, 123),
-        (9, {"x": "y"}),
-        (10, "forty-two"),
-        (11, "zzz"),
-        (12, "xxx"),
-        (15, "yyy"),
+        (9, {"x": b"y"}),
+        (10, b"forty-two"),
+        (11, b"zzz"),
+        (12, b"xxx"),
+        (15, b"yyy"),
         (20, 456),
     ]
     assert (20, 456) in nt.items()
@@ -76,7 +76,7 @@ def test_number_tree():
 
 NAMETREE1 = {
     "Kids": [
-        {"Names": [b"bletch", "a", b"foobie", "b"], "Limits": [b"bletch", b"foobie"]},
+        {"Names": [b"bletch", b"a", b"foobie", b"b"], "Limits": [b"bletch", b"foobie"]},
         {
             "Kids": [
                 {
@@ -84,7 +84,7 @@ NAMETREE1 = {
                     "Limits": [b"gargantua", b"gorgon"],
                 },
                 {
-                    "Names": [b"xylophone", 123, b"zzyzx", {"x": "y"}],
+                    "Names": [b"xylophone", 123, b"zzyzx", {"x": b"y"}],
                     "Limits": [b"xylophone", b"zzyzx"],
                 },
             ],
@@ -100,15 +100,20 @@ def test_name_tree():
     assert b"bletch" in nt
     assert b"zzyzx" in nt
     assert b"gorgon" in nt
-    assert nt[b"zzyzx"] == {"x": "y"}
+    assert nt[b"zzyzx"] == {"x": b"y"}
     assert list(nt.items()) == [
-        (b"bletch", "a"),
-        (b"foobie", "b"),
+        (b"bletch", b"a"),
+        (b"foobie", b"b"),
         (b"gargantua", 35),
         (b"gorgon", 42),
         (b"xylophone", 123),
-        (b"zzyzx", {"x": "y"}),
+        (b"zzyzx", {"x": b"y"}),
     ]
     assert (b"gargantua", 35) in nt.items()
     assert b"gargantua" in nt.keys()
     assert 35 in nt.values()
+
+
+if __name__ == "__main__":
+    test_name_tree()
+    test_number_tree()

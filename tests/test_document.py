@@ -284,3 +284,7 @@ def test_missing_pages(caplog) -> None:
     assert "Missing or invalid page object" in caplog.text
     # Make sure we create an empty page anyway
     assert len(pages) == 2
+
+
+if __name__ == "__main__":
+    test_destinations()

@@ -109,6 +109,9 @@ bench = [
     "python benchmarks/latency.py",
 ]
 
+[[tool.hatch.envs.benchmark.matrix]]
+python = ["3.10", "3.11", "3.12", "3.13", "3.14"]
+
 [tool.hatch.envs.benchmark-mypyc]
 # Do not use editable install (but we get .so droppings anyway)
 dev-mode = false
@@ -116,6 +119,9 @@ template = "benchmark"
 
 [tool.hatch.envs.benchmark-mypyc.env-vars]
 HATCH_BUILD_HOOK_ENABLE_MYPYC = "1"
+
+[[tool.hatch.envs.benchmark-mypyc.matrix]]
+python = ["3.10", "3.11", "3.12", "3.13", "3.14"]
 
 [tool.hatch.envs.docs]
 dependencies = [

@@ -355,9 +355,8 @@ def font_from_spec(spec: Dict[str, Any]) -> Font:
         bbox = spec.get("FontBBox", (0, 0, 0, 0))
         if bbox != (0, 0, 0, 0):
             font["bbox"] = bbox
-    matrix = matrix_value(spec.get("FontMatrix", MATRIX_IDENTITY))
-    if matrix is not MATRIX_IDENTITY:
-        font["matrix"] = matrix
+    if "FontMatrix" in spec:
+        font["matrix"] = matrix_value(spec["FontMatrix"])
     return font
 
 
