@@ -169,7 +169,7 @@ class Lexer(Iterator[Tuple[int, Token]]):
             m = LEXER.match(self.data, self.pos)
             if m is None:  # can only happen at EOS
                 raise StopIteration
-            self._curtokenpos = m.start()
+            self._curtokenpos = self.pos
             self.pos = m.end()
             if m.lastgroup not in ("whitespace", "comment"):  # type: ignore
                 # Okay, we got a token or something
@@ -192,7 +192,9 @@ class Lexer(Iterator[Tuple[int, Token]]):
         if m.lastgroup == "enddict":  # type: ignore
             return (self._curtokenpos, KEYWORD_DICT_END)
         if m.lastgroup == "startstr":  # type: ignore
-            return self._parse_endstr(self.data[m.start() + 1 : m.end()], m.end())
+            return self._parse_endstr(
+                self.data[self._curtokenpos + 1 : self.pos], self.pos
+            )
         if m.lastgroup == "hexstr":  # type: ignore
             self._curtoken = SPC.sub(b"", self._curtoken[1:-1])
             if len(self._curtoken) % 2 == 1:
