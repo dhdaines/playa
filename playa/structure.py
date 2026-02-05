@@ -625,7 +625,7 @@ def _make_kids_objr(
     if not isinstance(ref, ObjRef):
         LOG.warning("'Obj' entry is not an indirect object reference: %r", k)
         return
-    obj: Union[Dict[str, PDFObject], ContentStream] = ref.resolve()
+    obj = ref.resolve()
     if not isinstance(obj, (dict, ContentStream)):
         LOG.warning("'Obj' entry does not point to a dict or ContentStream: %r", obj)
         return

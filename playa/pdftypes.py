@@ -54,7 +54,7 @@ class PSLiteral:
     Always use PSLiteralTable.intern().
     """
 
-    def __init__(self, name: str) -> None:
+    def __init__(self, name: str = "") -> None:
         self.name = name
 
     def __repr__(self) -> str:
@@ -72,7 +72,7 @@ class PSKeyword:
     Always use PSKeywordTable.intern().
     """
 
-    def __init__(self, name: bytes) -> None:
+    def __init__(self, name: bytes = b"") -> None:
         self.name = name
 
     def __repr__(self) -> str:
@@ -178,17 +178,14 @@ class DecipherCallable(Protocol):
 class ObjRef:
     def __init__(
         self,
-        doc: Union[DocumentRef, None],
-        objid: int,
+        doc: Union[DocumentRef, None] = None,
+        objid: int = 0,
     ) -> None:
         """Reference to a PDF object.
 
         :param doc: The PDF document.
         :param objid: The object number.
         """
-        if objid == 0:
-            raise ValueError("PDF object id cannot be 0.")
-
         self.doc = doc
         self.objid = objid
 
@@ -210,7 +207,7 @@ class ObjRef:
     def __repr__(self) -> str:
         return "<ObjRef:%d>" % (self.objid)
 
-    def resolve(self, default: Any = None) -> Any:
+    def resolve(self, default: PDFObject = None) -> PDFObject:
         if self.doc is None:
             return default
         doc = _deref_document(self.doc)
@@ -340,7 +337,11 @@ def stream_value(x: PDFObject) -> "ContentStream":
 
 def point_value(o: PDFObject) -> Point:
     try:
-        (x, y) = (num_value(x) for x in list_value(o))
+        lp = list_value(o)
+        if len(lp) != 2:
+            raise ValueError("Point must have 2 elements")
+        x = num_value(lp[0])
+        y = num_value(lp[1])
         return x, y
     except ValueError:
         raise ValueError("Could not parse point %r" % (o,))
@@ -350,7 +351,13 @@ def point_value(o: PDFObject) -> Point:
 
 def rect_value(o: PDFObject) -> Rect:
     try:
-        (x0, y0, x1, y1) = (num_value(x) for x in list_value(o))
+        lr = list_value(o)
+        if len(lr) != 4:
+            raise ValueError("Rect must have 4 elements")
+        x0 = num_value(lr[0])
+        y0 = num_value(lr[1])
+        x1 = num_value(lr[2])
+        y1 = num_value(lr[3])
         return x0, y0, x1, y1
     except ValueError:
         raise ValueError("Could not parse rectangle %r" % (o,))
@@ -360,7 +367,15 @@ def rect_value(o: PDFObject) -> Rect:
 
 def matrix_value(o: PDFObject) -> Matrix:
     try:
-        (a, b, c, d, e, f) = (num_value(x) for x in list_value(o))
+        lm = list_value(o)
+        if len(lm) != 6:
+            raise ValueError("Matrix must have 6 elements")
+        a = num_value(lm[0])
+        b = num_value(lm[1])
+        c = num_value(lm[2])
+        d = num_value(lm[3])
+        e = num_value(lm[4])
+        f = num_value(lm[5])
         return a, b, c, d, e, f
     except ValueError:
         raise ValueError("Could not parse matrix %r" % (o,))
@@ -402,25 +417,24 @@ class ContentStream:
 
     def __init__(
         self,
-        attrs: Dict[str, Any],
-        rawdata: bytes,
+        attrs: Union[Dict[str, Any], None] = None,
+        rawdata: bytes = b"",
         decipher: Union[DecipherCallable, None] = None,
     ) -> None:
-        assert isinstance(attrs, dict), str(type(attrs))
+        if attrs is None:
+            attrs = {}
         self.attrs = attrs
-        self.rawdata: Union[bytes, None] = rawdata
+        self.rawdata = rawdata
         self.decipher = decipher
 
     def __repr__(self) -> str:
         if self._data is None:
-            assert self.rawdata is not None
             return "<ContentStream(%r): raw=%d, %r>" % (
                 self.objid,
                 len(self.rawdata),
                 self.attrs,
             )
         else:
-            assert self._data is not None
             return "<ContentStream(%r): len=%d, %r>" % (
                 self.objid,
                 len(self._data),
@@ -467,10 +481,7 @@ class ContentStream:
                 resolved_params.append({})
         return list(zip(filters, resolved_params))
 
-    def decode(self, strict: bool = False) -> None:
-        assert self._data is None and self.rawdata is not None, str(
-            (self._data, self.rawdata),
-        )
+    def decode(self, strict: bool = False) -> bytes:
         data = self.rawdata
         if self.decipher:
             # Handle encryption
@@ -480,8 +491,7 @@ class ContentStream:
         filters = self.get_filters()
         if not filters:
             self._data = data
-            self.rawdata = None
-            return
+            return data
         for f, params in filters:
             if f in LITERALS_FLATE_DECODE:
                 # will get errors if the document is encrypted.
@@ -566,7 +576,7 @@ class ContentStream:
                     error_msg = "Unsupported predictor: %r" % pred
                     raise NotImplementedError(error_msg)
         self._data = data
-        self.rawdata = None
+        return data
 
     @property
     def bits(self) -> int:
@@ -623,10 +633,7 @@ class ContentStream:
     @property
     def buffer(self) -> bytes:
         """The decoded contents of the stream."""
-        if self._data is None:
-            self.decode()
-            assert self._data is not None
-        return self._data
+        return self.decode()
 
 
 class InlineImage(ContentStream):

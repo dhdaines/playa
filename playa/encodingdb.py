@@ -57,39 +57,37 @@ def name2unicode(name: str) -> str:
     return ""
 
 
-class EncodingDB:
-    encodings = {
-        # NOTE: According to PDF 1.7 Annex D.1, "Conforming readers
-        # shall not have a predefined encoding named
-        # StandardEncoding", but it's not clear why not.
-        "StandardEncoding": STANDARD_ENCODING,
-        "MacRomanEncoding": MAC_ROMAN_ENCODING,
-        "WinAnsiEncoding": WIN_ANSI_ENCODING,
-        "MacExpertEncoding": MAC_EXPERT_ENCODING,
-    }
+ENCODINGS: Dict[str, Dict[int, str]] = {
+    # NOTE: According to PDF 1.7 Annex D.1, "Conforming readers
+    # shall not have a predefined encoding named
+    # StandardEncoding", but it's not clear why not.
+    "StandardEncoding": STANDARD_ENCODING,
+    "MacRomanEncoding": MAC_ROMAN_ENCODING,
+    "WinAnsiEncoding": WIN_ANSI_ENCODING,
+    "MacExpertEncoding": MAC_EXPERT_ENCODING,
+}
 
-    @classmethod
-    def get_encoding(
-        cls,
-        base: Union[PSLiteral, Dict[int, str], None] = None,
-        diff: Optional[Iterable[PDFObject]] = None,
-    ) -> Dict[int, str]:
-        if base is None:
-            encoding = {}
-        elif isinstance(base, PSLiteral):
-            encoding = cls.encodings.get(base.name, {})
-        else:
-            encoding = base
-        if diff is not None:
-            encoding = encoding.copy()
-            cid = 0
-            for x in diff:
-                if isinstance(x, int):
-                    cid = x
-                elif isinstance(x, PSLiteral):
-                    encoding[cid] = x.name
-                    cid += 1
-        return encoding
+
+def get_encoding(
+    base: Union[PSLiteral, Dict[int, str], None] = None,
+    diff: Optional[Iterable[PDFObject]] = None,
+) -> Dict[int, str]:
+    if base is None:
+        encoding = {}
+    elif isinstance(base, PSLiteral):
+        encoding = ENCODINGS.get(base.name, {})
+    else:
+        encoding = base
+    if diff is not None:
+        encoding = encoding.copy()
+        cid = 0
+        for x in diff:
+            if isinstance(x, int):
+                cid = x
+            elif isinstance(x, PSLiteral):
+                encoding[cid] = x.name
+                cid += 1
+    return encoding
 
 
 def cid2unicode_from_encoding(encoding: Dict[int, str]) -> Dict[int, str]:

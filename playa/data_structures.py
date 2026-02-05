@@ -1,6 +1,13 @@
-from typing import Dict, Iterator, Mapping, Tuple, Union, ItemsView
+from typing import Dict, Iterator, List, Mapping, Tuple, Union, ItemsView
 
-from playa.pdftypes import PDFObject, dict_value, int_value, list_value, str_value
+from playa.pdftypes import (
+    PDFObject,
+    ObjRef,
+    dict_value,
+    int_value,
+    list_value,
+    str_value,
+)
 from playa.utils import choplist
 
 
@@ -11,7 +18,7 @@ from playa.utils import choplist
 def walk_number_tree(
     tree: Dict[str, PDFObject], key: Union[int, None] = None
 ) -> Iterator[Tuple[int, PDFObject]]:
-    stack = [tree]
+    stack: List[PDFObject] = [tree]
     while stack:
         item = dict_value(stack.pop())
         if key is not None and "Limits" in item:
@@ -19,6 +26,8 @@ def walk_number_tree(
             if key < k1 or k2 < key:
                 continue
         if "Nums" in item:
+            k: Union[int, ObjRef]
+            v: PDFObject
             for k, v in choplist(2, list_value(item["Nums"])):
                 yield int_value(k), v
         if "Kids" in item:
@@ -64,7 +73,7 @@ class NumberTree(Mapping[int, PDFObject]):
 def walk_name_tree(
     tree: Dict[str, PDFObject], key: Union[bytes, None] = None
 ) -> Iterator[Tuple[bytes, PDFObject]]:
-    stack = [tree]
+    stack: List[PDFObject] = [tree]
     while stack:
         item = dict_value(stack.pop())
         if key is not None and "Limits" in item:
@@ -72,6 +81,8 @@ def walk_name_tree(
             if key < k1 or k2 < key:
                 continue
         if "Names" in item:
+            k: Union[bytes, ObjRef]
+            v: PDFObject
             for k, v in choplist(2, list_value(item["Names"])):
                 yield str_value(k), v
         if "Kids" in item:

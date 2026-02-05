@@ -1,3 +1,9 @@
+## PLAYA 0.10.1: 2026-02-05
+
+- Make some types a bit stricter to satisfy mypyc
+- Compile as much as possible with mypyc for some speedup
+- Update font metrics and font metric generator
+
 ## PLAYA 0.10.0: 2026-02-04
 
 - Load xref tables lazily

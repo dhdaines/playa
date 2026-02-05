@@ -8,7 +8,6 @@ from typing import (
     Dict,
     Optional,
     Sequence,
-    Tuple,
     Union,
 )
 
@@ -40,14 +39,14 @@ PASSWORD_PADDING = (
 class PDFStandardSecurityHandler:
     """Basic security handler for basic encryption types."""
 
-    supported_revisions: Tuple[int, ...] = (2, 3)
-
     def __init__(
         self,
         docid: Sequence[bytes],
         param: Dict[str, Any],
         password: str = "",
     ) -> None:
+        # Initialize this here as mypc does not like default values
+        self.supported_revisions = frozenset((2, 3))
         self.docid = docid
         self.param = param
         self.password = password
@@ -95,7 +94,7 @@ class PDFStandardSecurityHandler:
             hash.update(self.docid[0])  # 3
             result = Arcfour(key).process(hash.digest())  # 4
             for i in range(1, 20):  # 5
-                k = b"".join(bytes((c ^ i,)) for c in iter(key))
+                k = b"".join([bytes((c ^ i,)) for c in iter(key)])
                 result = Arcfour(k).process(result)
             result += result  # 6
             return result
@@ -157,7 +156,7 @@ class PDFStandardSecurityHandler:
         else:
             user_password = self.o
             for i in range(19, -1, -1):
-                k = b"".join(bytes((c ^ i,)) for c in iter(key))
+                k = b"".join([bytes((c ^ i,)) for c in iter(key)])
                 user_password = Arcfour(k).process(user_password)
         return self.authenticate_user_password(user_password)
 
@@ -206,11 +205,19 @@ def raise_missing_cryptography() -> None:
 class PDFStandardSecurityHandlerV4(PDFStandardSecurityHandler):
     """Security handler for encryption type 4."""
 
-    supported_revisions: Tuple[int, ...] = (4,)
-
-    def __init__(self, *args, **kwargs) -> None:
+    def __init__(
+        self,
+        docid: Sequence[bytes],
+        param: Dict[str, Any],
+        password: str = "",
+    ) -> None:
         raise_missing_cryptography()
-        super().__init__(*args, **kwargs)
+        # Initialize this here as mypc does not like default values
+        self.supported_revisions = frozenset((4,))
+        self.docid = docid
+        self.param = param
+        self.password = password
+        self.init()
 
     def init_params(self) -> None:
         super().init_params()
@@ -287,11 +294,19 @@ class PDFStandardSecurityHandlerV4(PDFStandardSecurityHandler):
 class PDFStandardSecurityHandlerV5(PDFStandardSecurityHandlerV4):
     """Security handler for encryption types 5 and 6."""
 
-    supported_revisions = (5, 6)
-
-    def __init__(self, *args, **kwargs) -> None:
+    def __init__(
+        self,
+        docid: Sequence[bytes],
+        param: Dict[str, Any],
+        password: str = "",
+    ) -> None:
         raise_missing_cryptography()
-        super().__init__(*args, **kwargs)
+        # Initialize this here as mypc does not like default values
+        self.supported_revisions = frozenset((5, 6))
+        self.docid = docid
+        self.param = param
+        self.password = password
+        self.init()
 
     def init_params(self) -> None:
         super().init_params()

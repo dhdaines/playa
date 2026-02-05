@@ -197,17 +197,19 @@ def test_xobjects() -> None:
         boxes = []
         for obj in page.flatten(TextObject):
             assert isinstance(obj, TextObject)
-            boxes.append(tuple(round(x) for x in obj.bbox))
+            boxes.append(obj.bbox)
         # Make sure they are in the right place!
-        assert boxes == [
-            (136, 16, 136, 17),
-            (238, 81, 358, 96),
-            (45, 117, 116, 131),
-            (118, 120, 550, 130),
-            (61, 132, 142, 145),
-            (147, 135, 550, 145),
-            (389, 817, 546, 828),
-        ]
+        assert boxes == pytest.approx(
+            [
+                (136.06, 15.686999999999966, 136.338, 16.611999999999966),
+                (237.64, 81.34199999999998, 357.64, 95.74199999999998),
+                (45.35, 117.05399999999995, 115.88600000000002, 131.02199999999993),
+                (117.92, 119.822, 549.9199999999995, 129.254),
+                (60.62, 132.01200000000003, 141.954, 144.81600000000003),
+                (146.72, 134.822, 549.9199999999996, 144.254),
+                (389.28, 816.874, 546.072, 827.974),
+            ]
+        )
 
 
 def test_annotations() -> None:
@@ -282,3 +284,7 @@ def test_missing_pages(caplog) -> None:
     assert "Missing or invalid page object" in caplog.text
     # Make sure we create an empty page anyway
     assert len(pages) == 2
+
+
+if __name__ == "__main__":
+    test_destinations()

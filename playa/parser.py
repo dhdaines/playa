@@ -4,7 +4,6 @@ Danger: API subject to change.
     These APIs are unstable and subject to revision before PLAYA 1.0.
 """
 
-import itertools
 import logging
 import mmap
 import re
@@ -125,7 +124,7 @@ SPC = re.compile(rb"\s")
 WSR = re.compile(rb"\s+")
 
 
-class Lexer:
+class Lexer(Iterator[Tuple[int, Token]]):
     """Lexer for PDF data."""
 
     def __init__(self, data: Union[bytes, mmap.mmap], pos: int = 0) -> None:
@@ -163,11 +162,7 @@ class Lexer:
             self.pos = m.end()
         return (linepos, self.data[linepos : self.pos])
 
-    def __iter__(self) -> Iterator[Tuple[int, Token]]:
-        """Iterate over tokens."""
-        return self
-
-    def __next__(self) -> Tuple[int, Token]:
+    def __next__(self) -> Any:  # should be Tuple[int, Token] but mypyc
         """Get the next token in iteration, raising StopIteration when
         done."""
         while True:
@@ -257,14 +252,13 @@ class Lexer:
         return (self._curtokenpos, b"".join(parts))
 
 
-StackEntry = Tuple[int, PDFObject]
 EIR = re.compile(rb"\sEI\b")
 EIEIR = re.compile(rb"EI")
 A85R = re.compile(rb"\s*~\s*>\s*EI\b")
 FURTHESTEIR = re.compile(rb".*EI")
 
 
-class ObjectParser:
+class ObjectParser(Iterator[Tuple[int, PDFObject]]):
     """ObjectParser is used to parse PDF object streams (and
     content streams, which have the same syntax).  Notably these
     consist of, well, a stream of objects without the surrounding
@@ -286,7 +280,7 @@ class ObjectParser:
         streamid: Union[int, None] = None,
     ) -> None:
         self._lexer = Lexer(data, pos)
-        self.stack: List[StackEntry] = []
+        self.stack: List[Tuple[int, PDFObject]] = []
         self.docref = None if doc is None else _ref_document(doc)
         self.strict = strict
         self.streamid = streamid
@@ -309,11 +303,7 @@ class ObjectParser:
         """Clear internal parser state."""
         del self.stack[:]
 
-    def __iter__(self) -> Iterator[StackEntry]:
-        """Iterate over (position, object) tuples."""
-        return self
-
-    def __next__(self) -> StackEntry:
+    def __next__(self) -> Any:  # should be Tuple[int, PDFObject] but mypyc
         """Get next PDF object from stream (raises StopIteration at EOF)."""
         top: Union[int, None] = None
         obj: Union[Dict[Any, Any], List[PDFObject], PDFObject] = None
@@ -625,7 +615,7 @@ class IndirectObject(NamedTuple):
 ENDSTREAMR = re.compile(rb"(?:\r\n|\r|\n|)endstream")
 
 
-class IndirectObjectParser:
+class IndirectObjectParser(Iterator[Tuple[int, IndirectObject]]):
     """IndirectObjectParser fetches indirect objects from a data
     stream.  It holds a weak reference to the document in order to
     resolve indirect references.  If the document is deleted then this
@@ -668,10 +658,7 @@ class IndirectObjectParser:
             return None
         return _deref_document(self.docref)
 
-    def __iter__(self) -> Iterator[Tuple[int, IndirectObject]]:
-        return self
-
-    def __next__(self) -> Tuple[int, IndirectObject]:
+    def __next__(self) -> Any:  # should be Tuple[int, IndirectObject] but mypyc
         obj: Union[PDFObject, ContentStream]
         while True:
             try:
@@ -747,10 +734,10 @@ class IndirectObjectParser:
             genno = int_value(genno)
         except TypeError as e:
             objs = " ".join(
-                repr(obj)
-                for obj in itertools.chain(
-                    (x[1] for x in self.objstack), (objid, genno, obj)
-                )
+                [
+                    repr(obj)
+                    for obj in [x[1] for x in self.objstack] + [objid, genno, obj]
+                ]
             )
             errmsg = (
                 f"Failed to parse indirect object at {pos}: got: {objs} before 'endobj'"
@@ -929,8 +916,8 @@ class ContentParser(ObjectParser):
             super().__init__(stream.buffer, doc, streamid=stream.objid)
         except StopIteration:
             super().__init__(b"")
-        except TypeError:
-            log.warning("Found non-stream in contents: %r", streams)
+        except TypeError as e:
+            log.warning("Found non-stream in contents %r: %s", streams, e)
             super().__init__(b"")
 
     def nexttoken(self) -> Tuple[int, Token]:

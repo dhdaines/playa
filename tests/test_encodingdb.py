@@ -2,7 +2,7 @@
 Inadequately test EncodingDB and such.
 """
 
-from playa.encodingdb import cid2unicode_from_encoding, name2unicode, EncodingDB
+from playa.encodingdb import cid2unicode_from_encoding, name2unicode, get_encoding
 from playa.font import LITERAL_STANDARD_ENCODING
 
 
@@ -31,7 +31,7 @@ def test_name2unicode():
 
 def test_get_encoding():
     """Briefly test that get_encoding works as expected."""
-    standard = EncodingDB.get_encoding(LITERAL_STANDARD_ENCODING)
+    standard = get_encoding(LITERAL_STANDARD_ENCODING)
     assert standard[174] == "fi"
     standard_touni = cid2unicode_from_encoding(standard)
     assert standard_touni[174] == "ﬁ"
