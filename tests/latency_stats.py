@@ -29,12 +29,14 @@ def main() -> None:
             try:
                 start = time.time()
                 pdf = playa.open(p, password=password)
-                open_time.append((time.time() - start, p.relative_to(HERE)))
+                open_time.append(((time.time() - start) * 1000, p.relative_to(HERE)))
                 _ = pdf.catalog
-                cat_time.append((time.time() - start, p.relative_to(HERE)))
+                cat_time.append(((time.time() - start) * 1000, p.relative_to(HERE)))
                 try:
                     _ = next(iter(pdf.pages))
-                    page_time.append((time.time() - start, p.relative_to(HERE)))
+                    page_time.append(
+                        ((time.time() - start) * 1000, p.relative_to(HERE))
+                    )
                 except StopIteration:
                     pass
                 print(".", end="", file=sys.stderr, flush=True)
@@ -56,12 +58,9 @@ def report(name: str, stats: list[tuple[float, Path]]) -> None:
     mean_time = sum(t for t, p in stats) / nstats
     var_time = sum((t - mean_time) ** 2 for t, p in stats) / (nstats - 1)
     std_time = math.sqrt(var_time)
-    print("    mean: %.2fms std: %.2fms" % (mean_time * 1000, std_time * 1000))
-    med_time, med_path = stats[nstats // 2]
-    print("    median: %.2fms %s" % (med_time * 1000, med_path))
-    print("  sorted:")
-    for t, p in stats:
-        print("    %.2fms %s" % (t * 1000, p))
+    print("  mean: %.2fms std: %.2fms" % (mean_time, std_time))
+    print("  median: %.2fms %s" % stats[nstats // 2])
+    print("  max: %.2fms %s" % stats[0])
 
 
 if __name__ == "__main__":
