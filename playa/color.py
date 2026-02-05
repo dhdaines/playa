@@ -1,30 +1,30 @@
-from typing import Dict, NamedTuple, Tuple, Union
+from typing import Dict, Final, NamedTuple, Tuple, Union
 
 from playa.parser import LIT, PDFObject, PSLiteral
 from playa.pdftypes import list_value, literal_name, num_value, resolve1, stream_value
 
-LITERAL_DEVICE_GRAY = LIT("DeviceGray")
-LITERAL_DEVICE_RGB = LIT("DeviceRGB")
-LITERAL_DEVICE_CMYK = LIT("DeviceCMYK")
-LITERAL_DEVICE_N = LIT("DeviceN")
-LITERAL_ICC_BASED = LIT("ICCBased")
-LITERAL_PATTERN = LIT("Pattern")
+LITERAL_DEVICE_GRAY: Final = LIT("DeviceGray")
+LITERAL_DEVICE_RGB: Final = LIT("DeviceRGB")
+LITERAL_DEVICE_CMYK: Final = LIT("DeviceCMYK")
+LITERAL_DEVICE_N: Final = LIT("DeviceN")
+LITERAL_ICC_BASED: Final = LIT("ICCBased")
+LITERAL_PATTERN: Final = LIT("Pattern")
 # Abbreviations for inline images
-LITERAL_INLINE_DEVICE_GRAY = LIT("G")
-LITERAL_INLINE_DEVICE_RGB = LIT("RGB")
-LITERAL_INLINE_DEVICE_CMYK = LIT("CMYK")
-LITERAL_INLINE_INDEXED = LIT("I")
+LITERAL_INLINE_DEVICE_GRAY: Final = LIT("G")
+LITERAL_INLINE_DEVICE_RGB: Final = LIT("RGB")
+LITERAL_INLINE_DEVICE_CMYK: Final = LIT("CMYK")
+LITERAL_INLINE_INDEXED: Final = LIT("I")
 # Rendering intents
-LITERAL_RELATIVE_COLORIMETRIC = LIT("RelativeColorimetric")
-LITERAL_ABSOLUTE_COLORIMETRIC = LIT("AbsoluteColorimetric")
-LITERAL_SATURATION = LIT("Saturation")
-LITERAL_PERCEPTUAL = LIT("Perceptual")
+LITERAL_RELATIVE_COLORIMETRIC: Final = LIT("RelativeColorimetric")
+LITERAL_ABSOLUTE_COLORIMETRIC: Final = LIT("AbsoluteColorimetric")
+LITERAL_SATURATION: Final = LIT("Saturation")
+LITERAL_PERCEPTUAL: Final = LIT("Perceptual")
 # Use of black point compensation
-LITERAL_DEFAULT = LIT("Default")
+LITERAL_DEFAULT: Final = LIT("Default")
 # Blend modes
-LITERAL_NORMAL = LIT("Normal")
+LITERAL_NORMAL: Final = LIT("Normal")
 
-PREDEFINED_COLORSPACE: Dict[str, "ColorSpace"] = {}
+PREDEFINED_COLORSPACE: Final[Dict[str, "ColorSpace"]] = {}
 
 
 class Color(NamedTuple):
@@ -32,7 +32,7 @@ class Color(NamedTuple):
     pattern: Union[str, None]
 
 
-BASIC_BLACK = Color((0,), None)
+BASIC_BLACK: Final = Color((0,), None)
 
 
 class ColorSpace(NamedTuple):
@@ -74,7 +74,8 @@ for name, n in [
     ("Pattern", 1),
 ]:
     PREDEFINED_COLORSPACE[name] = ColorSpace(name, n)
-PREDEFINED_INLINE_COLORSPACE = {
+
+PREDEFINED_INLINE_COLORSPACE: Final = {
     LITERAL_INLINE_DEVICE_GRAY: PREDEFINED_COLORSPACE["DeviceGray"],
     LITERAL_INLINE_DEVICE_RGB: PREDEFINED_COLORSPACE["DeviceRGB"],
     LITERAL_INLINE_DEVICE_CMYK: PREDEFINED_COLORSPACE["DeviceCMYK"],

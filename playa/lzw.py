@@ -1,8 +1,8 @@
 import logging
 from io import BytesIO
-from typing import BinaryIO, Iterator, List, Optional, cast
+from typing import BinaryIO, Final, Iterator, List, Optional, cast
 
-logger = logging.getLogger(__name__)
+logger: Final = logging.getLogger(__name__)
 
 
 class CorruptDataError(Exception):

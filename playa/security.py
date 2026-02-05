@@ -5,7 +5,10 @@ from hashlib import md5, sha256, sha384, sha512
 from typing import (
     Any,
     Callable,
+    ClassVar,
     Dict,
+    Final,
+    FrozenSet,
     Optional,
     Sequence,
     Union,
@@ -39,14 +42,14 @@ PASSWORD_PADDING = (
 class PDFStandardSecurityHandler:
     """Basic security handler for basic encryption types."""
 
+    supported_revisions: ClassVar[FrozenSet[int]] = frozenset((2, 3))
+
     def __init__(
         self,
         docid: Sequence[bytes],
         param: Dict[str, Any],
         password: str = "",
     ) -> None:
-        # Initialize this here as mypc does not like default values
-        self.supported_revisions = frozenset((2, 3))
         self.docid = docid
         self.param = param
         self.password = password
@@ -205,6 +208,8 @@ def raise_missing_cryptography() -> None:
 class PDFStandardSecurityHandlerV4(PDFStandardSecurityHandler):
     """Security handler for encryption type 4."""
 
+    supported_revisions: ClassVar[FrozenSet[int]] = frozenset((4,))
+
     def __init__(
         self,
         docid: Sequence[bytes],
@@ -212,12 +217,7 @@ class PDFStandardSecurityHandlerV4(PDFStandardSecurityHandler):
         password: str = "",
     ) -> None:
         raise_missing_cryptography()
-        # Initialize this here as mypc does not like default values
-        self.supported_revisions = frozenset((4,))
-        self.docid = docid
-        self.param = param
-        self.password = password
-        self.init()
+        super().__init__(docid, param, password)
 
     def init_params(self) -> None:
         super().init_params()
@@ -294,6 +294,8 @@ class PDFStandardSecurityHandlerV4(PDFStandardSecurityHandler):
 class PDFStandardSecurityHandlerV5(PDFStandardSecurityHandlerV4):
     """Security handler for encryption types 5 and 6."""
 
+    supported_revisions: ClassVar[FrozenSet[int]] = frozenset((5, 6))
+
     def __init__(
         self,
         docid: Sequence[bytes],
@@ -301,12 +303,7 @@ class PDFStandardSecurityHandlerV5(PDFStandardSecurityHandlerV4):
         password: str = "",
     ) -> None:
         raise_missing_cryptography()
-        # Initialize this here as mypc does not like default values
-        self.supported_revisions = frozenset((5, 6))
-        self.docid = docid
-        self.param = param
-        self.password = password
-        self.init()
+        super().__init__(docid, param, password)
 
     def init_params(self) -> None:
         super().init_params()
@@ -432,7 +429,7 @@ class PDFStandardSecurityHandlerV5(PDFStandardSecurityHandlerV4):
         return unpad_aes(cleartext)
 
 
-SECURITY_HANDLERS = {
+SECURITY_HANDLERS: Final = {
     1: PDFStandardSecurityHandler,
     2: PDFStandardSecurityHandler,
     4: PDFStandardSecurityHandlerV4,

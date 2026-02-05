@@ -3,7 +3,7 @@ import functools
 import itertools
 import struct
 from pathlib import Path
-from typing import BinaryIO, Callable, Tuple
+from typing import BinaryIO, Callable, Final, Tuple
 
 from playa import asobj
 from playa.color import get_colorspace
@@ -16,9 +16,9 @@ from playa.pdftypes import (
     stream_value,
 )
 
-LOG = logging.getLogger(__name__)
+LOG: Final = logging.getLogger(__name__)
 
-JBIG2_HEADER = b"\x97JB2\r\n\x1a\n"
+JBIG2_HEADER: Final = b"\x97JB2\r\n\x1a\n"
 
 
 # PDF 2.0, sec 8.9.3 Sample data shall be represented as a stream of
@@ -215,45 +215,45 @@ def write_cmyk_tiff(
         bits = 8
 
     # 2. --- TIFF Structure Constants & Calculations ---
-    byte_order = b"MM"  # Big-endian
+    byte_order: Final = b"MM"  # Big-endian
 
     # --- Tag Codes ---
-    TAG_IMAGE_WIDTH = 256
-    TAG_IMAGE_LENGTH = 257
-    TAG_BITS_PER_SAMPLE = 258
-    TAG_COMPRESSION = 259
-    TAG_PHOTOMETRIC_INTERP = 262
-    TAG_STRIP_OFFSETS = 273
-    TAG_SAMPLES_PER_PIXEL = 277
-    TAG_ROWS_PER_STRIP = 278
-    TAG_STRIP_BYTE_COUNTS = 279
-    TAG_X_RESOLUTION = 282
-    TAG_Y_RESOLUTION = 283
-    TAG_PLANAR_CONFIGURATION = 284
-    TAG_RESOLUTION_UNIT = 296
+    TAG_IMAGE_WIDTH: Final = 256
+    TAG_IMAGE_LENGTH: Final = 257
+    TAG_BITS_PER_SAMPLE: Final = 258
+    TAG_COMPRESSION: Final = 259
+    TAG_PHOTOMETRIC_INTERP: Final = 262
+    TAG_STRIP_OFFSETS: Final = 273
+    TAG_SAMPLES_PER_PIXEL: Final = 277
+    TAG_ROWS_PER_STRIP: Final = 278
+    TAG_STRIP_BYTE_COUNTS: Final = 279
+    TAG_X_RESOLUTION: Final = 282
+    TAG_Y_RESOLUTION: Final = 283
+    TAG_PLANAR_CONFIGURATION: Final = 284
+    TAG_RESOLUTION_UNIT: Final = 296
 
     # --- Data Type Codes ---
-    TYPE_SHORT = 3
-    TYPE_LONG = 4
-    TYPE_RATIONAL = 5
+    TYPE_SHORT: Final = 3
+    TYPE_LONG: Final = 4
+    TYPE_RATIONAL: Final = 5
 
-    num_tags = 13
+    num_tags: Final = 13
 
     # --- Calculate Offsets ---
     # The file is laid out as: Header -> IFD -> Extra IFD Data -> Image Data
-    header_size = 8
+    header_size: Final = 8
     # 2 for tag count, 12 per tag, 4 for next IFD offset
-    ifd_size = 2 + (num_tags * 12) + 4
+    ifd_size: Final = 2 + (num_tags * 12) + 4
 
     # Offsets are relative to the start of the file
-    offset_extra_data_start = header_size + ifd_size
-    offset_bits_per_sample = offset_extra_data_start
+    offset_extra_data_start: Final = header_size + ifd_size
+    offset_bits_per_sample: Final = offset_extra_data_start
     # 4 samples * 2 bytes/SHORT for the BitsPerSample array
-    samples_per_pixel = 4
-    offset_x_resolution = offset_bits_per_sample + (samples_per_pixel * 2)
+    samples_per_pixel: Final = 4
+    offset_x_resolution: Final = offset_bits_per_sample + (samples_per_pixel * 2)
     # 1 RATIONAL = 2 * 4 bytes
-    offset_y_resolution = offset_x_resolution + 8
-    offset_image_data = offset_y_resolution + 8
+    offset_y_resolution: Final = offset_x_resolution + 8
+    offset_image_data: Final = offset_y_resolution + 8
 
     # 3. --- Write TIFF Header ---
     # 8-byte header: Byte Order, TIFF Version (42), Offset to first IFD

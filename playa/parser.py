@@ -14,6 +14,7 @@ from typing import (
     Any,
     Deque,
     Dict,
+    Final,
     Iterable,
     Iterator,
     List,
@@ -43,41 +44,41 @@ from playa.pdftypes import (
 from playa.utils import choplist
 from playa.worker import _deref_document, _ref_document
 
-log = logging.getLogger(__name__)
 if TYPE_CHECKING:
     from playa.document import Document
 
+log: Final = logging.getLogger(__name__)
 # Intern a bunch of important keywords
-KEYWORD_PROC_BEGIN = KWD(b"{")
-KEYWORD_PROC_END = KWD(b"}")
-KEYWORD_ARRAY_BEGIN = KWD(b"[")
-KEYWORD_ARRAY_END = KWD(b"]")
-KEYWORD_DICT_BEGIN = KWD(b"<<")
-KEYWORD_DICT_END = KWD(b">>")
-KEYWORD_GT = KWD(b">")
-KEYWORD_R = KWD(b"R")
-KEYWORD_NULL = KWD(b"null")
-KEYWORD_ENDOBJ = KWD(b"endobj")
-KEYWORD_STREAM = KWD(b"stream")
-KEYWORD_ENDSTREAM = KWD(b"endstream")
-KEYWORD_XREF = KWD(b"xref")
-KEYWORD_STARTXREF = KWD(b"startxref")
-KEYWORD_OBJ = KWD(b"obj")
-KEYWORD_TRAILER = KWD(b"trailer")
-KEYWORD_BI = KWD(b"BI")
-KEYWORD_ID = KWD(b"ID")
-KEYWORD_EI = KWD(b"EI")
+KEYWORD_PROC_BEGIN: Final = KWD(b"{")
+KEYWORD_PROC_END: Final = KWD(b"}")
+KEYWORD_ARRAY_BEGIN: Final = KWD(b"[")
+KEYWORD_ARRAY_END: Final = KWD(b"]")
+KEYWORD_DICT_BEGIN: Final = KWD(b"<<")
+KEYWORD_DICT_END: Final = KWD(b">>")
+KEYWORD_GT: Final = KWD(b">")
+KEYWORD_R: Final = KWD(b"R")
+KEYWORD_NULL: Final = KWD(b"null")
+KEYWORD_ENDOBJ: Final = KWD(b"endobj")
+KEYWORD_STREAM: Final = KWD(b"stream")
+KEYWORD_ENDSTREAM: Final = KWD(b"endstream")
+KEYWORD_XREF: Final = KWD(b"xref")
+KEYWORD_STARTXREF: Final = KWD(b"startxref")
+KEYWORD_OBJ: Final = KWD(b"obj")
+KEYWORD_TRAILER: Final = KWD(b"trailer")
+KEYWORD_BI: Final = KWD(b"BI")
+KEYWORD_ID: Final = KWD(b"ID")
+KEYWORD_EI: Final = KWD(b"EI")
 
 
-EOL = b"\r\n"
-WHITESPACE = b" \t\n\r\f\v"
-NUMBER = b"0123456789"
-HEX = NUMBER + b"abcdef" + b"ABCDEF"
-NOTLITERAL = b"#/%[]()<>{}" + WHITESPACE
-NOTKEYWORD = b"#/%[]()<>{}" + WHITESPACE
-NOTSTRING = b"()\\"
-OCTAL = b"01234567"
-ESC_STRING = {
+EOL: Final = b"\r\n"
+WHITESPACE: Final = b" \t\n\r\f\v"
+NUMBER: Final = b"0123456789"
+HEX: Final = NUMBER + b"abcdef" + b"ABCDEF"
+NOTLITERAL: Final = b"#/%[]()<>{}" + WHITESPACE
+NOTKEYWORD: Final = b"#/%[]()<>{}" + WHITESPACE
+NOTSTRING: Final = b"()\\"
+OCTAL: Final = b"01234567"
+ESC_STRING: Final = {
     b"b": 8,
     b"t": 9,
     b"n": 10,
@@ -90,7 +91,7 @@ ESC_STRING = {
 
 
 Token = Union[float, bool, PSLiteral, PSKeyword, bytes]
-LEXER = re.compile(
+LEXER: Final = re.compile(
     rb"""(?:
       (?P<whitespace> \s+)
     | (?P<comment> %[^\r\n]*[\r\n])
@@ -106,7 +107,7 @@ LEXER = re.compile(
 """,
     re.VERBOSE,
 )
-STRLEXER = re.compile(
+STRLEXER: Final = re.compile(
     rb"""(?:
       (?P<octal> \\[0-7]{1,3})
     | (?P<linebreak> \\(?:\r\n?|\n))
@@ -118,10 +119,10 @@ STRLEXER = re.compile(
 )""",
     re.VERBOSE,
 )
-HEXDIGIT = re.compile(rb"#([A-Fa-f\d][A-Fa-f\d])")
-EOLR = re.compile(rb"\r\n?|\n")
-SPC = re.compile(rb"\s")
-WSR = re.compile(rb"\s+")
+HEXDIGIT: Final = re.compile(rb"#([A-Fa-f\d][A-Fa-f\d])")
+EOLR: Final = re.compile(rb"\r\n?|\n")
+SPC: Final = re.compile(rb"\s")
+WSR: Final = re.compile(rb"\s+")
 
 
 class Lexer(Iterator[Tuple[int, Token]]):
@@ -254,10 +255,10 @@ class Lexer(Iterator[Tuple[int, Token]]):
         return (self._curtokenpos, b"".join(parts))
 
 
-EIR = re.compile(rb"\sEI\b")
-EIEIR = re.compile(rb"EI")
-A85R = re.compile(rb"\s*~\s*>\s*EI\b")
-FURTHESTEIR = re.compile(rb".*EI")
+EIR: Final = re.compile(rb"\sEI\b")
+EIEIR: Final = re.compile(rb"EI")
+A85R: Final = re.compile(rb"\s*~\s*>\s*EI\b")
+FURTHESTEIR: Final = re.compile(rb".*EI")
 
 
 class ObjectParser(Iterator[Tuple[int, PDFObject]]):
@@ -614,7 +615,7 @@ class IndirectObject(NamedTuple):
     obj: PDFObject
 
 
-ENDSTREAMR = re.compile(rb"(?:\r\n|\r|\n|)endstream")
+ENDSTREAMR: Final = re.compile(rb"(?:\r\n|\r|\n|)endstream")
 
 
 class IndirectObjectParser(Iterator[Tuple[int, IndirectObject]]):

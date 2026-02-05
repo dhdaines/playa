@@ -4,6 +4,7 @@ from typing import (
     TYPE_CHECKING,
     Any,
     Dict,
+    Final,
     Iterable,
     List,
     Optional,
@@ -17,7 +18,7 @@ from playa.worker import DocumentRef, _deref_document
 if TYPE_CHECKING:
     from playa.color import ColorSpace
 
-logger = logging.getLogger(__name__)
+logger: Final = logging.getLogger(__name__)
 PDFObject = Union[
     int,
     float,
@@ -35,8 +36,8 @@ PDFObject = Union[
 Point = Tuple[float, float]
 Rect = Tuple[float, float, float, float]
 Matrix = Tuple[float, float, float, float, float, float]
-BBOX_NONE = (-1, -1, -1, -1)
-MATRIX_IDENTITY: Matrix = (1, 0, 0, 1, 0, 0)
+BBOX_NONE: Final[Rect] = (-1, -1, -1, -1)
+MATRIX_IDENTITY: Final[Matrix] = (1, 0, 0, 1, 0, 0)
 
 
 class PSLiteral:
@@ -77,38 +78,37 @@ class PSKeyword:
 
 
 # Do not make these generic as they are performance-critical
-class LiteralTable(Dict[str, PSLiteral]):
-    def intern(self, name: str) -> PSLiteral:
-        if name not in self:
-            self[name] = PSLiteral(name)
-        return self[name]
+PSLiteralTable: Final[Dict[str, PSLiteral]] = {}
+PSKeywordTable: Final[Dict[bytes, PSKeyword]] = {}
 
 
-class KeywordTable(Dict[bytes, PSKeyword]):
-    def intern(self, name: bytes) -> PSKeyword:
-        if name not in self:
-            self[name] = PSKeyword(name)
-        return self[name]
+def LIT(name: str) -> PSLiteral:
+    obj = PSLiteralTable.get(name)
+    if obj is None:
+        obj = PSLiteralTable[name] = PSLiteral(name)
+    return obj
 
 
-PSLiteralTable = LiteralTable()
-PSKeywordTable = KeywordTable()
-LIT = PSLiteralTable.intern
-KWD = PSKeywordTable.intern
+def KWD(name: bytes) -> PSKeyword:
+    obj = PSKeywordTable.get(name)
+    if obj is None:
+        obj = PSKeywordTable[name] = PSKeyword(name)
+    return obj
+
 
 # Intern a bunch of important literals
-LITERAL_CRYPT = LIT("Crypt")
-LITERAL_IMAGE = LIT("Image")
+LITERAL_CRYPT: Final = LIT("Crypt")
+LITERAL_IMAGE: Final = LIT("Image")
 # Abbreviation of Filter names in PDF 4.8.6. "Inline Images"
-LITERALS_FLATE_DECODE = (LIT("FlateDecode"), LIT("Fl"))
-LITERALS_LZW_DECODE = (LIT("LZWDecode"), LIT("LZW"))
-LITERALS_ASCII85_DECODE = (LIT("ASCII85Decode"), LIT("A85"))
-LITERALS_ASCIIHEX_DECODE = (LIT("ASCIIHexDecode"), LIT("AHx"))
-LITERALS_RUNLENGTH_DECODE = (LIT("RunLengthDecode"), LIT("RL"))
-LITERALS_CCITTFAX_DECODE = (LIT("CCITTFaxDecode"), LIT("CCF"))
-LITERALS_DCT_DECODE = (LIT("DCTDecode"), LIT("DCT"))
-LITERALS_JBIG2_DECODE = (LIT("JBIG2Decode"),)
-LITERALS_JPX_DECODE = (LIT("JPXDecode"),)
+LITERALS_FLATE_DECODE: Final = (LIT("FlateDecode"), LIT("Fl"))
+LITERALS_LZW_DECODE: Final = (LIT("LZWDecode"), LIT("LZW"))
+LITERALS_ASCII85_DECODE: Final = (LIT("ASCII85Decode"), LIT("A85"))
+LITERALS_ASCIIHEX_DECODE: Final = (LIT("ASCIIHexDecode"), LIT("AHx"))
+LITERALS_RUNLENGTH_DECODE: Final = (LIT("RunLengthDecode"), LIT("RL"))
+LITERALS_CCITTFAX_DECODE: Final = (LIT("CCITTFaxDecode"), LIT("CCF"))
+LITERALS_DCT_DECODE: Final = (LIT("DCTDecode"), LIT("DCT"))
+LITERALS_JBIG2_DECODE: Final = (LIT("JBIG2Decode"),)
+LITERALS_JPX_DECODE: Final = (LIT("JPXDecode"),)
 
 
 def name_str(x: bytes) -> str:

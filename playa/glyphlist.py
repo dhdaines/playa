@@ -52,7 +52,9 @@ https://raw.githubusercontent.com/adobe-type-tools/agl-aglfn/refs/heads/master/g
 #   (2) Unicode scalar value--four uppercase hexadecimal digits
 #
 
-glyphname2unicode = {
+from typing import Final, Dict
+
+glyphname2unicode: Final[Dict[str, str]] = {
     "A": "\u0041",
     "AE": "\u00c6",
     "AEacute": "\u01fc",
