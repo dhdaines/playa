@@ -17,6 +17,7 @@ from typing import (
     Any,
     Callable,
     Dict,
+    Final,
     List,
     Tuple,
     Union,
@@ -26,7 +27,7 @@ from playa.pdftypes import PDFObject, int_value
 if TYPE_CHECKING:
     from mypy_extensions import u8
 
-LOG = logging.getLogger(__name__)
+LOG: Final = logging.getLogger(__name__)
 BitParserNode = Union[int, str, None, List]
 
 
@@ -69,7 +70,7 @@ class BitParserTree:
         p[b] = v
 
 
-MODE = BitParserTree(
+MODE: Final = BitParserTree(
     "MODE",
     (0, "1"),
     (+1, "011"),
@@ -92,9 +93,9 @@ MODE = BitParserTree(
     ("e", "000000000001"),
 )
 
-NEXT2D = BitParserTree("NEXT2D", (0, "1"), (1, "0"))
+NEXT2D: Final = BitParserTree("NEXT2D", (0, "1"), (1, "0"))
 
-WHITE = BitParserTree(
+WHITE: Final = BitParserTree(
     "WHITE",
     (0, "00110101"),
     (1, "000111"),
@@ -203,7 +204,7 @@ WHITE = BitParserTree(
     ("e", "000000000001"),
 )
 
-BLACK = BitParserTree(
+BLACK: Final = BitParserTree(
     "BLACK",
     (0, "0000110111"),
     (1, "010"),
@@ -312,7 +313,7 @@ BLACK = BitParserTree(
     ("e", "000000000001"),
 )
 
-UNCOMPRESSED = BitParserTree(
+UNCOMPRESSED: Final = BitParserTree(
     "UNCOMPRESSED",
     ("1", "1"),
     ("01", "01"),

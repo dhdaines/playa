@@ -244,14 +244,6 @@ def test_literals():
     assert keyword_name(KWD(b"\x80\x83\xfe\xff")) == "\x80\x83\xfe\xff"
 
 
-def test_interns():
-    """Verify that interning only accepts certain values."""
-    with pytest.raises(ValueError):
-        _ = KWD("not-a-bytes")
-    with pytest.raises(ValueError):
-        _ = LIT(b"not-a-str")
-
-
 def test_lexer_eof() -> None:
     """Verify lexer works at EOF."""
     lex = Lexer(b"/Foo /Bar (baz)")

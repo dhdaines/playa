@@ -4,6 +4,7 @@ import logging
 import re
 from typing import (
     Dict,
+    Final,
     Iterator,
     List,
     Mapping,
@@ -40,13 +41,13 @@ from playa.worker import _ref_document
 if TYPE_CHECKING:
     from playa.document import Document
 
-log = logging.getLogger(__name__)
-LITERAL_OBJSTM = LIT("ObjStm")
-LITERAL_XREF = LIT("XRef")
+log: Final = logging.getLogger(__name__)
+LITERAL_OBJSTM: Final = LIT("ObjStm")
+LITERAL_XREF: Final = LIT("XRef")
 # Specific regex optimized only for finding objects (SFOOFFO)
-FIND_INDOBJR = re.compile(rb"(?<!\d)\d{1,10}\s+\d{1,10}\s+obj")
-INDOBJR = re.compile(rb"\s*\d{1,10}\s+\d{1,10}\s+obj")
-XREFR = re.compile(rb"\s*xref\s*(\d+)\s*(\d+)\s*")
+FIND_INDOBJR: Final = re.compile(rb"(?<!\d)\d{1,10}\s+\d{1,10}\s+obj")
+INDOBJR: Final = re.compile(rb"\s*\d{1,10}\s+\d{1,10}\s+obj")
+XREFR: Final = re.compile(rb"\s*xref\s*(\d+)\s*(\d+)\s*")
 
 
 def _update_refs(trailer: Dict[str, PDFObject], doc: "Document") -> None:

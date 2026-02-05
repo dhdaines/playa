@@ -12,6 +12,7 @@ from typing import (
     Any,
     Callable,
     Dict,
+    Final,
     Generic,
     Iterable,
     Iterator,
@@ -91,9 +92,9 @@ LTComponentT = TypeVar("LTComponentT", bound="LTComponent")
 _T = TypeVar("_T")
 # This is **not** infinity, just an arbitrary big number we use for
 # initializing bounding boxes.
-INF = (1 << 31) - 1
+INF: Final = (1 << 31) - 1
 # This is an "infinite" bounding box used as a default
-BBOX_INF = (+INF, +INF, -INF, -INF)
+BBOX_INF: Final = (+INF, +INF, -INF, -INF)
 # Ugly pdfminer.six type which represents what it *actually* puts in
 # `LTCurve.original_path` (see
 # https://github.com/pdfminer/pdfminer.six/issues/1180)

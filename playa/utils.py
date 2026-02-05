@@ -4,6 +4,7 @@ import itertools
 import string
 from typing import (
     TYPE_CHECKING,
+    Final,
     Iterable,
     Iterator,
     List,
@@ -286,7 +287,7 @@ def nunpack(s: bytes, default: int = 0) -> int:
         return int.from_bytes(s, byteorder="big", signed=False)
 
 
-PDFDocEncoding = "".join(
+PDFDocEncoding: Final[str] = "".join(
     chr(x)
     for x in (
         0x0000,
@@ -591,8 +592,8 @@ def string_property(obj: PDFObject, key: str) -> Union[str, None]:
     return decode_text(val)
 
 
-ROMAN_ONES = ["i", "x", "c", "m"]
-ROMAN_FIVES = ["v", "l", "d"]
+ROMAN_ONES: Final = ["i", "x", "c", "m"]
+ROMAN_FIVES: Final = ["v", "l", "d"]
 
 
 def format_int_roman(value: int) -> str:

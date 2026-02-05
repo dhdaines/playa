@@ -1,6 +1,6 @@
 import logging
 import re
-from typing import Dict, Iterable, Optional, Union
+from typing import Dict, Final, Iterable, Optional, Union
 
 from playa.encodings import (
     MAC_EXPERT_ENCODING,
@@ -11,9 +11,9 @@ from playa.encodings import (
 from playa.glyphlist import glyphname2unicode
 from playa.parser import PSLiteral, PDFObject
 
-HEXADECIMAL = re.compile(r"[0-9a-fA-F]+")
+HEXADECIMAL: Final = re.compile(r"[0-9a-fA-F]+")
 
-log = logging.getLogger(__name__)
+log: Final = logging.getLogger(__name__)
 
 
 def name2unicode(name: str) -> str:
@@ -57,7 +57,7 @@ def name2unicode(name: str) -> str:
     return ""
 
 
-ENCODINGS: Dict[str, Dict[int, str]] = {
+ENCODINGS: Final[Dict[str, Dict[int, str]]] = {
     # NOTE: According to PDF 1.7 Annex D.1, "Conforming readers
     # shall not have a predefined encoding named
     # StandardEncoding", but it's not clear why not.

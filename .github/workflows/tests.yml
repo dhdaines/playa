@@ -23,6 +23,8 @@ jobs:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
     runs-on: ${{ matrix.os }}
+    env:
+      HATCH_BUILD_HOOK_ENABLE_MYPYC: 1
     steps:
       - uses: actions/checkout@v4
       - name: Set up Python
@@ -31,10 +33,8 @@ jobs:
           python-version: "3.14"
       - name: Install Hatch
         uses: pypa/hatch@install
-      - name: Compile with mypyc
-        run: hatch env create benchmark-mypyc.py3.14
       - name: Run tests
-        run: hatch test
+        run: hatch test -py 3.14
   test38:
     needs: check
     runs-on: ubuntu-latest

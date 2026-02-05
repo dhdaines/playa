@@ -22,10 +22,10 @@ __all__ = ["saslprep"]
 
 import stringprep
 import unicodedata
-from typing import Callable, Tuple
+from typing import Callable, Final, Tuple
 
 # RFC4013 section 2.3 prohibited output.
-_PROHIBITED: Tuple[Callable[[str], bool], ...] = (
+_PROHIBITED: Final[Tuple[Callable[[str], bool], ...]] = (
     # A strict reading of RFC 4013 requires table c12 here, but
     # characters from it are mapped to SPACE in the Map step. Can
     # normalization reintroduce them somehow?
