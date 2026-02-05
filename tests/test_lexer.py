@@ -246,9 +246,9 @@ def test_literals():
 
 def test_interns():
     """Verify that interning only accepts certain values."""
-    with pytest.raises(ValueError):
+    with pytest.raises(TypeError):
         _ = KWD("not-a-bytes")
-    with pytest.raises(ValueError):
+    with pytest.raises(TypeError):
         _ = LIT(b"not-a-str")
 
 
