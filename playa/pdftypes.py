@@ -4,14 +4,11 @@ from typing import (
     TYPE_CHECKING,
     Any,
     Dict,
-    Generic,
     Iterable,
     List,
     Optional,
     Protocol,
     Tuple,
-    Type,
-    TypeVar,
     Union,
 )
 
@@ -79,31 +76,23 @@ class PSKeyword:
         return "/%r" % self.name
 
 
-_SymbolT = TypeVar("_SymbolT", PSLiteral, PSKeyword)
-_NameT = TypeVar("_NameT", str, bytes)
+# Do not make these generic as they are performance-critical
+class LiteralTable(Dict[str, PSLiteral]):
+    def intern(self, name: str) -> PSLiteral:
+        if name not in self:
+            self[name] = PSLiteral(name)
+        return self[name]
 
 
-class PSSymbolTable(Generic[_SymbolT, _NameT]):
-    """Store globally unique name objects or language keywords."""
-
-    def __init__(self, table_type: Type[_SymbolT], name_type: Type[_NameT]) -> None:
-        self.dict: Dict[_NameT, _SymbolT] = {}
-        self.table_type: Type[_SymbolT] = table_type
-        self.name_type: Type[_NameT] = name_type
-
-    def intern(self, name: _NameT) -> _SymbolT:
-        if not isinstance(name, self.name_type):
-            raise ValueError(f"{self.table_type} can only store {self.name_type}")
-        if name in self.dict:
-            lit = self.dict[name]
-        else:
-            lit = self.table_type(name)  # type: ignore
-        self.dict[name] = lit
-        return lit
+class KeywordTable(Dict[bytes, PSKeyword]):
+    def intern(self, name: bytes) -> PSKeyword:
+        if name not in self:
+            self[name] = PSKeyword(name)
+        return self[name]
 
 
-PSLiteralTable = PSSymbolTable(PSLiteral, str)
-PSKeywordTable = PSSymbolTable(PSKeyword, bytes)
+PSLiteralTable = LiteralTable()
+PSKeywordTable = KeywordTable()
 LIT = PSLiteralTable.intern
 KWD = PSKeywordTable.intern
 
