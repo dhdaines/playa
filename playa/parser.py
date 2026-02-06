@@ -912,12 +912,15 @@ class ContentParser(Iterator[Tuple[int, PDFObject]]):
         try:
             stream = stream_value(next(self.streamiter))
             buffer = stream.buffer
+            streamid = stream.objid
         except StopIteration:
             buffer = b""
+            streamid = 0
         except TypeError as e:
             log.warning("Found non-stream in contents %r: %s", streams, e)
             buffer = b""
-        self._parser = ObjectParser(buffer, doc, streamid=stream.objid)
+            streamid = 0
+        self._parser = ObjectParser(buffer, doc, streamid=streamid)
 
     def __next__(self) -> Any:  # should be Tuple[int, PDFObject] but mypyc
         while True:
