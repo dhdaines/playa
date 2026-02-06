@@ -165,6 +165,7 @@ include = [
     "playa/encodingdb.py",
     "playa/glyphlist.py",
     "playa/image.py",
+    "playa/interp.py",
     "playa/lzw.py",
     "playa/miner.py",
     "playa/parser.py",
@@ -178,7 +179,6 @@ include = [
     # "playa/cmapdb.py",
     # "playa/fontprogram.py",
     # "playa/font.py",
-    # "playa/interp.py",
     # These shouldn't compile as they are just data
     # "playa/encodings.py",
     # "playa/fontmetrics.py",
