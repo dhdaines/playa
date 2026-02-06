@@ -228,9 +228,6 @@ class LazyInterpreter:
         # mcstack: stack for marked content sections.
         self.mcstack: Tuple[MarkedContent, ...] = ()
 
-    def push(self, obj: PDFObject) -> None:
-        self.argstack.append(obj)
-
     def pop(self, n: int) -> List[PDFObject]:
         if n == 0:
             return []
@@ -248,38 +245,40 @@ class LazyInterpreter:
                 if co is not None:
                     yield co
             elif isinstance(obj, PSKeyword):
-                if obj in self._dispatch:
-                    method, nargs = self._dispatch[obj]
-                    co = None
-                    if nargs:
-                        args = self.pop(nargs)
-                        if len(args) != nargs:
-                            log.warning(
-                                "Insufficient arguments (%d) for operator: %r",
-                                len(args),
-                                obj,
-                            )
-                        else:
-                            try:
-                                co = method(*args)
-                            except TypeError as e:
-                                log.warning(
-                                    "Incorrect type of arguments(%r) for operator %r: %s",
-                                    args,
-                                    obj,
-                                    e,
-                                )
-                    else:
-                        co = method()
-                    if co is not None:
-                        yield co
-                    if isinstance(co, TextObject):
-                        self.textstate.glyph_offset = co._get_next_glyph_offset()
-                else:
-                    # TODO: This can get very verbose
-                    log.warning("Unknown operator: %r", obj)
+                co = self.operate(obj)
+                if co is not None:
+                    yield co
+                if isinstance(co, TextObject):
+                    self.textstate.glyph_offset = co._get_next_glyph_offset()
             else:
-                self.push(obj)
+                self.argstack.append(obj)
+
+    def operate(self, obj: PSKeyword) -> Union[ContentObject, None]:
+        if obj not in self._dispatch:
+            # TODO: This can get very verbose
+            log.warning("Unknown operator: %r", obj)
+            return None
+        method, nargs = self._dispatch[obj]
+        if nargs == 0:
+            return method()
+        args = self.pop(nargs)
+        if len(args) != nargs:
+            log.warning(
+                "Insufficient arguments (%d) for operator: %r",
+                len(args),
+                obj,
+            )
+        else:
+            try:
+                return method(*args)
+            except TypeError as e:
+                log.warning(
+                    "Incorrect type of arguments(%r) for operator %r: %s",
+                    args,
+                    obj,
+                    e,
+                )
+                return None
 
     def create(self, object_class, **kwargs) -> Union[ContentObject, None]:
         return object_class(
