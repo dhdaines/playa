@@ -1101,7 +1101,9 @@ class Type3Interpreter(LazyInterpreter):
         parent_key: Union[int, None] = None,
         ignore_colours: bool = False,
     ) -> None:
-        super().__init__(page, contents, resources, ctm, gstate, parent_key, ignore_colours)
+        super().__init__(
+            page, contents, resources, ctm, gstate, parent_key, ignore_colours
+        )
         self._dispatch[KWD(b"d0")] = (self.do_d0, 2)
         self._dispatch[KWD(b"d1")] = (self.do_d1, 6)
 
