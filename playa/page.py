@@ -34,7 +34,7 @@ from playa.content import (
 )
 from playa.exceptions import PDFSyntaxError
 from playa.interp import LazyInterpreter, FontMapping
-from playa.parser import ContentParser, PDFObject, Token
+from playa.parser import ContentParser, Lexer, PDFObject, Token
 from playa.pdftypes import (
     MATRIX_IDENTITY,
     ContentStream,
@@ -323,13 +323,9 @@ class Page:
     @property
     def tokens(self) -> Iterator[Token]:
         """Iterator over tokens in the content streams."""
-        parser = ContentParser(self._contents, self.doc)
-        while True:
-            try:
-                pos, tok = parser.nexttoken()
-            except StopIteration:
-                return
-            yield tok
+        for stream in self._contents:
+            for _, tok in Lexer(stream.buffer):
+                yield tok
 
     @property
     def parent_key(self) -> Union[int, None]:
