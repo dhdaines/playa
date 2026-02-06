@@ -36,8 +36,9 @@ PDFObject = Union[
 Point = Tuple[float, float]
 Rect = Tuple[float, float, float, float]
 Matrix = Tuple[float, float, float, float, float, float]
-BBOX_NONE: Final[Rect] = (-1, -1, -1, -1)
-MATRIX_IDENTITY: Final[Matrix] = (1, 0, 0, 1, 0, 0)
+# These cannot be final because of https://github.com/mypyc/mypyc/issues/1183
+BBOX_NONE: Rect = (-1., -1., -1., -1.)
+MATRIX_IDENTITY: Matrix = (1., 0., 0., 1., 0., 0.)
 
 
 class PSLiteral:

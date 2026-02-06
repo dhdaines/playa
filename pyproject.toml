@@ -89,8 +89,6 @@ parallel = true
 dependencies = [ "cryptography" ]
 
 [tool.hatch.envs.benchmark]
-# Do not use editable install because of mypyc's .so droppings
-dev-mode = false
 extra-dependencies = [ "pdfminer.six" ]
 
 [tool.hatch.envs.benchmark.scripts]
@@ -113,8 +111,6 @@ bench = [
 python = ["3.10", "3.11", "3.12", "3.13", "3.14"]
 
 [tool.hatch.envs.benchmark-mypyc]
-# Do not use editable install (but we get .so droppings anyway)
-dev-mode = false
 template = "benchmark"
 
 [tool.hatch.envs.benchmark-mypyc.env-vars]
