@@ -34,7 +34,7 @@ from playa.color import (
     ColorSpace,
 )
 from playa.font import CIDFont, Font, Type3Font
-from playa.parser import LIT, ContentParser, Token
+from playa.parser import LIT, ContentParser, Lexer, Token
 from playa.pdftypes import (
     BBOX_NONE,
     ContentStream,
@@ -524,12 +524,7 @@ class XObjectObject(ContentObject):
     @property
     def tokens(self) -> Iterator[Token]:
         """Iterate over tokens in the XObject's content stream."""
-        parser = ContentParser([self.stream], self.doc)
-        while True:
-            try:
-                pos, tok = parser.nexttoken()
-            except StopIteration:
-                return
+        for _, tok in Lexer(self.stream.buffer):
             yield tok
 
     @property

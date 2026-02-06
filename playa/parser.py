@@ -313,7 +313,7 @@ class ObjectParser(Iterator[Tuple[int, PDFObject]]):
         while True:
             if self.stack and top is None:
                 return self.stack.pop()
-            (pos, token) = self.nexttoken()
+            (pos, token) = next(self._lexer)
             if token is KEYWORD_ARRAY_BEGIN:
                 if top is None:
                     top = pos
@@ -555,7 +555,7 @@ class ObjectParser(Iterator[Tuple[int, PDFObject]]):
         if length is not None:
             end = pos + int_value(length)
             self.seek(end)
-            (_, token) = self.nexttoken()
+            (_, token) = next(self._lexer)
             if token is not KEYWORD_EI:
                 errmsg = f"EI not found after Length {length!r}"
                 if self.strict:
@@ -602,11 +602,6 @@ class ObjectParser(Iterator[Tuple[int, PDFObject]]):
     def nextline(self) -> Tuple[int, bytes]:
         """Read (and do not parse) next line from underlying data."""
         return self._lexer.nextline()
-
-    def nexttoken(self) -> Tuple[int, Token]:
-        """Get the next token in iteration, raising StopIteration when
-        done."""
-        return next(self._lexer)
 
 
 class IndirectObject(NamedTuple):
@@ -899,7 +894,7 @@ class ObjectStreamParser:
             yield pos, IndirectObject(objid=objid, genno=0, obj=obj)
 
 
-class ContentParser(ObjectParser):
+class ContentParser(Iterator[Tuple[int, PDFObject]]):
     """Parse the concatenation of multiple content streams, as
     described in the spec (PDF 1.7, p.86):
 
@@ -916,28 +911,27 @@ class ContentParser(ObjectParser):
         self.streamiter = iter(streams)
         try:
             stream = stream_value(next(self.streamiter))
-            super().__init__(stream.buffer, doc, streamid=stream.objid)
+            buffer = stream.buffer
+            streamid = stream.objid
         except StopIteration:
-            super().__init__(b"")
+            buffer = b""
+            streamid = 0
         except TypeError as e:
             log.warning("Found non-stream in contents %r: %s", streams, e)
-            super().__init__(b"")
+            buffer = b""
+            streamid = 0
+        self._parser = ObjectParser(buffer, doc, streamid=streamid)
 
-    def nexttoken(self) -> Tuple[int, Token]:
-        """Override nexttoken() to continue parsing in subsequent streams.
-
-        TODO: If we want to avoid evil implementation inheritance, we
-        should do this in the lexer instead.
-        """
+    def __next__(self) -> Any:  # should be Tuple[int, PDFObject] but mypyc
         while True:
             try:
-                return super().nexttoken()
+                return next(self._parser)
             except StopIteration:
                 # Will also raise StopIteration if there are no more,
                 # which is exactly what we want
                 try:
                     ref = next(self.streamiter)
                     stream = stream_value(ref)
-                    self.newstream(stream.buffer, streamid=stream.objid)
+                    self._parser.newstream(stream.buffer, streamid=stream.objid)
                 except TypeError:
                     log.warning("Found non-stream in contents: %r", ref)

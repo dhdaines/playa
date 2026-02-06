@@ -3,7 +3,6 @@ Interpreter for PDF content streams.
 """
 
 import logging
-import re
 from copy import copy
 from dataclasses import dataclass
 from typing import (
@@ -157,18 +156,79 @@ class LazyInterpreter:
         parent_key: Union[int, None] = None,
         ignore_colours: bool = False,
     ) -> None:
-        self._dispatch: Dict[PSKeyword, Tuple[Callable, int]] = {}
-        for name in dir(self):
-            if name.startswith("do_"):
-                func = getattr(self, name)
-                name = re.sub(r"_a", "*", name[3:])
-                if name == "_q":
-                    name = "'"
-                if name == "_w":
-                    name = '"'
-                kwd = KWD(name.encode("iso-8859-1"))
-                nargs = func.__code__.co_argcount - 1
-                self._dispatch[kwd] = (func, nargs)
+        self._dispatch: Dict[PSKeyword, Tuple[Callable, int]] = {
+            KWD(b"B"): (self.do_B, 0),
+            KWD(b"BDC"): (self.do_BDC, 2),
+            KWD(b"BI"): (self.do_BI, 0),
+            KWD(b"BMC"): (self.do_BMC, 1),
+            KWD(b"BT"): (self.do_BT, 0),
+            KWD(b"BX"): (self.do_BX, 0),
+            KWD(b"B*"): (self.do_B_a, 0),
+            KWD(b"CS"): (self.do_CS, 1),
+            KWD(b"DP"): (self.do_DP, 2),
+            KWD(b"Do"): (self.do_Do, 1),
+            KWD(b"EI"): (self.do_EI, 1),
+            KWD(b"EMC"): (self.do_EMC, 0),
+            KWD(b"ET"): (self.do_ET, 0),
+            KWD(b"EX"): (self.do_EX, 0),
+            KWD(b"F"): (self.do_F, 0),
+            KWD(b"G"): (self.do_G, 1),
+            KWD(b"ID"): (self.do_ID, 0),
+            KWD(b"J"): (self.do_J, 1),
+            KWD(b"K"): (self.do_K, 4),
+            KWD(b"M"): (self.do_M, 1),
+            KWD(b"MP"): (self.do_MP, 1),
+            KWD(b"Q"): (self.do_Q, 0),
+            KWD(b"RG"): (self.do_RG, 3),
+            KWD(b"S"): (self.do_S, 0),
+            KWD(b"SC"): (self.do_SC, 0),
+            KWD(b"SCN"): (self.do_SCN, 0),
+            KWD(b"TD"): (self.do_TD, 2),
+            KWD(b"TJ"): (self.do_TJ, 1),
+            KWD(b"TL"): (self.do_TL, 1),
+            KWD(b"T*"): (self.do_T_a, 0),
+            KWD(b"Tc"): (self.do_Tc, 1),
+            KWD(b"Td"): (self.do_Td, 2),
+            KWD(b"Tf"): (self.do_Tf, 2),
+            KWD(b"Tj"): (self.do_Tj, 1),
+            KWD(b"Tm"): (self.do_Tm, 6),
+            KWD(b"Tr"): (self.do_Tr, 1),
+            KWD(b"Ts"): (self.do_Ts, 1),
+            KWD(b"Tw"): (self.do_Tw, 1),
+            KWD(b"Tz"): (self.do_Tz, 1),
+            KWD(b"W"): (self.do_W, 0),
+            KWD(b"W*"): (self.do_W_a, 0),
+            KWD(b"'"): (self.do__q, 1),
+            KWD(b'"'): (self.do__w, 3),
+            KWD(b"b"): (self.do_b, 0),
+            KWD(b"b*"): (self.do_b_a, 0),
+            KWD(b"c"): (self.do_c, 6),
+            KWD(b"cm"): (self.do_cm, 6),
+            KWD(b"cs"): (self.do_cs, 1),
+            KWD(b"d"): (self.do_d, 2),
+            KWD(b"f"): (self.do_f, 0),
+            KWD(b"f*"): (self.do_f_a, 0),
+            KWD(b"g"): (self.do_g, 1),
+            KWD(b"gs"): (self.do_gs, 1),
+            KWD(b"h"): (self.do_h, 0),
+            KWD(b"i"): (self.do_i, 1),
+            KWD(b"j"): (self.do_j, 1),
+            KWD(b"k"): (self.do_k, 4),
+            KWD(b"l"): (self.do_l, 2),
+            KWD(b"m"): (self.do_m, 2),
+            KWD(b"n"): (self.do_n, 0),
+            KWD(b"q"): (self.do_q, 0),
+            KWD(b"re"): (self.do_re, 4),
+            KWD(b"rg"): (self.do_rg, 3),
+            KWD(b"ri"): (self.do_ri, 1),
+            KWD(b"s"): (self.do_s, 0),
+            KWD(b"sc"): (self.do_sc, 0),
+            KWD(b"scn"): (self.do_scn, 0),
+            KWD(b"sh"): (self.do_sh, 1),
+            KWD(b"v"): (self.do_v, 4),
+            KWD(b"w"): (self.do_w, 1),
+            KWD(b"y"): (self.do_y, 4),
+        }
         self.page = page
         self.parent_key = (
             page.attrs.get("StructParents") if parent_key is None else parent_key
@@ -228,9 +288,6 @@ class LazyInterpreter:
         # mcstack: stack for marked content sections.
         self.mcstack: Tuple[MarkedContent, ...] = ()
 
-    def push(self, obj: PDFObject) -> None:
-        self.argstack.append(obj)
-
     def pop(self, n: int) -> List[PDFObject]:
         if n == 0:
             return []
@@ -248,38 +305,41 @@ class LazyInterpreter:
                 if co is not None:
                     yield co
             elif isinstance(obj, PSKeyword):
-                if obj in self._dispatch:
-                    method, nargs = self._dispatch[obj]
-                    co = None
-                    if nargs:
-                        args = self.pop(nargs)
-                        if len(args) != nargs:
-                            log.warning(
-                                "Insufficient arguments (%d) for operator: %r",
-                                len(args),
-                                obj,
-                            )
-                        else:
-                            try:
-                                co = method(*args)
-                            except TypeError as e:
-                                log.warning(
-                                    "Incorrect type of arguments(%r) for operator %r: %s",
-                                    args,
-                                    obj,
-                                    e,
-                                )
-                    else:
-                        co = method()
-                    if co is not None:
-                        yield co
-                    if isinstance(co, TextObject):
-                        self.textstate.glyph_offset = co._get_next_glyph_offset()
-                else:
-                    # TODO: This can get very verbose
-                    log.warning("Unknown operator: %r", obj)
+                co = self.operate(obj)
+                if co is not None:
+                    yield co
+                if isinstance(co, TextObject):
+                    self.textstate.glyph_offset = co._get_next_glyph_offset()
             else:
-                self.push(obj)
+                self.argstack.append(obj)
+
+    def operate(self, obj: PSKeyword) -> Union[ContentObject, None]:
+        if obj not in self._dispatch:
+            # TODO: This can get very verbose
+            log.warning("Unknown operator: %r", obj)
+            return None
+        method, nargs = self._dispatch[obj]
+        if nargs == 0:
+            return method()
+        args = self.pop(nargs)
+        if len(args) != nargs:
+            log.warning(
+                "Insufficient arguments (%d) for operator: %r",
+                len(args),
+                obj,
+            )
+            return None
+        else:
+            try:
+                return method(*args)
+            except TypeError as e:
+                log.warning(
+                    "Incorrect type of arguments(%r) for operator %r: %s",
+                    args,
+                    obj,
+                    e,
+                )
+                return None
 
     def create(self, object_class, **kwargs) -> Union[ContentObject, None]:
         return object_class(
@@ -1030,6 +1090,22 @@ class Type3Interpreter(LazyInterpreter):
 
     width: float = 1000
     bbox: Rect
+
+    def __init__(
+        self,
+        page: "Page",
+        contents: Iterable[PDFObject],
+        resources: Union[Dict, None] = None,
+        ctm: Union[Matrix, None] = None,
+        gstate: Union[GraphicState, None] = None,
+        parent_key: Union[int, None] = None,
+        ignore_colours: bool = False,
+    ) -> None:
+        super().__init__(
+            page, contents, resources, ctm, gstate, parent_key, ignore_colours
+        )
+        self._dispatch[KWD(b"d0")] = (self.do_d0, 2)
+        self._dispatch[KWD(b"d1")] = (self.do_d1, 6)
 
     def do_d0(self, wx: float, wy: float) -> None:
         """Simple Type3 font metrics operator."""

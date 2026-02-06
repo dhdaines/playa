@@ -89,8 +89,6 @@ parallel = true
 dependencies = [ "cryptography" ]
 
 [tool.hatch.envs.benchmark]
-# Do not use editable install because of mypyc's .so droppings
-dev-mode = false
 extra-dependencies = [ "pdfminer.six" ]
 
 [tool.hatch.envs.benchmark.scripts]
@@ -113,15 +111,10 @@ bench = [
 python = ["3.10", "3.11", "3.12", "3.13", "3.14"]
 
 [tool.hatch.envs.benchmark-mypyc]
-# Do not use editable install (but we get .so droppings anyway)
-dev-mode = false
 template = "benchmark"
 
 [tool.hatch.envs.benchmark-mypyc.env-vars]
 HATCH_BUILD_HOOK_ENABLE_MYPYC = "1"
-
-[[tool.hatch.envs.benchmark-mypyc.matrix]]
-python = ["3.10", "3.11", "3.12", "3.13", "3.14"]
 
 [tool.hatch.envs.docs]
 dependencies = [
@@ -165,6 +158,7 @@ include = [
     "playa/encodingdb.py",
     "playa/glyphlist.py",
     "playa/image.py",
+    "playa/interp.py",
     "playa/lzw.py",
     "playa/miner.py",
     "playa/parser.py",
@@ -178,7 +172,6 @@ include = [
     # "playa/cmapdb.py",
     # "playa/fontprogram.py",
     # "playa/font.py",
-    # "playa/interp.py",
     # These shouldn't compile as they are just data
     # "playa/encodings.py",
     # "playa/fontmetrics.py",
