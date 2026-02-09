@@ -93,7 +93,7 @@ LEXER: Final = re.compile(
       (?P<whitespace> \s+)
     | (?P<comment> %[^\r\n]*[\r\n])
     | (?P<name> /(?: \#[A-Fa-f\d][A-Fa-f\d] | [^#/%\[\]()<>{}\s])* )
-    | (?P<number> [-+]? (?: \d+\.\d* | \.?\d+ ) )
+    | (?P<number> [+-]? (?: \. \d+ | \d+ (?: \. \d* )?))
     | (?P<keyword> [A-Za-z] [^#/%\[\]()<>{}\s]*)
     | (?P<startstr> \([^()\\]*)
     | (?P<hexstr> <[A-Fa-f\d\s]*>)
