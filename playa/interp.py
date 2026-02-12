@@ -315,8 +315,6 @@ class LazyInterpreter:
 
     def operate(self, obj: PSKeyword) -> Union[ContentObject, None]:
         if obj not in self._dispatch:
-            # TODO: This can get very verbose
-            log.warning("Unknown operator: %r", obj)
             return None
         method, nargs = self._dispatch[obj]
         if nargs == 0:
