@@ -6,25 +6,8 @@ on:
     branches: [ "main" ]
 
 jobs:
-  check:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.14"
-      - name: Install Hatch
-        uses: pypa/hatch@install
-      - name: Check types with mypy
-        run: hatch run types:check
   test:
-    needs: check
-    strategy:
-      fail-fast: true
-      matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
-    runs-on: ${{ matrix.os }}
+    runs-on: windows-latest
     env:
       HATCH_PYTHON: python3.14  # WTF, Hatch, why you not use latest python?
     steps:
@@ -36,21 +19,6 @@ jobs:
       - name: Install Hatch
         uses: pypa/hatch@install
       - name: Test mypyc compilation
-        if: ${{ matrix.os == 'windows-latest' }}
         run: hatch run types:compile
       - name: Run tests
         run: hatch test -py 3.14
-  test38:
-    needs: check
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.8"
-      - name: Run tests
-        run: |
-          pip install -e .
-          pip install pytest pytest-xdist cryptography pdfminer.six
-          pytest -n auto

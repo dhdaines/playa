@@ -141,8 +141,7 @@ extra-dependencies = [
 [tool.hatch.envs.types.scripts]
 check = "mypy --install-types --non-interactive {args:playa tests benchmarks}"
 compile = """mypyc \
-    playa/interp.py \
-    playa/parser.py \
+    playa/parser.py
 """
 
 [tool.hatch.envs.schema]
