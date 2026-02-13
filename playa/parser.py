@@ -224,10 +224,12 @@ class Lexer(Iterator[Tuple[int, Token]]):
                     # By far the most common situation!
                     break
                 parts.append(m[0])
-            elif m.lastgroup == "parenleft":
+                continue
+            if m.lastgroup == "parenleft":
                 parts.append(m[0])
                 paren += 1
-            elif m.lastgroup == "escape":
+                continue
+            if m.lastgroup == "escape":
                 c = m[0][1]
                 if c not in ESC_STRING:
                     # PDF 1.7 sec 7.3.4.2: If the character following
@@ -236,7 +238,8 @@ class Lexer(Iterator[Tuple[int, Token]]):
                     parts.append(bytes((c,)))
                 else:
                     parts.append(ESC_STRING[c])
-            elif m.lastgroup == "octal":
+                continue
+            if m.lastgroup == "octal":
                 chrcode = int(m[0][1:], 8)
                 if chrcode >= 256:
                     # PDF1.7 p.16: "high-order overflow shall be
@@ -244,12 +247,12 @@ class Lexer(Iterator[Tuple[int, Token]]):
                     log.warning("Invalid octal %r (%d)", m[0][1:], chrcode)
                 else:
                     parts.append(bytes((chrcode,)))
-            elif m.lastgroup == "newline":
+                continue
+            if m.lastgroup == "newline":
                 # Handle nonsense CRLF conversion in strings (PDF 1.7, p.15)
                 parts.append(b"\n")
-            elif m.lastgroup == "linebreak":
-                pass
-            else:
+                continue
+            if m.lastgroup != "linebreak":
                 parts.append(m[0])
         if paren != 0:
             log.warning("Unterminated string at %d", self.pos)
