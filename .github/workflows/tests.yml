@@ -36,7 +36,7 @@ jobs:
       - name: Install Hatch
         uses: pypa/hatch@install
       - name: Test mypyc compilation
-        if: ${{ matrix.os != 'windows-latest' }}
+        if: ${{ matrix.os == 'windows-latest' }}
         run: hatch run types:compile
       - name: Run tests
         run: hatch test -py 3.14
