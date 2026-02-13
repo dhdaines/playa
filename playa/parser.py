@@ -1,8 +1,4 @@
-"""PDF lexer and parser
-
-Danger: API subject to change.
-    These APIs are unstable and subject to revision before PLAYA 1.0.
-"""
+"""PDF lexer and parser."""
 
 import logging
 import mmap
