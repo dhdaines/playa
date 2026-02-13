@@ -134,11 +134,31 @@ publish = "mike deploy --push --update-aliases $(playa --version) latest"
 [tool.hatch.envs.types]
 extra-dependencies = [
   "mypy[mypyc]>=1.0.0",
+  "setuptools>=77",  # Will not work on Python 3.8! WTF!
   "pdfminer.six",
   "pytest",
 ]
 [tool.hatch.envs.types.scripts]
 check = "mypy --install-types --non-interactive {args:playa tests benchmarks}"
+compile = """mypyc \
+    playa/arcfour.py \
+    playa/ccitt.py \
+    playa/color.py \
+    playa/data_structures.py \
+    playa/encodingdb.py \
+    playa/glyphlist.py \
+    playa/image.py \
+    playa/interp.py \
+    playa/lzw.py \
+    playa/miner.py \
+    playa/parser.py \
+    playa/pdftypes.py \
+    playa/runlength.py \
+    playa/security.py \
+    playa/utils.py \
+    playa/xref.py \
+    playa/_saslprep.py
+"""
 
 [tool.hatch.envs.schema]
 extra-dependencies = [ "pydantic > 2" ]
