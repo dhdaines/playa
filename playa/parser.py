@@ -200,7 +200,7 @@ class Lexer(Iterator[Tuple[int, Token]]):
             return (self._curtokenpos, KEYWORD_DICT_END)
         if m.lastgroup == "startstr":
             return self._parse_endstr(
-                self.data[self._curtokenpos + 1 : self.pos], self.pos
+                self.data[self._curtokenpos + 1 : self.pos]
             )
         if m.lastgroup == "hexstr":
             self._curtoken = SPC.sub(b"", self._curtoken[1:-1])
@@ -210,12 +210,15 @@ class Lexer(Iterator[Tuple[int, Token]]):
         # Anything else is treated as a keyword (whether explicitly matched or not)
         return (self._curtokenpos, KWD(self._curtoken))
 
-    def _parse_endstr(self, start: bytes, pos: int) -> Tuple[int, Token]:
+    def _parse_endstr(self, start: bytes) -> Tuple[int, Token]:
         """Parse the remainder of a string."""
         # Handle nonsense CRLF conversion in strings (PDF 1.7, p.15)
         parts = [EOLR.sub(b"\n", start)]
         paren = 1
-        for m in STRLEXER.finditer(self.data, pos):
+        while True:
+            m = STRLEXER.match(self.data, self.pos)
+            if m is None:  # can only happen at EOS
+                break
             self.pos = m.end()
             if m.lastgroup == "parenright":
                 paren -= 1
@@ -251,7 +254,7 @@ class Lexer(Iterator[Tuple[int, Token]]):
             else:
                 parts.append(m[0])
         if paren != 0:
-            log.warning("Unterminated string at %d", pos)
+            log.warning("Unterminated string at %d", self.pos)
             raise StopIteration
         return (self._curtokenpos, b"".join(parts))
 
