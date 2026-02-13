@@ -9,12 +9,14 @@ from typing import (
     TYPE_CHECKING,
     Any,
     Callable,
+    Collection,
     Dict,
     Iterable,
     Iterator,
     List,
     Mapping,
     Tuple,
+    Type,
     Union,
 )
 
@@ -155,6 +157,8 @@ class LazyInterpreter:
         gstate: Union[GraphicState, None] = None,
         parent_key: Union[int, None] = None,
         ignore_colours: bool = False,
+        filter: Union[Collection[Type[ContentObject]], None] = None,
+        restrict: Union[Collection[PSKeyword], None] = None,
     ) -> None:
         self._dispatch: Dict[PSKeyword, Tuple[Callable, int]] = {
             KWD(b"B"): (self.do_B, 0),
@@ -229,6 +233,8 @@ class LazyInterpreter:
             KWD(b"w"): (self.do_w, 1),
             KWD(b"y"): (self.do_y, 4),
         }
+        self.filter = filter
+        self.restrict = restrict
         self.page = page
         self.parent_key = (
             page.attrs.get("StructParents") if parent_key is None else parent_key
@@ -255,7 +261,8 @@ class LazyInterpreter:
                 continue
             if k == "ProcSet":
                 continue
-            # PDF 2.0, sec 7.8.3, Table 34, ProcSet is an array, everything else are dictionaries
+            # PDF 2.0, sec 7.8.3, Table 34, ProcSet is an array,
+            # everything else are dictionaries
             if not isinstance(mapping, dict):
                 log.warning("%s mapping not a dict: %r", k, mapping)
                 continue
@@ -307,7 +314,8 @@ class LazyInterpreter:
             elif isinstance(obj, PSKeyword):
                 co = self.operate(obj)
                 if co is not None:
-                    yield co
+                    if self.filter is None or isinstance(co, tuple(self.filter)):
+                        yield co
                 if isinstance(co, TextObject):
                     self.textstate.glyph_offset = co._get_next_glyph_offset()
             else:
@@ -317,6 +325,9 @@ class LazyInterpreter:
         if obj not in self._dispatch:
             return None
         method, nargs = self._dispatch[obj]
+        if self.restrict is not None and obj not in self.restrict:
+            self.pop(nargs)
+            return None
         if nargs == 0:
             return method()
         args = self.pop(nargs)
@@ -340,6 +351,8 @@ class LazyInterpreter:
                 return None
 
     def create(self, object_class, **kwargs) -> Union[ContentObject, None]:
+        if self.filter is not None and object_class not in self.filter:
+            return None
         return object_class(
             _pageref=self.page.pageref,
             _parentkey=self.parent_key,

@@ -9,6 +9,7 @@ import textwrap
 from dataclasses import dataclass
 from typing import (
     TYPE_CHECKING,
+    Collection,
     Dict,
     Iterable,
     Iterator,
@@ -38,8 +39,10 @@ from playa.parser import ContentParser, Lexer, PDFObject, Token
 from playa.pdftypes import (
     MATRIX_IDENTITY,
     ContentStream,
+    KWD,
     Matrix,
     PSLiteral,
+    PSKeyword,
     Point,
     Rect,
     dict_value,
@@ -62,7 +65,34 @@ log = logging.getLogger(__name__)
 
 # some predefined literals and keywords.
 DeviceSpace = Literal["page", "screen", "default", "user"]
-CO = TypeVar("CO")
+CO = TypeVar("CO", bound=ContentObject)
+TEXT_OPERATORS = {
+    KWD(b"Do"),
+    KWD(b"BMC"),
+    KWD(b"BDC"),
+    KWD(b"EMC"),
+    KWD(b"q"),
+    KWD(b"Q"),
+    KWD(b"cm"),
+    KWD(b"gs"),
+    KWD(b"BT"),
+    KWD(b"ET"),
+    KWD(b"TJ"),
+    KWD(b"Tj"),
+    KWD(b"'"),
+    KWD(b'"'),
+    KWD(b"Tc"),
+    KWD(b"Tw"),
+    KWD(b"Tz"),
+    KWD(b"TL"),
+    KWD(b"Tf"),
+    KWD(b"Tr"),
+    KWD(b"Ts"),
+    KWD(b"Td"),
+    KWD(b"TD"),
+    KWD(b"Tm"),
+    KWD(b"T*"),
+}
 
 
 class Page:
@@ -264,7 +294,15 @@ class Page:
 
     def __iter__(self) -> Iterator["ContentObject"]:
         """Iterator over lazy layout objects."""
-        return iter(LazyInterpreter(self, self._contents))
+        return self.interp()
+
+    def interp(
+        self,
+        filter: Union[Collection[Type[ContentObject]], None] = None,
+        restrict: Union[Collection[PSKeyword], None] = None,
+    ) -> Iterator[ContentObject]:
+        interp = LazyInterpreter(self, self._contents, filter=filter, restrict=restrict)
+        return iter(interp)
 
     @property
     def paths(self) -> Iterator["PathObject"]:
@@ -429,12 +467,27 @@ class Page:
     @overload
     def flatten(self, filter_class: Type[CO]) -> Iterator[CO]: ...
 
+    @overload
     def flatten(
-        self, filter_class: Union[None, Type[CO]] = None
+        self, filter_class: Type[CO], restrict_keywords: Collection[PSKeyword]
+    ) -> Iterator[CO]: ...
+
+    def flatten(
+        self,
+        filter_class: Union[None, Type[CO]] = None,
+        restrict_keywords: Union[Collection[PSKeyword], None] = None,
     ) -> Iterator[Union[CO, "ContentObject"]]:
         """Iterate over content objects, recursing into form XObjects."""
 
         from typing import Set
+
+        if filter_class is not None:
+            filter: Union[Set[Type[ContentObject]], None] = {
+                XObjectObject,
+                filter_class,
+            }
+        else:
+            filter = None
 
         def flatten_one(
             itor: Iterable["ContentObject"], parents: Set[int]
@@ -443,16 +496,18 @@ class Page:
                 if isinstance(obj, XObjectObject):
                     stream_id = 0 if obj.stream.objid is None else obj.stream.objid
                     if stream_id not in parents:
-                        yield from flatten_one(obj, parents | {stream_id})
+                        yield from flatten_one(
+                            obj.interp(filter=filter, restrict=restrict_keywords),
+                            parents | {stream_id},
+                        )
                 else:
                     yield obj
 
-        if filter_class is None:
-            yield from flatten_one(self, set())
-        else:
-            for obj in flatten_one(self, set()):
-                if isinstance(obj, filter_class):
-                    yield obj
+        for obj in flatten_one(
+            self.interp(filter=filter, restrict=restrict_keywords),
+            set(),
+        ):
+            yield obj
 
     def extract_text(self) -> str:
         """Do some best-effort text extraction.
@@ -492,7 +547,8 @@ class Page:
         prev_origin: Union[Point, None] = None
         lines = []
         strings: List[str] = []
-        for text in self.texts:
+        itor = self.flatten(filter_class=TextObject, restrict_keywords=TEXT_OPERATORS)
+        for text in itor:
             if text.gstate.font is None:
                 continue
             vertical = text.gstate.font.vertical
@@ -547,7 +603,8 @@ class Page:
         prev_origin: Union[Point, None] = None
         # TODO: Iteration over marked content sections and getting
         # their text, origin, and displacement, will be refactored
-        for mcs, texts in itertools.groupby(self.texts, operator.attrgetter("mcs")):
+        itor = self.flatten(filter_class=TextObject, restrict_keywords=TEXT_OPERATORS)
+        for mcs, texts in itertools.groupby(itor, operator.attrgetter("mcs")):
             text: Union[TextObject, None] = None
             # TODO: Artifact can also be a structure element, but
             # also, any content outside the structure tree is

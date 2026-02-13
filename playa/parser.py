@@ -199,9 +199,7 @@ class Lexer(Iterator[Tuple[int, Token]]):
         if m.lastgroup == "enddict":
             return (self._curtokenpos, KEYWORD_DICT_END)
         if m.lastgroup == "startstr":
-            return self._parse_endstr(
-                self.data[self._curtokenpos + 1 : self.pos]
-            )
+            return self._parse_endstr(self.data[self._curtokenpos + 1 : self.pos])
         if m.lastgroup == "hexstr":
             self._curtoken = SPC.sub(b"", self._curtoken[1:-1])
             if len(self._curtoken) % 2 == 1:
