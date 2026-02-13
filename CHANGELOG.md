@@ -1,6 +1,8 @@
 ## Unreleased
 
-- Further optimize `arcfour` and PNG predictors.
+- Further optimize `arcfour` decryption.
+- Eagerly load the cross-reference tables and catalog for multiprocess
+  operation.
 
 ## PLAYA 0.11.0: 2026-02-13
 

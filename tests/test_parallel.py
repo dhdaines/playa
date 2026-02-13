@@ -99,7 +99,7 @@ def test_map_parallel():
 
 def test_worker():
     """Ensure coverage of worker functions (even though they are tested above)."""
-    _init_worker(123456, TESTDIR / "pdf_structure.pdf")
+    _init_worker(123456, TESTDIR / "pdf_structure.pdf", "", {})
     pdf1 = _get_document()
     assert pdf1
     assert in_worker()
@@ -117,7 +117,7 @@ def test_worker():
         _set_document(pdf2, 654321)
         assert _get_document() is pdf2
     with open(TESTDIR / "image_structure.pdf", "rb") as fh:
-        _init_worker_buffer(654321, fh.read())
+        _init_worker_buffer(654321, fh.read(), "", {})
         assert _get_document()
     _set_document(None, 0)
     pdf3 = playa.open(TESTDIR / "image_structure.pdf")
