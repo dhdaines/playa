@@ -143,7 +143,7 @@ class FontMapping(Mapping[str, Font]):
         return self._fontmap[fontid]
 
 
-class LazyInterpreter:
+class LazyInterpreter(Iterator[ContentObject]):
     """Interpret the page yielding lazy objects."""
 
     ctm: Matrix
@@ -243,6 +243,8 @@ class LazyInterpreter:
         self.ignore_colours = ignore_colours
         self.init_resources(page, page.resources if resources is None else resources)
         self.init_state(page.ctm if ctm is None else ctm, gstate)
+        self.parser = ContentParser(contents, page.doc)
+        self._prev_text: Union[TextObject, None] = None
 
     def init_resources(self, page: "Page", resources: Dict) -> None:
         """Prepare the fonts and XObjects listed in the Resource attribute."""
@@ -300,24 +302,30 @@ class LazyInterpreter:
         del self.argstack[-n:]
         return x
 
-    def __iter__(self) -> Iterator[ContentObject]:
-        parser = ContentParser(self.contents, self.page.doc)
-        for _, obj in parser:
+    def __next__(self) -> ContentObject:
+        while True:
+            # Update glyph offset (used to be done with a coroutine)
+            if self._prev_text is not None:
+                self.textstate.glyph_offset = self._prev_text._get_next_glyph_offset()
+                self._prev_text = None
+            _, obj = next(self.parser)
             # These are handled inside the parser as they don't obey
             # the normal syntax rules (PDF 1.7 sec 8.9.7)
             if isinstance(obj, InlineImage):
                 co = self.do_EI(obj)
                 if co is not None:
-                    yield co
-            elif isinstance(obj, PSKeyword):
+                    return co
+                continue
+            if isinstance(obj, PSKeyword):
                 co = self.operate(obj)
                 if co is not None:
+                    # Store a TextObject to update text state if we return
+                    if isinstance(co, TextObject):
+                        self._prev_text = co
                     if self.filter is None or isinstance(co, tuple(self.filter)):
-                        yield co
-                if isinstance(co, TextObject):
-                    self.textstate.glyph_offset = co._get_next_glyph_offset()
-            else:
-                self.argstack.append(obj)
+                        return co
+                continue
+            self.argstack.append(obj)
 
     def operate(self, obj: PSKeyword) -> Union[ContentObject, None]:
         if obj not in self._dispatch:

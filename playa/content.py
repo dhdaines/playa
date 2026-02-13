@@ -543,7 +543,7 @@ class XObjectObject(ContentObject):
     ) -> Iterator[ContentObject]:
         from playa.interp import LazyInterpreter
 
-        interp = LazyInterpreter(
+        return LazyInterpreter(
             self.page,
             [self.stream],
             self.resources,
@@ -557,7 +557,6 @@ class XObjectObject(ContentObject):
             filter=filter,
             restrict=restrict,
         )
-        return iter(interp)
 
     def __iter__(self) -> Iterator[ContentObject]:
         return self.interp()

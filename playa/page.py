@@ -301,8 +301,7 @@ class Page:
         filter: Union[Collection[Type[ContentObject]], None] = None,
         restrict: Union[Collection[PSKeyword], None] = None,
     ) -> Iterator[ContentObject]:
-        interp = LazyInterpreter(self, self._contents, filter=filter, restrict=restrict)
-        return iter(interp)
+        return LazyInterpreter(self, self._contents, filter=filter, restrict=restrict)
 
     @property
     def paths(self) -> Iterator["PathObject"]:
