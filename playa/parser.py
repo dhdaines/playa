@@ -1,4 +1,8 @@
-"""PDF lexer and parser."""
+"""PDF lexer and parser
+
+Danger: API subject to change.
+    These APIs are unstable and subject to revision before PLAYA 1.0.
+"""
 
 import logging
 import mmap
@@ -116,7 +120,6 @@ HEXDIGIT: Final = re.compile(rb"#([A-Fa-f\d][A-Fa-f\d])")
 EOLR: Final = re.compile(rb"\r\n?|\n")
 SPC: Final = re.compile(rb"\s")
 WSR: Final = re.compile(rb"\s+")
-DOT: Final[int] = ord(b".")
 
 
 class Lexer(Iterator[Tuple[int, Token]]):
@@ -168,64 +171,61 @@ class Lexer(Iterator[Tuple[int, Token]]):
                 raise StopIteration
             self._curtokenpos = self.pos
             self.pos = m.end()
-            if m.lastgroup not in ("whitespace", "comment"):
+            if m.lastgroup not in ("whitespace", "comment"):  # type: ignore
                 # Okay, we got a token or something
                 break
         self._curtoken = m[0]
-        if m.lastgroup == "number":
-            if DOT in self._curtoken:
-                return (self._curtokenpos, float(self._curtoken))
-            else:
-                return (self._curtokenpos, int(self._curtoken))
-        if m.lastgroup == "keyword":
-            if self._curtoken == b"true":
-                return (self._curtokenpos, True)
-            if self._curtoken == b"false":
-                return (self._curtokenpos, False)
-            return (self._curtokenpos, KWD(self._curtoken))
-        if m.lastgroup == "name":
+        if m.lastgroup == "name":  # type: ignore
             self._curtoken = m[0][1:]
             self._curtoken = HEXDIGIT.sub(
                 lambda x: bytes((int(x[1], 16),)), self._curtoken
             )
             tok = LIT(name_str(self._curtoken))
             return (self._curtokenpos, tok)
-        if m.lastgroup == "startdict":
+        if m.lastgroup == "number":  # type: ignore
+            DOT: Final[int] = ord(b".")
+            if DOT in self._curtoken:
+                return (self._curtokenpos, float(self._curtoken))
+            else:
+                return (self._curtokenpos, int(self._curtoken))
+        if m.lastgroup == "startdict":  # type: ignore
             return (self._curtokenpos, KEYWORD_DICT_BEGIN)
-        if m.lastgroup == "enddict":
+        if m.lastgroup == "enddict":  # type: ignore
             return (self._curtokenpos, KEYWORD_DICT_END)
-        if m.lastgroup == "startstr":
-            return self._parse_endstr(self.data[self._curtokenpos + 1 : self.pos])
-        if m.lastgroup == "hexstr":
+        if m.lastgroup == "startstr":  # type: ignore
+            return self._parse_endstr(
+                self.data[self._curtokenpos + 1 : self.pos], self.pos
+            )
+        if m.lastgroup == "hexstr":  # type: ignore
             self._curtoken = SPC.sub(b"", self._curtoken[1:-1])
             if len(self._curtoken) % 2 == 1:
                 self._curtoken += b"0"
             return (self._curtokenpos, unhexlify(self._curtoken))
         # Anything else is treated as a keyword (whether explicitly matched or not)
-        return (self._curtokenpos, KWD(self._curtoken))
+        if self._curtoken == b"true":
+            return (self._curtokenpos, True)
+        elif self._curtoken == b"false":
+            return (self._curtokenpos, False)
+        else:
+            return (self._curtokenpos, KWD(self._curtoken))
 
-    def _parse_endstr(self, start: bytes) -> Tuple[int, Token]:
+    def _parse_endstr(self, start: bytes, pos: int) -> Tuple[int, Token]:
         """Parse the remainder of a string."""
         # Handle nonsense CRLF conversion in strings (PDF 1.7, p.15)
         parts = [EOLR.sub(b"\n", start)]
         paren = 1
-        while True:
-            m = STRLEXER.match(self.data, self.pos)
-            if m is None:  # can only happen at EOS
-                break
+        for m in STRLEXER.finditer(self.data, pos):
             self.pos = m.end()
-            if m.lastgroup == "parenright":
+            if m.lastgroup == "parenright":  # type: ignore
                 paren -= 1
                 if paren == 0:
                     # By far the most common situation!
                     break
                 parts.append(m[0])
-                continue
-            if m.lastgroup == "parenleft":
+            elif m.lastgroup == "parenleft":  # type: ignore
                 parts.append(m[0])
                 paren += 1
-                continue
-            if m.lastgroup == "escape":
+            elif m.lastgroup == "escape":  # type: ignore
                 c = m[0][1]
                 if c not in ESC_STRING:
                     # PDF 1.7 sec 7.3.4.2: If the character following
@@ -234,8 +234,7 @@ class Lexer(Iterator[Tuple[int, Token]]):
                     parts.append(bytes((c,)))
                 else:
                     parts.append(ESC_STRING[c])
-                continue
-            if m.lastgroup == "octal":
+            elif m.lastgroup == "octal":  # type: ignore
                 chrcode = int(m[0][1:], 8)
                 if chrcode >= 256:
                     # PDF1.7 p.16: "high-order overflow shall be
@@ -243,15 +242,15 @@ class Lexer(Iterator[Tuple[int, Token]]):
                     log.warning("Invalid octal %r (%d)", m[0][1:], chrcode)
                 else:
                     parts.append(bytes((chrcode,)))
-                continue
-            if m.lastgroup == "newline":
+            elif m.lastgroup == "newline":  # type: ignore
                 # Handle nonsense CRLF conversion in strings (PDF 1.7, p.15)
                 parts.append(b"\n")
-                continue
-            if m.lastgroup != "linebreak":
+            elif m.lastgroup == "linebreak":  # type: ignore
+                pass
+            else:
                 parts.append(m[0])
         if paren != 0:
-            log.warning("Unterminated string at %d", self.pos)
+            log.warning("Unterminated string at %d", pos)
             raise StopIteration
         return (self._curtokenpos, b"".join(parts))
 

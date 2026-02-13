@@ -9,14 +9,12 @@ from typing import (
     TYPE_CHECKING,
     Any,
     Callable,
-    Collection,
     Dict,
     Iterable,
     Iterator,
     List,
     Mapping,
     Tuple,
-    Type,
     Union,
 )
 
@@ -143,7 +141,7 @@ class FontMapping(Mapping[str, Font]):
         return self._fontmap[fontid]
 
 
-class LazyInterpreter(Iterator[ContentObject]):
+class LazyInterpreter:
     """Interpret the page yielding lazy objects."""
 
     ctm: Matrix
@@ -157,8 +155,6 @@ class LazyInterpreter(Iterator[ContentObject]):
         gstate: Union[GraphicState, None] = None,
         parent_key: Union[int, None] = None,
         ignore_colours: bool = False,
-        filter: Union[Collection[Type[ContentObject]], None] = None,
-        restrict: Union[Collection[PSKeyword], None] = None,
     ) -> None:
         self._dispatch: Dict[PSKeyword, Tuple[Callable, int]] = {
             KWD(b"B"): (self.do_B, 0),
@@ -233,8 +229,6 @@ class LazyInterpreter(Iterator[ContentObject]):
             KWD(b"w"): (self.do_w, 1),
             KWD(b"y"): (self.do_y, 4),
         }
-        self.filter = filter
-        self.restrict = restrict
         self.page = page
         self.parent_key = (
             page.attrs.get("StructParents") if parent_key is None else parent_key
@@ -243,8 +237,6 @@ class LazyInterpreter(Iterator[ContentObject]):
         self.ignore_colours = ignore_colours
         self.init_resources(page, page.resources if resources is None else resources)
         self.init_state(page.ctm if ctm is None else ctm, gstate)
-        self.parser = ContentParser(contents, page.doc)
-        self._prev_text: Union[TextObject, None] = None
 
     def init_resources(self, page: "Page", resources: Dict) -> None:
         """Prepare the fonts and XObjects listed in the Resource attribute."""
@@ -263,8 +255,7 @@ class LazyInterpreter(Iterator[ContentObject]):
                 continue
             if k == "ProcSet":
                 continue
-            # PDF 2.0, sec 7.8.3, Table 34, ProcSet is an array,
-            # everything else are dictionaries
+            # PDF 2.0, sec 7.8.3, Table 34, ProcSet is an array, everything else are dictionaries
             if not isinstance(mapping, dict):
                 log.warning("%s mapping not a dict: %r", k, mapping)
                 continue
@@ -298,48 +289,39 @@ class LazyInterpreter(Iterator[ContentObject]):
         self.mcstack: Tuple[MarkedContent, ...] = ()
 
     def pop(self, n: int) -> List[PDFObject]:
+        if n == 0:
+            return []
         x = self.argstack[-n:]
-        del self.argstack[-n:]
+        self.argstack = self.argstack[:-n]
         return x
 
-    def __next__(self) -> ContentObject:
-        while True:
-            # Update glyph offset (used to be done with a coroutine)
-            if self._prev_text is not None:
-                self.textstate.glyph_offset = self._prev_text._get_next_glyph_offset()
-                self._prev_text = None
-            _, obj = next(self.parser)
+    def __iter__(self) -> Iterator[ContentObject]:
+        parser = ContentParser(self.contents, self.page.doc)
+        for _, obj in parser:
             # These are handled inside the parser as they don't obey
             # the normal syntax rules (PDF 1.7 sec 8.9.7)
             if isinstance(obj, InlineImage):
                 co = self.do_EI(obj)
                 if co is not None:
-                    return co
-                continue
-            if isinstance(obj, PSKeyword):
+                    yield co
+            elif isinstance(obj, PSKeyword):
                 co = self.operate(obj)
                 if co is not None:
-                    # Store a TextObject to update text state if we return
-                    if isinstance(co, TextObject):
-                        self._prev_text = co
-                    if self.filter is None or isinstance(co, tuple(self.filter)):
-                        return co
-                continue
-            self.argstack.append(obj)
+                    yield co
+                if isinstance(co, TextObject):
+                    self.textstate.glyph_offset = co._get_next_glyph_offset()
+            else:
+                self.argstack.append(obj)
 
     def operate(self, obj: PSKeyword) -> Union[ContentObject, None]:
         if obj not in self._dispatch:
+            # TODO: This can get very verbose
+            log.warning("Unknown operator: %r", obj)
             return None
         method, nargs = self._dispatch[obj]
-        if self.restrict is not None and obj not in self.restrict:
-            # We don't care about the args at all!
-            del self.argstack[-nargs:]
-            return None
         if nargs == 0:
             return method()
-        # Avoid self.pop() here in the fast path
-        args = self.argstack[-nargs:]
-        del self.argstack[-nargs:]
+        args = self.pop(nargs)
         if len(args) != nargs:
             log.warning(
                 "Insufficient arguments (%d) for operator: %r",
@@ -360,8 +342,6 @@ class LazyInterpreter(Iterator[ContentObject]):
                 return None
 
     def create(self, object_class, **kwargs) -> Union[ContentObject, None]:
-        if self.filter is not None and object_class not in self.filter:
-            return None
         return object_class(
             _pageref=self.page.pageref,
             _parentkey=self.parent_key,

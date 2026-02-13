@@ -43,6 +43,7 @@ def test_iter(caplog) -> None:
             pass
     assert "Insufficient arguments" in caplog.text
     assert "Incorrect type" in caplog.text
+    assert "Unknown operator" in caplog.text
     assert "Undefined xobject" in caplog.text
     assert "invalid xobject" in caplog.text
     assert "Unsupported XObject" in caplog.text

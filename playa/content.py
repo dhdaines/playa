@@ -10,7 +10,6 @@ from copy import copy
 from dataclasses import dataclass
 from typing import (
     TYPE_CHECKING,
-    Collection,
     Dict,
     Iterable,
     Iterator,
@@ -21,7 +20,6 @@ from typing import (
     Sequence,
     Sized,
     Tuple,
-    Type,
     Union,
     overload,
 )
@@ -43,7 +41,6 @@ from playa.pdftypes import (
     Matrix,
     PDFObject,
     Point,
-    PSKeyword,
     PSLiteral,
     Rect,
     dict_value,
@@ -536,14 +533,10 @@ class XObjectObject(ContentObject):
         for pos, obj in ContentParser([self.stream], self.doc):
             yield obj
 
-    def interp(
-        self,
-        filter: Union[Collection[Type[ContentObject]], None] = None,
-        restrict: Union[Collection[PSKeyword], None] = None,
-    ) -> Iterator[ContentObject]:
+    def __iter__(self) -> Iterator[ContentObject]:
         from playa.interp import LazyInterpreter
 
-        return LazyInterpreter(
+        interp = LazyInterpreter(
             self.page,
             [self.stream],
             self.resources,
@@ -554,12 +547,8 @@ class XObjectObject(ContentObject):
             # there to be any marked content sections inside it so
             # this should never get accessed anyway.
             parent_key=self._parentkey,
-            filter=filter,
-            restrict=restrict,
         )
-
-    def __iter__(self) -> Iterator[ContentObject]:
-        return self.interp()
+        return iter(interp)
 
     @property
     def parent(self) -> Union["Element", None]:
