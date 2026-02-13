@@ -157,8 +157,8 @@ class LazyInterpreter(Iterator[ContentObject]):
         gstate: Union[GraphicState, None] = None,
         parent_key: Union[int, None] = None,
         ignore_colours: bool = False,
-        filter: Union[Collection[Type[ContentObject]], None] = None,
-        restrict: Union[Collection[PSKeyword], None] = None,
+        filter_classes: Union[Collection[Type[ContentObject]], None] = None,
+        restrict_ops: Union[Collection[PSKeyword], None] = None,
     ) -> None:
         self._dispatch: Dict[PSKeyword, Tuple[Callable, int]] = {
             KWD(b"B"): (self.do_B, 0),
@@ -233,8 +233,8 @@ class LazyInterpreter(Iterator[ContentObject]):
             KWD(b"w"): (self.do_w, 1),
             KWD(b"y"): (self.do_y, 4),
         }
-        self.filter = filter
-        self.restrict = restrict
+        self.filter_classes = filter_classes
+        self.restrict_ops = restrict_ops
         self.page = page
         self.parent_key = (
             page.attrs.get("StructParents") if parent_key is None else parent_key
@@ -322,7 +322,9 @@ class LazyInterpreter(Iterator[ContentObject]):
                     # Store a TextObject to update text state if we return
                     if isinstance(co, TextObject):
                         self._prev_text = co
-                    if self.filter is None or isinstance(co, tuple(self.filter)):
+                    if self.filter_classes is None or isinstance(
+                        co, tuple(self.filter_classes)
+                    ):
                         return co
                 continue
             self.argstack.append(obj)
@@ -331,7 +333,7 @@ class LazyInterpreter(Iterator[ContentObject]):
         if obj not in self._dispatch:
             return None
         method, nargs = self._dispatch[obj]
-        if self.restrict is not None and obj not in self.restrict:
+        if self.restrict_ops is not None and obj not in self.restrict_ops:
             # We don't care about the args at all!
             del self.argstack[-nargs:]
             return None
@@ -360,7 +362,7 @@ class LazyInterpreter(Iterator[ContentObject]):
                 return None
 
     def create(self, object_class, **kwargs) -> Union[ContentObject, None]:
-        if self.filter is not None and object_class not in self.filter:
+        if self.filter_classes is not None and object_class not in self.filter_classes:
             return None
         return object_class(
             _pageref=self.page.pageref,
