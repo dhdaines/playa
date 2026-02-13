@@ -296,10 +296,8 @@ class LazyInterpreter:
         self.mcstack: Tuple[MarkedContent, ...] = ()
 
     def pop(self, n: int) -> List[PDFObject]:
-        if n == 0:
-            return []
         x = self.argstack[-n:]
-        self.argstack = self.argstack[:-n]
+        del self.argstack[-n:]
         return x
 
     def __iter__(self) -> Iterator[ContentObject]:
@@ -326,11 +324,14 @@ class LazyInterpreter:
             return None
         method, nargs = self._dispatch[obj]
         if self.restrict is not None and obj not in self.restrict:
-            self.pop(nargs)
+            # We don't care about the args at all!
+            del self.argstack[-nargs:]
             return None
         if nargs == 0:
             return method()
-        args = self.pop(nargs)
+        # Avoid self.pop() here in the fast path
+        args = self.argstack[-nargs:]
+        del self.argstack[-nargs:]
         if len(args) != nargs:
             log.warning(
                 "Insufficient arguments (%d) for operator: %r",
