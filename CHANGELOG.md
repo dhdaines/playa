@@ -1,3 +1,7 @@
+## Unreleased
+
+- Further optimize `arcfour` and PNG predictors.
+
 ## PLAYA 0.11.0: 2026-02-13
 
 - Implement `filter_classes` and `restrict_ops` to greatly speed up
