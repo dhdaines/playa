@@ -538,8 +538,8 @@ class XObjectObject(ContentObject):
 
     def interp(
         self,
-        filter: Union[Collection[Type[ContentObject]], None] = None,
-        restrict: Union[Collection[PSKeyword], None] = None,
+        filter_classes: Union[Collection[Type[ContentObject]], None] = None,
+        restrict_ops: Union[Collection[PSKeyword], None] = None,
     ) -> Iterator[ContentObject]:
         from playa.interp import LazyInterpreter
 
@@ -554,8 +554,8 @@ class XObjectObject(ContentObject):
             # there to be any marked content sections inside it so
             # this should never get accessed anyway.
             parent_key=self._parentkey,
-            filter=filter,
-            restrict=restrict,
+            filter_classes=filter_classes,
+            restrict_ops=restrict_ops,
         )
 
     def __iter__(self) -> Iterator[ContentObject]:

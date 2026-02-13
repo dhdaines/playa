@@ -530,7 +530,7 @@ def extract_outline(doc: Document, args: argparse.Namespace) -> None:
 
 def get_images(page: Page, imgdir: Path) -> List[Tuple[Path, Image]]:
     images = []
-    itor = page.flatten(filter_class=ImageObject, restrict_keywords=IMAGE_OPERATORS)
+    itor = page.flatten(filter_class=ImageObject, restrict_ops=IMAGE_OPERATORS)
     for idx, img in enumerate(itor):
         if img.xobjid is None:
             text_bbox = ",".join(str(round(x)) for x in img.bbox)

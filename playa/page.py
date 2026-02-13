@@ -298,10 +298,15 @@ class Page:
 
     def interp(
         self,
-        filter: Union[Collection[Type[ContentObject]], None] = None,
-        restrict: Union[Collection[PSKeyword], None] = None,
+        filter_classes: Union[Collection[Type[ContentObject]], None] = None,
+        restrict_ops: Union[Collection[PSKeyword], None] = None,
     ) -> Iterator[ContentObject]:
-        return LazyInterpreter(self, self._contents, filter=filter, restrict=restrict)
+        return LazyInterpreter(
+            self,
+            self._contents,
+            filter_classes=filter_classes,
+            restrict_ops=restrict_ops,
+        )
 
     @property
     def paths(self) -> Iterator["PathObject"]:
@@ -468,25 +473,25 @@ class Page:
 
     @overload
     def flatten(
-        self, filter_class: Type[CO], restrict_keywords: Collection[PSKeyword]
+        self, filter_class: Type[CO], restrict_ops: Collection[PSKeyword]
     ) -> Iterator[CO]: ...
 
     def flatten(
         self,
         filter_class: Union[None, Type[CO]] = None,
-        restrict_keywords: Union[Collection[PSKeyword], None] = None,
+        restrict_ops: Union[Collection[PSKeyword], None] = None,
     ) -> Iterator[Union[CO, "ContentObject"]]:
         """Iterate over content objects, recursing into form XObjects."""
 
         from typing import Set
 
         if filter_class is not None:
-            filter: Union[Set[Type[ContentObject]], None] = {
+            filter_classes: Union[Set[Type[ContentObject]], None] = {
                 XObjectObject,
                 filter_class,
             }
         else:
-            filter = None
+            filter_classes = None
 
         def flatten_one(
             itor: Iterable["ContentObject"], parents: Set[int]
@@ -496,14 +501,16 @@ class Page:
                     stream_id = 0 if obj.stream.objid is None else obj.stream.objid
                     if stream_id not in parents:
                         yield from flatten_one(
-                            obj.interp(filter=filter, restrict=restrict_keywords),
+                            obj.interp(
+                                filter_classes=filter_classes, restrict_ops=restrict_ops
+                            ),
                             parents | {stream_id},
                         )
                 else:
                     yield obj
 
         for obj in flatten_one(
-            self.interp(filter=filter, restrict=restrict_keywords),
+            self.interp(filter_classes=filter_classes, restrict_ops=restrict_ops),
             set(),
         ):
             yield obj
@@ -546,7 +553,7 @@ class Page:
         prev_origin: Union[Point, None] = None
         lines = []
         strings: List[str] = []
-        itor = self.flatten(filter_class=TextObject, restrict_keywords=TEXT_OPERATORS)
+        itor = self.flatten(filter_class=TextObject, restrict_ops=TEXT_OPERATORS)
         for text in itor:
             if text.gstate.font is None:
                 continue
@@ -602,7 +609,7 @@ class Page:
         prev_origin: Union[Point, None] = None
         # TODO: Iteration over marked content sections and getting
         # their text, origin, and displacement, will be refactored
-        itor = self.flatten(filter_class=TextObject, restrict_keywords=TEXT_OPERATORS)
+        itor = self.flatten(filter_class=TextObject, restrict_ops=TEXT_OPERATORS)
         for mcs, texts in itertools.groupby(itor, operator.attrgetter("mcs")):
             text: Union[TextObject, None] = None
             # TODO: Artifact can also be a structure element, but
