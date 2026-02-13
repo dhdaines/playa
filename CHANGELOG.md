@@ -1,3 +1,11 @@
+## PLAYA 0.11.0: 2026-02-13
+
+- Implement `filter_classes` and `restrict_ops` to greatly speed up
+  text and image extraction.
+- Statically dispatch PDF operators for extra speed particularly when
+  not compiling with mypyc.
+- BREAKING CHANGE: It's now called `filter_class` in `flatten`.
+
 ## PLAYA 0.10.1: 2026-02-05
 
 - Make some types a bit stricter to satisfy mypyc
