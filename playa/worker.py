@@ -2,10 +2,10 @@
 
 import weakref
 from pathlib import Path
-from typing import TYPE_CHECKING, Tuple, Union
+from typing import TYPE_CHECKING, Any, Dict, Tuple, Union
 
 if TYPE_CHECKING:
-    from playa.document import DeviceSpace, Document
+    from playa.document import Document
     from playa.page import Page
 
 # Type signature of document reference
@@ -27,24 +27,26 @@ def in_worker() -> bool:
     return __pdf is not None
 
 
-def _init_worker(
-    boss: int, path: Path, password: str = "", space: "DeviceSpace" = "screen"
-) -> None:
+def _init_worker(boss: int, path: Path, password: str, props: Dict[str, Any]) -> None:
     from playa.document import Document
 
     global __pdf, GLOBAL_DOC
     fp = open(path, "rb")
-    __pdf = Document(fp, password=password, space=space, _boss_id=boss)
+    __pdf = Document(fp, password=password, _boss_id=boss)
+    for key, value in props.items():
+        setattr(__pdf, key, value)
     GLOBAL_DOC = boss
 
 
 def _init_worker_buffer(
-    boss: int, buffer: bytes, password: str = "", space: "DeviceSpace" = "screen"
+    boss: int, buffer: bytes, password: str, props: Dict[str, Any]
 ) -> None:
     from playa.document import Document
 
     global __pdf, GLOBAL_DOC
-    __pdf = Document(buffer, password=password, space=space, _boss_id=boss)
+    __pdf = Document(buffer, password=password, _boss_id=boss)
+    for key, value in props.items():
+        setattr(__pdf, key, value)
     GLOBAL_DOC = boss
 
 
