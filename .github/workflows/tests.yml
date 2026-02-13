@@ -26,7 +26,7 @@ jobs:
         os: [ubuntu-latest, windows-latest, macos-latest]
     runs-on: ${{ matrix.os }}
     env:
-      HATCH_BUILD_HOOK_ENABLE_MYPYC: 1
+      HATCH_PYTHON: python3.14  # WTF, Hatch, why you not use latest python?
     steps:
       - uses: actions/checkout@v4
       - name: Set up Python
@@ -35,6 +35,9 @@ jobs:
           python-version: "3.14"
       - name: Install Hatch
         uses: pypa/hatch@install
+      - name: Test mypyc compilation
+        if: ${{ matrix.os != 'windows-latest' }}
+        run: hatch run types:compile
       - name: Run tests
         run: hatch test -py 3.14
   test38:

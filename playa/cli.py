@@ -98,6 +98,7 @@ from playa.outline import Outline
 from playa.page import ImageObject
 from playa.pdftypes import (
     ContentStream,
+    KWD,
     ObjRef,
     resolve1,
     PDFObject,
@@ -107,6 +108,19 @@ from playa.structure import ContentObject as StructContentObject
 from playa.structure import Element
 
 LOG = logging.getLogger(__name__)
+IMAGE_OPERATORS = {
+    KWD(b"Do"),
+    KWD(b"BMC"),
+    KWD(b"BDC"),
+    KWD(b"EMC"),
+    KWD(b"q"),
+    KWD(b"Q"),
+    KWD(b"cm"),
+    KWD(b"gs"),
+    KWD(b"BI"),
+    KWD(b"ID"),
+    KWD(b"EI"),
+}
 
 
 def make_argparse() -> argparse.ArgumentParser:
@@ -516,7 +530,8 @@ def extract_outline(doc: Document, args: argparse.Namespace) -> None:
 
 def get_images(page: Page, imgdir: Path) -> List[Tuple[Path, Image]]:
     images = []
-    for idx, img in enumerate(page.flatten(ImageObject)):
+    itor = page.flatten(filter_class=ImageObject, restrict_keywords=IMAGE_OPERATORS)
+    for idx, img in enumerate(itor):
         if img.xobjid is None:
             text_bbox = ",".join(str(round(x)) for x in img.bbox)
             imgid = f"inline-{text_bbox}"
