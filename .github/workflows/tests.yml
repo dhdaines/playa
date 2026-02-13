@@ -20,5 +20,10 @@ jobs:
         uses: pypa/hatch@install
       - name: Test mypyc compilation
         run: hatch run types:compile
+      - name: Save failed artifats
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          path: build
       - name: Run tests
         run: hatch test -py 3.14
