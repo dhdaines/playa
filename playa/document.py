@@ -875,6 +875,11 @@ class PageList(Sequence[Page]):
             }
             self._by_objid = {page.pageid: page for page in pages}
 
+    def _eager_load(self) -> None:
+        # Not for public consumption
+        if self._pages is None:
+            self._pages, self._by_label, self._by_objid = self._init_pages()
+
     def _init_pages(self) -> Tuple[List[Page], Dict[str, Page], Dict[int, Page]]:
         pages: List[Page] = []
         by_label: Dict[str, Page] = {}

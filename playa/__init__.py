@@ -90,11 +90,25 @@ def open(
     pdf = Document(fp, password=password, space=space)
     pdf._fp = fp
     if max_workers is None or max_workers > 1:
+        # Eagerly load a few things
+        catalog = pdf.catalog
+        xrefs = pdf.xrefs
+        pages = pdf.pages
         pdf._pool = ProcessPoolExecutor(
             max_workers=max_workers,
             mp_context=mp_context,
             initializer=_init_worker,  # type: ignore[arg-type]
-            initargs=(id(pdf), path, password, space),  # type: ignore[arg-type]
+            initargs=(  # type: ignore[arg-type]
+                id(pdf),
+                path,
+                password,
+                {
+                    "space": space,
+                    "_catalog": catalog,
+                    "_xrefs": xrefs,
+                    "_pages": pages,
+                },
+            ),
         )
     return pdf
 
@@ -131,10 +145,24 @@ def parse(
     """
     pdf = Document(buffer, password=password, space=space)
     if max_workers is None or max_workers > 1:
+        # Eagerly load a few things
+        catalog = pdf.catalog
+        xrefs = pdf.xrefs
+        pages = pdf.pages
         pdf._pool = ProcessPoolExecutor(
             max_workers=max_workers,
             mp_context=mp_context,
             initializer=_init_worker_buffer,  # type: ignore[arg-type]
-            initargs=(id(pdf), buffer, password, space),  # type: ignore[arg-type]
+            initargs=(  # type: ignore[arg-type]
+                id(pdf),
+                buffer,
+                password,
+                {
+                    "space": space,
+                    "_catalog": catalog,
+                    "_xrefs": xrefs,
+                    "_pages": pages,
+                },
+            ),
         )
     return pdf
