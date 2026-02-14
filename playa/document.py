@@ -864,10 +864,13 @@ class PageList(Sequence[Page]):
     _by_objid: Union[Dict[int, Page], None] = None
 
     def __init__(
-        self, doc: Document, pages: Union[Iterable[Page], None] = None
+        self,
+        doc: Union[Document, None] = None,
+        pages: Union[Iterable[Page], None] = None,
     ) -> None:
-        self.docref = _ref_document(doc)
-        self.have_labels = doc.page_labels is not None
+        if doc is not None:
+            self.docref = _ref_document(doc)
+            self.have_labels = doc.page_labels is not None
         if pages is not None:
             self._pages = list(pages)
             self._by_label = {
