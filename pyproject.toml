@@ -98,6 +98,7 @@ bench = [
     "python benchmarks/text.py",
     "python benchmarks/objects.py",
     "python benchmarks/miner.py",
+    "python benchmarks/arcfour.py",
     "python benchmarks/ccitt_decode.py",
     "python benchmarks/png_predict.py",
     "python benchmarks/tiff_predict.py",

@@ -11,6 +11,7 @@ from typing import (
     NamedTuple,
     Optional,
     Tuple,
+    Union,
     TYPE_CHECKING,
 )
 
@@ -76,10 +77,13 @@ class XRefTable(XRef):
     plain text at the end of the file.
     """
 
-    def __init__(self, doc: "Document", pos: int = 0, offset: int = 0) -> None:
+    def __init__(
+        self, doc: Union["Document", None] = None, pos: int = 0, offset: int = 0
+    ) -> None:
         self.offsets: Dict[int, XRefPos] = {}
         self.trailer: Dict[str, PDFObject] = {}
-        self._load(ObjectParser(doc.buffer, doc, pos), offset)
+        if doc is not None:
+            self._load(ObjectParser(doc.buffer, doc, pos), offset)
 
     def _load(self, parser: ObjectParser, offset: int) -> None:
         while True:
@@ -163,12 +167,15 @@ class XRefFallback(XRef):
     cross-reference table by simply scanning the entire file to find
     all indirect objects."""
 
-    def __init__(self, doc: "Document", pos: int = 0, offset: int = 0) -> None:
+    def __init__(
+        self, doc: Union["Document", None] = None, pos: int = 0, offset: int = 0
+    ) -> None:
         self.offsets: Dict[int, XRefPos] = {}
         self.trailer: Dict[str, PDFObject] = {}
         # Create a new IndirectObjectParser without a parent document
         # to avoid endless looping
-        self._load(IndirectObjectParser(doc.buffer, doc=None, pos=pos), doc)
+        if doc is not None:
+            self._load(IndirectObjectParser(doc.buffer, doc=None, pos=pos), doc)
 
     def __repr__(self) -> str:
         return "<XRefFallback: offsets=%r>" % (self.offsets.keys())
@@ -266,7 +273,9 @@ class XRefFallback(XRef):
 class XRefStream(XRef):
     """Cross-reference stream (as of PDF 1.5)"""
 
-    def __init__(self, doc: "Document", pos: int = 0, offset: int = 0) -> None:
+    def __init__(
+        self, doc: Union["Document", None] = None, pos: int = 0, offset: int = 0
+    ) -> None:
         self.offset = offset
         self.data: Optional[bytes] = None
         self.entlen: Optional[int] = None
@@ -278,7 +287,8 @@ class XRefStream(XRef):
         # object references, we create a new IndirectObjectParser
         # here with no document to avoid trying to follow them
         # (and thus creating an infinite loop)
-        self._load(IndirectObjectParser(doc.buffer, doc=None, pos=pos), doc)
+        if doc is not None:
+            self._load(IndirectObjectParser(doc.buffer, doc=None, pos=pos), doc)
 
     def __repr__(self) -> str:
         return "<XRefStream: ranges=%r>" % (self.ranges)

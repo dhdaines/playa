@@ -1,10 +1,11 @@
 """Test parallel analysis."""
 
 import operator
-from typing import List
+from typing import Dict, List
 
 import playa
 import pytest
+from playa.pdftypes import PDFObject, PSLiteral, PSKeyword
 from playa.page import Page, XObjectObject
 from playa.worker import (
     _deref_document,
@@ -64,6 +65,31 @@ def test_parallel_references():
         assert desc["F1"].resolve()["LastChar"] == 17
 
 
+def get_props(page: Page) -> Dict[str, PDFObject]:
+    element = page.structure[0]
+    return {} if element is None else element.props
+
+
+def get_contents(page: Page) -> List[PDFObject]:
+    return list(page.contents)
+
+
+def test_parallel_symbols():
+    """Verify that literal/keyword symbols can be passed between processes."""
+    with playa.open(
+        TESTDIR / "pdf_structure.pdf", space="default", max_workers=2
+    ) as pdf:
+        props1 = [get_props(p) for p in pdf.pages]
+        props2 = list(pdf.pages.map(get_props))
+        assert isinstance(props1[0]["Type"], PSLiteral)
+        assert props1[0]["Type"] is props2[0]["Type"]
+
+        contents1 = [get_contents(p) for p in pdf.pages]
+        contents2 = list(pdf.pages.map(get_contents))
+        assert isinstance(contents1[0][3], PSKeyword)
+        assert contents1[0][3] is contents2[0][3]
+
+
 def get_xobjs(page: Page) -> List[XObjectObject]:
     return list(page.xobjects)
 
@@ -99,7 +125,7 @@ def test_map_parallel():
 
 def test_worker():
     """Ensure coverage of worker functions (even though they are tested above)."""
-    _init_worker(123456, TESTDIR / "pdf_structure.pdf")
+    _init_worker(123456, TESTDIR / "pdf_structure.pdf", "", {})
     pdf1 = _get_document()
     assert pdf1
     assert in_worker()
@@ -117,7 +143,7 @@ def test_worker():
         _set_document(pdf2, 654321)
         assert _get_document() is pdf2
     with open(TESTDIR / "image_structure.pdf", "rb") as fh:
-        _init_worker_buffer(654321, fh.read())
+        _init_worker_buffer(654321, fh.read(), "", {})
         assert _get_document()
     _set_document(None, 0)
     pdf3 = playa.open(TESTDIR / "image_structure.pdf")

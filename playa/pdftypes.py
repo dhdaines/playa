@@ -44,17 +44,22 @@ MATRIX_IDENTITY: Matrix = (1.0, 0.0, 0.0, 1.0, 0.0, 0.0)
 class PSLiteral:
     """A class that represents a PostScript literal.
 
-    Postscript literals are used as identifiers, such as
-    variable names, property names and dictionary keys.
-    Literals are case sensitive and denoted by a preceding
-    slash sign (e.g. "/Name")
-
-    Note: Do not create an instance of PSLiteral directly.
-    Always use PSLiteralTable.intern().
+    Postscript literals are used as identifiers, such as variable
+    names, property names and dictionary keys.  Literals are case
+    sensitive and denoted by a preceding slash sign (e.g. "/Name").
+    They are globally unique objects stored in PSLiteralTable.
     """
 
-    def __init__(self, name: str = "") -> None:
-        self.name = name
+    name: str
+
+    def __new__(cls, name: str) -> "PSLiteral":
+        if name not in PSLiteralTable:
+            PSLiteralTable[name] = object.__new__(cls)
+            PSLiteralTable[name].name = name
+        return PSLiteralTable[name]
+
+    def __getnewargs__(self) -> Tuple:
+        return (self.name,)
 
     def __repr__(self) -> str:
         return "/%r" % self.name
@@ -63,16 +68,22 @@ class PSLiteral:
 class PSKeyword:
     """A class that represents a PostScript keyword.
 
-    PostScript keywords are a dozen of predefined words.
-    Commands and directives in PostScript are expressed by keywords.
-    They are also used to denote the content boundaries.
-
-    Note: Do not create an instance of PSKeyword directly.
-    Always use PSKeywordTable.intern().
+    PostScript keywords are a dozen of predefined words.  Commands and
+    directives in PostScript are expressed by keywords.  They are also
+    used to denote the content boundaries.  They are globally unique
+    objects stored in PSKeywordTable.
     """
 
-    def __init__(self, name: bytes = b"") -> None:
-        self.name = name
+    name: bytes
+
+    def __new__(cls, name: bytes) -> "PSKeyword":
+        if name not in PSKeywordTable:
+            PSKeywordTable[name] = object.__new__(cls)
+            PSKeywordTable[name].name = name
+        return PSKeywordTable[name]
+
+    def __getnewargs__(self) -> Tuple:
+        return (self.name,)
 
     def __repr__(self) -> str:
         return "/%r" % self.name
@@ -82,20 +93,9 @@ class PSKeyword:
 PSLiteralTable: Final[Dict[str, PSLiteral]] = {}
 PSKeywordTable: Final[Dict[bytes, PSKeyword]] = {}
 
-
-def LIT(name: str) -> PSLiteral:
-    obj = PSLiteralTable.get(name)
-    if obj is None:
-        obj = PSLiteralTable[name] = PSLiteral(name)
-    return obj
-
-
-def KWD(name: bytes) -> PSKeyword:
-    obj = PSKeywordTable.get(name)
-    if obj is None:
-        obj = PSKeywordTable[name] = PSKeyword(name)
-    return obj
-
+# Compatibility aliases
+LIT: Final = PSLiteral
+KWD: Final = PSKeyword
 
 # Intern a bunch of important literals
 LITERAL_CRYPT: Final = LIT("Crypt")
