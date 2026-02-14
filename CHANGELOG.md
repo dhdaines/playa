@@ -3,6 +3,8 @@
 - Further optimize `arcfour` decryption.
 - Eagerly load the cross-reference tables and catalog for multiprocess
   operation.
+- Fix pickling and unpickling of `PSLiteral` and `PSKeyword` to return
+  unique objects.
 
 ## PLAYA 0.11.0: 2026-02-13
 
