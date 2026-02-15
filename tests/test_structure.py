@@ -5,8 +5,7 @@ import pytest
 import playa
 from playa.exceptions import PDFEncryptionError
 from playa.page import Annotation, ImageObject
-from playa.pdftypes import BBOX_NONE
-from playa.structure import Element, Tree, ContentItem, ContentObject
+from playa.structure import Element, Tree, ContentItem, ContentObject, LITERAL_ANNOT
 
 from .data import ALLPDFS, CONTRIB, PASSWORDS, TESTDIR, XFAILS
 
@@ -70,9 +69,9 @@ def test_annotations() -> None:
         assert pdf.structure is not None
         for link in pdf.structure.find_all("Link"):
             for kid in link:
-                if isinstance(kid, ContentObject):
+                if isinstance(kid, ContentObject) and kid.type is LITERAL_ANNOT:
                     assert isinstance(kid.obj, Annotation)
-                    assert kid.bbox is not BBOX_NONE
+                    assert kid.bbox is not None
 
 
 def test_content_xobjects() -> None:
@@ -154,19 +153,19 @@ def test_structure_bbox() -> None:
         assert pdf.structure is not None
         table = pdf.structure.find("Table")
         assert table is not None
-        assert table.bbox is not BBOX_NONE
+        assert table.bbox is not None
         li = pdf.structure.find("LI")
         assert li is not None
-        assert li.bbox is not BBOX_NONE
+        assert li.bbox is not None
         for item in li.contents:
-            assert item.bbox is not BBOX_NONE
+            assert item.bbox is not None
     with playa.open(TESTDIR / "image_structure.pdf") as pdf:
         assert pdf.structure is not None
         figure = pdf.structure.find("Figure")
         assert figure is not None
-        assert figure.bbox is not BBOX_NONE
+        assert figure.bbox is not None
         for item in figure.contents:
-            assert item.bbox is not BBOX_NONE
+            assert item.bbox is not None
 
 
 def test_content_structure() -> None:

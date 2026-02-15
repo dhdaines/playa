@@ -16,7 +16,6 @@ from typing import (
     List,
     Literal,
     Mapping,
-    Optional,
     Tuple,
     Type,
     TypeVar,
@@ -95,7 +94,7 @@ TEXT_OPERATORS = {
 }
 
 
-class Page:
+class Page(Iterable[ContentObject]):
     """An object that holds the information about a page.
 
     Args:
@@ -129,7 +128,7 @@ class Page:
         doc: "Document",
         pageid: int,
         attrs: Dict,
-        label: Optional[str],
+        label: Union[str, None],
         page_idx: int = 0,
         space: DeviceSpace = "screen",
     ) -> None:

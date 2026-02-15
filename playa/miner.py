@@ -17,7 +17,6 @@ from typing import (
     Iterable,
     Iterator,
     List,
-    Optional,
     Sequence,
     Set,
     Tuple,
@@ -292,7 +291,7 @@ class LAParams:
         char_margin: float = 2.0,
         line_margin: float = 0.5,
         word_margin: float = 0.1,
-        boxes_flow: Optional[float] = 0.5,
+        boxes_flow: Union[float, None] = 0.5,
         detect_vertical: bool = False,
         all_texts: bool = False,
     ) -> None:
@@ -906,7 +905,7 @@ class LTLayoutContainer(LTContainer[LTComponent]):
             # No initialization, for pickling purposes
             return
         super().__init__(bbox, mcstack)
-        self.groups: Optional[List[LTTextGroup]] = None
+        self.groups: Union[List[LTTextGroup], None] = None
 
     # group_objects: group text object to textlines.
     def group_objects(

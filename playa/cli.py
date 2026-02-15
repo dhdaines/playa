@@ -533,7 +533,8 @@ def get_images(page: Page, imgdir: Path) -> List[Tuple[Path, Image]]:
     itor = page.flatten(filter_class=ImageObject, restrict_ops=IMAGE_OPERATORS)
     for idx, img in enumerate(itor):
         if img.xobjid is None:
-            text_bbox = ",".join(str(round(x)) for x in img.bbox)
+            bbox = img.bbox or (0, 0, 0, 0)
+            text_bbox = ",".join(str(round(x)) for x in bbox)
             imgid = f"inline-{text_bbox}"
         else:
             imgid = re.sub(r"\W", "", img.xobjid)

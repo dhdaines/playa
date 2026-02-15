@@ -6,8 +6,9 @@ from typing import (
     Dict,
     Final,
     Iterable,
+    Iterator,
     List,
-    Optional,
+    Mapping,
     Protocol,
     Tuple,
     Union,
@@ -36,8 +37,7 @@ PDFObject = Union[
 Point = Tuple[float, float]
 Rect = Tuple[float, float, float, float]
 Matrix = Tuple[float, float, float, float, float, float]
-# These cannot be final because of https://github.com/mypyc/mypyc/issues/1183
-BBOX_NONE: Rect = (-1.0, -1.0, -1.0, -1.0)
+# Cannot be final because of https://github.com/mypyc/mypyc/issues/1183
 MATRIX_IDENTITY: Matrix = (1.0, 0.0, 0.0, 1.0, 0.0, 0.0)
 
 
@@ -153,16 +153,15 @@ def keyword_name(x: Any) -> str:
 
 
 class DecipherCallable(Protocol):
-    """Fully typed a decipher callback, with optional parameter."""
+    """Fully typed decipher callback, with optional parameter."""
 
     def __call__(
         self,
         objid: int,
         genno: int,
         data: bytes,
-        attrs: Optional[Dict[str, Any]] = None,
-    ) -> bytes:
-        raise NotImplementedError
+        attrs: Union[Dict[str, Any], None] = None,
+    ) -> bytes: ...
 
 
 class ObjRef:
@@ -399,7 +398,7 @@ def decompress_corrupted(data: bytes, bufsiz: int = 4096) -> bytes:
     return result_str
 
 
-class ContentStream:
+class ContentStream(Mapping[str, PDFObject]):
     _data: Union[bytes, None] = None
     _colorspace: Union["ColorSpace", None] = None
     objid: Union[int, None] = None
@@ -431,14 +430,17 @@ class ContentStream:
                 self.attrs,
             )
 
-    def __contains__(self, name: str) -> bool:
+    def __contains__(self, name: object) -> bool:
         return name in self.attrs
 
     def __getitem__(self, name: str) -> Any:
         return self.attrs[name]
 
-    def get(self, name: str, default: PDFObject = None) -> PDFObject:
-        return self.attrs.get(name, default)
+    def __iter__(self) -> Iterator[str]:
+        return iter(self.attrs)
+
+    def __len__(self) -> int:
+        return len(self.attrs)
 
     def get_any(self, names: Iterable[str], default: PDFObject = None) -> PDFObject:
         for name in names:

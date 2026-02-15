@@ -22,7 +22,6 @@ from typing import (
     Iterable,
     Iterator,
     List,
-    Optional,
     TextIO,
     Tuple,
     Union,
@@ -114,7 +113,7 @@ class CMap(CMapBase):
     def dump(
         self,
         out: TextIO = sys.stdout,
-        code2cid: Optional[CodeToCIDMap] = None,
+        code2cid: Union[CodeToCIDMap, None] = None,
         code: Tuple[int, ...] = (),
     ) -> None:
         if code2cid is None:
@@ -187,49 +186,48 @@ class PyUnicodeMap(UnicodeMap):
             self.cid2unichr = data["CID2UNICHR_H"]
 
 
-class CMapDB:
-    _cmap_cache: Dict[str, PyCMap] = {}
-    _umap_cache: Dict[str, List[PyUnicodeMap]] = {}
+CMAP_CACHE: Dict[str, PyCMap] = {}
+UMAP_CACHE: Dict[str, List[PyUnicodeMap]] = {}
 
-    @classmethod
-    def _load_data(cls, name: str) -> Any:
-        name = name.replace("\0", "")
-        filename = "%s.pickle.gz" % name
-        pklpath = (CMAP_DIR / filename).resolve()
-        try:
-            _ = pklpath.relative_to(CMAP_DIR)
-            with gzip.open(pklpath) as gzfile:
-                return pickle.load(gzfile)
-        except ValueError as e:
-            raise KeyError(f"Ignoring malicious or malformed CMap {name}") from e
-        except FileNotFoundError as e:
-            raise KeyError(f"CMap {name} not found in CMapDB") from e
 
-    @classmethod
-    def get_cmap(cls, name: str) -> CMapBase:
-        if name == "Identity-H":
-            return IdentityCMap(CMapName=name, WMode=0)
-        elif name == "Identity-V":
-            return IdentityCMap(CMapName=name, WMode=1)
-        elif name == "OneByteIdentityH":
-            return IdentityCMapByte(CMapName=name, WMode=0)
-        elif name == "OneByteIdentityV":
-            return IdentityCMapByte(CMapName=name, WMode=1)
-        if name in cls._cmap_cache:
-            return cls._cmap_cache[name]
-        data = cls._load_data(name)
-        cls._cmap_cache[name] = cmap = PyCMap(name, data)
-        return cmap
+def _load_data(name: str) -> Any:
+    name = name.replace("\0", "")
+    filename = "%s.pickle.gz" % name
+    pklpath = (CMAP_DIR / filename).resolve()
+    try:
+        _ = pklpath.relative_to(CMAP_DIR)
+        with gzip.open(pklpath) as gzfile:
+            return pickle.load(gzfile)
+    except ValueError as e:
+        raise KeyError(f"Ignoring malicious or malformed CMap {name}") from e
+    except FileNotFoundError as e:
+        raise KeyError(f"CMap {name} not found in CMapDB") from e
 
-    @classmethod
-    def get_unicode_map(cls, name: str, vertical: bool = False) -> UnicodeMap:
-        try:
-            return cls._umap_cache[name][vertical]
-        except KeyError:
-            pass
-        data = cls._load_data("to-unicode-%s" % name)
-        cls._umap_cache[name] = [PyUnicodeMap(name, data, v) for v in (False, True)]
-        return cls._umap_cache[name][vertical]
+
+def get_cmap(name: str) -> CMapBase:
+    if name == "Identity-H":
+        return IdentityCMap(CMapName=name, WMode=0)
+    elif name == "Identity-V":
+        return IdentityCMap(CMapName=name, WMode=1)
+    elif name == "OneByteIdentityH":
+        return IdentityCMapByte(CMapName=name, WMode=0)
+    elif name == "OneByteIdentityV":
+        return IdentityCMapByte(CMapName=name, WMode=1)
+    if name in CMAP_CACHE:
+        return CMAP_CACHE[name]
+    data = _load_data(name)
+    CMAP_CACHE[name] = cmap = PyCMap(name, data)
+    return cmap
+
+
+def get_unicode_map(name: str, vertical: bool = False) -> UnicodeMap:
+    try:
+        return UMAP_CACHE[name][vertical]
+    except KeyError:
+        pass
+    data = _load_data("to-unicode-%s" % name)
+    UMAP_CACHE[name] = [PyUnicodeMap(name, data, v) for v in (False, True)]
+    return UMAP_CACHE[name][vertical]
 
 
 KEYWORD_BEGINCMAP = KWD(b"begincmap")
@@ -384,7 +382,7 @@ def parse_tounicode(data: bytes) -> ToUnicodeMap:
         elif obj is KEYWORD_USECMAP:
             try:
                 cmapname = stack.pop()
-                cmap.use_cmap(CMapDB.get_cmap(literal_name(cmapname)))
+                cmap.use_cmap(get_cmap(literal_name(cmapname)))
             except (IndexError, TypeError, KeyError):
                 pass
         elif obj is KEYWORD_BEGINCODESPACERANGE:

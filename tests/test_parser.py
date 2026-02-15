@@ -8,7 +8,7 @@ import pytest
 from playa.document import Document
 from playa.exceptions import PDFSyntaxError
 from playa.parser import InlineImage, ObjectParser
-from playa.pdftypes import KWD, LIT, ObjRef
+from playa.pdftypes import KWD, LIT, ContentStream, ObjRef
 
 logger = logging.getLogger(__name__)
 
@@ -145,9 +145,15 @@ def test_cached_inline_images():
     doc = Document(b"trailer << >>")
     first = list(ObjectParser(INLINEDATA1, doc, streamid=0))
     second = list(ObjectParser(INLINEDATA1, doc, streamid=0))
-    assert first == second
+    assert all(
+        a is b for (_, a), (_, b) in zip(first, second) if isinstance(a, ContentStream)
+    )
     third = list(ObjectParser(INLINEDATA1, doc, streamid=1))
-    assert first != third
+    assert any(
+        a is not b
+        for (_, a), (_, b) in zip(first, third)
+        if isinstance(a, ContentStream)
+    )
 
 
 def test_strict_errors() -> None:

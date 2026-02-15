@@ -1,10 +1,20 @@
-## Unreleased
+## PLAYA 1.0.0: Unreleased
 
 - Further optimize `arcfour` decryption.
 - Eagerly load the cross-reference tables and catalog for multiprocess
   operation.
 - Fix pickling and unpickling of `PSLiteral` and `PSKeyword` to return
   unique objects.
+- Add explicit ABCs to classes that need them.
+- Remove use of `Optional` everywhere in favour of `Union[T, None]`
+- BREAKING CHANGE: `XObjectObject` is not a `Mapping` so remove
+  `__getitem__` and `__contains__` methods
+- BREAKING CHANGE: `BBOX_NONE` considered harmful since it can't be
+  type checked, so do the sensible thing and use `None` instead.
+- BREAKING CHANGE: `CmapDB` is a useless class, we are not Java
+- TODO: Allow `--structure` and `--images` at the same time, linking
+  image files to structure JSON.
+- TODO: BREAKING CHANGE: Remove `objstack` from `IndirectObjectParser`
 
 ## PLAYA 0.11.0: 2026-02-13
 

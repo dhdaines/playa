@@ -1,6 +1,5 @@
 """Miscellaneous Routines."""
 
-import itertools
 import string
 from typing import (
     TYPE_CHECKING,
@@ -235,15 +234,18 @@ def get_bound(pts: Iterable[Point]) -> Rect:
     return x0, y0, x1, y1
 
 
-def get_bound_rects(boxes: Iterable[Rect]) -> Rect:
-    """Compute the union of bounding boxes (which need not be normalized)
-
-    Raises:
-      ValueError: on empty input (as there is no bounding box).
-    """
-    return get_bound(
-        itertools.chain.from_iterable(((x0, y0), (x1, y1)) for x0, y0, x1, y1 in boxes)
-    )
+def get_bound_rects(boxes: Iterable[Union[Rect, None]]) -> Union[Rect, None]:
+    """Compute the union of bounding boxes (which need not be normalized)."""
+    points = []
+    for box in boxes:
+        if box is None:
+            continue
+        x0, y0, x1, y1 = box
+        points.append((x0, y0))
+        points.append((x1, y1))
+    if points:
+        return get_bound(points)
+    return None
 
 
 def transform_bbox(matrix: Matrix, bbox: Rect) -> Rect:

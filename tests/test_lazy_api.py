@@ -230,8 +230,10 @@ def test_glyph_bboxes() -> None:
         page = doc.pages[0]
         texts = page.texts
         t = next(texts)
+        assert t.bbox is not None
         _, zh_y0, _, zh_y1 = t.bbox
         t = next(texts)
+        assert t.bbox is not None
         _, en_y0, _, en_y1 = t.bbox
         assert en_y0 <= zh_y0
         assert en_y1 >= zh_y1
