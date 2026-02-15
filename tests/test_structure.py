@@ -5,7 +5,7 @@ import pytest
 import playa
 from playa.exceptions import PDFEncryptionError
 from playa.page import Annotation, ImageObject
-from playa.structure import Element, Tree, ContentItem, ContentObject
+from playa.structure import Element, Tree, ContentItem, ContentObject, LITERAL_ANNOT
 
 from .data import ALLPDFS, CONTRIB, PASSWORDS, TESTDIR, XFAILS
 
@@ -69,7 +69,7 @@ def test_annotations() -> None:
         assert pdf.structure is not None
         for link in pdf.structure.find_all("Link"):
             for kid in link:
-                if isinstance(kid, ContentObject):
+                if isinstance(kid, ContentObject) and kid.type is LITERAL_ANNOT:
                     assert isinstance(kid.obj, Annotation)
                     assert kid.bbox is not None
 
