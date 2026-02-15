@@ -25,14 +25,17 @@ def test_spaces() -> None:
     with playa.open(CONTRIB / "issue-1181.pdf", space="page") as doc:
         page = doc.pages[0]
         page_box = next(iter(page)).bbox
+        assert page_box is not None
     with playa.open(CONTRIB / "issue-1181.pdf", space="default") as doc:
         page = doc.pages[0]
         user_box = next(iter(page)).bbox
+        assert user_box is not None
     assert page_box[1] == pytest.approx(user_box[1] - page.mediabox[1])
     with playa.open(CONTRIB / "issue-1181.pdf", space="screen") as doc:
         page = doc.pages[0]
         screen_box = next(iter(page)).bbox
     # BBoxes are normalied, so top is 1 for screen and 3 for page
+    assert screen_box is not None
     assert screen_box[3] == pytest.approx(page.height - page_box[1])
     assert screen_box[3] == pytest.approx(page.height - page_box[1])
 

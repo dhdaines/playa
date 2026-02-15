@@ -38,7 +38,6 @@ from playa.color import (
 from playa.font import CIDFont, Font, Type3Font
 from playa.parser import LIT, ContentParser, Lexer, Token
 from playa.pdftypes import (
-    BBOX_NONE,
     ContentStream,
     Matrix,
     PDFObject,
@@ -57,6 +56,7 @@ from playa.utils import (
     apply_matrix_pt,
     decode_text,
     get_bound,
+    get_bound_rects,
     mult_matrix,
     transform_bbox,
     translate_matrix,
@@ -281,14 +281,11 @@ class ContentObject(Sized, Iterable["ContentObject"]):
         return name[: -len("Object")].lower()
 
     @property
-    def bbox(self) -> Rect:
+    def bbox(self) -> Union[Rect, None]:
         """The bounding box in device space of this object."""
         # These bboxes have already been computed in device space so
         # we don't need all 4 corners!
-        points = itertools.chain.from_iterable(
-            ((x0, y0), (x1, y1)) for x0, y0, x1, y1 in (item.bbox for item in self)
-        )
-        return get_bound(points)
+        return get_bound_rects(item.bbox for item in self)
 
     @property
     def mcs(self) -> Union[MarkedContent, None]:
@@ -389,18 +386,9 @@ class TagObject(ContentObject):
         return super().mcid
 
     @property
-    def bbox(self) -> Rect:
-        """A tag has no content and thus no bounding box.
-
-        To avoid needlessly complicating user code this returns
-        `BBOX_NONE` instead of `None` or throwing a exception.
-        Because that is a specific object, you can reliably check for
-        it with:
-
-            if obj.bbox is BBOX_NONE:
-                ...
-        """
-        return BBOX_NONE
+    def bbox(self) -> Union[Rect, None]:
+        """A tag has no content and thus no bounding box."""
+        return None
 
 
 @dataclass
@@ -468,7 +456,7 @@ class ImageObject(ContentObject):
         return self.stream.buffer
 
     @property
-    def bbox(self) -> Rect:
+    def bbox(self) -> Union[Rect, None]:
         # PDF 1.7 sec 8.3.24: All images shall be 1 unit wide by 1
         # unit high in user space, regardless of the number of samples
         # in the image. To be painted, an image shall be mapped to a
@@ -1146,30 +1134,30 @@ class TextObject(TextBase):
         return self._displacement
 
     @property
-    def bbox(self) -> Rect:
+    def bbox(self) -> Union[Rect, None]:
         # We specialize this to avoid it having side effects on the
         # text state (already it's a bit of a footgun that __iter__
         # does that...), but also because we know all glyphs have the
         # same text matrix and thus we can avoid a lot of multiply
         if self._bbox is not None:
             return self._bbox
-        matrix = mult_matrix(self.line_matrix, self.ctm)
         font = self.gstate.font
-        fontsize = self.gstate.fontsize
-        rise = self.gstate.rise
         if font is None:
             log.warning(
                 "No font is set, will not update text state or output text: %r TJ",
                 self.args,
             )
-            self._bbox = BBOX_NONE
+            self._bbox = None
             self._next_glyph_offset = self._glyph_offset
             return self._bbox
         if len(self.args) == 0:
-            self._bbox = BBOX_NONE
+            self._bbox = None
             self._next_glyph_offset = self._glyph_offset
             return self._bbox
 
+        fontsize = self.gstate.fontsize
+        rise = self.gstate.rise
+        matrix = mult_matrix(self.line_matrix, self.ctm)
         horizontal_scaling = self.gstate.scaling * 0.01
         charspace = self.gstate.charspace
         wordspace = self.gstate.wordspace

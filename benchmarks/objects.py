@@ -7,7 +7,7 @@ import time
 from pathlib import Path
 
 import playa
-from playa import ContentObject, Rect
+from playa import ContentObject
 
 LOG = logging.getLogger("benchmark-convert")
 # Use a standard benchmark set to make version comparisons possible
@@ -23,7 +23,6 @@ def benchmark_one_lazy(path: Path):
     with playa.open(path) as pdf:
         for page in pdf.pages:
             obj: ContentObject
-            _: Rect
             for obj in page.texts:
                 _ = obj.bbox
             for obj in page.paths:

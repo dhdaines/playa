@@ -7,12 +7,12 @@
   unique objects.
 - Add explicit ABCs to classes that need them.
 - Remove use of `Optional` everywhere in favour of `Union[T, None]`
-- TODO: Allow `--structure` and `--images` at the same time, linking
-  image files to structure JSON.
-- BREAKING CHANGE: Remove `objstack` from `IndirectObjectParser`
 - BREAKING CHANGE: `XObjectObject` is not a `Mapping` so remove
   `__getitem__` and `__contains__` methods
-- BREAKING CHANGE: `CmapDB` is a useless class, we are not Java
+- TODO: Allow `--structure` and `--images` at the same time, linking
+  image files to structure JSON.
+- TODO: BREAKING CHANGE: Remove `objstack` from `IndirectObjectParser`
+- TODO: BREAKING CHANGE: `CmapDB` is a useless class, we are not Java
 
 ## PLAYA 0.11.0: 2026-02-13
 

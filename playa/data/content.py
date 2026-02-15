@@ -33,7 +33,7 @@ from playa.pdftypes import resolve_all, MATRIX_IDENTITY, Matrix, Point, Rect
 class Text(TypedDict, total=False):
     chars: str
     """Unicode string representation of text."""
-    bbox: Rect
+    bbox: Union[Rect, None]
     """Bounding rectangle for all glyphs in text in default user space."""
     matrix: Matrix
     """Text rendering matrix.  Note that the effective font size
@@ -163,7 +163,7 @@ class Image(TypedDict, total=False):
     """Coordinate transformation matrix, default is `(1, 0, 0, 1, 0, 0)`"""
     xobject_name: str
     """Name of XObject in page resources, if any."""
-    bbox: Rect
+    bbox: Union[Rect, None]
     """Bounding rectangle for image."""
     srcsize: Tuple[int, int]
     """Size of source image in pixels."""
@@ -209,7 +209,7 @@ class Glyph(TypedDict, total=False):
     """Unicode string representation of glyph, if any."""
     cid: int
     """Character ID for glyph in font."""
-    bbox: Rect
+    bbox: Union[Rect, None]
     """Bounding rectangle."""
     matrix: Matrix
     """Rendering matrix for glyph.  Note that the effective font size

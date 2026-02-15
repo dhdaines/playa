@@ -23,7 +23,6 @@ from typing import (
 from playa.data_structures import NumberTree
 from playa.parser import LIT, PDFObject, PSLiteral
 from playa.pdftypes import (
-    BBOX_NONE,
     ContentStream,
     ObjRef,
     Rect,
@@ -98,22 +97,17 @@ class ContentItem(Iterable["PageContentObject"]):
         return _deref_document(docref)
 
     @property
-    def bbox(self) -> Rect:
+    def bbox(self) -> Union[Rect, None]:
         """Find the bounding box, if any, of this item, which is the
         smallest rectangle enclosing all objects in its marked content
         section.
 
-        If the `page` attribute is `None`, then `bbox` will be
-        `BBOX_NONE`.
+        If the `page` attribute is `None`, then `bbox` will be `None`.
 
         """
         if self._bbox is not None:
             return self._bbox
-        page = self.page
-        if page is None:
-            # We *really* should have a page!
-            self._bbox = BBOX_NONE
-        else:
+        if self.page is not None:
             self._bbox = get_bound_rects(obj.bbox for obj in self)
         return self._bbox
 
@@ -236,11 +230,11 @@ class ContentObject:
         return _deref_document(docref)
 
     @property
-    def bbox(self) -> Rect:
+    def bbox(self) -> Union[Rect, None]:
         """Find the bounding box, if any, of this object.
 
         If there is no bounding box (very unlikely) this will be
-        `BBOX_NONE`.
+        `None`.
         """
         if "BBox" in self.props:
             rawbox = rect_value(self.props["BBox"])
@@ -252,7 +246,7 @@ class ContentObject:
 
         obj = self.obj
         if obj is None:
-            return BBOX_NONE
+            return None
         return obj.bbox
 
 
@@ -433,7 +427,7 @@ class Element(Findable, Iterable[Union["Element", ContentItem, ContentObject]]):
                 yield kid
 
     @property
-    def bbox(self) -> Rect:
+    def bbox(self) -> Union[Rect, None]:
         """The bounding box, if any, of this element.
 
         Elements may explicitly define a `BBox` in default user space,
@@ -448,20 +442,20 @@ class Element(Findable, Iterable[Union["Element", ContentItem, ContentObject]]):
         Note: Elements may span multiple pages!
             In the case of an element (such as a `Document` for
             instance) that spans multiple pages, the bounding box
-            cannot exist, and `BBOX_NONE` will be returned.  If the
+            cannot exist, and `None` will be returned.  If the
             `page` attribute is `None`, then `bbox` will be
-            `BBOX_NONE`.
+            `None`.
 
         """
         page = self.page
         if page is None:
-            return BBOX_NONE
+            return None
         if "BBox" in self.props:
             rawbox = rect_value(self.props["BBox"])
             return transform_bbox(page.ctm, rawbox)
         else:
             boxes = (item.bbox for item in self.contents if item.page is page)
-            return get_bound_rects(box for box in boxes if box is not BBOX_NONE)
+            return get_bound_rects(boxes)
 
     @property
     def title(self) -> Union[str, None]:
@@ -724,7 +718,7 @@ class Tree(Findable, Iterable[Union["Element", ContentItem, ContentObject]]):
       parent_tree: Parent tree linking marked content sections to
           structure elements (PDF 1.7 section 14.7.4.4)
       parent: A structure tree has no parent element, so this is `None`
-      bbox: A structure tree has no bounding box so this is `BBOX_NONE`
+      bbox: A structure tree has no bounding box so this is `None`
       type: This is "StructTreeRoot"
       role: This is also "StructTreeRoot"
     """
@@ -735,7 +729,7 @@ class Tree(Findable, Iterable[Union["Element", ContentItem, ContentObject]]):
     _parent_tree: Union[NumberTree, None] = None
     page = None
     parent = None
-    bbox = BBOX_NONE
+    bbox = None
     type = "StructTreeRoot"
     role = "StructTreeRoot"
 

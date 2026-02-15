@@ -37,7 +37,6 @@ from playa.content import (
 from playa.font import Font
 from playa.parser import KWD, ContentParser, InlineImage, PDFObject
 from playa.pdftypes import (
-    BBOX_NONE,
     LIT,
     MATRIX_IDENTITY,
     ContentStream,
@@ -1111,7 +1110,7 @@ class Type3Interpreter(LazyInterpreter):
     """Interpret Type3 font programs."""
 
     width: float = 1000
-    bbox: Rect
+    bbox: Union[Rect, None]
 
     def __init__(
         self,
@@ -1132,7 +1131,7 @@ class Type3Interpreter(LazyInterpreter):
     def do_d0(self, wx: float, wy: float) -> None:
         """Simple Type3 font metrics operator."""
         self.width = wx
-        self.bbox = BBOX_NONE
+        self.bbox = None
 
     def do_d1(
         self, wx: float, wy: float, llx: float, lly: float, urx: float, ury: float

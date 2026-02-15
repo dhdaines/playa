@@ -95,6 +95,7 @@ def test_type3_font_boxes() -> None:
         boxes: List[Rect] = []
         for text in textor:
             bbox = text.bbox
+            assert bbox is not None
             # They should be mostly adjacent and aligned
             if boxes:
                 assert bbox[0] == pytest.approx(boxes[-1][2])
@@ -134,7 +135,7 @@ def test_exotic_type3_font_boxes() -> None:
         # othewise the same)
         assert f30.char_bbox(0) != f30r.char_bbox(0)
         # Ensure TextObject bboxes take rotation into account
-        boxes = list(t.bbox for t in page.texts)
+        boxes = list(t.bbox for t in page.texts if t.bbox is not None)
         # Rotating backwards moves the left side backwards
         assert boxes[1][0] < boxes[0][0]
         # Rotating forwards moves the right side forwards
@@ -209,5 +210,6 @@ def test_bogus_metrics() -> None:
     """Verify that we fix bogus font descriptors with ascent = descent = 0."""
     with playa.open(TESTDIR / "pdf_structure.pdf") as pdf:
         for t in pdf.pages[0].texts:
+            assert t.bbox is not None
             x0, y0, x1, y1 = t.bbox
             assert y1 > y0
