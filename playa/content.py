@@ -234,7 +234,7 @@ class PathSegment(NamedTuple):
 
 
 @dataclass
-class ContentObject:
+class ContentObject(Sized, Iterable["ContentObject"]):
     """Any sort of content object.
 
     Attributes:
@@ -503,12 +503,6 @@ class XObjectObject(ContentObject):
     stream: ContentStream
     resources: Union[None, Dict[str, PDFObject]]
     group: Union[None, Dict[str, PDFObject]]
-
-    def __contains__(self, name: str) -> bool:
-        return name in self.stream
-
-    def __getitem__(self, name: str) -> PDFObject:
-        return self.stream[name]
 
     @property
     def bbox(self) -> Rect:

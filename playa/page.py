@@ -94,7 +94,7 @@ TEXT_OPERATORS = {
 }
 
 
-class Page:
+class Page(Iterable[ContentObject]):
     """An object that holds the information about a page.
 
     Args:

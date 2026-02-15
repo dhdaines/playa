@@ -4,7 +4,7 @@ Lazy interface to PDF document outline (PDF 1.7 sect 12.3.3).
 
 import logging
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Dict, Iterator, Sequence, Tuple, Union
+from typing import TYPE_CHECKING, Dict, Iterable, Iterator, Sequence, Tuple, Union
 
 from playa.parser import PDFObject, PSLiteral
 from playa.pdftypes import LIT, ObjRef, dict_value, resolve1
@@ -106,7 +106,7 @@ class Action:
         return Destination.from_dest(self.doc, dest)
 
 
-class Outline:
+class Outline(Iterable["Outline"]):
     """PDF document outline (PDF 1.7 sect 12.3.3)"""
 
     _docref: DocumentRef

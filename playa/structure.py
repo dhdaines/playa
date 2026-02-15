@@ -67,7 +67,7 @@ if TYPE_CHECKING:
 
 
 @dataclass
-class ContentItem:
+class ContentItem(Iterable["PageContentObject"]):
     """Content item in logical structure tree.
 
     This corresponds to an individual marked content section on a
@@ -340,7 +340,7 @@ class Findable(Iterable):
 
 
 @dataclass
-class Element(Findable):
+class Element(Findable, Iterable[Union["Element", ContentItem, ContentObject]]):
     """Logical structure element.
 
     Attributes:
@@ -703,7 +703,7 @@ def _iter_structure(
         yield from _make_kids(k, None, _ref_document(doc))
 
 
-class Tree(Findable):
+class Tree(Findable, Iterable[Union["Element", ContentItem, ContentObject]]):
     """Logical structure tree.
 
     A structure tree can be iterated over in the same fashion as its

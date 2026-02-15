@@ -1124,7 +1124,7 @@ def _format_page_label(value: int, style: Any) -> str:
     return label
 
 
-class Destinations:
+class Destinations(Mapping[Union[str, bytes, PSLiteral], Destination]):
     """Mapping of named destinations.
 
     These either come as a NameTree or a dict, depending on the
@@ -1159,6 +1159,13 @@ class Destinations:
                     return
                 self.dests_tree = NameTree(dests)
 
+    def __len__(self) -> int:
+        if self.dests_dict is not None:
+            return len(self.dests_dict)
+        if self.dests_tree is not None:
+            return len(self.dests_tree)
+        return 0
+
     def __iter__(self) -> Iterator[str]:
         """Iterate over names of destinations.
 
@@ -1176,21 +1183,9 @@ class Destinations:
                 ks = decode_text(kb)
                 yield ks
 
-    def items(self) -> Iterator[Tuple[str, Destination]]:
+    def items(self) -> "DestinationsItemsView":
         """Iterate over named destinations."""
-        if self.dests_dict is not None:
-            for name, dest in self.dests_dict.items():
-                if name not in self.dests:
-                    dest = resolve1(self.dests_dict[name])
-                    self.dests[name] = self._create_dest(dest, name)
-                yield name, self.dests[name]
-        elif self.dests_tree is not None:
-            for k, v in self.dests_tree.items():
-                name = decode_text(k)
-                if name not in self.dests:
-                    dest = resolve1(v)
-                    self.dests[name] = self._create_dest(dest, name)
-                yield name, self.dests[name]
+        return DestinationsItemsView(self)
 
     def __getitem__(self, name: Union[bytes, str, PSLiteral]) -> Destination:
         """Get a named destination.
@@ -1240,3 +1235,23 @@ class Destinations:
     def doc(self) -> "Document":
         """Get associated document if it exists."""
         return _deref_document(self._docref)
+
+
+class DestinationsItemsView(ItemsView[str, Destination]):
+    _mapping: Destinations
+
+    def __iter__(self) -> Iterator[Tuple[str, Destination]]:
+        dests = self._mapping
+        if dests.dests_dict is not None:
+            for name, dest in dests.dests_dict.items():
+                if name not in dests.dests:
+                    dest = resolve1(dests.dests_dict[name])
+                    dests.dests[name] = dests._create_dest(dest, name)
+                yield name, dests.dests[name]
+        elif dests.dests_tree is not None:
+            for k, v in dests.dests_tree.items():
+                name = decode_text(k)
+                if name not in dests.dests:
+                    dest = resolve1(v)
+                    dests.dests[name] = dests._create_dest(dest, name)
+                yield name, dests.dests[name]
