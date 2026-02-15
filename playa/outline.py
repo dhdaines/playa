@@ -106,7 +106,7 @@ class Action:
         return Destination.from_dest(self.doc, dest)
 
 
-class Outline(Iterable["Outline"]):
+class Tree(Iterable["Item"]):
     """PDF document outline (PDF 1.7 sect 12.3.3)"""
 
     _docref: DocumentRef
@@ -116,24 +116,44 @@ class Outline(Iterable["Outline"]):
         self._docref = _ref_document(doc)
         self.props = dict_value(doc.catalog["Outlines"])
 
-    def __iter__(self) -> Iterator["Outline"]:
+    def __iter__(self) -> Iterator["Item"]:
         if "First" in self.props and "Last" in self.props:
             ref = self.props["First"]
             while ref is not None:
                 if not isinstance(ref, ObjRef):
                     LOG.warning("Not an indirect object reference: %r", ref)
                     break
-                out = self._from_ref(ref)
+                out = Item(_docref=self._docref, props=dict_value(ref))
                 ref = out.props.get("Next")
                 yield out
                 if ref is self.props["Last"]:
                     break
 
-    def _from_ref(self, ref: ObjRef) -> "Outline":
-        out = Outline.__new__(Outline)
-        out._docref = self._docref
-        out.props = dict_value(ref)
-        return out
+    @property
+    def doc(self) -> "Document":
+        """Get associated document if it exists."""
+        return _deref_document(self._docref)
+
+
+@dataclass
+class Item(Iterable["Item"]):
+    """PDF document outline item (PDF 1.7 sect 12.3.3)"""
+
+    _docref: DocumentRef
+    props: Dict[str, PDFObject]
+
+    def __iter__(self) -> Iterator["Item"]:
+        if "First" in self.props and "Last" in self.props:
+            ref = self.props["First"]
+            while ref is not None:
+                if not isinstance(ref, ObjRef):
+                    LOG.warning("Not an indirect object reference: %r", ref)
+                    break
+                out = Item(_docref=self._docref, props=dict_value(ref))
+                ref = out.props.get("Next")
+                yield out
+                if ref is self.props["Last"]:
+                    break
 
     @property
     def doc(self) -> "Document":
@@ -141,13 +161,12 @@ class Outline(Iterable["Outline"]):
         return _deref_document(self._docref)
 
     @property
-    def title(self) -> Union[str, None]:
+    def title(self) -> str:
         raw = resolve1(self.props.get("Title"))
         if raw is None:
-            return None
+            raise ValueError(f"Outline item has no title: {self.props!r}")
         if not isinstance(raw, bytes):
-            LOG.warning("Title is not a string: %r", raw)
-            return None
+            raise ValueError(f"Outline item title is not a string: {raw!r}")
         return decode_text(raw)
 
     @property
@@ -197,11 +216,13 @@ class Outline(Iterable["Outline"]):
             return None
 
     @property
-    def parent(self) -> Union["Outline", None]:
-        ref = self.props.get("Parent")
-        if ref is None:
-            return None
+    def parent(self) -> Union["Item", "Tree"]:
+        ref = self.props["Parent"]
         if not isinstance(ref, ObjRef):
-            LOG.warning("Parent is not indirect object reference: %r", ref)
-            return None
-        return self._from_ref(ref)
+            raise ValueError(f"Parent is not indirect object reference: {ref!r}")
+        props = dict_value(ref)
+        if "Parent" not in props:
+            tree = self.doc.outline
+            if tree is None:
+                raise ValueError("Document apparently has no outline?!?")
+        return Item(self._docref, props)

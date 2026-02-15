@@ -94,7 +94,7 @@ from playa import Document, Page, PDFPasswordIncorrect, asobj
 from playa.data.content import Image
 from playa.data.metadata import asobj_document, asobj_structelement
 from playa.image import get_one_image
-from playa.outline import Outline
+from playa.outline import Item as OutlineItem
 from playa.page import ImageObject
 from playa.pdftypes import (
     ContentStream,
@@ -486,7 +486,7 @@ def extract_structure(doc: Document, args: argparse.Namespace) -> None:
     print("]", file=args.outfile)
 
 
-def _extract_outline_item(item: Outline, indent: int, outfh: TextIO) -> bool:
+def _extract_outline_item(item: OutlineItem, indent: int, outfh: TextIO) -> bool:
     """Extract a single outline item."""
     ws = " " * indent
     ss = "  "
@@ -498,8 +498,11 @@ def _extract_outline_item(item: Outline, indent: int, outfh: TextIO) -> bool:
         s.append(f"{ws}{ss}{k}: {v}")
 
     print(f"{ws}{{", file=outfh)
-    if item.title is not None:
+    try:
         format_attr("title", item.title)
+    except ValueError as e:
+        LOG.warning("Invalid outline item: %s", e)
+        pass
     if item.destination is not None:
         format_attr("destination", asobj(item.destination))
     if s:
@@ -525,7 +528,17 @@ def extract_outline(doc: Document, args: argparse.Namespace) -> None:
         LOG.info("Document has no outline")
         print("{}", file=args.outfile)
         return
-    _extract_outline_item(doc.outline, 0, args.outfile)
+    children = list(doc.outline)
+    if not children:
+        print("{}", file=args.outfile)
+        return
+    print('{"outlines": [', file=args.outfile)
+    comma = False
+    for item in children:
+        if comma:
+            print(",", file=args.outfile)
+        comma = _extract_outline_item(item, 0, args.outfile)
+    print("\n]}", file=args.outfile)
 
 
 def get_images(page: Page, imgdir: Path) -> List[Tuple[Path, Image]]:

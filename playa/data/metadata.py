@@ -20,7 +20,7 @@ from playa.document import Document as _Document
 from playa.font import Font as _Font
 from playa.fontmetrics import FONT_METRICS
 from playa.outline import Destination as _Destination
-from playa.outline import Outline as _Outline
+from playa.outline import Tree as _OutlineTree, Item as _OutlineItem
 from playa.page import Annotation as _Annotation
 from playa.page import Page as _Page
 from playa.parser import IndirectObject as _IndirectObject
@@ -552,10 +552,19 @@ def asobj_stream(obj: _ContentStream) -> Dict:
 
 
 @asobj.register
-def asobj_outline(obj: _Outline, recurse: bool = True) -> Outline:
+def asobj_outline_tree(obj: _OutlineTree, recurse: bool = True) -> Outline:
     out = Outline()
-    if obj.title is not None:
-        out["title"] = obj.title
+    if recurse:
+        children = list(obj)
+        if children:
+            out["outlines"] = asobj(children)
+    return out
+
+
+@asobj.register
+def asobj_outline_item(obj: _OutlineItem, recurse: bool = True) -> Outline:
+    out = Outline()
+    out["title"] = obj.title
     if obj.destination is not None:
         out["destination"] = asobj(obj.destination)
     if recurse:

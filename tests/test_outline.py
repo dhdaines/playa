@@ -8,13 +8,13 @@ import pytest
 
 import playa
 from playa.exceptions import PDFEncryptionError
-from playa.outline import Outline
+from playa.outline import Tree as OutlineTree, Item as OutlineItem
 
 from .data import ALLPDFS, PASSWORDS, TESTDIR, XFAILS
 
 
-def expand_titles(outline: Outline) -> List:
-    def expand_one(child):
+def expand_titles(outline: OutlineTree) -> List:
+    def expand_one(child: OutlineItem):
         out = [child.title]
         for c in child:
             out.append(expand_one(c))
@@ -33,8 +33,8 @@ def test_outline():
         assert titles == ["Titre 1", ["Titre 2", ["Tableau"]]]
 
 
-def expand(outline: Outline) -> List:
-    def expand_one(child, level=1):
+def expand(outline: OutlineTree) -> List:
+    def expand_one(child: OutlineItem, level=1):
         out = [child.title, child.destination, child.element]
         # Limit depth to avoid taking all memory
         if level == 3:

@@ -15,6 +15,10 @@
 - TODO: Allow `--structure` and `--images` at the same time, linking
   image files to structure JSON.
 - TODO: BREAKING CHANGE: Remove `objstack` from `IndirectObjectParser`
+- TODO: BREAKING CHANGE: Separate outline trees from outline items
+  along the same model of `Tree` and `Element` (same principle as with
+  `BBOX_NONE`, we want to strongly type things that are different
+  instead of relying on ad-hoc checks like `item.parent is None`)
 
 ## PLAYA 0.11.0: 2026-02-13
 
