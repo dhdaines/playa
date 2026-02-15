@@ -21,9 +21,10 @@ from typing import (
 from playa.cmapdb import (
     CMap,
     CMapBase,
-    CMapDB,
     ToUnicodeMap,
     UnicodeMap,
+    get_cmap,
+    get_unicode_map,
     parse_encoding,
     parse_tounicode,
 )
@@ -588,7 +589,7 @@ class CIDFont(Font):
         # with a ToUnicodeMap)
         if self.tounicode is None:
             try:
-                self.unicode_map = CMapDB.get_unicode_map(
+                self.unicode_map = get_unicode_map(
                     self.cidcoding,
                     self.cmap.is_vertical(),
                 )
@@ -683,7 +684,7 @@ class CIDFont(Font):
         cmap_name = self._get_cmap_name(spec)
 
         try:
-            return CMapDB.get_cmap(cmap_name)
+            return get_cmap(cmap_name)
         except KeyError as e:
             # Parse an embedded CMap if necessary
             if isinstance(spec["Encoding"], ContentStream):
