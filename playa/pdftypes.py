@@ -6,8 +6,9 @@ from typing import (
     Dict,
     Final,
     Iterable,
+    Iterator,
     List,
-    Optional,
+    Mapping,
     Protocol,
     Tuple,
     Union,
@@ -153,16 +154,15 @@ def keyword_name(x: Any) -> str:
 
 
 class DecipherCallable(Protocol):
-    """Fully typed a decipher callback, with optional parameter."""
+    """Fully typed decipher callback, with optional parameter."""
 
     def __call__(
         self,
         objid: int,
         genno: int,
         data: bytes,
-        attrs: Optional[Dict[str, Any]] = None,
-    ) -> bytes:
-        raise NotImplementedError
+        attrs: Union[Dict[str, Any], None] = None,
+    ) -> bytes: ...
 
 
 class ObjRef:

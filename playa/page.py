@@ -16,7 +16,6 @@ from typing import (
     List,
     Literal,
     Mapping,
-    Optional,
     Tuple,
     Type,
     TypeVar,
@@ -129,7 +128,7 @@ class Page:
         doc: "Document",
         pageid: int,
         attrs: Dict,
-        label: Optional[str],
+        label: Union[str, None],
         page_idx: int = 0,
         space: DeviceSpace = "screen",
     ) -> None:

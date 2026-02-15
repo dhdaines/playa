@@ -22,7 +22,6 @@ from typing import (
     Iterable,
     Iterator,
     List,
-    Optional,
     TextIO,
     Tuple,
     Union,
@@ -114,7 +113,7 @@ class CMap(CMapBase):
     def dump(
         self,
         out: TextIO = sys.stdout,
-        code2cid: Optional[CodeToCIDMap] = None,
+        code2cid: Union[CodeToCIDMap, None] = None,
         code: Tuple[int, ...] = (),
     ) -> None:
         if code2cid is None:

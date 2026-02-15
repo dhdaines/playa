@@ -1,6 +1,6 @@
 import logging
 import re
-from typing import Dict, Final, Iterable, Optional, Union
+from typing import Dict, Final, Iterable, Union
 
 from playa.encodings import (
     MAC_EXPERT_ENCODING,
@@ -70,7 +70,7 @@ ENCODINGS: Final[Dict[str, Dict[int, str]]] = {
 
 def get_encoding(
     base: Union[PSLiteral, Dict[int, str], None] = None,
-    diff: Optional[Iterable[PDFObject]] = None,
+    diff: Union[Iterable[PDFObject], None] = None,
 ) -> Dict[int, str]:
     if base is None:
         encoding = {}

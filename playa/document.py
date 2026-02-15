@@ -13,11 +13,11 @@ from typing import (
     BinaryIO,
     Callable,
     Dict,
+    ItemsView,
     Iterable,
     Iterator,
     List,
     Mapping,
-    Optional,
     Sequence,
     Set,
     Tuple,
@@ -236,7 +236,7 @@ class Document(Mapping[int, PDFObject]):
         self._parsed_objs: Dict[int, Tuple[List[PDFObject], int]] = {}
         self._cached_fonts: Dict[int, Font] = {}
         self._cached_inline_images: Dict[
-            Tuple[int, int], Tuple[int, Optional[InlineImage]]
+            Tuple[int, int], Tuple[int, Union[InlineImage, None]]
         ] = {}
         self._pdf_version, self._offset, self.buffer = _open_input(fp)
         # These are always True unless "encryption" (lol) is present

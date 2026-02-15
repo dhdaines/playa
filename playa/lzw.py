@@ -1,6 +1,6 @@
 import logging
 from io import BytesIO
-from typing import BinaryIO, Final, Iterator, List, Optional, cast
+from typing import BinaryIO, Final, Iterator, List, Union, cast
 
 logger: Final = logging.getLogger(__name__)
 
@@ -16,8 +16,8 @@ class LZWDecoder:
         self.bpos = 8
         self.nbits = 9
         # NB: self.table stores None only in indices 256 and 257
-        self.table: List[Optional[bytes]] = []
-        self.prevbuf: Optional[bytes] = None
+        self.table: List[Union[bytes, None]] = []
+        self.prevbuf: Union[bytes, None] = None
 
     def readbits(self, bits: int) -> int:
         v = 0

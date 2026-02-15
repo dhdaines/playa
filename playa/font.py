@@ -14,7 +14,6 @@ from typing import (
     Iterable,
     List,
     Mapping,
-    Optional,
     Tuple,
     Union,
 )
@@ -82,7 +81,7 @@ class Font:
         self,
         descriptor: Dict[str, PDFObject],
         widths: Dict[int, float],
-        default_width: Optional[float] = None,
+        default_width: Union[float, None] = None,
     ) -> None:
         self.descriptor = descriptor
         self.widths = widths
@@ -175,7 +174,7 @@ class Font:
         a, _, _, d, _, _ = self.matrix
         return (0, d * self.descent, a * width, d * self.ascent)
 
-    def write_fontfile(self, outdir: Path) -> Optional[Path]:
+    def write_fontfile(self, outdir: Path) -> Union[Path, None]:
         for suffix, key in (
             (".pfa", "FontFile"),
             (".ttf", "FontFile2"),
@@ -218,7 +217,7 @@ class SimpleFont(Font):
             base = self.get_implicit_encoding(descriptor)
         self.encoding = get_encoding(base, diff)
         self._cid2unicode = cid2unicode_from_encoding(self.encoding)
-        self.tounicode: Optional[ToUnicodeMap] = None
+        self.tounicode: Union[ToUnicodeMap, None] = None
         if "ToUnicode" in spec:
             strm = resolve1(spec["ToUnicode"])
             if isinstance(strm, ContentStream):
@@ -550,8 +549,8 @@ class CIDFont(Font):
         except KeyError:
             log.warning("Font spec is missing FontDescriptor: %r", spec)
             descriptor = {}
-        self.tounicode: Optional[ToUnicodeMap] = None
-        self.unicode_map: Optional[UnicodeMap] = None
+        self.tounicode: Union[ToUnicodeMap, None] = None
+        self.unicode_map: Union[UnicodeMap, None] = None
         # Since None is equivalent to an identity map, avoid warning
         # in the case where there was some kind of explicit Identity
         # mapping (even though this is absolutely not standards compliant)
@@ -638,7 +637,7 @@ class CIDFont(Font):
         Font.__init__(self, descriptor, widths, default_width=default_width)
 
     @property
-    def cid2gid(self) -> Optional[Mapping[int, int]]:
+    def cid2gid(self) -> Union[Mapping[int, int], None]:
         """According to PDF 2.0 Sec 9.7.4.2 Glyph selection in CIDFonts:
         The CID to glyph id mapping, or None in the case of external TrueType
         font program (Type2 CIDFont), because "...In this case, CIDs shall not

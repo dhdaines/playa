@@ -9,7 +9,6 @@ from typing import (
     Dict,
     Final,
     FrozenSet,
-    Optional,
     Sequence,
     Union,
 )
@@ -122,14 +121,14 @@ class PDFStandardSecurityHandler:
                 result = md5(result[:n]).digest()
         return result[:n]
 
-    def authenticate(self, password: str) -> Optional[bytes]:
+    def authenticate(self, password: str) -> Union[bytes, None]:
         password_bytes = password.encode("latin1")
         key = self.authenticate_user_password(password_bytes)
         if key is None:
             key = self.authenticate_owner_password(password_bytes)
         return key
 
-    def authenticate_user_password(self, password: bytes) -> Optional[bytes]:
+    def authenticate_user_password(self, password: bytes) -> Union[bytes, None]:
         key = self.compute_encryption_key(password)
         if self.verify_encryption_key(key):
             return key
@@ -143,7 +142,7 @@ class PDFStandardSecurityHandler:
             return u == self.u
         return u[:16] == self.u[:16]
 
-    def authenticate_owner_password(self, password: bytes) -> Optional[bytes]:
+    def authenticate_owner_password(self, password: bytes) -> Union[bytes, None]:
         # Algorithm 3.7
         password = (password + PASSWORD_PADDING)[:32]
         hash = md5(password)
@@ -168,7 +167,7 @@ class PDFStandardSecurityHandler:
         objid: int,
         genno: int,
         data: bytes,
-        attrs: Optional[Dict[str, Any]] = None,
+        attrs: Union[Dict[str, Any], None] = None,
     ) -> bytes:
         return self.decrypt_rc4(objid, genno, data)
 
@@ -242,7 +241,7 @@ class PDFStandardSecurityHandlerV4(PDFStandardSecurityHandler):
             error_msg = "Undefined crypt filter: param=%r" % self.param
             raise PDFEncryptionError(error_msg)
 
-    def get_cfm(self, name: str) -> Optional[Callable[[int, int, bytes], bytes]]:
+    def get_cfm(self, name: str) -> Union[Callable[[int, int, bytes], bytes], None]:
         if name == "V2":
             return self.decrypt_rc4
         elif name == "AESV2":
@@ -255,8 +254,8 @@ class PDFStandardSecurityHandlerV4(PDFStandardSecurityHandler):
         objid: int,
         genno: int,
         data: bytes,
-        attrs: Optional[Dict[str, Any]] = None,
-        name: Optional[str] = None,
+        attrs: Union[Dict[str, Any], None] = None,
+        name: Union[str, None] = None,
     ) -> bytes:
         if not self.encrypt_metadata and attrs is not None:
             t = attrs.get("Type")
@@ -317,13 +316,13 @@ class PDFStandardSecurityHandlerV5(PDFStandardSecurityHandlerV4):
         self.u_validation_salt = self.u[32:40]
         self.u_key_salt = self.u[40:]
 
-    def get_cfm(self, name: str) -> Optional[Callable[[int, int, bytes], bytes]]:
+    def get_cfm(self, name: str) -> Union[Callable[[int, int, bytes], bytes], None]:
         if name == "AESV3":
             return self.decrypt_aes256
         else:
             return None
 
-    def authenticate(self, password: str) -> Optional[bytes]:
+    def authenticate(self, password: str) -> Union[bytes, None]:
         assert default_backend is not None
         password_b = self._normalize_password(password)
         hash = self._password_hash(password_b, self.o_validation_salt, self.u)
@@ -360,7 +359,7 @@ class PDFStandardSecurityHandlerV5(PDFStandardSecurityHandlerV4):
         self,
         password: bytes,
         salt: bytes,
-        vector: Optional[bytes] = None,
+        vector: Union[bytes, None] = None,
     ) -> bytes:
         """Compute password hash depending on revision number"""
         if self.r == 5:
@@ -371,7 +370,7 @@ class PDFStandardSecurityHandlerV5(PDFStandardSecurityHandlerV4):
         self,
         password: bytes,
         salt: bytes,
-        vector: Optional[bytes] = None,
+        vector: Union[bytes, None] = None,
     ) -> bytes:
         """Compute the password for revision 5"""
         hash = sha256(password)
@@ -384,7 +383,7 @@ class PDFStandardSecurityHandlerV5(PDFStandardSecurityHandlerV4):
         self,
         password: bytes,
         salt: bytes,
-        vector: Optional[bytes] = None,
+        vector: Union[bytes, None] = None,
     ) -> bytes:
         """Compute the password for revision 6"""
         initial_hash = sha256(password)

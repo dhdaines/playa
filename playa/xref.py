@@ -9,7 +9,6 @@ from typing import (
     List,
     Mapping,
     NamedTuple,
-    Optional,
     Tuple,
     Union,
     TYPE_CHECKING,
@@ -59,7 +58,7 @@ def _update_refs(trailer: Dict[str, PDFObject], doc: "Document") -> None:
 
 
 class XRefPos(NamedTuple):
-    streamid: Optional[int]
+    streamid: Union[int, None]
     pos: int
     genno: int
 
@@ -277,11 +276,11 @@ class XRefStream(XRef):
         self, doc: Union["Document", None] = None, pos: int = 0, offset: int = 0
     ) -> None:
         self.offset = offset
-        self.data: Optional[bytes] = None
-        self.entlen: Optional[int] = None
-        self.fl1: Optional[int] = None
-        self.fl2: Optional[int] = None
-        self.fl3: Optional[int] = None
+        self.data: Union[bytes, None] = None
+        self.entlen: Union[int, None] = None
+        self.fl1: Union[int, None] = None
+        self.fl2: Union[int, None] = None
+        self.fl3: Union[int, None] = None
         self.ranges: List[Tuple[int, int]] = []
         # Because an XRefStream's dictionary may contain indirect
         # object references, we create a new IndirectObjectParser
