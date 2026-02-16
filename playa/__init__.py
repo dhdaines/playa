@@ -30,7 +30,8 @@ from playa.content import (
 from playa.data import asobj
 from playa.document import Document, PageList
 from playa.exceptions import PDFEncryptionError, PDFException, PDFPasswordIncorrect
-from playa.page import DeviceSpace, Page
+from playa.outline import Destination, Action
+from playa.page import DeviceSpace, Page, Annotation
 from playa.parser import Token
 from playa.pdftypes import ContentStream, Matrix, ObjRef, Point, Rect
 from playa.pdftypes import resolve1 as resolve
@@ -46,6 +47,9 @@ __all__ = [
     "ColorSpace",
     "ContentObject",
     "ContentStream",
+    "Destination",
+    "Action",
+    "Annotation",
     "GraphicState",
     "MarkedContent",
     "Matrix",

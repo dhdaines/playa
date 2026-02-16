@@ -681,7 +681,7 @@ class Annotation:
     """PDF annotation (PDF 1.7 section 12.5).
 
     Attributes:
-      subtype: Type of annotation.
+      type: Type of annotation.
       rect: Annotation rectangle (location on page) in *default user space*
       bbox: Annotation rectangle in *device space*
       parent: Structure element associed with this annotation, if any.
@@ -690,7 +690,7 @@ class Annotation:
     """
 
     _pageref: PageRef
-    subtype: str
+    type: str
     rect: Rect
     props: Dict[str, PDFObject]
 
@@ -701,9 +701,9 @@ class Annotation:
         if subtype is None or not isinstance(subtype, PSLiteral):
             raise PDFSyntaxError("Invalid annotation Subtype %r" % (subtype,))
         rect = rect_value(annot.get("Rect"))
-        return Annotation(
+        return cls(
             _pageref=page.pageref,
-            subtype=literal_name(subtype),
+            type=literal_name(subtype),
             rect=rect,
             props=annot,
         )

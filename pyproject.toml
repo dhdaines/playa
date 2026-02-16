@@ -169,7 +169,7 @@ compile = """mypyc \
 extra-dependencies = [ "pydantic > 2" ]
 
 [tool.hatch.envs.notebooks]
-extra-dependencies = [ "paves", "jupyterlab" ]
+extra-dependencies = [ "paves", "jupyterlab", "graphviz" ]
 
 [tool.hatch.envs.notebooks.scripts]
 lab = "jupyter lab"

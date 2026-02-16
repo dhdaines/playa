@@ -221,7 +221,7 @@ def test_annotations() -> None:
             assert annot.page is page
             rx0, ry0, rx1, ry1 = annot.rect
             bx0, by0, bx1, by1 = annot.bbox
-            print(annot.subtype, annot.rect, annot.bbox)
+            print(annot.type, annot.rect, annot.bbox)
             assert rx0 == bx0
             assert rx1 == bx1
             assert by0 == pytest.approx(page.height - ry1)

@@ -174,7 +174,7 @@ class Page(TypedDict, total=False):
 
 
 class Annotation(TypedDict, total=False):
-    subtype: str
+    type: str
     """Type of annotation."""
     rect: Rect
     """Annotation rectangle in default user space."""
@@ -188,7 +188,7 @@ class Annotation(TypedDict, total=False):
 
 
 class XObject(TypedDict, total=False):
-    subtype: str
+    type: str
     """Type of XObject."""
     xobject_id: int
     """Indirect object ID."""
@@ -390,7 +390,7 @@ def xobject_from_stream(
         xobject_id=stream["stream_id"],
         genno=stream["genno"],
         length=stream["length"],
-        subtype=asobj(obj.attrs["Subtype"]),
+        type=asobj(obj.attrs["Subtype"]),
     )
     if "filters" in stream:
         xobj["filters"] = stream["filters"]
@@ -497,7 +497,7 @@ def asobj_page(obj: _Page) -> Page:
 
 @asobj.register
 def asobj_annotation(obj: _Annotation) -> Annotation:
-    annot = Annotation(subtype=obj.subtype, rect=obj.rect)
+    annot = Annotation(type=obj.type, rect=obj.rect)
     for attr in "contents", "name", "mtime":
         val = getattr(obj, attr)
         if val is not None:
