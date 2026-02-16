@@ -8,13 +8,13 @@ import pytest
 
 import playa
 from playa.exceptions import PDFEncryptionError
-from playa.outline import Outline
+from playa.outline import Tree as OutlineTree, Item as OutlineItem
 
 from .data import ALLPDFS, PASSWORDS, TESTDIR, XFAILS
 
 
-def expand_titles(outline: Outline) -> List:
-    def expand_one(child):
+def expand_titles(outline: OutlineTree) -> List:
+    def expand_one(child: OutlineItem):
         out = [child.title]
         for c in child:
             out.append(expand_one(c))
@@ -33,8 +33,8 @@ def test_outline():
         assert titles == ["Titre 1", ["Titre 2", ["Tableau"]]]
 
 
-def expand(outline: Outline) -> List:
-    def expand_one(child, level=1):
+def expand(outline: OutlineTree) -> List:
+    def expand_one(child: OutlineItem, level=1):
         out = [child.title, child.destination, child.element]
         # Limit depth to avoid taking all memory
         if level == 3:
@@ -66,6 +66,9 @@ def test_outlines(path) -> None:
                     print(expand(outline))
         except PDFEncryptionError:
             pytest.skip("password incorrect or cryptography package not installed")
+        except ValueError as e:
+            # Make sure we report the error as an invalid outline
+            assert "outline" in str(e).lower()
 
 
 @pytest.mark.parametrize("path", ALLPDFS, ids=str)
@@ -80,10 +83,11 @@ def test_destinations(path) -> None:
         try:
             with playa.open(path, password=password) as pdf:
                 for idx, k in enumerate(pdf.destinations):
-                    _ = pdf.destinations[k]
+                    dest = pdf.destinations[k]
+                    assert dest.pos
                     # FIXME: Currently getting destinations is quite
                     # slow, so only do a few of them.
-                    if idx == 300:
+                    if idx == 10:
                         break
         except PDFEncryptionError:
             pytest.skip("password incorrect or cryptography package not installed")

@@ -7,11 +7,16 @@
   unique objects.
 - Add explicit ABCs to classes that need them.
 - Remove use of `Optional` everywhere in favour of `Union[T, None]`
+- Add useful device space properties to `Destination`
 - BREAKING CHANGE: `XObjectObject` is not a `Mapping` so remove
   `__getitem__` and `__contains__` methods
 - BREAKING CHANGE: `BBOX_NONE` considered harmful since it can't be
   type checked, so do the sensible thing and use `None` instead.
 - BREAKING CHANGE: `CmapDB` is a useless class, we are not Java
+- BREAKING CHANGE: Separate outline trees from outline items
+  along the same model of `Tree` and `Element` (same principle as with
+  `BBOX_NONE`, we want to strongly type things that are different
+  instead of relying on ad-hoc checks like `item.parent is None`)
 - TODO: Allow `--structure` and `--images` at the same time, linking
   image files to structure JSON.
 - TODO: BREAKING CHANGE: Remove `objstack` from `IndirectObjectParser`

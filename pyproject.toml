@@ -75,7 +75,7 @@ config-path = "none"  # Disable hatch's unreasonable ruff defaults
 ban-relative-imports = "all"
 
 [tool.ruff]
-exclude = ["samples/3rdparty"] # why no leading slash?
+exclude = ["samples/3rdparty", "notebooks"] # why no leading slash?
 
 [tool.pytest.ini_options]
 testpaths = [ "tests" ]
@@ -166,6 +166,9 @@ extra-dependencies = [ "pydantic > 2" ]
 
 [tool.hatch.envs.notebooks]
 extra-dependencies = [ "paves", "jupyterlab" ]
+
+[tool.hatch.envs.notebooks.scripts]
+lab = "jupyter lab"
 
 # To enable, set HATCH_BUILD_HOOK_ENABLE_MYPYC=1
 [tool.hatch.build.targets.wheel.hooks.mypyc]

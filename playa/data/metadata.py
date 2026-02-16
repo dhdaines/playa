@@ -20,7 +20,7 @@ from playa.document import Document as _Document
 from playa.font import Font as _Font
 from playa.fontmetrics import FONT_METRICS
 from playa.outline import Destination as _Destination
-from playa.outline import Outline as _Outline
+from playa.outline import Tree as _OutlineTree, Item as _OutlineItem
 from playa.page import Annotation as _Annotation
 from playa.page import Page as _Page
 from playa.parser import IndirectObject as _IndirectObject
@@ -57,8 +57,8 @@ class Document(TypedDict, total=False):
     """Should the user be allowed to extract text?"""
     encryption: "Encryption"
     """Encryption information for this document."""
-    outline: "Outline"
-    """Outline hierarchy for this document."""
+    outlines: List["Outline"]
+    """Outline for this document."""
     destinations: Dict[str, "Destination"]
     """Named destinations for this document."""
     structure: "StructTree"
@@ -79,7 +79,7 @@ class Encryption(TypedDict, total=False):
 
 
 class Outline(TypedDict, total=False):
-    """Outline hierarchy for a PDF document."""
+    """Outline item for a PDF document."""
 
     title: str
     """Title of this outline entry."""
@@ -552,10 +552,14 @@ def asobj_stream(obj: _ContentStream) -> Dict:
 
 
 @asobj.register
-def asobj_outline(obj: _Outline, recurse: bool = True) -> Outline:
+def asobj_outline_tree(obj: _OutlineTree) -> List[Outline]:
+    return [asobj(outline) for outline in obj]
+
+
+@asobj.register
+def asobj_outline_item(obj: _OutlineItem, recurse: bool = True) -> Outline:
     out = Outline()
-    if obj.title is not None:
-        out["title"] = obj.title
+    out["title"] = obj.title
     if obj.destination is not None:
         out["destination"] = asobj(obj.destination)
     if recurse:
@@ -653,9 +657,9 @@ def asobj_document(pdf: _Document, exclude: Set[str] = set()) -> Document:
         doc["pages"] = [asobj(page) for page in pdf.pages]
     if "objects" not in exclude:
         doc["objects"] = [asobj(obj) for obj in pdf.objects]
-    if "outline" not in exclude:
+    if "outlines" not in exclude:
         if pdf.outline is not None:
-            doc["outline"] = asobj(pdf.outline)
+            doc["outlines"] = asobj(pdf.outline)
         dests = asobj(pdf.destinations)
         if dests:
             doc["destinations"] = dests

@@ -31,7 +31,7 @@ from playa.exceptions import (
     PDFSyntaxError,
 )
 from playa.font import CIDFont, Font, TrueTypeFont, Type1Font, Type3Font
-from playa.outline import Destination, Outline
+from playa.outline import Destination, Tree as Outlines
 from playa.page import (
     DeviceSpace,
     Page,
@@ -187,7 +187,7 @@ class Document(Mapping[int, PDFObject]):
     _pages: Union["PageList", None] = None
     _pool: Union[Executor, None] = None
     _catalog: Union[Dict[str, PDFObject], None] = None
-    _outline: Union["Outline", None] = None
+    _outline: Union["Outlines", None] = None
     _destinations: Union["Destinations", None] = None
     _structure: Union["Tree", None] = None
     _fontmap: Union[Mapping[str, Font], None] = None
@@ -739,18 +739,19 @@ class Document(Mapping[int, PDFObject]):
         return self._fontmap
 
     @property
-    def outline(self) -> Union[Outline, None]:
+    def outline(self) -> Union[Outlines, None]:
         """Document outline, if any."""
         if "Outlines" not in self.catalog:
             return None
-        if self._outline is None:
-            try:
-                self._outline = Outline(self)
-            except TypeError:
-                log.warning(
-                    "Invalid Outlines entry in catalog: %r", self.catalog["Outlines"]
-                )
-                return None
+        if self._outline is not None:
+            return self._outline
+        try:
+            self._outline = Outlines(self)
+        except TypeError:
+            log.warning(
+                "Invalid Outlines entry in catalog: %r", self.catalog["Outlines"]
+            )
+            return None
         return self._outline
 
     @property

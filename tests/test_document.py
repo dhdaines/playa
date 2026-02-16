@@ -177,7 +177,9 @@ def test_names():
 def test_destinations():
     with playa.open(CONTRIB / "issue620f.pdf") as doc:
         assert "Page.1" in doc.destinations
+        assert doc.destinations["Page.1"].pos == (0, 0)
         assert "Page.2" in doc.destinations
+        assert doc.destinations["Page.2"].pos == (0, 0)
     with playa.open(CONTRIB / "issue620f.pdf") as doc:
         names = list(doc.destinations)
         assert names == ["Page.1", "Page.2"]
