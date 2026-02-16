@@ -523,22 +523,22 @@ def _extract_outline_item(item: OutlineItem, indent: int, outfh: TextIO) -> bool
 
 
 def extract_outline(doc: Document, args: argparse.Namespace) -> None:
-    """Extract logical outline as JSON."""
+    """Extract document outline as JSON."""
     if doc.outline is None:
         LOG.info("Document has no outline")
-        print("{}", file=args.outfile)
+        print("[]", file=args.outfile)
         return
     children = list(doc.outline)
     if not children:
-        print("{}", file=args.outfile)
+        print("[]", file=args.outfile)
         return
-    print('{"outlines": [', file=args.outfile)
+    print('[', file=args.outfile)
     comma = False
     for item in children:
         if comma:
             print(",", file=args.outfile)
-        comma = _extract_outline_item(item, 0, args.outfile)
-    print("\n]}", file=args.outfile)
+        comma = _extract_outline_item(item, 2, args.outfile)
+    print("\n]", file=args.outfile)
 
 
 def get_images(page: Page, imgdir: Path) -> List[Tuple[Path, Image]]:

@@ -57,8 +57,8 @@ class Document(TypedDict, total=False):
     """Should the user be allowed to extract text?"""
     encryption: "Encryption"
     """Encryption information for this document."""
-    outline: "Outline"
-    """Outline hierarchy for this document."""
+    outlines: List["Outline"]
+    """Outline for this document."""
     destinations: Dict[str, "Destination"]
     """Named destinations for this document."""
     structure: "StructTree"
@@ -79,7 +79,7 @@ class Encryption(TypedDict, total=False):
 
 
 class Outline(TypedDict, total=False):
-    """Outline hierarchy for a PDF document."""
+    """Outline item for a PDF document."""
 
     title: str
     """Title of this outline entry."""
@@ -552,13 +552,8 @@ def asobj_stream(obj: _ContentStream) -> Dict:
 
 
 @asobj.register
-def asobj_outline_tree(obj: _OutlineTree, recurse: bool = True) -> Outline:
-    out = Outline()
-    if recurse:
-        children = list(obj)
-        if children:
-            out["outlines"] = asobj(children)
-    return out
+def asobj_outline_tree(obj: _OutlineTree) -> List[Outline]:
+    return [asobj(outline) for outline in obj]
 
 
 @asobj.register
@@ -662,9 +657,9 @@ def asobj_document(pdf: _Document, exclude: Set[str] = set()) -> Document:
         doc["pages"] = [asobj(page) for page in pdf.pages]
     if "objects" not in exclude:
         doc["objects"] = [asobj(obj) for obj in pdf.objects]
-    if "outline" not in exclude:
+    if "outlines" not in exclude:
         if pdf.outline is not None:
-            doc["outline"] = asobj(pdf.outline)
+            doc["outlines"] = asobj(pdf.outline)
         dests = asobj(pdf.destinations)
         if dests:
             doc["destinations"] = dests

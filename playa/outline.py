@@ -6,6 +6,7 @@ import logging
 from dataclasses import dataclass
 from typing import (
     TYPE_CHECKING,
+    ClassVar,
     Dict,
     Final,
     Iterable,
@@ -61,7 +62,7 @@ class Destination:
     _pageref: PageRef
     display: Union[PSLiteral, None]
     coords: List[PDFObject]
-    ncoords: int = 0
+    ncoords: ClassVar[int] = 0
 
     @classmethod
     def from_dest(
@@ -153,7 +154,7 @@ class Destination:
 class DestinationXYZ(Destination):
     """Destination of type XYZ, with a (left, top) position and a zoom level."""
 
-    ncoords: Final = 3
+    ncoords: ClassVar[int] = 3
 
     @property
     def top(self) -> Union[float, None]:
@@ -200,7 +201,7 @@ class DestinationXYZ(Destination):
 class DestinationFitH(Destination):
     """Destination of type FitH or FitBH, with a top position."""
 
-    ncoords: Final = 1
+    ncoords: ClassVar[int] = 1
 
     @property
     def top(self) -> Union[float, None]:
@@ -234,7 +235,7 @@ class DestinationFitH(Destination):
 class DestinationFitV(Destination):
     """Destination of type FitV or FitBV, with a left position."""
 
-    ncoords: Final = 1
+    ncoords: ClassVar[int] = 1
 
     @property
     def top(self) -> Union[float, None]:
@@ -268,7 +269,7 @@ class DestinationFitV(Destination):
 class DestinationFitR(Destination):
     """Destination of type FitR, with a bounding box."""
 
-    ncoords: Final = 4
+    ncoords: ClassVar[int] = 4
 
     @property
     def top(self) -> Union[float, None]:
@@ -319,7 +320,7 @@ class DestinationFitR(Destination):
             right = self.page.width
         if top is None:
             top = self.page.height
-        return transform_bbox(self.doc.ctm, rect_value([left, bottom, right, top]))
+        return transform_bbox(self.page.ctm, rect_value([left, bottom, right, top]))
 
 
 DEST_CLASSES: Dict[PSLiteral, Type[Destination]] = {
