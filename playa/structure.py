@@ -5,10 +5,14 @@ Lazy interface to PDF logical structure (PDF 1.7 sect 14.7).
 import functools
 import logging
 import re
+from collections import deque
 from dataclasses import dataclass
+from itertools import groupby
+from operator import attrgetter
 from typing import (
     TYPE_CHECKING,
     Callable,
+    Deque,
     Dict,
     Iterable,
     Iterator,
@@ -23,10 +27,12 @@ from typing import (
 from playa.data_structures import NumberTree
 from playa.parser import LIT, PDFObject, PSLiteral
 from playa.pdftypes import (
+    KWD,
     ContentStream,
     ObjRef,
     Rect,
     dict_value,
+    int_value,
     list_value,
     literal_name,
     resolve1,
@@ -57,6 +63,7 @@ LITERAL_OBJR = LIT("OBJR")
 LITERAL_STRUCTTREEROOT = LIT("StructTreeRoot")
 LITERAL_STRUCTELEM = LIT("StructElem")
 MatchFunc = Callable[["Element"], bool]
+KWD_BDC = KWD(b"BDC")
 
 if TYPE_CHECKING:
     from playa.document import Document
@@ -333,6 +340,69 @@ class Findable(Iterable):
             return None
 
 
+class ContentIterator(Iterator[Union[ContentItem, ContentObject]]):
+    """Iterator over contents of a structure element."""
+
+    def __init__(self, el: Iterable[Union["Element", ContentItem, ContentObject]]):
+        self._itors = [iter(el)]
+
+    @property
+    def page_order(self) -> Iterator[Union[ContentItem, ContentObject]]:
+        """Iterate over content items and objects in page order as defined in
+        PDF 2.0 section 14.8.2.5.
+
+        Items are grouped by page, then ordered inside a page by their
+        appearance in the content stream.
+
+        Because content objects are outside the page's content stream,
+        it is not clear how they should be ordered with respect to
+        marked content sections.  For lack of a better idea, we will
+        place them at the start of the page ordering.
+
+        This interface is not at all Lazy as it requires us to create
+        the entire set of items/objects, then interpret all the pages.
+        """
+        all_items = list(self)
+        all_items.sort(key=attrgetter("page.page_idx"))
+        for page, items in groupby(all_items, attrgetter("page")):
+            page_items = list(items)
+            by_mcid: Dict[int, ContentItem] = {}
+            for item in page_items:
+                if isinstance(item, ContentObject):
+                    yield item
+                elif isinstance(item, ContentItem):
+                    by_mcid[item.mcid] = item
+            # Now interpret the page to return items in order
+            stack: Deque[PDFObject] = deque([], 3)
+            proprsrc = dict_value(page.resources.get("Properties", {}))
+            for obj in page.contents:
+                stack.append(obj)
+                if obj is KWD_BDC:
+                    tag, props, _ = stack
+                    if isinstance(props, PSLiteral):
+                        props = proprsrc.get(props.name, {})
+                    propdict = dict_value(props)
+                    if "MCID" in propdict:
+                        mcid = int_value(propdict["MCID"])
+                        if mcid in by_mcid:
+                            yield by_mcid[mcid]
+
+    def __next__(self) -> Union[ContentItem, ContentObject]:
+        while True:
+            if not self._itors:
+                raise StopIteration
+            try:
+                kid = next(self._itors[-1])
+            except StopIteration:
+                self._itors.pop()
+                continue
+            if isinstance(kid, Element):
+                self._itors.append(iter(kid))
+                continue
+            if isinstance(kid, (ContentItem, ContentObject)):
+                return kid
+
+
 @dataclass
 class Element(Findable, Iterable[Union["Element", ContentItem, ContentObject]]):
     """Logical structure element.
@@ -418,13 +488,13 @@ class Element(Findable, Iterable[Union["Element", ContentItem, ContentObject]]):
         return Element.from_dict(self.doc, p)
 
     @property
-    def contents(self) -> Iterator[Union[ContentItem, ContentObject]]:
-        """Iterate over all content items contained in an element."""
-        for kid in self:
-            if isinstance(kid, Element):
-                yield from kid.contents
-            elif isinstance(kid, (ContentItem, ContentObject)):
-                yield kid
+    def contents(self) -> ContentIterator:
+        """Iterate over all content items contained in an element.
+
+        By default these are returned in depth-first order, which is
+        "logical content order" as defined in PDF 2.0 section 14.8.2.5.
+        """
+        return ContentIterator(self)
 
     @property
     def text(self) -> str:
@@ -790,14 +860,9 @@ class Tree(Findable, Iterable[Union["Element", ContentItem, ContentObject]]):
         return self._parent_tree
 
     @property
-    def contents(self) -> Iterator[Union[ContentItem, ContentObject]]:
+    def contents(self) -> ContentIterator:
         """Iterate over all content items in the tree."""
-        for kid in self:
-            if isinstance(kid, Element):
-                yield from kid.contents
-            elif isinstance(kid, (ContentItem, ContentObject)):
-                # This is not supposed to happen, but we will support it anyway
-                yield kid
+        return ContentIterator(self)
 
     @property
     def doc(self) -> "Document":

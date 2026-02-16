@@ -224,5 +224,22 @@ def test_marked_content() -> None:
         assert logical_mcids != page_mcids
 
 
+def test_page_order() -> None:
+    with playa.open(TESTDIR / "pdf_structure.pdf") as pdf:
+        page = pdf.pages[0]
+        el = page.structure.find("L")
+        assert el is not None
+        logical_mcids = [
+            item.mcid for item in el.contents if isinstance(item, ContentItem)
+        ]
+        print(logical_mcids)
+        page_mcids = [
+            item.mcid
+            for item in el.contents.page_order
+            if isinstance(item, ContentItem)
+        ]
+        print(page_mcids)
+
+
 if __name__ == "__main__":
     test_specific_structure()

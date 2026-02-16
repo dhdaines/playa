@@ -1291,13 +1291,11 @@ class ContentSection(Iterable[ContentObject], Sized):
 class ContentSequence(Sequence[ContentSection]):
     """Collect content object in marked content sections.
 
-    These are organized in a sequence and ordered by marked content
-    ID, because this is the definition of "logical content order" and
-    also defines the reading order of text.
+    These are ordered by marked content ID, and you can index into
+    this to get the content for a specific MCID.
 
-    You can also get them as an iterator in "page content order",
-    i.e. the order in which they appeared in the actual content
-    stream, using the `page_order` property.
+    You can iterate over them in page content order with the
+    `page_order` property.
 
     """
 
