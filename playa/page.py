@@ -53,7 +53,13 @@ from playa.pdftypes import (
     stream_value,
 )
 from playa.structure import PageStructure
-from playa.utils import decode_text, mult_matrix, normalize_rect, transform_bbox
+from playa.utils import (
+    decode_text,
+    mult_matrix,
+    normalize_rect,
+    point_inside,
+    transform_bbox,
+)
 from playa.worker import PageRef, _deref_document, _deref_page, _ref_document, _ref_page
 
 if TYPE_CHECKING:
@@ -514,20 +520,25 @@ class Page(Iterable[ContentObject]):
         ):
             yield obj
 
-    def extract_text(self) -> str:
+    def extract_text(self, bbox: Union[Rect, None] = None) -> str:
         """Do some best-effort text extraction.
 
         This necessarily involves a few heuristics, so don't get your
         hopes up.  It will attempt to use marked content information
         for a tagged PDF, otherwise it will fall back on the character
         displacement and line matrix to determine word and line breaks.
+
+        Args:
+          bbox: If not `None`, only text objects which intersect this
+          rectangle will be extracted
+
         """
         if self.doc.is_tagged:
-            return self.extract_text_tagged()
+            return self.extract_text_tagged(bbox=bbox)
         else:
-            return self.extract_text_untagged()
+            return self.extract_text_untagged(bbox=bbox)
 
-    def extract_text_untagged(self) -> str:
+    def extract_text_untagged(self, bbox: Union[Rect, None] = None) -> str:
         """Get text from a page of an untagged PDF."""
 
         def _extract_text_from_obj(
@@ -569,7 +580,14 @@ class Page(Iterable[ContentObject]):
             if strings and off - prev_end > 0.5 and not strings[-1].endswith(" "):
                 strings.append(" ")
             textstr, prev_end = _extract_text_from_obj(text, vertical, off)
-            strings.append(textstr)
+            if bbox is None:
+                strings.append(textstr)
+            else:
+                text_end = (dx, prev_end) if vertical else (prev_end, dy)
+                # FIXME: This is not actually correct, we want to
+                # check if the line segment intersects the bbox
+                if point_inside((dx, dy), bbox) or point_inside(text_end, bbox):
+                    strings.append(textstr)
             prev_origin = dx, dy
         if strings:
             lines.append("".join(strings))
@@ -600,7 +618,7 @@ class Page(Iterable[ContentObject]):
                 line_offset = dy
         return line_offset < 0
 
-    def extract_text_tagged(self) -> str:
+    def extract_text_tagged(self, bbox: Union[Rect, None] = None) -> str:
         """Get text from a page of a tagged PDF."""
         lines: List[str] = []
         strings: List[str] = []
@@ -641,7 +659,16 @@ class Page(Iterable[ContentObject]):
                     lines.extend(textwrap.wrap("".join(strings)))
                     strings.clear()
                 prev_mcid = mcs.mcid
-            strings.append(chars)
+            if bbox is None or text is None:
+                strings.append(chars)
+            else:
+                x, y = text.origin
+                dx, dy = text.displacement
+                text_end = (x + dx, y + dy)
+                # FIXME: This is not actually correct, we want to
+                # check if the line segment intersects the bbox
+                if point_inside((x, y), bbox) or point_inside(text_end, bbox):
+                    strings.append(chars)
             if text is not None:
                 prev_origin = text.origin
         if strings:

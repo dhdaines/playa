@@ -170,6 +170,12 @@ def normalize_rect(r: Rect) -> Rect:
     return x0, y0, x1, y1
 
 
+def point_inside(p: Point, r: Rect) -> bool:
+    x, y = p
+    x0, y0, x1, y1 = normalize_rect(r)
+    return x0 <= x <= x1 and y0 <= y <= y1
+
+
 def mult_matrix(m1: Matrix, m0: Matrix) -> Matrix:
     (a1, b1, c1, d1, e1, f1) = m1
     (a0, b0, c0, d0, e0, f0) = m0

@@ -532,7 +532,7 @@ def extract_outline(doc: Document, args: argparse.Namespace) -> None:
     if not children:
         print("[]", file=args.outfile)
         return
-    print('[', file=args.outfile)
+    print("[", file=args.outfile)
     comma = False
     for item in children:
         if comma:

@@ -8,7 +8,6 @@ from typing import (
     TYPE_CHECKING,
     ClassVar,
     Dict,
-    Final,
     Iterable,
     Iterator,
     List,

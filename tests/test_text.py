@@ -33,3 +33,11 @@ def test_tagged_line_breaks() -> None:
     with playa.open(CONTRIB / "2023-06-20-PV.pdf") as pdf:
         text = pdf.pages[0].extract_text()
         assert "4. Demande" in text
+
+
+@pytest.mark.skipif(not CONTRIB.exists(), reason="contrib samples not present")
+def test_tagged_bbox() -> None:
+    """Make sure we can extract text in a bbox from a tagged PDF."""
+    with playa.open(CONTRIB / "2023-06-20-PV.pdf") as pdf:
+        text = pdf.pages[0].extract_text(bbox=(200, 100, 400, 170))
+        assert text == "COMITÉ DE DÉMOLITION\nPROCÈS-VERBAL"
