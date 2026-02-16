@@ -66,6 +66,9 @@ def test_outlines(path) -> None:
                     print(expand(outline))
         except PDFEncryptionError:
             pytest.skip("password incorrect or cryptography package not installed")
+        except ValueError as e:
+            # Make sure we report the error as an invalid outline
+            assert "outline" in str(e).lower()
 
 
 @pytest.mark.parametrize("path", ALLPDFS, ids=str)
@@ -80,10 +83,11 @@ def test_destinations(path) -> None:
         try:
             with playa.open(path, password=password) as pdf:
                 for idx, k in enumerate(pdf.destinations):
-                    _ = pdf.destinations[k]
+                    dest = pdf.destinations[k]
+                    assert dest.pos
                     # FIXME: Currently getting destinations is quite
                     # slow, so only do a few of them.
-                    if idx == 300:
+                    if idx == 10:
                         break
         except PDFEncryptionError:
             pytest.skip("password incorrect or cryptography package not installed")

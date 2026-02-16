@@ -4,20 +4,43 @@ Lazy interface to PDF document outline (PDF 1.7 sect 12.3.3).
 
 import logging
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Dict, Iterable, Iterator, Sequence, Tuple, Union
+from typing import (
+    TYPE_CHECKING,
+    Dict,
+    Final,
+    Iterable,
+    Iterator,
+    List,
+    Sequence,
+    Type,
+    Union,
+)
 
 from playa.parser import PDFObject, PSLiteral
-from playa.pdftypes import LIT, ObjRef, dict_value, resolve1
+from playa.pdftypes import (
+    LIT,
+    ObjRef,
+    Point,
+    Rect,
+    dict_value,
+    num_value,
+    point_value,
+    rect_value,
+    resolve1,
+)
 from playa.structure import Element
-from playa.utils import decode_text
+from playa.utils import apply_matrix_pt, decode_text, normalize_rect, transform_bbox
 from playa.worker import (
     DocumentRef,
+    PageRef,
+    _deref_page,
     _deref_document,
     _ref_document,
 )
 
 if TYPE_CHECKING:
     from playa.document import Document
+    from playa.page import Page
 
 LOG = logging.getLogger(__name__)
 DISPLAY_XYZ = LIT("XYZ")
@@ -35,10 +58,10 @@ ACTION_GOTO = LIT("GoTo")
 class Destination:
     """PDF destinations (PDF 1.7 sect 12.3.2)"""
 
-    _docref: DocumentRef
-    page_idx: Union[int, None]
+    _pageref: PageRef
     display: Union[PSLiteral, None]
-    coords: Tuple[Union[float, None], ...]
+    coords: List[PDFObject]
+    ncoords: int = 0
 
     @classmethod
     def from_dest(
@@ -53,14 +76,15 @@ class Destination:
 
     @classmethod
     def from_list(cls, doc: "Document", dest: Sequence) -> "Destination":
-        pageobj, display, *args = dest
-        page_idx: Union[int, None] = None
+        pageobj, display, *coords = dest
+        cls = DEST_CLASSES.get(display, cls)
+        page = doc.pages[0]
         if isinstance(pageobj, int):
             # Not really sure if this is page number or page index...
-            page_idx = pageobj - 1
+            page = doc.pages[pageobj - 1]
         elif isinstance(pageobj, ObjRef):
             try:
-                page_idx = doc.pages.by_id(pageobj.objid).page_idx
+                page = doc.pages.by_id(pageobj.objid)
             except KeyError:
                 LOG.warning("Invalid page object in destination: %r", pageobj)
         else:
@@ -68,13 +92,246 @@ class Destination:
         if not isinstance(display, PSLiteral):
             LOG.warning("Unknown display type: %r", display)
             display = None
-        coords = tuple(x if isinstance(x, (int, float)) else None for x in args)
-        return Destination(
-            _docref=_ref_document(doc),
-            page_idx=page_idx,
+        return cls(
+            _pageref=page.pageref,
             display=display,
             coords=coords,
         )
+
+    @property
+    def page(self) -> "Page":
+        """The page target of this destination."""
+        return _deref_page(self._pageref)
+
+    @property
+    def doc(self) -> "Document":
+        """The document containing this destination."""
+        docref, _ = self._pageref
+        return _deref_document(docref)
+
+    @property
+    def page_idx(self) -> int:
+        return self.page.page_idx
+
+    @property
+    def top(self) -> Union[float, None]:
+        """Top position for this destination, or None for unchanged."""
+        return None
+
+    @property
+    def left(self) -> Union[float, None]:
+        """Left position for this destination, or None for unchanged."""
+        return None
+
+    @property
+    def pos(self) -> Point:
+        """Position of this destination in device space.
+
+        In the case where a coordinate is None (for "unchanged") it
+        will default to the left or top edge of the page.
+        """
+        return apply_matrix_pt(self.page.ctm, (0, self.page.height))
+
+    @property
+    def bbox(self) -> Rect:
+        """Rectangle in device space to zoom to for this destination.
+
+        In the case where a coordinate is None (for "unchanged") it
+        will default to the edge of the page.
+        """
+        left, top = self.pos
+        right, bottom = apply_matrix_pt(self.page.ctm, (self.page.width, 0))
+        return normalize_rect((left, top, right, bottom))
+
+    @property
+    def zoom(self) -> Union[float, None]:
+        """Zoom factor of this destination, or None for unchanged."""
+        return None
+
+
+@dataclass
+class DestinationXYZ(Destination):
+    """Destination of type XYZ, with a (left, top) position and a zoom level."""
+
+    ncoords: Final = 3
+
+    @property
+    def top(self) -> Union[float, None]:
+        """Top position for this destination, or None for unchanged."""
+        top = self.coords[1]
+        if top is None:
+            return None
+        _, y = apply_matrix_pt(self.page.ctm, (0, num_value(top)))
+        return y
+
+    @property
+    def left(self) -> Union[float, None]:
+        """Left position for this destination, or None for unchanged."""
+        left = self.coords[0]
+        if left is None:
+            return None
+        x, _ = apply_matrix_pt(self.page.ctm, (num_value(left), 0))
+        return x
+
+    @property
+    def pos(self) -> Point:
+        """Position of this destination in device space.
+
+        In the case where a coordinate is None (for "unchanged") it
+        will default to the left or top edge of the page.
+        """
+        left, top = self.coords[0:2]
+        # Give them some defaults in default user space
+        if left is None:
+            left = 0
+        if top is None:
+            top = self.page.height
+        return apply_matrix_pt(self.page.ctm, point_value([left, top]))
+
+    @property
+    def zoom(self) -> Union[float, None]:
+        """Zoom factor of this destination, or None for unchanged."""
+        if not self.coords[2]:  # 0 and None are equivalent
+            return None
+        return num_value(self.coords[2])
+
+
+@dataclass
+class DestinationFitH(Destination):
+    """Destination of type FitH or FitBH, with a top position."""
+
+    ncoords: Final = 1
+
+    @property
+    def top(self) -> Union[float, None]:
+        """Top position for this destination, or None for unchanged."""
+        top = self.coords[0]
+        if top is None:
+            return None
+        _, y = apply_matrix_pt(self.page.ctm, (0, num_value(top)))
+        return y
+
+    @property
+    def left(self) -> Union[float, None]:
+        """Left position for this destination (always None, unchanged)."""
+        return None
+
+    @property
+    def pos(self) -> Point:
+        """Position of this destination in device space.
+
+        In the case where a coordinate is None (for "unchanged") it
+        will default to the left or top edge of the page.
+        """
+        top = self.coords[0]
+        left = 0
+        if top is None:
+            top = self.page.height
+        return apply_matrix_pt(self.page.ctm, point_value([left, top]))
+
+
+@dataclass
+class DestinationFitV(Destination):
+    """Destination of type FitV or FitBV, with a left position."""
+
+    ncoords: Final = 1
+
+    @property
+    def top(self) -> Union[float, None]:
+        """Top position for this destination (always None, unchanged)."""
+        return None
+
+    @property
+    def left(self) -> Union[float, None]:
+        """Left position for this destination, or None for unchanged."""
+        left = self.coords[0]
+        if left is None:
+            return None
+        x, _ = apply_matrix_pt(self.page.ctm, (num_value(left), self.page.height))
+        return x
+
+    @property
+    def pos(self) -> Point:
+        """Position of this destination in device space.
+
+        In the case where a coordinate is None (for "unchanged") it
+        will default to the left or top edge of the page.
+        """
+        left = self.coords[0]
+        top = self.page.height
+        if left is None:
+            left = 0
+        return apply_matrix_pt(self.page.ctm, point_value([left, top]))
+
+
+@dataclass
+class DestinationFitR(Destination):
+    """Destination of type FitR, with a bounding box."""
+
+    ncoords: Final = 4
+
+    @property
+    def top(self) -> Union[float, None]:
+        """Top position for this destination, or None for unchanged."""
+        top = self.coords[3]
+        if top is None:
+            return None
+        _, y = self.pos
+        return y
+
+    @property
+    def left(self) -> Union[float, None]:
+        """Left position for this destination, or None for unchanged."""
+        left = self.coords[0]
+        if left is None:
+            return None
+        x, _ = self.pos
+        return x
+
+    @property
+    def pos(self) -> Point:
+        """Position of this destination in device space.
+
+        In the case where a coordinate is None (for "unchanged") it
+        will default to the left or top edge of the page.
+        """
+        left, _, _, top = self.coords
+        # Give them some defaults in default user space
+        if left is None:
+            left = 0
+        if top is None:
+            top = self.page.height
+        return apply_matrix_pt(self.page.ctm, point_value([left, top]))
+
+    @property
+    def bbox(self) -> Rect:
+        """Rectangle in device space to zoom to for this destination.
+
+        In the case where a coordinate is None (for "unchanged") it
+        will default to the edge of the page.
+        """
+        left, bottom, right, top = self.coords
+        if left is None:
+            left = 0
+        if bottom is None:
+            bottom = 0
+        if right is None:
+            right = self.page.width
+        if top is None:
+            top = self.page.height
+        return transform_bbox(self.doc.ctm, rect_value([left, bottom, right, top]))
+
+
+DEST_CLASSES: Dict[PSLiteral, Type[Destination]] = {
+    DISPLAY_XYZ: DestinationXYZ,
+    DISPLAY_FIT: Destination,
+    DISPLAY_FITH: DestinationFitH,
+    DISPLAY_FITV: DestinationFitV,
+    DISPLAY_FITR: DestinationFitR,
+    DISPLAY_FITB: Destination,
+    DISPLAY_FITBH: DestinationFitH,
+    DISPLAY_FITBV: DestinationFitV,
+}
 
 
 @dataclass
