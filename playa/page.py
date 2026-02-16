@@ -530,14 +530,14 @@ class Page(Iterable[ContentObject]):
 
         Args:
           bbox: If not `None`, only text objects which intersect this
-          rectangle will be extracted
+                rectangle will be extracted.
 
-        Note: `bbox` operates on text objects, not glyphs You may be
-          surprised to get a lot more text than you expected if you
-          call this with a `bbox`.  This is because, for efficiency
-          reasons, the intersection check is performed on text objects
-          (strings in the content stream) rather than glyphs
-          (individual characters).  For many tasks like table
+        Note: `bbox` operates on text objects, not glyphs.
+          You may be surprised to get a lot more text than you
+          expected if you call this with a `bbox`.  This is because,
+          for efficiency reasons, the intersection check is performed
+          on text objects (strings in the content stream) rather than
+          glyphs (individual characters).  For many tasks like table
           extraction, this is actually what you want.  Otherwise, you
           will need to use `playa.utils.intersect_rects` on the
           individual glyph bboxes, which is, of course, slow.
@@ -625,7 +625,7 @@ class Page(Iterable[ContentObject]):
                 line_offset = dy
         return line_offset < 0
 
-    def extract_text_tagged(self, bbox: Union[Rect, None] = None) -> str:
+    def extract_text_tagged(self, *, bbox: Union[Rect, None] = None) -> str:
         """Get text from a page of a tagged PDF."""
         lines: List[str] = []
         strings: List[str] = []

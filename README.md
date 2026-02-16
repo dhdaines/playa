@@ -3,7 +3,7 @@
 ## TL;DR
 
 You can read this document, or just go look at some
-[notebooks](./notebooks) to gen an idea of what this does.
+[notebooks](./notebooks/) to gen an idea of what this does.
 
 ## About
 
