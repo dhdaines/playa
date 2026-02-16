@@ -419,7 +419,15 @@ class Element(Findable, Iterable[Union["Element", ContentItem, ContentObject]]):
 
     @property
     def contents(self) -> Iterator[Union[ContentItem, ContentObject]]:
-        """Iterate over all content items contained in an element."""
+        """Iterate over all content items contained in an element.
+
+        These are returned in depth-first order, which is "logical
+        content order" as defined in PDF 2.0 section 14.8.2.5.
+
+        To get them in page content order, you need to, obviously,
+        iterate over the page.
+
+        """
         for kid in self:
             if isinstance(kid, Element):
                 yield from kid.contents
