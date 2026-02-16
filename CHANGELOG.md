@@ -17,6 +17,9 @@
   along the same model of `Tree` and `Element` (same principle as with
   `BBOX_NONE`, we want to strongly type things that are different
   instead of relying on ad-hoc checks like `item.parent is None`)
+- BREAKING CHANGE: `subtype` becomes `type` in annotations and actions
+- BREAKING CHANGE: order of arguments to `Destination.from_dest` has changed
+- BREAKING CHANGE: invalid outline items throw `PDFSyntaxError` not `ValueError`
 - TODO: Allow `--structure` and `--images` at the same time, linking
   image files to structure JSON.
 - TODO: BREAKING CHANGE: Remove `objstack` from `IndirectObjectParser`
