@@ -12,6 +12,7 @@ from operator import attrgetter
 from typing import (
     TYPE_CHECKING,
     Callable,
+    Deque,
     Dict,
     Iterable,
     Iterator,
@@ -372,7 +373,7 @@ class ContentIterator(Iterator[Union[ContentItem, ContentObject]]):
                 elif isinstance(item, ContentItem):
                     by_mcid[item.mcid] = item
             # Now interpret the page to return items in order
-            stack = deque([], 3)
+            stack: Deque[PDFObject] = deque([], 3)
             proprsrc = dict_value(page.resources.get("Properties", {}))
             for obj in page.contents:
                 stack.append(obj)

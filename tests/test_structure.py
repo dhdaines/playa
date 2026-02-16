@@ -228,6 +228,7 @@ def test_page_order() -> None:
     with playa.open(TESTDIR / "pdf_structure.pdf") as pdf:
         page = pdf.pages[0]
         el = page.structure.find("L")
+        assert el is not None
         logical_mcids = [
             item.mcid for item in el.contents if isinstance(item, ContentItem)
         ]
