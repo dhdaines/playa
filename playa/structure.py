@@ -113,7 +113,7 @@ class ContentItem(Iterable["PageContentObject"]):
 
     @property
     def text(self) -> str:
-        """Unicode text contained in this structure element."""
+        """Unicode text contained in this content item."""
         from playa.content import TextObject
 
         if self._text is not None:
@@ -425,6 +425,12 @@ class Element(Findable, Iterable[Union["Element", ContentItem, ContentObject]]):
                 yield from kid.contents
             elif isinstance(kid, (ContentItem, ContentObject)):
                 yield kid
+
+    @property
+    def text(self) -> str:
+        """Unicode text of all content items in this element."""
+        return "".join(item.text for item in self.contents
+                       if isinstance(item, ContentItem))
 
     @property
     def bbox(self) -> Union[Rect, None]:
