@@ -170,7 +170,17 @@ def normalize_rect(r: Rect) -> Rect:
     return x0, y0, x1, y1
 
 
-def point_inside(p: Point, r: Rect) -> bool:
+def intersect_rects(a: Rect, b: Rect) -> Rect:
+    (ax0, ay0, ax1, ay1) = normalize_rect(a)
+    (bx0, by0, bx1, by1) = normalize_rect(b)
+    x0 = max(ax0, bx0)
+    x1 = min(ax1, bx1)
+    y0 = max(ay0, by0)
+    y1 = min(ay1, by1)
+    return x0, y0, x1, y1
+
+
+def point_in_rect(p: Point, r: Rect) -> bool:
     x, y = p
     x0, y0, x1, y1 = normalize_rect(r)
     return x0 <= x <= x1 and y0 <= y <= y1

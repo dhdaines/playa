@@ -57,7 +57,7 @@ from playa.utils import (
     decode_text,
     mult_matrix,
     normalize_rect,
-    point_inside,
+    intersect_rects,
     transform_bbox,
 )
 from playa.worker import PageRef, _deref_document, _deref_page, _ref_document, _ref_page
@@ -520,7 +520,7 @@ class Page(Iterable[ContentObject]):
         ):
             yield obj
 
-    def extract_text(self, bbox: Union[Rect, None] = None) -> str:
+    def extract_text(self, *, bbox: Union[Rect, None] = None) -> str:
         """Do some best-effort text extraction.
 
         This necessarily involves a few heuristics, so don't get your
@@ -532,13 +532,22 @@ class Page(Iterable[ContentObject]):
           bbox: If not `None`, only text objects which intersect this
           rectangle will be extracted
 
+        Note: `bbox` operates on text objects, not glyphs You may be
+          surprised to get a lot more text than you expected if you
+          call this with a `bbox`.  This is because, for efficiency
+          reasons, the intersection check is performed on text objects
+          (strings in the content stream) rather than glyphs
+          (individual characters).  For many tasks like table
+          extraction, this is actually what you want.  Otherwise, you
+          will need to use `playa.utils.intersect_rects` on the
+          individual glyph bboxes, which is, of course, slow.
         """
         if self.doc.is_tagged:
             return self.extract_text_tagged(bbox=bbox)
         else:
             return self.extract_text_untagged(bbox=bbox)
 
-    def extract_text_untagged(self, bbox: Union[Rect, None] = None) -> str:
+    def extract_text_untagged(self, *, bbox: Union[Rect, None] = None) -> str:
         """Get text from a page of an untagged PDF."""
 
         def _extract_text_from_obj(
@@ -583,10 +592,8 @@ class Page(Iterable[ContentObject]):
             if bbox is None:
                 strings.append(textstr)
             else:
-                text_end = (dx, prev_end) if vertical else (prev_end, dy)
-                # FIXME: This is not actually correct, we want to
-                # check if the line segment intersects the bbox
-                if point_inside((dx, dy), bbox) or point_inside(text_end, bbox):
+                ex, ey = (dx, prev_end) if vertical else (prev_end, dy)
+                if _crosses_bbox((dx, dy), (ex, ey), bbox):
                     strings.append(textstr)
             prev_origin = dx, dy
         if strings:
@@ -641,7 +648,14 @@ class Page(Iterable[ContentObject]):
                 reversed = mcs.tag == "ReversedChars"
                 c = []
                 for text in texts:  # noqa: B031
-                    c.append(text.chars[::-1] if reversed else text.chars)
+                    if bbox is None:
+                        c.append(text.chars[::-1] if reversed else text.chars)
+                    else:
+                        x, y = text.origin
+                        dx, dy = text.displacement
+                        ex, ey = (x + dx, y + dy)
+                        if _crosses_bbox((x, y), (ex, ey), bbox):
+                            c.append(text.chars[::-1] if reversed else text.chars)
                 chars = "".join(c)
             else:
                 assert isinstance(actual_text, bytes)
@@ -659,21 +673,20 @@ class Page(Iterable[ContentObject]):
                     lines.extend(textwrap.wrap("".join(strings)))
                     strings.clear()
                 prev_mcid = mcs.mcid
-            if bbox is None or text is None:
-                strings.append(chars)
-            else:
-                x, y = text.origin
-                dx, dy = text.displacement
-                text_end = (x + dx, y + dy)
-                # FIXME: This is not actually correct, we want to
-                # check if the line segment intersects the bbox
-                if point_inside((x, y), bbox) or point_inside(text_end, bbox):
-                    strings.append(chars)
+            strings.append(chars)
             if text is not None:
                 prev_origin = text.origin
         if strings:
             lines.extend(textwrap.wrap("".join(strings)))
         return "\n".join(lines)
+
+
+def _crosses_bbox(origin: Point, destination: Point, bbox: Rect) -> bool:
+    x, y = origin
+    dx, dy = destination
+    # FIXME: This presumes that y == dy
+    ix0, iy0, ix1, iy1 = intersect_rects((x, y, dx, dy), bbox)
+    return ix1 > ix0 and iy1 >= iy0
 
 
 @dataclass

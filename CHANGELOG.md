@@ -8,6 +8,8 @@
 - Add explicit ABCs to classes that need them.
 - Remove use of `Optional` everywhere in favour of `Union[T, None]`
 - Add useful device space properties to `Destination`
+- Add `text` property to `Element`
+- Add `bbox` argument to `extract_text`
 - BREAKING CHANGE: `XObjectObject` is not a `Mapping` so remove
   `__getitem__` and `__contains__` methods
 - BREAKING CHANGE: `BBOX_NONE` considered harmful since it can't be

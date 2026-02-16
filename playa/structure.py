@@ -429,8 +429,9 @@ class Element(Findable, Iterable[Union["Element", ContentItem, ContentObject]]):
     @property
     def text(self) -> str:
         """Unicode text of all content items in this element."""
-        return "".join(item.text for item in self.contents
-                       if isinstance(item, ContentItem))
+        return "".join(
+            item.text for item in self.contents if isinstance(item, ContentItem)
+        )
 
     @property
     def bbox(self) -> Union[Rect, None]:
