@@ -1293,6 +1293,10 @@ class ContentSequence(Sequence[ContentSection]):
 
     These are ordered by marked content ID, and you can index into
     this to get the content for a specific MCID.
+
+    You can iterate over them in page content order with the
+    `page_order` property.
+
     """
 
     def __init__(self, streamer: Iterable[ContentObject]) -> None:
