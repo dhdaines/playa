@@ -1,5 +1,10 @@
 # **P**arallel and/or **LA**z**Y** **A**nalyzer for **PDF** 🏖️
 
+## TL;DR
+
+You can read this document, or just go look at some
+[notebooks](./notebooks) to gen an idea of what this does.
+
 ## About
 
 There are already too many PDF libraries, unfortunately none of which
@@ -15,15 +20,16 @@ pdfminer.six, for instance:
 2. Obtaining the absolute position and attributes of every character,
    line, path, and image in every page of a PDF.
    
-Note that while **PL**AYA **A**in't a LA**Y**out **A**nalyzer, it does in
-fact implement the [layout
+Note that while **PL**AYA **A**in't a LA**Y**out **A**nalyzer, it does
+in fact implement the [layout
 analysis](https://pdfminersix.readthedocs.io/en/latest/topic/converting_pdf_to_text.html#layout-analysis-algorithm)
 algorithm from
 [pdfminer.six](https://github.com/pdfminer/pdfminer.six) anyways.  See
 [the
 documentation](https://dhdaines.github.io/playa/latest/working-in-the-pdf-mine)
 for more information on how to migrate your code.  You may be
-interested to know that PLAYA's implementation is also 15-50% faster,
+interested to know that PLAYA's implementation is also up to 10x
+faster ([benchmarks](https://github.com/dhdaines/benchmarks)),
 depending on how many CPUs you use.
 
 All that said, the primary purpose of PLAYA is to provide a parallel,

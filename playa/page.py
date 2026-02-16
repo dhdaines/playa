@@ -52,7 +52,7 @@ from playa.pdftypes import (
     resolve1,
     stream_value,
 )
-from playa.structure import PageStructure
+from playa.structure import Element, PageStructure
 from playa.utils import (
     decode_text,
     mult_matrix,
@@ -681,15 +681,16 @@ class Annotation:
     """PDF annotation (PDF 1.7 section 12.5).
 
     Attributes:
-      subtype: Type of annotation.
+      type: Type of annotation.
       rect: Annotation rectangle (location on page) in *default user space*
       bbox: Annotation rectangle in *device space*
+      parent: Structure element associed with this annotation, if any.
       props: Annotation dictionary containing all other properties
              (PDF 1.7 sec. 12.5.2).
     """
 
     _pageref: PageRef
-    subtype: str
+    type: str
     rect: Rect
     props: Dict[str, PDFObject]
 
@@ -700,9 +701,9 @@ class Annotation:
         if subtype is None or not isinstance(subtype, PSLiteral):
             raise PDFSyntaxError("Invalid annotation Subtype %r" % (subtype,))
         rect = rect_value(annot.get("Rect"))
-        return Annotation(
+        return cls(
             _pageref=page.pageref,
-            subtype=literal_name(subtype),
+            type=literal_name(subtype),
             rect=rect,
             props=annot,
         )
@@ -716,6 +717,23 @@ class Annotation:
     def bbox(self) -> Rect:
         """Bounding box for this annotation in device space."""
         return transform_bbox(self.page.ctm, self.rect)
+
+    @property
+    def parent(self) -> Union["Element", None]:
+        """The enclosing logical structure element, if any."""
+        if hasattr(self, "_parent"):
+            return self._parent
+        self._parent: Union["Element", None] = None
+        try:
+            parent_key = int_value(self.props.get("StructParent"))
+            if parent_key is None:
+                return self._parent
+            self._parent = self.page.structure[parent_key]
+        except TypeError:
+            log.warning("Annotation has invalid StructParent: %r", self)
+        except IndexError:
+            log.warning("Annotation StructParent out of range: %r", self)
+        return self._parent
 
     @property
     def contents(self) -> Union[str, None]:

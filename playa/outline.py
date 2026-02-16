@@ -16,6 +16,7 @@ from typing import (
     Union,
 )
 
+from playa.exceptions import PDFSyntaxError
 from playa.parser import PDFObject, PSLiteral
 from playa.pdftypes import (
     LIT,
@@ -65,7 +66,7 @@ class Destination:
 
     @classmethod
     def from_dest(
-        cls, doc: "Document", dest: Union[PSLiteral, bytes, list]
+        cls, dest: Union[PSLiteral, bytes, list], doc: "Document"
     ) -> "Destination":
         if isinstance(dest, (bytes, PSLiteral)):
             return doc.destinations[dest]
@@ -341,6 +342,14 @@ class Action:
     _docref: DocumentRef
     props: Dict[str, PDFObject]
 
+    @classmethod
+    def from_dict(cls, obj: PDFObject, doc: "Document") -> "Action":
+        props = dict_value(obj)
+        subtype = props.get("S")
+        if subtype is None or not isinstance(subtype, PSLiteral):
+            raise PDFSyntaxError("Invalid action subtype %r" % (subtype,))
+        return cls(_docref=_ref_document(doc), props=props)
+
     @property
     def type(self) -> PSLiteral:
         assert isinstance(self.props["S"], PSLiteral)
@@ -350,17 +359,6 @@ class Action:
     def doc(self) -> "Document":
         """Get associated document if it exists."""
         return _deref_document(self._docref)
-
-    @property
-    def destination(self) -> Union[Destination, None]:
-        """Destination of this action, if any."""
-        dest = resolve1(self.props.get("D"))
-        if dest is None:
-            return None
-        elif not isinstance(dest, (PSLiteral, bytes, list)):
-            LOG.warning("Unrecognized destination: %r", dest)
-            return None
-        return Destination.from_dest(self.doc, dest)
 
 
 class Tree(Iterable["Item"]):
@@ -421,9 +419,9 @@ class Item(Iterable["Item"]):
     def title(self) -> str:
         raw = resolve1(self.props.get("Title"))
         if raw is None:
-            raise ValueError(f"Outline item has no title: {self.props!r}")
+            raise PDFSyntaxError(f"Outline item has no title: {self.props!r}")
         if not isinstance(raw, bytes):
-            raise ValueError(f"Outline item title is not a string: {raw!r}")
+            raise PDFSyntaxError(f"Outline item title is not a string: {raw!r}")
         return decode_text(raw)
 
     @property
@@ -443,14 +441,20 @@ class Item(Iterable["Item"]):
         if dest is not None:
             try:
                 if isinstance(dest, (PSLiteral, bytes, list)):
-                    return Destination.from_dest(self.doc, dest)
+                    return Destination.from_dest(dest, self.doc)
             except KeyError:
                 LOG.warning("Unknown named destination: %r", dest)
         # Fall through to try an Action instead
         action = self.action
         if action is None or action.type is not ACTION_GOTO:
             return None
-        return action.destination
+        try:
+            dest = action.props["D"]
+            if isinstance(dest, (PSLiteral, bytes, list)):
+                return Destination.from_dest(dest, self.doc)
+        except KeyError:
+            LOG.warning("Unknown named destination: %r", dest)
+        return None
 
     @property
     def action(self) -> Union[Action, None]:
@@ -476,7 +480,7 @@ class Item(Iterable["Item"]):
     def parent(self) -> Union["Item", "Tree"]:
         ref = self.props["Parent"]
         if not isinstance(ref, ObjRef):
-            raise ValueError(f"Parent is not indirect object reference: {ref!r}")
+            raise PDFSyntaxError(f"Parent is not indirect object reference: {ref!r}")
         props = dict_value(ref)
         if "Parent" not in props:
             tree = self.doc.outline

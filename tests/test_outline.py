@@ -7,7 +7,7 @@ from typing import List
 import pytest
 
 import playa
-from playa.exceptions import PDFEncryptionError
+from playa.exceptions import PDFEncryptionError, PDFSyntaxError
 from playa.outline import Tree as OutlineTree, Item as OutlineItem
 
 from .data import ALLPDFS, PASSWORDS, TESTDIR, XFAILS
@@ -66,7 +66,7 @@ def test_outlines(path) -> None:
                     print(expand(outline))
         except PDFEncryptionError:
             pytest.skip("password incorrect or cryptography package not installed")
-        except ValueError as e:
+        except PDFSyntaxError as e:
             # Make sure we report the error as an invalid outline
             assert "outline" in str(e).lower()
 
