@@ -87,15 +87,15 @@ import re
 import textwrap
 from collections import deque
 from pathlib import Path
-from typing import Any, Deque, Iterable, Iterator, List, TextIO, Tuple, Union
+from typing import Any, Deque, Dict, Iterable, Iterator, List, TextIO, Tuple, Union
 
 import playa
 from playa import Document, Page, PDFPasswordIncorrect, asobj
+from playa.content import TextObject, ImageObject
 from playa.data.content import Image
 from playa.data.metadata import asobj_document, asobj_structelement
 from playa.image import get_one_image
 from playa.outline import Item as OutlineItem
-from playa.page import ImageObject
 from playa.pdftypes import (
     ContentStream,
     KWD,
@@ -106,6 +106,7 @@ from playa.pdftypes import (
 from playa.structure import ContentItem
 from playa.structure import ContentObject as StructContentObject
 from playa.structure import Element
+from playa.utils import decode_text
 
 LOG = logging.getLogger(__name__)
 IMAGE_OPERATORS = {
@@ -426,7 +427,7 @@ def _extract_content_object(
     kid: StructContentObject, indent: int, outfh: TextIO
 ) -> bool:
     ws = " " * indent
-    text = json.dumps(kid.props, default=asobj)
+    text = json.dumps({kid.type.name: asobj(kid.obj)})
     print(f"{ws}{text}", end="", file=outfh)
     return True
 
@@ -435,12 +436,28 @@ def _extract_content_object(
 def _extract_content_item(kid: ContentItem, indent: int, outfh: TextIO) -> bool:
     if kid.page is None:
         return False
-    text = kid.text
-    if text is None:
+    contents: List[Union[str, Dict[str, PDFObject]]] = []
+    for obj in kid:
+        if isinstance(obj, TextObject):
+            mcs = obj.mcs
+            if mcs is None or mcs.mcid is None:
+                continue
+            if "ActualText" in mcs.props:
+                assert isinstance(mcs.props["ActualText"], bytes)
+                chars = decode_text(mcs.props["ActualText"])
+            else:
+                chars = obj.chars
+            # Remove soft hyphens
+            chars = chars.replace("\xad", "")
+            contents.append(chars)
+        elif isinstance(obj, ImageObject):
+            contents.append({"Image": asobj(obj)})
+    if not contents:
         return False
     ws = " " * indent
-    text = json.dumps(text, ensure_ascii=False)
-    print(f"{ws}{text}", end="", file=outfh)
+    for idx, item in enumerate(contents):
+        text = json.dumps(item, ensure_ascii=False)
+        print(f"{ws}{text}", end=(",\n" if idx + 1 < len(contents) else ""), file=outfh)
     return True
 
 
@@ -541,16 +558,19 @@ def extract_outline(doc: Document, args: argparse.Namespace) -> None:
     print("\n]", file=args.outfile)
 
 
+def get_image_id(img: ImageObject) -> str:
+    if img.xobjid is None:
+        bbox = img.bbox or (0, 0, 0, 0)
+        text_bbox = ",".join(str(round(x)) for x in bbox)
+        return f"inline-{text_bbox}"
+    return re.sub(r"\W", "", img.xobjid)
+
+
 def get_images(page: Page, imgdir: Path) -> List[Tuple[Path, Image]]:
     images = []
     itor = page.flatten(filter_class=ImageObject, restrict_ops=IMAGE_OPERATORS)
     for idx, img in enumerate(itor):
-        if img.xobjid is None:
-            bbox = img.bbox or (0, 0, 0, 0)
-            text_bbox = ",".join(str(round(x)) for x in bbox)
-            imgid = f"inline-{text_bbox}"
-        else:
-            imgid = re.sub(r"\W", "", img.xobjid)
+        imgid = get_image_id(img)
         imgname = f"page{page.page_idx + 1}-{idx}-{imgid}"
         imgpath = imgdir / imgname
         try:

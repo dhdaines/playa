@@ -3,7 +3,8 @@
 ## TL;DR
 
 You can read this document, or just go look at some
-[notebooks](./notebooks/) to gen an idea of what this does.
+[notebooks](https://github.com/dhdaines/playa/tree/main/notebooks/) to
+get an idea of what this package does.
 
 ## About
 
