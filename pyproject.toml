@@ -134,7 +134,7 @@ dependencies = [
 HATCH_BUILD_HOOK_ENABLE_MYPYC = "0"
 [tool.hatch.envs.docs.scripts]
 serve = "mkdocs serve"
-publish = "mike deploy --push --update-aliases $(playa --version) latest"
+publish = "mike deploy --push --update-aliases v$(playa --version) latest"
 
 [tool.hatch.envs.types]
 extra-dependencies = [
