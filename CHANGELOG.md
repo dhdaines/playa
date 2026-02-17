@@ -1,4 +1,4 @@
-## PLAYA 1.0.0: Unreleased
+## PLAYA 1.0.0: 2026-02-16
 
 - Further optimize `arcfour` decryption.
 - Eagerly load the cross-reference tables and catalog for multiprocess
@@ -29,7 +29,6 @@
 - BREAKING CHANGE: `subtype` becomes `type` in annotations and actions
 - BREAKING CHANGE: order of arguments to `Destination.from_dest` has changed
 - BREAKING CHANGE: invalid outline items throw `PDFSyntaxError` not `ValueError`
-- TODO: BREAKING CHANGE: Remove `objstack` from `IndirectObjectParser`
 
 ## PLAYA 0.11.0: 2026-02-13
 
