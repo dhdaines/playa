@@ -10,6 +10,13 @@
 - Add useful device space properties to `Destination`
 - Add `text` property to `Element`
 - Add `bbox` argument to `extract_text`
+- Output image metadata in `playa --structure` output.
+- Output actions and destinations in more readable form.
+- BREAKING CHANGE: Schemas for various `playa.data` objects have changed.
+- BREAKING CHANGE: `playa --structure` output emits individual text
+  objects in element contents.
+- BREAKING CHANGE: `playa --structure` output wraps annotations in
+  `{"Annot: ...}` in element contents.
 - BREAKING CHANGE: `XObjectObject` is not a `Mapping` so remove
   `__getitem__` and `__contains__` methods
 - BREAKING CHANGE: `BBOX_NONE` considered harmful since it can't be
@@ -22,8 +29,6 @@
 - BREAKING CHANGE: `subtype` becomes `type` in annotations and actions
 - BREAKING CHANGE: order of arguments to `Destination.from_dest` has changed
 - BREAKING CHANGE: invalid outline items throw `PDFSyntaxError` not `ValueError`
-- TODO: Allow `--structure` and `--images` at the same time, linking
-  image files to structure JSON.
 - TODO: BREAKING CHANGE: Remove `objstack` from `IndirectObjectParser`
 
 ## PLAYA 0.11.0: 2026-02-13
