@@ -122,8 +122,10 @@ class Action(TypedDict, total=False):
 
     type: str
     """Type of action."""
-    props: dict
-    """Action dictionary."""
+    destination: Destination
+    """Destination for a GoTo action."""
+    uri: str
+    """URI for a URI action."""
 
 
 class StructContentObject(TypedDict, total=False):
@@ -211,9 +213,9 @@ class Annotation(TypedDict, total=False):
     mtime: str
     """String describing date and time when annotation was most recently
     modified."""
-    destination: str
+    destination: Destination
     """Destination of a link annotation."""
-    action: str
+    action: Action
     """Action for a link annotation."""
 
 
@@ -653,10 +655,13 @@ def asobj_destination_fitr(obj: DestinationFitR) -> Destination:
 
 @asobj.register
 def asobj_action(obj: _Action) -> Action:
-    action = Action(
-        type=asobj(obj.type),
-        props=asobj({k: v for k, v in obj.props.items() if k != "S"}),
-    )
+    action = Action(type=asobj(obj.type))
+    if "URI" in obj.props:
+        action["uri"] = asobj(obj.props["URI"])
+    if "D" in obj.props:
+        dest = resolve1(obj.props["D"])
+        if isinstance(dest, (PSLiteral, bytes, list)):
+            action["destination"] = asobj(_Destination.from_dest(dest, obj.doc))
     return action
 
 
