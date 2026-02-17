@@ -34,7 +34,7 @@ class Text(TypedDict, total=False):
     chars: str
     """Unicode string representation of text."""
     bbox: Union[Rect, None]
-    """Bounding rectangle for all glyphs in text in default user space."""
+    """Bounding rectangle for all glyphs in text."""
     matrix: Matrix
     """Text rendering matrix.  Note that the effective font size
     and the origin can be derived from this."""

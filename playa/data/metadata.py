@@ -19,7 +19,14 @@ from playa.document import Destinations as _Destinations
 from playa.document import Document as _Document
 from playa.font import Font as _Font
 from playa.fontmetrics import FONT_METRICS
-from playa.outline import Destination as _Destination
+from playa.outline import (
+    Action as _Action,
+    Destination as _Destination,
+    DestinationXYZ,
+    DestinationFitH,
+    DestinationFitV,
+    DestinationFitR,
+)
 from playa.outline import Tree as _OutlineTree, Item as _OutlineItem
 from playa.page import Annotation as _Annotation
 from playa.page import Page as _Page
@@ -28,6 +35,8 @@ from playa.pdftypes import MATRIX_IDENTITY
 from playa.pdftypes import ContentStream as _ContentStream
 from playa.pdftypes import (
     PDFObject,
+    PSLiteral,
+    Point,
     dict_value,
     int_value,
     matrix_value,
@@ -96,8 +105,25 @@ class Destination(TypedDict, total=False):
     """Zero-based index of destination page."""
     display: str
     """How to display the destination on that page."""
-    coords: List[Union[float, None]]
-    """List of coordinates (meaning depends on display)."""
+    pos: Point
+    """Target position."""
+    top: float
+    """Target top edge."""
+    left: float
+    """Target left edge."""
+    bbox: Rect
+    """Target zoom box."""
+    zoom: float
+    """Zoom factor."""
+
+
+class Action(TypedDict, total=False):
+    """Action for an outline entry or annotation."""
+
+    type: str
+    """Type of action."""
+    props: dict
+    """Action dictionary."""
 
 
 class StructContentObject(TypedDict, total=False):
@@ -176,8 +202,8 @@ class Page(TypedDict, total=False):
 class Annotation(TypedDict, total=False):
     type: str
     """Type of annotation."""
-    rect: Rect
-    """Annotation rectangle in default user space."""
+    bbox: Rect
+    """Bounding rectangle for annotation."""
     contents: str
     """Text contents."""
     name: str
@@ -185,6 +211,10 @@ class Annotation(TypedDict, total=False):
     mtime: str
     """String describing date and time when annotation was most recently
     modified."""
+    destination: str
+    """Destination of a link annotation."""
+    action: str
+    """Action for a link annotation."""
 
 
 class XObject(TypedDict, total=False):
@@ -497,11 +527,16 @@ def asobj_page(obj: _Page) -> Page:
 
 @asobj.register
 def asobj_annotation(obj: _Annotation) -> Annotation:
-    annot = Annotation(type=obj.type, rect=obj.rect)
+    annot = Annotation(type=obj.type, bbox=obj.bbox)
     for attr in "contents", "name", "mtime":
         val = getattr(obj, attr)
         if val is not None:
             annot[attr] = asobj(val)
+    dest = resolve1(obj.props.get("Dest"))
+    if isinstance(dest, (PSLiteral, bytes, list)):
+        annot["destination"] = asobj(_Destination.from_dest(dest, obj.page.doc))
+    if "A" in obj.props:
+        annot["action"] = asobj(_Action.from_dict(obj.props["A"], obj.page.doc))
     return annot
 
 
@@ -581,9 +616,48 @@ def asobj_destination(obj: _Destination) -> Destination:
         dest["page_idx"] = obj.page_idx
     if obj.display is not None:
         dest["display"] = asobj(obj.display)
-    if obj.coords:
-        dest["coords"] = asobj(obj.coords)
     return dest
+
+
+@asobj.register
+def asobj_destination_xyz(obj: DestinationXYZ) -> Destination:
+    dest = asobj_destination(obj)
+    if obj.zoom is not None:
+        dest["zoom"] = obj.zoom
+    dest["pos"] = asobj(obj.pos)
+    return dest
+
+
+@asobj.register
+def asobj_destination_fith(obj: DestinationFitH) -> Destination:
+    dest = asobj_destination(obj)
+    if obj.top is not None:
+        dest["top"] = obj.top
+    return dest
+
+
+@asobj.register
+def asobj_destination_fitv(obj: DestinationFitV) -> Destination:
+    dest = asobj_destination(obj)
+    if obj.left is not None:
+        dest["left"] = obj.left
+    return dest
+
+
+@asobj.register
+def asobj_destination_fitr(obj: DestinationFitR) -> Destination:
+    dest = asobj_destination(obj)
+    dest["bbox"] = obj.bbox
+    return dest
+
+
+@asobj.register
+def asobj_action(obj: _Action) -> Action:
+    action = Action(
+        type=asobj(obj.type),
+        props=asobj({k: v for k, v in obj.props.items() if k != "S"}),
+    )
+    return action
 
 
 @asobj.register
