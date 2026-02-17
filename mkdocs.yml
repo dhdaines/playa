@@ -1,5 +1,5 @@
 site_name: PLAYA
-site_description: PLAYA ain't a LAYout Analyzer
+site_description: Parallel and LAzY Analyzer for PDFs
 site_author: David Huggins-Daines
 site_url: https://dhdaines.github.io/playa
 repo_name: dhdaines/playa
