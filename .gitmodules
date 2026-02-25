@@ -7,3 +7,9 @@
 [submodule "playa/cmap/resources"]
 	path = playa/cmap/resources
 	url = https://github.com/adobe-type-tools/cmap-resources.git
+[submodule "samples/3rdparty/safedocs"]
+	path = samples/3rdparty/safedocs
+	url = https://github.com/pdf-association/safedocs.git
+[submodule "samples/3rdparty/veraPDF-corpus"]
+	path = samples/3rdparty/veraPDF-corpus
+	url = https://github.com/veraPDF/veraPDF-corpus.git
