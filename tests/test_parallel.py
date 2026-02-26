@@ -145,6 +145,10 @@ def test_map_parallel():
         parallel_texts = list(pdf.pages[3:8].map(get_text))
         print(parallel_texts)
         assert parallel_texts != texts
+    # Verify that a shorter slice will not execute in parallel
+    with playa.open(CONTRIB / "PSC_Station.pdf", space="default", max_workers=2) as pdf:
+        in_workers = list(pdf.pages[0:2].map(in_worker_page))
+        assert not any(in_workers)
 
 
 def test_worker():
