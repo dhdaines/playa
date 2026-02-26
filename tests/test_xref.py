@@ -121,9 +121,9 @@ BAD_XREF4 = (
 
 def test_bad_xref_tables() -> None:
     """Verify that we fail on fatally flawed xref tables."""
-    with pytest.raises((StopIteration, PDFSyntaxError)):
+    with pytest.raises(StopIteration):
         XRefTable(mock_doc(BAD_XREF1))
-    with pytest.raises((StopIteration, PDFSyntaxError)):
+    with pytest.raises(PDFSyntaxError):
         XRefTable(mock_doc(BAD_XREF2))
     with pytest.raises(PDFSyntaxError):
         XRefTable(mock_doc(BAD_XREF3))
@@ -168,9 +168,8 @@ UGLY_XREF2 = (
 
 def test_robust_xref_tables() -> None:
     """Verify that we can read slightly invalid xref tables."""
-    # with pytest.raises(PDFSyntaxError):
-    nospace = GOOD_XREF1.replace(b" \n", b"\n")
     with pytest.raises(PDFSyntaxError):
+        nospace = GOOD_XREF1.replace(b" \n", b"\n")
         XRefTable(mock_doc(nospace))
     with pytest.raises(PDFSyntaxError):
         XRefTable(mock_doc(UGLY_XREF1))

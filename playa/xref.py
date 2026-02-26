@@ -82,7 +82,6 @@ class XRefTable(XRef):
         self, doc: Union["Document", None] = None, pos: int = 0, offset: int = 0
     ) -> None:
         self.subsections: List[XRefTableSubsection] = []
-        # self.offsets: Dict[int, XRefPos] = {}
         self.trailer: Dict[str, PDFObject] = {}
         if doc is not None:
             self._load(ObjectParser(doc.buffer, doc, pos), offset)
@@ -110,10 +109,13 @@ class XRefTable(XRef):
                 raise PDFSyntaxError
             subsection = XRefTableSubsection(table_data, start, nobjs)
             log.debug(subsection)
-            if False and log.level <= logging.DEBUG:
+            if log.level <= logging.DEBUG:
                 for objid in subsection:
                     if objid in subsection:
-                        ref = subsection[objid]
+                        try:
+                            ref = subsection[objid]
+                        except Exception as e:
+                            raise PDFSyntaxError from e
                         log.debug(
                             "object %d %d at pos %d", objid, ref.genno, ref.pos + offset
                         )
@@ -188,10 +190,14 @@ class XRefTableSubsection:
         pos = int(row[0:10])
         genno = int(row[11:16])
         use = row[17:18]
-        if use == b"n":
-            return XRefPos(None, pos, genno)
-        # Ignore free entries, we don't care
-        raise KeyError
+        match use:
+            case b"n":
+                return XRefPos(None, pos, genno)
+            case b"f":
+                # Ignore free entries, we don't care
+                raise KeyError
+            case _:
+                raise PDFSyntaxError(row)
 
 class XRefFallback(XRef):
     """In the case where a file is non-conforming and has no
