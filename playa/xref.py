@@ -1,5 +1,6 @@
 """PDF cross-reference tables / streams."""
 
+import itertools
 import logging
 import re
 from typing import (
@@ -18,6 +19,7 @@ from playa.exceptions import (
     PDFSyntaxError,
 )
 from playa.parser import (
+    WHITESPACE,
     KEYWORD_TRAILER,
     LIT,
     IndirectObjectParser,
@@ -100,7 +102,9 @@ class XRefTable(XRef):
                     f"Expected object ID and count, got {start!r} {nobjs!r}"
                 )
             # Cue up the table data
-            parser.nextline()
+            _, ws = parser.nextline()
+            if any(b for b in ws if b not in WHITESPACE):
+                raise PDFSyntaxError
             table_data = parser.read(20 * nobjs)
             if len(table_data) != 20 * nobjs:
                 raise PDFSyntaxError
@@ -138,7 +142,7 @@ class XRefTable(XRef):
         return sum(len(x) for x in self.subsections)
 
     def __iter__(self) -> Iterator[int]:
-        return iter(self.offsets)
+        return itertools.chain.from_iterable(self.subsections)
 
     def __getitem__(self, objid: int) -> XRefPos:
         for s in self.subsections:
