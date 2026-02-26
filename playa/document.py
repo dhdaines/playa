@@ -187,6 +187,7 @@ class Document(Mapping[int, PDFObject]):
     _pages: Union["PageList", None] = None
     _pool: Union[Executor, None] = None
     _ncpus: int = 1
+    _batchsize: int = 4
     _catalog: Union[Dict[str, PDFObject], None] = None
     _outline: Union["Outlines", None] = None
     _destinations: Union["Destinations", None] = None
@@ -1057,7 +1058,7 @@ class PageList(Sequence[Page]):
         """
         doc = _deref_document(self.docref)
         if doc._pool is not None and (
-            self._pages is None or len(self._pages) > doc._ncpus
+            self._pages is None or len(self._pages) > doc._ncpus * doc._batchsize
         ):
             return doc._pool.map(
                 call_page,
