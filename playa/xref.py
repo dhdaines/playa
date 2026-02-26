@@ -111,14 +111,13 @@ class XRefTable(XRef):
             log.debug(subsection)
             if log.level <= logging.DEBUG:
                 for objid in subsection:
-                    if objid in subsection:
-                        try:
-                            ref = subsection[objid]
-                        except Exception as e:
-                            raise PDFSyntaxError from e
-                        log.debug(
-                            "object %d %d at pos %d", objid, ref.genno, ref.pos + offset
-                        )
+                    try:
+                        ref = subsection[objid]
+                    except Exception as e:
+                        raise PDFSyntaxError from e
+                    log.debug(
+                        "object %d %d at pos %d", objid, ref.genno, ref.pos + offset
+                    )
             self.subsections.append(subsection)
         self._load_trailer(parser)
 
@@ -176,10 +175,10 @@ class XRefTableSubsection:
         return self.nobjs
 
     def __iter__(self):
-        return iter(self.range)
+        return (objid for objid in self.range if objid in self)
 
     def __contains__(self, objid):
-        return objid in self.range and b"f" != self._get_row(objid)[17:18]
+        return b"f" != self._get_row(objid)[17:18]
 
     def _get_row(self, objid: int) -> bytes:
         offset = 20 * self.range.index(objid)

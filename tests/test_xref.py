@@ -71,13 +71,13 @@ def test_xref_tables() -> None:
     """Verify that we can read valid xref tables."""
     x = XRefTable(mock_doc(GOOD_XREF1))
     assert repr(x)
-    assert [0, 1, 2, 5, 6] == list(x)
+    assert [1, 2, 5, 6] == list(x)
     crlf = GOOD_XREF1.replace(b" \n", b"\r\n")
     x = XRefTable(mock_doc(crlf))
-    assert [0, 1, 2, 5, 6] == list(x)
+    assert [1, 2, 5, 6] == list(x)
     cr = GOOD_XREF1.replace(b" \n", b" \r")
     x = XRefTable(mock_doc(cr))
-    assert [0, 1, 2, 5, 6] == list(x)
+    assert [1, 2, 5, 6] == list(x)
 
 
 # EOF before trailer (no trailer = fallback)
