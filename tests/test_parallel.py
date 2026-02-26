@@ -58,6 +58,8 @@ def test_parallel_references():
     with playa.open(
         TESTDIR / "pdf_structure.pdf", space="default", max_workers=2
     ) as pdf:
+        # Force parallelism
+        pdf._ncpus = 0
         (resources,) = pdf.pages.map(operator.attrgetter("resources"))
         desc = resources["Font"].resolve()  # should succeed!
         assert "F1" in desc  # should exist!
@@ -79,6 +81,8 @@ def test_parallel_symbols():
     with playa.open(
         TESTDIR / "pdf_structure.pdf", space="default", max_workers=2
     ) as pdf:
+        # Force parallelism
+        pdf._ncpus = 0
         props1 = [get_props(p) for p in pdf.pages]
         props2 = list(pdf.pages.map(get_props))
         assert isinstance(props1[0]["Type"], PSLiteral)
@@ -98,6 +102,8 @@ def get_xobjs(page: Page) -> List[XObjectObject]:
 def test_parallel_xobjects():
     # Verify that page references (used in XObjects) also work
     with playa.open(CONTRIB / "basicapi.pdf", space="default", max_workers=2) as pdf:
+        # Force parallelism
+        pdf._ncpus = 0
         for page in pdf.pages:
             for xobj in page.xobjects:
                 assert xobj.page.page_idx == page.page_idx
@@ -110,8 +116,26 @@ def get_text(page: Page) -> str:
     return " ".join(x.chars for x in page.texts)
 
 
+def in_worker_page(page: Page) -> int:
+    return in_worker()
+
+
+def test_map_not_parallel():
+    """Verify that we will not execute in parallel for a single page."""
+    # This document has only one page
+    with playa.open(
+        TESTDIR / "pdf_structure.pdf", space="default", max_workers=2
+    ) as pdf:
+        in_workers = list(pdf.pages.map(in_worker_page))
+        assert in_workers == [False]
+
+
 @pytest.mark.skipif(not CONTRIB.exists(), reason="contrib samples not present")
 def test_map_parallel():
+    # Verify also that a longer document will execute in parallel!
+    with playa.open(CONTRIB / "PSC_Station.pdf", space="default", max_workers=2) as pdf:
+        in_workers = list(pdf.pages.map(in_worker_page))
+        assert all(in_workers)
     with playa.open(CONTRIB / "PSC_Station.pdf", space="default", max_workers=2) as pdf:
         parallel_texts = list(pdf.pages.map(get_text))
     with playa.open(CONTRIB / "PSC_Station.pdf", space="default") as pdf:

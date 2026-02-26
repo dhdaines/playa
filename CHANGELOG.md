@@ -1,3 +1,7 @@
+## Unreleased
+
+- Avoid launching workers for short documents
+
 ## PLAYA 1.0.0: 2026-02-16
 
 - Further optimize `arcfour` decryption.
