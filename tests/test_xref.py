@@ -71,10 +71,13 @@ def test_xref_tables() -> None:
     """Verify that we can read valid xref tables."""
     x = XRefTable(mock_doc(GOOD_XREF1))
     assert repr(x)
+    assert [1, 2, 5, 6] == list(x)
     crlf = GOOD_XREF1.replace(b" \n", b"\r\n")
-    XRefTable(mock_doc(crlf))
+    x = XRefTable(mock_doc(crlf))
+    assert [1, 2, 5, 6] == list(x)
     cr = GOOD_XREF1.replace(b" \n", b" \r")
-    XRefTable(mock_doc(cr))
+    x = XRefTable(mock_doc(cr))
+    assert [1, 2, 5, 6] == list(x)
 
 
 # EOF before trailer (no trailer = fallback)
@@ -120,7 +123,7 @@ def test_bad_xref_tables() -> None:
     """Verify that we fail on fatally flawed xref tables."""
     with pytest.raises(StopIteration):
         XRefTable(mock_doc(BAD_XREF1))
-    with pytest.raises(StopIteration):
+    with pytest.raises(PDFSyntaxError):
         XRefTable(mock_doc(BAD_XREF2))
     with pytest.raises(PDFSyntaxError):
         XRefTable(mock_doc(BAD_XREF3))
@@ -163,17 +166,15 @@ UGLY_XREF2 = (
 )
 # FIXME: Don't yet handle the case of too small nobjs
 
-
 def test_robust_xref_tables() -> None:
     """Verify that we can read slightly invalid xref tables."""
-    nospace = GOOD_XREF1.replace(b" \n", b"\n")
-    x = XRefTable(mock_doc(nospace))
-    assert list(x) == [1, 2, 5, 6]
-    x = XRefTable(mock_doc(UGLY_XREF1))
-    assert list(x) == [1, 2, 5, 6]
-    x = XRefTable(mock_doc(UGLY_XREF2))
-    assert list(x) == [1, 2]
-    assert x[2].pos == 20
+    with pytest.raises(PDFSyntaxError):
+        nospace = GOOD_XREF1.replace(b" \n", b"\n")
+        XRefTable(mock_doc(nospace))
+    with pytest.raises(PDFSyntaxError):
+        XRefTable(mock_doc(UGLY_XREF1))
+    with pytest.raises(PDFSyntaxError):
+        XRefTable(mock_doc(UGLY_XREF2))
 
 
 XREF_STREAM1 = b"""1 0 obj
