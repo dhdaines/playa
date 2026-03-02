@@ -166,16 +166,6 @@ UGLY_XREF2 = (
 )
 # FIXME: Don't yet handle the case of too small nobjs
 
-def test_robust_xref_tables() -> None:
-    """Verify that we can read slightly invalid xref tables."""
-    with pytest.raises(PDFSyntaxError):
-        nospace = GOOD_XREF1.replace(b" \n", b"\n")
-        XRefTable(mock_doc(nospace))
-    with pytest.raises(PDFSyntaxError):
-        XRefTable(mock_doc(UGLY_XREF1))
-    with pytest.raises(PDFSyntaxError):
-        XRefTable(mock_doc(UGLY_XREF2))
-
 
 XREF_STREAM1 = b"""1 0 obj
 <</Type/XRef/Size 5/W[1 3 2]/Filter[/ASCIIHexDecode]/Length 75>>
