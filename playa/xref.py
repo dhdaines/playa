@@ -19,7 +19,6 @@ from playa.exceptions import (
     PDFSyntaxError,
 )
 from playa.parser import (
-    WHITESPACE,
     KEYWORD_TRAILER,
     LIT,
     IndirectObjectParser,
@@ -157,10 +156,10 @@ class XRefTableSubsection:
 
     def __init__(
         self,
-        data: bytes,
-        start: int,
-        nobjs: int,
-        offset: int,
+        data: bytes = b"",
+        start: int = 0,
+        nobjs: int = 0,
+        offset: int = 0,
     ):
         self.data = data
         self.start = start
@@ -178,7 +177,9 @@ class XRefTableSubsection:
         return self.nobjs
 
     def __iter__(self):
-        return (objid for objid in self.range if objid in self)
+        for objid in self.range:
+            if objid in self:
+                yield objid
 
     def __contains__(self, objid):
         return self._get_row(objid)[17] != ORDF

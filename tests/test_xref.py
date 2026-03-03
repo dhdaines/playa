@@ -24,9 +24,17 @@ def test_read_xref():
     with playa.open(TESTDIR / "junk_before_header.pdf") as pdf:
         # Not a fallback, we got the right one
         assert isinstance(pdf.xrefs[0], XRefTable)
+
+        # Verify that the positions are the file positions
         assert pdf.xrefs[0][1].pos == 9 + pdf._offset
         assert pdf.xrefs[0][6].pos == 954 + pdf._offset
+
+        # Verify that we can get data
         assert pdf[2] == {"Type": LIT("Outlines"), "Count": 0}
+
+        # Verify that free objects are free
+        with pytest.raises(KeyError):
+            pdf[42]
 
 
 @pytest.mark.skipif(not CONTRIB.exists(), reason="contrib samples not present")
