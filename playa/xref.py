@@ -1,5 +1,6 @@
 """PDF cross-reference tables / streams."""
 
+import itertools
 import logging
 import re
 from typing import (
@@ -48,6 +49,8 @@ LITERAL_XREF: Final = LIT("XRef")
 FIND_INDOBJR: Final = re.compile(rb"(?<!\d)\d{1,10}\s+\d{1,10}\s+obj")
 INDOBJR: Final = re.compile(rb"\s*\d{1,10}\s+\d{1,10}\s+obj")
 XREFR: Final = re.compile(rb"\s*xref\s*(\d+)\s*(\d+)\s*")
+ORDN: Final = ord(b"n")
+ORDF: Final = ord(b"f")
 
 
 def _update_refs(trailer: Dict[str, PDFObject], doc: "Document") -> None:
@@ -79,7 +82,7 @@ class XRefTable(XRef):
     def __init__(
         self, doc: Union["Document", None] = None, pos: int = 0, offset: int = 0
     ) -> None:
-        self.offsets: Dict[int, XRefPos] = {}
+        self.subsections: List[XRefTableSubsection] = []
         self.trailer: Dict[str, PDFObject] = {}
         if doc is not None:
             self._load(ObjectParser(doc.buffer, doc, pos), offset)
@@ -98,38 +101,23 @@ class XRefTable(XRef):
                 raise PDFSyntaxError(
                     f"Expected object ID and count, got {start!r} {nobjs!r}"
                 )
-            log.debug("reading positions of objects %d to %d", start, start + nobjs - 1)
-            objid = start
-            while objid < start + nobjs:
-                # FIXME: It's supposed to be exactly 20 bytes, not
-                # necessarily a line
-                pos, line = parser.nextline()
-                log.debug("%r %r", pos, line)
-                if line == b"":  # EOF
-                    raise StopIteration("EOF in xref table parsing")
-                line = line.strip()
-                if line == b"trailer":  # oops, nobjs was wrong
-                    log.warning(f"Expect object at {pos}, got trailer")
-                    # We will hit trailer on the next outer loop
-                    parser.seek(pos)
-                    break
-                # We need to tolerate blank lines here in case someone
-                # has creatively ended an entry with \r\r or \n\n
-                if line == b"":  # Blank line
-                    continue
-                f = line.split(b" ")
-                if len(f) != 3:
-                    raise PDFSyntaxError(f"Invalid XRef format: line={line!r}")
-                (pos_b, genno_b, use_b) = f
-                if use_b != b"n":
-                    # Ignore free entries, we don't care
-                    objid += 1
-                    continue
-                log.debug(
-                    "object %d %d at pos %d", objid, int(genno_b), int(pos_b) + offset
-                )
-                self.offsets[objid] = XRefPos(None, int(pos_b) + offset, int(genno_b))
-                objid += 1
+            # Cue up the table data by skipping any whitespace
+            pos, ws = parser.nextline()
+            if ws.strip():  # Not whitespace, it's an error
+                raise PDFSyntaxError(f"Unexpected data in xref table: {ws!r}")
+            table_data = parser.read(20 * nobjs)
+            if len(table_data) != 20 * nobjs:
+                raise PDFSyntaxError(f"EOF in reading xref table data at {pos}")
+            subsection = XRefTableSubsection(table_data, start, nobjs, offset)
+            if log.isEnabledFor(logging.DEBUG):
+                log.debug(subsection)
+                for objid in subsection:
+                    try:
+                        ref = subsection[objid]
+                    except Exception as e:
+                        raise PDFSyntaxError from e
+                    log.debug("object %d %d at pos %d", objid, ref.genno, ref.pos)
+            self.subsections.append(subsection)
         self._load_trailer(parser)
 
     def _load_trailer(self, parser: ObjectParser) -> None:
@@ -148,16 +136,70 @@ class XRefTable(XRef):
         self.trailer.update(dict_value(dic))
 
     def __repr__(self) -> str:
-        return "<XRefTable: offsets=%r>" % (self.offsets.keys())
+        return "<XRefTable: subsections=%r>" % (self.subsections)
 
     def __len__(self) -> int:
-        return len(self.offsets)
+        return sum(len(x) for x in self.subsections)
 
     def __iter__(self) -> Iterator[int]:
-        return iter(self.offsets)
+        return itertools.chain.from_iterable(self.subsections)
 
     def __getitem__(self, objid: int) -> XRefPos:
-        return self.offsets[objid]
+        for s in self.subsections:
+            if objid in s.range:
+                return s[objid]
+        raise KeyError
+
+
+class XRefTableSubsection:
+    """A contiguous chunk of object numbers from the cross-reference table."""
+
+    def __init__(
+        self,
+        data: bytes = b"",
+        start: int = 0,
+        nobjs: int = 0,
+        offset: int = 0,
+    ):
+        self.data = data
+        self.start = start
+        self.nobjs = nobjs
+        self.offset = offset
+
+    def __repr__(self) -> str:
+        return "<XRefTableSubsection: start=%d, nobjs=%d>" % (self.start, self.nobjs)
+
+    @property
+    def range(self) -> range:
+        return range(self.start, self.start + self.nobjs)
+
+    def __len__(self):
+        return self.nobjs
+
+    def __iter__(self):
+        for objid in self.range:
+            if objid in self:
+                yield objid
+
+    def __contains__(self, objid):
+        return self._get_row(objid)[17] != ORDF
+
+    def _get_row(self, objid: int) -> bytes:
+        table_offset = 20 * self.range.index(objid)
+        return self.data[table_offset : table_offset + 20]
+
+    def __getitem__(self, objid: int) -> XRefPos:
+        row = self._get_row(objid)
+        pos = int(row[0:10])
+        genno = int(row[11:16])
+        use = row[17]
+        if use == ORDN:
+            return XRefPos(None, pos + self.offset, genno)
+        if use == ORDF:
+            # NOTE: PDF standard says this is `null` but we will raise
+            # a KeyError in keeping with Python protocols
+            raise KeyError(f"Object ID {objid} does not exist")
+        raise PDFSyntaxError(f"Invalid xref table entry: {row!r}")
 
 
 class XRefFallback(XRef):
@@ -314,17 +356,16 @@ class XRefStream(XRef):
         # Update any references in trailer to point to the document
         _update_refs(self.trailer, doc)
         # Dump out objects for debugging
-        for start, nobjs in self.ranges:
-            if log.level > logging.DEBUG:
-                break
-            log.debug("objects %d - %d:", start, start + nobjs)
-            for index in range(nobjs):
-                offset = self.entlen * index
-                ent = self.data[offset : offset + self.entlen]
-                f1 = nunpack(ent[: self.fl1], 1)
-                f2 = nunpack(ent[self.fl1 : self.fl1 + self.fl2])
-                f3 = nunpack(ent[self.fl1 + self.fl2 :])
-                log.debug("obj %d => %d %d %d", start + index, f1, f2, f3)
+        if log.isEnabledFor(logging.DEBUG):
+            for start, nobjs in self.ranges:
+                log.debug("objects %d - %d:", start, start + nobjs)
+                for index in range(nobjs):
+                    offset = self.entlen * index
+                    ent = self.data[offset : offset + self.entlen]
+                    f1 = nunpack(ent[: self.fl1], 1)
+                    f2 = nunpack(ent[self.fl1 : self.fl1 + self.fl2])
+                    f3 = nunpack(ent[self.fl1 + self.fl2 :])
+                    log.debug("obj %d => %d %d %d", start + index, f1, f2, f3)
 
     def __iter__(self) -> Iterator[int]:
         for start, nobjs in self.ranges:
