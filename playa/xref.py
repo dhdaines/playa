@@ -109,7 +109,7 @@ class XRefTable(XRef):
             if len(table_data) != 20 * nobjs:
                 raise PDFSyntaxError(f"EOF in reading xref table data at {pos}")
             subsection = XRefTableSubsection(table_data, start, nobjs, offset)
-            if log.level and log.level <= logging.DEBUG:
+            if log.isEnabledFor(logging.DEBUG):
                 log.debug(subsection)
                 for objid in subsection:
                     try:
