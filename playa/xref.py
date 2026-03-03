@@ -50,6 +50,8 @@ LITERAL_XREF: Final = LIT("XRef")
 FIND_INDOBJR: Final = re.compile(rb"(?<!\d)\d{1,10}\s+\d{1,10}\s+obj")
 INDOBJR: Final = re.compile(rb"\s*\d{1,10}\s+\d{1,10}\s+obj")
 XREFR: Final = re.compile(rb"\s*xref\s*(\d+)\s*(\d+)\s*")
+ORDN: Final = ord(b"n")
+ORDF: Final = ord(b"f")
 
 
 def _update_refs(trailer: Dict[str, PDFObject], doc: "Document") -> None:
@@ -100,14 +102,14 @@ class XRefTable(XRef):
                 raise PDFSyntaxError(
                     f"Expected object ID and count, got {start!r} {nobjs!r}"
                 )
-            # Cue up the table data
-            _, ws = parser.nextline()
-            if any(b for b in ws if b not in WHITESPACE):
-                raise PDFSyntaxError
+            # Cue up the table data by skipping any whitespace
+            pos, ws = parser.nextline()
+            if ws.strip():  # Not whitespace, it's an error
+                raise PDFSyntaxError(f"Unexpected data in xref table: {ws!r}")
             table_data = parser.read(20 * nobjs)
             if len(table_data) != 20 * nobjs:
-                raise PDFSyntaxError
-            subsection = XRefTableSubsection(table_data, start, nobjs)
+                raise PDFSyntaxError(f"EOF in reading xref table data at {pos}")
+            subsection = XRefTableSubsection(table_data, start, nobjs, offset)
             log.debug(subsection)
             if log.level <= logging.DEBUG:
                 for objid in subsection:
@@ -115,9 +117,7 @@ class XRefTable(XRef):
                         ref = subsection[objid]
                     except Exception as e:
                         raise PDFSyntaxError from e
-                    log.debug(
-                        "object %d %d at pos %d", objid, ref.genno, ref.pos + offset
-                    )
+                    log.debug("object %d %d at pos %d", objid, ref.genno, ref.pos)
             self.subsections.append(subsection)
         self._load_trailer(parser)
 
@@ -154,15 +154,18 @@ class XRefTable(XRef):
 
 class XRefTableSubsection:
     """A contiguous chunk of object numbers from the cross-reference table."""
+
     def __init__(
         self,
         data: bytes,
         start: int,
         nobjs: int,
+        offset: int,
     ):
         self.data = data
         self.start = start
         self.nobjs = nobjs
+        self.offset = offset
 
     def __repr__(self) -> str:
         return "<XRefTableSubsection: start=%d, nobjs=%d>" % (self.start, self.nobjs)
@@ -178,25 +181,25 @@ class XRefTableSubsection:
         return (objid for objid in self.range if objid in self)
 
     def __contains__(self, objid):
-        return b"f" != self._get_row(objid)[17:18]
+        return self._get_row(objid)[17] != ORDF
 
     def _get_row(self, objid: int) -> bytes:
-        offset = 20 * self.range.index(objid)
-        return self.data[offset:offset + 20]
+        table_offset = 20 * self.range.index(objid)
+        return self.data[table_offset : table_offset + 20]
 
     def __getitem__(self, objid: int) -> XRefPos:
         row = self._get_row(objid)
         pos = int(row[0:10])
         genno = int(row[11:16])
-        use = row[17:18]
-        match use:
-            case b"n":
-                return XRefPos(None, pos, genno)
-            case b"f":
-                # Ignore free entries, we don't care
-                raise KeyError
-            case _:
-                raise PDFSyntaxError(row)
+        use = row[17]
+        if use == ORDN:
+            return XRefPos(None, pos + self.offset, genno)
+        if use == ORDF:
+            # NOTE: PDF standard says this is `null` but we will raise
+            # a KeyError in keeping with Python protocols
+            raise KeyError(f"Object ID {objid} does not exist")
+        raise PDFSyntaxError(f"Invalid xref table entry: {row!r}")
+
 
 class XRefFallback(XRef):
     """In the case where a file is non-conforming and has no
