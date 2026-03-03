@@ -22,8 +22,8 @@ PDFS = [
     "evil-pi-to-100000-digits.pdf",
 ]
 
-if __name__ == "__main__":
-    logging.basicConfig(level=logging.ERROR)
+
+def benchmark_latency(*, ncpus: int = 1) -> None:
     cat_time = fonts_time = open_time = page0_time = 0.0
     nfiles = 0
     niter = 5
@@ -31,11 +31,11 @@ if __name__ == "__main__":
         for name in PDFS:
             path = CONTRIB / name
             start = time.time()
-            pdf = playa.open(path)
+            pdf = playa.open(path, max_workers=ncpus)
             if idx != 0:
                 open_time += time.time() - start
                 nfiles += 1
-            cat = pdf.catalog
+            _ = pdf.catalog
             if idx != 0:
                 cat_time += time.time() - start
             try:
@@ -44,11 +44,20 @@ if __name__ == "__main__":
                 continue
             if idx != 0:
                 page0_time += time.time() - start
-            fonts = page.fonts
+            _ = page.fonts
             if idx != 0:
                 fonts_time += time.time() - start
 
+    print("PLAYA (%d cpu%s)" % (ncpus, "s" if ncpus > 1 else ""))
     print("Open took %.3f ms / file" % (open_time / nfiles * 1000,))
     print("Catalog took %.3f ms / file" % (cat_time / nfiles * 1000,))
     print("Page 0 took %.3f ms / file" % (page0_time / nfiles * 1000,))
     print("Page 0 Fonts took %.3f ms / file" % (fonts_time / nfiles * 1000,))
+
+
+if __name__ == "__main__":
+    logging.basicConfig(level=logging.ERROR)
+    # Benchmark latency without parallelism
+    benchmark_latency(ncpus=1)
+    # Ensure that parallelism doesn't add latency
+    benchmark_latency(ncpus=2)
