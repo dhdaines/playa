@@ -356,17 +356,16 @@ class XRefStream(XRef):
         # Update any references in trailer to point to the document
         _update_refs(self.trailer, doc)
         # Dump out objects for debugging
-        for start, nobjs in self.ranges:
-            if not log.isEnabledFor(logging.DEBUG):
-                break
-            log.debug("objects %d - %d:", start, start + nobjs)
-            for index in range(nobjs):
-                offset = self.entlen * index
-                ent = self.data[offset : offset + self.entlen]
-                f1 = nunpack(ent[: self.fl1], 1)
-                f2 = nunpack(ent[self.fl1 : self.fl1 + self.fl2])
-                f3 = nunpack(ent[self.fl1 + self.fl2 :])
-                log.debug("obj %d => %d %d %d", start + index, f1, f2, f3)
+        if log.isEnabledFor(logging.DEBUG):
+            for start, nobjs in self.ranges:
+                log.debug("objects %d - %d:", start, start + nobjs)
+                for index in range(nobjs):
+                    offset = self.entlen * index
+                    ent = self.data[offset : offset + self.entlen]
+                    f1 = nunpack(ent[: self.fl1], 1)
+                    f2 = nunpack(ent[self.fl1 : self.fl1 + self.fl2])
+                    f3 = nunpack(ent[self.fl1 + self.fl2 :])
+                    log.debug("obj %d => %d %d %d", start + index, f1, f2, f3)
 
     def __iter__(self) -> Iterator[int]:
         for start, nobjs in self.ranges:
