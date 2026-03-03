@@ -357,7 +357,7 @@ class XRefStream(XRef):
         _update_refs(self.trailer, doc)
         # Dump out objects for debugging
         for start, nobjs in self.ranges:
-            if log.level > logging.DEBUG:
+            if not log.isEnabledFor(logging.DEBUG):
                 break
             log.debug("objects %d - %d:", start, start + nobjs)
             for index in range(nobjs):
