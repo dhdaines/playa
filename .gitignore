@@ -30,3 +30,4 @@ poetry.lock
 .venv
 *.so
 .coverage
+docs/playa.1

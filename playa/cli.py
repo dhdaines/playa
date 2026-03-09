@@ -126,7 +126,7 @@ IMAGE_OPERATORS = {
 
 def make_argparse() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="PLAYA's CLI, which can get stuff out of PDFs for you."
+        description="PLAYA's CLI, which can get stuff out of PDFs for you.",
     )
     parser.add_argument("pdfs", type=Path, nargs="*")
     parser.add_argument("--version", action="store_true", help="Display version")
