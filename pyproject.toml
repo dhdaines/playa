@@ -208,7 +208,7 @@ include = [
 
 [tool.hatch.build.hooks.argparse-manpage]
 manpages = [
-    "docs/playa.1:function=make_argparse:module=playa.cli:prog=playa",
+    "docs/playa.1:function=make_argparse:pyfile=playa/cli.py:prog=playa",
 ]
 
 [tool.coverage.run]
