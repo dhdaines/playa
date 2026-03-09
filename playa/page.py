@@ -439,7 +439,7 @@ class Page(Iterable[ContentObject]):
         """
         if self._marked_contents is not None:
             return self._marked_contents
-        self._marked_contents = ContentSequence(self)
+        self._marked_contents = ContentSequence(self.interp())
         return self._marked_contents
 
     @property

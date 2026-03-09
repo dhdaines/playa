@@ -923,6 +923,15 @@ class ContentParser(Iterator[Tuple[int, PDFObject]]):
             streamid = 0
         self._parser = ObjectParser(buffer, doc, streamid=streamid)
 
+    @property
+    def streamid(self) -> Union[int, None]:
+        """Indirect object ID of currently parsing stream.
+
+        TODO: Ideally this would be returned in `__next__`, but we
+        won't break the API for the moment.
+        """
+        return self._parser.streamid
+
     def __next__(self) -> Any:  # should be Tuple[int, PDFObject] but mypyc
         while True:
             try:

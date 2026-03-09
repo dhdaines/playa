@@ -1300,6 +1300,8 @@ class ContentSequence(Sequence[ContentSection]):
     """
 
     def __init__(self, streamer: Iterable[ContentObject]) -> None:
+        from playa.interp import LazyInterpreter
+
         self._contents: Dict[int, ContentSection] = {}
         self._maxid: int = 0
         for mcid, objs in itertools.groupby(streamer, operator.attrgetter("mcid")):
@@ -1310,6 +1312,13 @@ class ContentSequence(Sequence[ContentSection]):
             # the spec, but.....) we can't do page content order
             self._contents[mcid] = ContentSection(objs)
             self._maxid = max(self._maxid, mcid)
+        # In this case we can also know about empty content sections
+        # as well as the start and end positions
+        if isinstance(streamer, LazyInterpreter):
+            for mcid in streamer._mcstart:
+                self._maxid = max(self._maxid, mcid)
+                if mcid not in self._contents:
+                    self._contents[mcid] = ContentSection([])
 
     def __len__(self) -> int:
         return self._maxid + 1

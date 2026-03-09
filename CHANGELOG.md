@@ -1,6 +1,9 @@
-## Unreleased
+## PLAYA 1.1.0: 2026-03-09
 
 - Avoid launching workers for short documents
+- Parse xref tables lazily (massive speedup for enormous documents)
+- Avoid vacuous debug logging
+- Create empty marked content sections if they exist
 
 ## PLAYA 1.0.0: 2026-02-16
 

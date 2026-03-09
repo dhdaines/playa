@@ -244,6 +244,10 @@ class LazyInterpreter(Iterator[ContentObject]):
         self.init_state(page.ctm if ctm is None else ctm, gstate)
         self.parser = ContentParser(contents, page.doc)
         self._prev_text: Union[TextObject, None] = None
+        self._curpos = 0  # Relative to the stream so it always starts at zero
+        # These are private for the moment while we think about the interface
+        self._mcstart: Dict[int, Tuple[Union[int, None], int]] = {}
+        self._mcend: Dict[int, Tuple[Union[int, None], int]] = {}
 
     def init_resources(self, page: "Page", resources: Dict) -> None:
         """Prepare the fonts and XObjects listed in the Resource attribute."""
@@ -307,7 +311,7 @@ class LazyInterpreter(Iterator[ContentObject]):
             if self._prev_text is not None:
                 self.textstate.glyph_offset = self._prev_text._get_next_glyph_offset()
                 self._prev_text = None
-            _, obj = next(self.parser)
+            self._curpos, obj = next(self.parser)
             # These are handled inside the parser as they don't obey
             # the normal syntax rules (PDF 1.7 sec 8.9.7)
             if isinstance(obj, InlineImage):
@@ -1066,6 +1070,7 @@ class LazyInterpreter(Iterator[ContentObject]):
         assert isinstance(tag, PSLiteral)
         if "MCID" in props:
             mcid = int_value(props["MCID"])
+            self._mcstart[mcid] = (self.parser.streamid, self._curpos)
         else:
             mcid = None
         self.mcstack = (
@@ -1102,6 +1107,10 @@ class LazyInterpreter(Iterator[ContentObject]):
     def do_EMC(self) -> None:
         """End marked-content sequence"""
         if self.mcstack:
+            # It's not a list so we can't pop it
+            mcs = self.mcstack[-1]
+            if mcs.mcid is not None:
+                self._mcend[mcs.mcid] = (self.parser.streamid, self._curpos)
             self.mcstack = self.mcstack[:-1]
 
 
