@@ -167,8 +167,9 @@ def test_decompress_corrupted(caplog) -> None:
     )
     assert stream.buffer == b"TOT AL UTTER NONSENSE"
     # Insert some random bytes, now we will lose data for real
-    bogusdata = bytearray(rawdata)
-    bogusdata[7:10] = b"HI!"
+    tmp = bytearray(rawdata)
+    tmp[7:10] = b"HI!"
+    bogusdata = bytes(tmp)
     stream = ContentStream({"Filter": LIT("FlateDecode")}, rawdata=bogusdata)
     caplog.clear()
     assert stream.buffer == b""
