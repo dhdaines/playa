@@ -13,15 +13,18 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
           # Necessary to get the gh-pages branch
           fetch-depth: 0
+          persist-credentials: false
       - name: Install Hatch
-        uses: pypa/hatch@install
+        uses: pypa/hatch@a3c83ab3d481fbc2dc91dd0088628817488dd1d5
       - name: Configure git
         run: |
           git config --global user.name "David Huggins-Daines"
           git config --global user.email "dhd@ecolingui.ca"
       - name: Deploy docs
-        run: hatch -e docs run mike deploy --push --update-aliases ${{ github.event.release.tag_name }} latest
+        run: hatch -e docs run mike deploy --push --update-aliases ${GITHUB_EVENT_RELEASE_TAG_NAME} latest
+        env:
+          GITHUB_EVENT_RELEASE_TAG_NAME: ${{ github.event.release.tag_name }}
