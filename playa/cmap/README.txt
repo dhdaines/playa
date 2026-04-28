@@ -3,7 +3,7 @@ README.txt for cmap
 
 This directory contains *.pickle.gz files converted from Adobe CMap resources.
 CMaps are required to decode text data written in CJK (Chinese, Japanese,
-Korean) language.
+Korean) languages.
 
 CMap files are available from
 https://github.com/adobe-type-tools/cmap-resources which is included
