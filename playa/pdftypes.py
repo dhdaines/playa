@@ -366,10 +366,10 @@ def matrix_value(o: PDFObject) -> Matrix:
         e = num_value(lm[4])
         f = num_value(lm[5])
         return a, b, c, d, e, f
-    except ValueError as e:
-        raise ValueError("Could not parse matrix %r" % (o,)) from e
-    except TypeError as e:
-        raise TypeError("Matrix contains non-numeric values") from e
+    except ValueError as err:
+        raise ValueError("Could not parse matrix %r" % (o,)) from err
+    except TypeError as err:
+        raise TypeError("Matrix contains non-numeric values") from err
 
 
 def decompress_corrupted(data: bytes, bufsiz: int = 4096) -> bytes:
