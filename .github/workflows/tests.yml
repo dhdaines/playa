@@ -5,17 +5,21 @@ on:
   pull_request:
     branches: [ "main" ]
 
+permissions: {}
+
 jobs:
   check:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          persist-credentials: false
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405
         with:
           python-version: "3.14"
       - name: Install Hatch
-        uses: pypa/hatch@install
+        uses: pypa/hatch@a3c83ab3d481fbc2dc91dd0088628817488dd1d5
       - name: Check types with mypy
         run: hatch run types:check
   test:
@@ -28,13 +32,15 @@ jobs:
     env:
       HATCH_PYTHON: python3.14  # WTF, Hatch, why you not use latest python?
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          persist-credentials: false
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405
         with:
           python-version: "3.14"
       - name: Install Hatch
-        uses: pypa/hatch@install
+        uses: pypa/hatch@a3c83ab3d481fbc2dc91dd0088628817488dd1d5
       - name: Test mypyc compilation
         run: hatch run types:compile
       - name: Run tests
@@ -43,9 +49,11 @@ jobs:
     needs: check
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          persist-credentials: false
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405
         with:
           python-version: "3.8"
       - name: Run tests
