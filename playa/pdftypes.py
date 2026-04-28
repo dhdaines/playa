@@ -332,10 +332,10 @@ def point_value(o: PDFObject) -> Point:
         x = num_value(lp[0])
         y = num_value(lp[1])
         return x, y
-    except ValueError:
-        raise ValueError("Could not parse point %r" % (o,))
-    except TypeError:
-        raise TypeError("Point contains non-numeric values")
+    except ValueError as e:
+        raise ValueError("Could not parse point %r" % (o,)) from e
+    except TypeError as e:
+        raise TypeError("Point contains non-numeric values") from e
 
 
 def rect_value(o: PDFObject) -> Rect:
@@ -348,10 +348,10 @@ def rect_value(o: PDFObject) -> Rect:
         x1 = num_value(lr[2])
         y1 = num_value(lr[3])
         return x0, y0, x1, y1
-    except ValueError:
-        raise ValueError("Could not parse rectangle %r" % (o,))
-    except TypeError:
-        raise TypeError("Rectangle contains non-numeric values")
+    except ValueError as e:
+        raise ValueError("Could not parse rectangle %r" % (o,)) from e
+    except TypeError as e:
+        raise TypeError("Rectangle contains non-numeric values") from e
 
 
 def matrix_value(o: PDFObject) -> Matrix:
@@ -366,10 +366,10 @@ def matrix_value(o: PDFObject) -> Matrix:
         e = num_value(lm[4])
         f = num_value(lm[5])
         return a, b, c, d, e, f
-    except ValueError:
-        raise ValueError("Could not parse matrix %r" % (o,))
-    except TypeError:
-        raise TypeError("Matrix contains non-numeric values")
+    except ValueError as e:
+        raise ValueError("Could not parse matrix %r" % (o,)) from e
+    except TypeError as e:
+        raise TypeError("Matrix contains non-numeric values") from e
 
 
 def decompress_corrupted(data: bytes, bufsiz: int = 4096) -> bytes:
