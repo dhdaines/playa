@@ -131,7 +131,7 @@ def apply_png_predictor(
                     raw_x_bpp = 0
                 else:
                     raw_x_bpp = raw[j - bpp]
-                raw[j] = (average_x + (raw_x_bpp + prior_x) // 2) & 255
+                raw[j] = (average_x + (int(raw_x_bpp) + int(prior_x)) // 2) & 255
 
         elif filter_type == 4:
             # Filter type 4: Paeth
